@@ -1,6 +1,6 @@
 # 0009. Angle stays dimensionless; kinds keep apart what dimensions cannot
 
-Date: 2026-10-31. State: proposed (from research 24; to be confirmed when spec 10 T16 starts).
+Date: 2026-10-31. State: proposed (from research 24; to be confirmed when spec 10 T11 starts).
 
 ## Context
 
@@ -21,5 +21,5 @@ frequency to angular speed.
 
 ## Assumption, and when to test it again
 
-That a kind on every port is cheap to infer (`quantityOf`) and to confirm. Test when T16 lands: if more than a few ports
+That a kind on every port is cheap to infer (`quantityOf`) and to confirm. Test when T11 lands: if more than a few ports
 need a person to name their kind, revisit.

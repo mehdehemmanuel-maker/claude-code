@@ -52,12 +52,11 @@ a folded block computes exactly what its inside does.
 | Id | Task | Check | After |
 | --- | --- | --- | --- |
 | P1 | Physical ports with effort, flow and key; junctions | a mass–spring–damper and an RLC circuit built from ports give their analytic responses within 0.1 % | 00 |
-| P2 | The equation compiler: sorting, loops reported, index reduction, ill-posed models explained | a pendulum in Cartesian coordinates (index 3) solves; an over-constrained board is refused with the equations named | P1 |
+| P2 | The equation compiler, its structural passes our own (absorbs P7; no JS implementation exists): matching, Pantelides with a numeric-singularity pre-pass, tearing, in StateSelection.jl's order; loops reported; ill-posed models explained by naming unmatched equations and variables, balance checked per block (as Modelon, OpenModelica, Simscape do) | a pendulum in Cartesian coordinates (index 3) solves; an over-constrained and an unbalanced board each refused with the equations named | P1 |
 | P3 | The fold test on every saved block (constitution C26) | every saved and starter block passes; a planted fault fails | 00 |
 | P4 | Validity envelopes in dimensionless groups, checked when nodes run (C22) | Stokes drag at Re = 10⁵ is refused with its envelope; a node within its envelope runs | 00 |
 | P5 | Conservation watch | a pendulum's energy drift reported per simulated hour; a symplectic integrator's drift smaller than explicit Euler's, measured | P1 |
 | P6 | Interfaces carry flow (spec 01): a shaft is a mechanical rotational port as well as a cylinder | a motor's shaft drives a gearbox through ports; torque and speed consistent with power | P1, 01 I8 |
-| P7 | Our own structural passes (no JS implementation exists): matching, Pantelides with a numeric-singularity pre-pass, tearing, in StateSelection.jl's order; ill-posed messages that name unmatched equations and variables and check balance per block (Modelon, OpenModelica, Simscape) | the index-3 pendulum and an unbalanced block each reported as those tools would | P2 |
 | P8 | Status and value as separate port types; "invalid" shown loudly, never silence; a protective action's transient checked as well as its end state (research 20) | an invalid sensor input raises a visible status, not a silent value | P1 |
 
 Moved 2026-11-01 to spec 01 (they are interface work): bodies and human fit (now I25), pattern refactoring (I26),

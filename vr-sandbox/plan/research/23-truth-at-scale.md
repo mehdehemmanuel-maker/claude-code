@@ -377,7 +377,7 @@ Each item is a node, rule, data model or way of working, with the spec it fits.
 
 ## (C) Questions
 
-The 66 questions of this pass are chapter 19 of `../BOOK-OF-QUESTIONS.md`.
+The 66 questions of this pass were chapter 19 of the book; 5 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q19.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

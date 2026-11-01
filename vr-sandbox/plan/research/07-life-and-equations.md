@@ -133,4 +133,4 @@ model-form error; "looks lifelike" is not validation; integrator artefacts; no l
 
 ## (C) Questions
 
-The 96 questions of this pass are chapter 3 of `../BOOK-OF-QUESTIONS.md`.
+The 96 questions of this pass were chapter 3 of the book; 0 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q3.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.

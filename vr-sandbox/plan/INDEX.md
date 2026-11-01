@@ -9,15 +9,31 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 135 (1 begun, the rest not started) |
+| Tasks in the specs | 129 (1 begun, the rest not started) |
 | Faults found in the code | 13 (2 fixed) |
-| Rules in the constitution | 30 (22 not yet enforced by a check) |
+| Rules in the constitution | 29 (21 not yet enforced by a check) |
 | Questions for the user | 15 (5 unanswered: U1, U2, U4, U14, U15) |
 | Research passes | 35 in 6 rounds |
 | Findings in the synthesis | 45 |
 | Research branches | 82 explored, 469 open, 3 touched |
-| Questions in the book | 2244 in 31 chapters |
+| Questions in the book | 171 in 13 sections (the best of 2,244; decision 0010) |
 | Plan problems found by this script | 0 |
+
+## The start queue (from `README.md`)
+
+1. **00.S6** The routing test covers plan/ as it covers docs/
+2. **11.LW15** Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry by its canonical fo
+3. **10.T11** First: quantity kinds on every wire (research 18, 24; faults D1–D4): every number port gets quantity, proposed by quantityOf and confirmed; fits checks kind, th
+4. **11.LW12** First, before LW13: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as volatile); canonica
+5. **04.P10** Headset comfort with numbers (absorbs P8; research 34; fault D11): the board 10° below the eye at 1.25 m, about 1,000 css px wide so text is ≥ 0.6°; the bar sca
+6. **00.S4** The provenance check, the placeholder scan and the secret scan in the gate
+7. **00.S5** Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them
+8. **00.S7** The evaluator: its brief, three scored examples, the rule that only it flips a task
+9. **00.S3** Hooks: push gate, budget, honesty, loop breaker
+10. **10.T3** Claim status on every value (C21)
+11. **10.T18** Propose, then certify: every AI change returns the diff and a certificate a small checker verifies; each certificate names what it trusts (C29)
+12. **10.T23** The kernel (src/kernel/, research 31): exact rationals and outward-rounded intervals; refuses when it cannot decide; imports nothing outside itself; certificate
+13. **01.I1** Decision: interfaces.ts owns the interface record, the negative and its tables; rows in CLAUDE.md and OWNERS.md
 
 ## Waiting on the user
 
@@ -31,10 +47,10 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | Id | Fault | Where | State | Task |
 | --- | --- | --- | --- | --- |
-| D1 | The wire check compares dimensions only: 60 rpm into Hz gives 6.283 Hz; torque wires to energy; Gy to Sv; a port with no unit wires to anything | `src/ganglia/units.ts` (rpm is 2π rad/min) | open | 10.T11, 10.T16 |
-| D2 | `dB` is a plain number with scale 1, so every decibel conversion is wrong | `src/ganglia/units.ts:22` | open | 10.T16 |
-| D3 | `degC` always adds 273.15, so a 10 °C difference becomes 283.15 K | `src/ganglia/units.ts:38` | open | 10.T16 |
-| D4 | The units file's header cites `dimensionsOf` and `ganglia.test.ts`; neither exists | `src/ganglia/units.ts:4` | open | 10.T16 |
+| D1 | The wire check compares dimensions only: 60 rpm into Hz gives 6.283 Hz; torque wires to energy; Gy to Sv; a port with no unit wires to anything | `src/ganglia/units.ts` (rpm is 2π rad/min) | open | 10.T11 |
+| D2 | `dB` is a plain number with scale 1, so every decibel conversion is wrong | `src/ganglia/units.ts:22` | open | 10.T11 |
+| D3 | `degC` always adds 273.15, so a 10 °C difference becomes 283.15 K | `src/ganglia/units.ts:38` | open | 10.T11 |
+| D4 | The units file's header cites `dimensionsOf` and `ganglia.test.ts`; neither exists | `src/ganglia/units.ts:4` | open | 10.T11 |
 | D5 | No early cutoff: a node's key is built from its inputs' keys, not their values, so a node that reruns to the same value reruns everything below it | `src/nexus/dataflow.ts:289` | open | 11.LW12 |
 | D6 | `stable()` writes every Map and Set as `{}` and every function as `undefined`, so it cannot tell such values apart (group feeds already rely on it) | `src/nexus/dataflow.ts:42` | open | 11.LW15 |
 | D7 | Blocks count as pure unless they say otherwise; nothing checks a block that reads the clock, chance or the network | `src/nexus/dataflow.ts:301` (`b.pure`) | open | 11.LW12 |
@@ -134,7 +150,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | W4 | Deploy only from a gate-passed commit | W2, spec 00 S3 | failing |
 | W5 | Measured on devices: load time, frame rate on the city board, search latency | W2 | failing |
 
-### 04-being-in-it (11)
+### 04-being-in-it (10)
 
 | Id | Task | After | State |
 | --- | --- | --- | --- |
@@ -146,8 +162,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | P6 | Sights, each with its legend | — | failing |
 | P7 | The corrector's ghost and band | P1 | failing |
 | P9 | Honesty in the view (C24): measured and commanded state apart; nothing that matters changed during a teleport, cut or blink, but queued and … | P1 | failing |
-| P8 | Comfort in a headset | spec 03 | failing |
-| P10 | Headset comfort with numbers (research 34): the board 10° below the eye at 1.25 m, about 1,000 css px wide so text is ≥ 0.6°; the bar scaled 0.74; … | — | failing |
+| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11): the board 10° below the eye at 1.25 m, about 1,000 css px wide so text is ≥ … | — | failing |
 | P11 | Moving comfortably: fixed speeds (stopped, 1.4, 3 m/s), snap turn 30°/45° on the right stick, a vignette while moving, zoom rate capped and about … | P10 | failing |
 
 ### 05-civil (7)
@@ -183,40 +198,37 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | K4 | Sizes: from the request, or digits read and checked against the scale | research 11 | failing |
 | K5 | Into 3D with interfaces at the holes | spec 01 | failing |
 
-### 09-physics-core (8)
+### 09-physics-core (7)
 
 | Id | Task | After | State |
 | --- | --- | --- | --- |
 | P1 | Physical ports with effort, flow and key; junctions | 00 | failing |
-| P2 | The equation compiler: sorting, loops reported, index reduction, ill-posed models explained | P1 | failing |
+| P2 | The equation compiler, its structural passes our own (absorbs P7; no JS implementation exists): matching, Pantelides with a numeric-singularity … | P1 | failing |
 | P3 | The fold test on every saved block (constitution C26) | 00 | failing |
 | P4 | Validity envelopes in dimensionless groups, checked when nodes run (C22) | 00 | failing |
 | P5 | Conservation watch | P1 | failing |
 | P6 | Interfaces carry flow (spec 01): a shaft is a mechanical rotational port as well as a cylinder | P1, 01 I8 | failing |
-| P7 | Our own structural passes (no JS implementation exists): matching, Pantelides with a numeric-singularity pre-pass, tearing, in StateSelection.jl's … | P2 | failing |
 | P8 | Status and value as separate port types; "invalid" shown loudly, never silence; a protective action's transient checked as well as its end state … | P1 | failing |
 
-### 10-trust (24)
+### 10-trust (22)
 
 | Id | Task | After | State |
 | --- | --- | --- | --- |
 | T1 | CODATA 2022 with correlations | 00 | values done 2026-10-31 (CODATA 2022); correlations not yet |
 | T2 | Interval and ensemble modes; GUM validity probe | 00 | failing |
 | T3 | Claim status on every value (C21) | 00 S4 | failing |
-| T4 | Quantity kinds beyond units | T3 | failing |
 | T5 | Envelopes on sourced numbers (C22) | T3 | failing |
 | T6 | Ensembles by default where chaos or uncertainty rule; horizon badge | T2 | failing |
 | T7 | Assimilation node | T6 | failing |
 | T8 | Forward-mode differentiation through boards | 00 | failing |
 | T9 | The "cannot simulate" register, read by the AI | 00 | failing |
 | T10 | Floating-point lint | 00 | failing |
-| T11 | **First**: the wire check uses quantity kinds from `quantities.ts` (research 18 found 60 rpm into Hz gives 6.283 Hz, torque wiring to energy, gray … | — | failing |
+| T11 | **First**: quantity kinds on every wire (research 18, 24; faults D1–D4): every number port gets `quantity`, proposed by `quantityOf` and … | — | failing |
 | T12 | Retraction check: source DOIs against Crossref's open Retraction Watch data; everything derived marked | T3 | failing |
 | T13 | AI-written values beside sourced ones, never replacing them (C27); the share of AI-made inputs on every derived value | T3 | failing |
 | T14 | Values linked to the decisions they bear on; a new estimate reopens them; two readings of one quantity that disagree stop the line (C28) | T3, 00 S10 | failing |
 | T15 | The AI's stated confidence Brier-scored as forecasts resolve; labelled "uncalibrated" until it is | 00 S5 | failing |
-| T16 | T11's shape (research 24): every number port gets `quantity`, proposed by `quantityOf` and confirmed; `fits` checks kind, then point or … | T11 | failing |
-| T17 | Imports declare each value's kind at the boundary (Mars Climate Orbiter, the Gimli Glider) | T16 | failing |
+| T17 | Imports declare each value's kind at the boundary (Mars Climate Orbiter, the Gimli Glider) | T11 | failing |
 | T18 | Propose, then certify: every AI change returns the diff and a certificate a small checker verifies; each certificate names what it trusts (C29) | T3 | failing |
 | T19 | The AI's formal requirements shown in plain words and run against known-bad designs before use | T18 | failing |
 | T20 | Rigour class per node, computed from the worst harm downstream (IEC 62304, V&V 40); the class sets the mandatory checks | T3 | failing |
@@ -225,12 +237,11 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | T23 | The kernel (`src/kernel/`, research 31): exact rationals and outward-rounded intervals; refuses when it cannot decide; imports nothing outside … | T18 | failing |
 | T24 | Interference as a gate: no exemption by name; a fastener excused only where its interface says it sits (its hole, its thread engagement); the 0.5 … | T23, 01 | failing |
 
-### 11-living-world (16)
+### 11-living-world (14)
 
 | Id | Task | After | State |
 | --- | --- | --- | --- |
-| LW1 | Lazy evaluation with declared side effects | 00 | failing |
-| LW2 | Determinism and replay; desync detector | 00 | failing |
+| LW2 | Determinism and replay (absorbs LW14): the run record (revision, input and output hashes, seed, effect, worker count) is the replay log; a desync … | LW12 | failing |
 | LW3 | Affordances and needs | 00 | failing |
 | LW4 | Stigmergy fields | LW3 | failing |
 | LW5 | The umpire node | LW3 | failing |
@@ -240,9 +251,8 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | LW9 | Determinism across browsers: a Jolt build with its cross-platform determinism option; a deterministic maths module (V8 and JavaScriptCore differ … | LW2 | failing |
 | LW10 | A `grow` node family: demand field, local rule, budget, load or damage ensemble, stop condition; resilience with an n − 1 check (research 22) | 09 P1 | failing |
 | LW11 | Space measures as nodes (justified depth, integration, intimacy gradient, egress distance, daylight), each with its stability under small edits … | — | failing |
-| LW12 | **First, before LW1**: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as … | — | failing |
-| LW13 | Push a mark, pull the work: observers (view, panels, checks, exports, the agent) pull; only stale nodes on their path run, in height order; … | LW12 | failing |
-| LW14 | The run record (revision, input and output hashes, seed, effect) is the replay log; replay names the first node that differs | LW12, LW2 | failing |
+| LW12 | **First, before LW13**: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as … | — | failing |
+| LW13 | Push a mark, pull the work (absorbs LW1, lazy evaluation): observers (view, panels, checks, exports, the agent) pull; only stale nodes on their … | LW12 | failing |
 | LW15 | Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry by … | — | failing |
 | LW16 | Every simulated world carries an ODD description, its update order, one label (demo, calibrated, compared, docked, forecast) and its worker count … | LW2 | failing |
 
@@ -250,7 +260,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | Id | Task | After | State |
 | --- | --- | --- | --- |
-| CC1 | Money and CO₂e as quantities with their context; the AI's estimates labelled (C30) | 10 T16 | failing |
+| CC1 | Money and CO₂e as quantities with their context; the AI's estimates labelled (C30) | 10 T11 | failing |
 | CC2 | Carbon rolled up from `madeof.ts` with ICE factors | CC1 | failing |
 | CC3 | `cost.process` (Ashby) with its envelope; `dfa.check` (the three Boothroyd–Dewhurst questions) | CC1 | failing |
 | CC4 | Learning curves with their fitted window named; inflation and exchange as visible dated nodes | CC3 | failing |
@@ -276,10 +286,9 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 - **C24** Show what is measured, never what was commanded as if it were the state; never change what matters while a person cannot see it (unenforced: spec 04, task P9)
 - **C25** A failed check stops the line: nothing downstream is called done while it is open (unenforced: spec 00, task S10)
 - **C26** Folding preserves behaviour exactly: a folded block computes what its inside computes (unenforced: spec 09, task P3)
-- **C27** AI-written values sit beside sourced ones and never replace them; the AI never cites AI-written entries as evidence (unenforced: spec 10, task T13)
+- **C27** AI-written values sit beside sourced ones and never replace them; the AI never cites AI-written entries as evidence, and never invents a value (a price, a carbon factor, any figure): an estimate is labelled with its method (absorbs C30, decision 0010) (unenforced: spec 10, task T13; spec 12, task CC1)
 - **C28** Two readings of one quantity that disagree stop the line until reconciled (unenforced: spec 10, task T14)
 - **C29** Where a sound checker exists (units, residuals, a solver, interference), it is the gate; a model rereading its own work, or a second model, is a judge beside it, never the gate (unenforced: spec 10, task T18)
-- **C30** The AI never invents a price or a carbon factor: an estimate is labelled, sourced to its method, and kept beside sourced values (unenforced: spec 12, task CC1)
 
 ## Research passes
 
@@ -365,39 +374,21 @@ rounds wrote sources inline instead). Each pass's questions moved to the book; i
 | From Human comfort and human load (`34-comfort-load.md`) | 0 | 20 | 0 |
 | From Repair, wear and the long life of things (`35-repair-wear.md`) | 0 | 20 | 0 |
 
-## The book of questions by chapter
+## The book of questions by section
 
-- Chapter 1. Nexus itself: the questions its own state raises: 53
-- Chapter 2. All of engineering, its languages and frameworks: 96
-- Chapter 3. Life and the universal equations: 96
-- Chapter 4. Mathematics: fractals, π, precision, proof, composition: 96
-- Chapter 5. Games, visualisation, the very large, and contests: 100
-- Chapter 6. Philosophy, knowledge, invention, learning and ethics: 134
-- Chapter 7. Prompts, judges, and a picture to exact geometry: 88
-- Chapter 8. Nature's collective genius: 66
-- Chapter 9. Crafts, toys, folding and ancient engineering: 64
-- Chapter 10. Sound, film, magic and designed experiences: 72
-- Chapter 11. Safety cultures and famous failures: 72
-- Chapter 12. Commons, citizen science and people together: 65
-- Chapter 13. Unseen sciences, old games and cooking: 70
-- Chapter 14. Self-describing interfaces: 70
-- Chapter 15. The physics core in a browser: 64
-- Chapter 16. Organisations that do not fail, and deep accidents: 70
-- Chapter 17. Grammars of space and cities: 66
-- Chapter 18. Growth and self-organisation: 70
-- Chapter 19. Keeping knowledge true at scale: 66
-- Chapter 20. Quantity kinds done right: 69
-- Chapter 21. Incremental, lazy and demand-driven computation: 70
-- Chapter 22. AI that proves, and shapes that explain themselves: 66
-- Chapter 23. Notations: 65
-- Chapter 24. The body as an engineered system, and medicine's safety: 72
-- Chapter 25. What things cost, and how markets behave: 66
-- Chapter 26. The token experiment: 30
-- Chapter 27. A small trusted kernel: 65
-- Chapter 28. Engines worth taking for early cutoff: 65
-- Chapter 29. Stocks, flows and simulated societies: 64
-- Chapter 30. Human comfort and human load: 67
-- Chapter 31. Repair, wear and the long life of things: 67
+- Spec 00: the structure: 25
+- Spec 01: interfaces: 21
+- Spec 02: search in tiers and the names index: 1
+- Spec 03: out of the container: the app on the web: 4
+- Spec 04: being in it: physics, ghost, scale, time, sight: 5
+- Spec 05: civil engineering, populated: 1
+- Spec 08: a picture to a 3D profile: the AI draws, a parser with no AI copies: 2
+- Spec 09: the physics core: ports that carry what flows, equations without direction, folding that is exact: 17
+- Spec 10: trust in numbers: uncertainty, status, sensitivity, and what cannot be simulated: 46
+- Spec 11: the living world: only the observed computed, replay, affordances, agents that coordinate, an umpire: 30
+- Spec 12: cost and carbon: what a thing costs and emits, with where and when: 4
+- For the user to decide: 14
+- The direction of the whole: 1
 
 ## Plan problems found
 

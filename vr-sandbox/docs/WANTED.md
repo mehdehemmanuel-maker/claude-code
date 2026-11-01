@@ -279,7 +279,7 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   the same world is not built)
 - 2026-10-31: "Okay go through and make navigation absolute and also propose full system upgrades" (done: search
   finds every node by name and id, every board, every app feature, misspelt and plain words; every source file and every
-  document routed from CLAUDE.md, both held by the gate; the proposal in `docs/UPGRADES.md`)
+  document routed from CLAUDE.md, both held by the gate; the proposal, since folded into `plan/`)
 - 2026-10-31: "Okay 1-2(but variants I can choose weather I'm ghost mode or whatever also I can change my perception
   change time Change my sight or whatever that would be good skip 3 for now 4 populate the civil engineering 5. Yes we
   need advanced topology that don't just apply specifically to a thing we can have geometry mating or inverting for

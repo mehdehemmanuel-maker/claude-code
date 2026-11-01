@@ -196,4 +196,4 @@ All of section B is [I]: my recommendations, each mapped to a node or capability
 
 ## (C) Questions
 
-The questions of this pass are chapter 2 of `../BOOK-OF-QUESTIONS.md`.
+The questions of this pass were chapter 2 of the book; 16 were kept when it was cut to the best on 2026-11-01 (decision 0010), tagged Q2.n in `../BOOK-OF-QUESTIONS.md`.

@@ -331,4 +331,4 @@ Each principle says what it changes in the product. "Cn" points at an existing C
 
 ## (C) Questions
 
-The questions of this pass are chapter 6 of `../BOOK-OF-QUESTIONS.md`.
+The questions of this pass were chapter 6 of the book; 7 were kept when it was cut to the best on 2026-11-01 (decision 0010), tagged Q6.n in `../BOOK-OF-QUESTIONS.md`.

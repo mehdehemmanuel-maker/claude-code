@@ -314,7 +314,7 @@ One research pass, 2026-10-31. Marks: [C] checked in this pass with its source; 
 
 ## (C) Questions
 
-The 70 questions of this pass are chapter 14 of `../BOOK-OF-QUESTIONS.md`.
+The 70 questions of this pass were chapter 14 of the book; 17 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q14.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

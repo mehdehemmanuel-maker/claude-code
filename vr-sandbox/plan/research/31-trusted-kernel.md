@@ -362,7 +362,7 @@ hold and the level a passing check earns. [I throughout; basis A1 to A9]
 
 ## (C) Questions
 
-The 65 questions of this pass are chapter 27 of `../BOOK-OF-QUESTIONS.md`.
+The 65 questions of this pass were chapter 27 of the book; 8 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q27.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

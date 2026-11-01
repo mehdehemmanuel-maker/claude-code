@@ -23,7 +23,7 @@ From research 29 (2026-10-31). Not yet accepted: it waits on the user's yes (`QU
 
 | Id | Task | Check | After |
 | --- | --- | --- | --- |
-| CC1 | Money and CO₂e as quantities with their context; the AI's estimates labelled (C30) | an unlabelled price is refused | 10 T16 |
+| CC1 | Money and CO₂e as quantities with their context; the AI's estimates labelled (C30) | an unlabelled price is refused | 10 T11 |
 | CC2 | Carbon rolled up from `madeof.ts` with ICE factors | a steel bracket's carbon equals its mass × the cited factor, with the factor's origin shown | CC1 |
 | CC3 | `cost.process` (Ashby) with its envelope; `dfa.check` (the three Boothroyd–Dewhurst questions) | a part's unit cost falls with batch size as the tooling term predicts; parts that need not be separate are named | CC1 |
 | CC4 | Learning curves with their fitted window named; inflation and exchange as visible dated nodes | a cost carried across years shows the deflator used | CC3 |

@@ -284,7 +284,7 @@ elision; LPN line per node.
 
 ## (C) Questions
 
-The 30 questions of this pass are chapter 26 of `../BOOK-OF-QUESTIONS.md`.
+The 30 questions of this pass were chapter 26 of the book; 5 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q26.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

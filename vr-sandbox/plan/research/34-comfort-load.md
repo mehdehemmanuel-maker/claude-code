@@ -255,7 +255,7 @@ The headset UI group `ui` stands at the head when `recentre()` runs (space.ts:23
 
 ## (C) Questions
 
-The 67 questions of this pass are chapter 30 of `../BOOK-OF-QUESTIONS.md`.
+The 67 questions of this pass were chapter 30 of the book; 2 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q30.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

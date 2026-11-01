@@ -56,4 +56,4 @@ One research pass, 2026-10-31. Marks: [D] found in that pass with its source; [K
 30. **A loop node**: the world resets, only the log is kept.
 
 ## Questions
-The 100 questions of this pass are chapter 5 of `../BOOK-OF-QUESTIONS.md`.
+The 100 questions of this pass were chapter 5 of the book; 3 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q5.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.

@@ -363,7 +363,7 @@ and no structural analysis. Nexus loads `jolt-physics` `^1.1.0` through its `was
 
 ## (C) Questions
 
-The 64 questions of this pass are chapter 15 of `../BOOK-OF-QUESTIONS.md`.
+The 64 questions of this pass were chapter 15 of the book; 13 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q15.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

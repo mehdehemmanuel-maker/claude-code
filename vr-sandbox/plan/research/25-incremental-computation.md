@@ -347,7 +347,7 @@ blocks are declared and the pool is shown to pay (Excel's overhead warning).
 
 ## (C) Questions
 
-The 70 questions of this pass are chapter 21 of `../BOOK-OF-QUESTIONS.md`.
+The 70 questions of this pass were chapter 21 of the book; 10 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q21.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

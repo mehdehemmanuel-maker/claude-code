@@ -142,15 +142,32 @@ def tree() -> list[tuple[str, int, int, int]]:
     return [t for t in out if sum(t[1:])]
 
 def book() -> list[tuple[str, int]]:
+    """Questions per section of the book (each '## ' heading)."""
     out, ch, n = [], None, 0
     for l in (PLAN / 'BOOK-OF-QUESTIONS.md').read_text().split('\n'):
-        if l.startswith('## Chapter'):
+        if l.startswith('## '):
             if ch: out.append((ch, n))
             ch, n = l[3:].strip(), 0
         elif ch and re.match(r'^\d+\. ', l):
             n += 1
     if ch: out.append((ch, n))
     return out
+
+def queue(tasks: list[dict]) -> list[str]:
+    """The start queue from README.md: task keys in order; each must exist and follow the tasks it waits on."""
+    r = (PLAN / 'README.md').read_text()
+    m = re.search(r'^## The start queue.*?(?=^## )', r, re.S | re.M)
+    keys = re.findall(r'^\d+\. `(\d\d\.[A-Z]+\d+)`', m.group(0), re.M) if m else []
+    by = {t['key']: t for t in tasks}
+    for i, k in enumerate(keys):
+        if k not in by: problems.append(f'start queue names {k}, which is not a task'); continue
+        for a in by[k]['after']:
+            mm = re.match(r'^(?:(\d\d)\s+)?([A-Z]+\d+)$', a)
+            if mm:
+                dep = f"{mm.group(1) or by[k]['spec']}.{mm.group(2)}"
+                if dep in keys[i:] or (dep not in keys and by.get(dep, {}).get('status', 'failing') == 'failing'):
+                    problems.append(f'start queue: {k} waits on {dep}, which does not come before it')
+    return keys
 
 def defects() -> list[list[str]]:
     p = PLAN / 'DEFECTS.md'
@@ -186,8 +203,15 @@ def main() -> None:
     w(f'| Research passes | {len(rp)} in {max(p["round"] for p in rp)} rounds |')
     w(f'| Findings in the synthesis | {len(fs)} |')
     w(f'| Research branches | {sum(t[1] for t in tr)} explored, {sum(t[2] for t in tr)} open, {sum(t[3] for t in tr)} touched |')
-    w(f'| Questions in the book | {sum(n for _, n in bk)} in {len(bk)} chapters |')
+    w(f'| Questions in the book | {sum(n for _, n in bk)} in {len(bk)} sections (the best of 2,244; decision 0010) |')
     w(f'| Plan problems found by this script | {len(problems)} |')
+    w('')
+    w('## The start queue (from `README.md`)')
+    w('')
+    by = {t['key']: t for t in tasks}
+    for i, k in enumerate(queue(tasks), 1):
+        t = by.get(k)
+        if t: w(f"{i}. **{k}** {re.sub(r'[*`]', '', t['title'])[:160]}")
     w('')
     w('## Waiting on the user')
     w('')
@@ -238,7 +262,7 @@ def main() -> None:
     w('| --- | --- | --- | --- |')
     for t in tr: w(f'| {t[0]} | {t[1]} | {t[2]} | {t[3]} |')
     w('')
-    w('## The book of questions by chapter')
+    w('## The book of questions by section')
     w('')
     for ch, n in bk: w(f'- {ch}: {n}')
     w('')
@@ -248,7 +272,7 @@ def main() -> None:
     (PLAN / 'INDEX.md').write_text('\n'.join(L) + '\n')
     # the book's contents, from its chapters
     bp = PLAN / 'BOOK-OF-QUESTIONS.md'; bs = bp.read_text()
-    rows = '\n'.join(['| Chapter | Questions |', '| --- | --- |'] + [f'| {re.sub(r"^Chapter ", "", ch)} | {n} |' for ch, n in bk])
+    rows = '\n'.join(['| Section | Questions |', '| --- | --- |'] + [f'| {ch} | {n} |' for ch, n in bk])
     bs = re.sub(r'(<!-- contents: written by plan/compile.py -->\n).*?(<!-- /contents -->)', lambda m: m.group(1) + rows + '\n' + m.group(2), bs, flags=re.S)
     bp.write_text(bs)
     print(f'INDEX.md written: {len(tasks)} tasks, {len(ds)} faults, {len(rp)} passes, {len(problems)} problems')

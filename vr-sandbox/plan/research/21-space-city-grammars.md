@@ -334,7 +334,7 @@ does), with **rules** that rewrite between layers and **modules** that fix the d
 
 ## (C) Questions
 
-The 66 questions of this pass are chapter 17 of `../BOOK-OF-QUESTIONS.md`.
+The 66 questions of this pass were chapter 17 of the book; 0 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q17.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

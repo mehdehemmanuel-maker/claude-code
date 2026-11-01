@@ -425,7 +425,7 @@ Rules:
 
 ## (C) Questions
 
-The 65 questions of this pass are chapter 23 of `../BOOK-OF-QUESTIONS.md`.
+The 65 questions of this pass were chapter 23 of the book; 5 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q23.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

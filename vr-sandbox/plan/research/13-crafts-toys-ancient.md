@@ -37,7 +37,7 @@ One research pass, 2026-10-31. Marks: [C] checked in that pass with its source; 
 
 ## (C) Questions
 
-The 64 questions of this pass are chapter 9 of `../BOOK-OF-QUESTIONS.md`.
+The 64 questions of this pass were chapter 9 of the book; 2 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q9.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 - *Tsugite* (UIST 2020): its voxel joints and slidability, durability and millability checks

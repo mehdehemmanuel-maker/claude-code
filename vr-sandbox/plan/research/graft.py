@@ -1,7 +1,7 @@
 """Graft a round's research files into the book of questions and the tree, then recompile the index.
 
 Usage: python3 plan/research/graft.py ROUND FIRST_CHAPTER file1 "title 1" file2 "title 2" ...
-Each file's (C) questions become a chapter of BOOK-OF-QUESTIONS.md (the file then points to it); its (D) branches are
+Each file's (C) questions become a section of BOOK-OF-QUESTIONS.md, to be cut to the best (the rubric of decision 0010) (the file then points to it); its (D) branches are
 added to TREE.md as open; a row is added to the tree's rounds table. The brief each pass is given is BRIEF.md here.
 """
 import sys,re,os,datetime,subprocess

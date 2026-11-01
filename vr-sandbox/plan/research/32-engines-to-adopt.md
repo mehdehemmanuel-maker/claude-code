@@ -331,7 +331,7 @@ algorithm into its own source rather than depend on the package) is the preceden
 
 ## (C) Questions
 
-The 65 questions of this pass are chapter 28 of `../BOOK-OF-QUESTIONS.md`.
+The 65 questions of this pass were chapter 28 of the book; 13 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q28.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

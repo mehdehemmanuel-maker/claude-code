@@ -346,7 +346,7 @@ checklist, CRM, ASRS, just culture, STPA, poka-yoke, FMEA or its case list; wher
 
 ## (C) Questions
 
-The 70 questions of this pass are chapter 16 of `../BOOK-OF-QUESTIONS.md`.
+The 70 questions of this pass were chapter 16 of the book; 2 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q16.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 - The NIOSH/CDC "normal accident theory-based complexity assessment": its graph attributes, read in full

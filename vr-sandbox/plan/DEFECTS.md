@@ -6,10 +6,10 @@ entry. `compile.py` reads this table into `INDEX.md` and fails if a task named h
 
 | Id | Fault | Where | State | Task |
 | --- | --- | --- | --- | --- |
-| D1 | The wire check compares dimensions only: 60 rpm into Hz gives 6.283 Hz; torque wires to energy; Gy to Sv; a port with no unit wires to anything | `src/ganglia/units.ts` (rpm is 2π rad/min) | open | 10.T11, 10.T16 |
-| D2 | `dB` is a plain number with scale 1, so every decibel conversion is wrong | `src/ganglia/units.ts:22` | open | 10.T16 |
-| D3 | `degC` always adds 273.15, so a 10 °C difference becomes 283.15 K | `src/ganglia/units.ts:38` | open | 10.T16 |
-| D4 | The units file's header cites `dimensionsOf` and `ganglia.test.ts`; neither exists | `src/ganglia/units.ts:4` | open | 10.T16 |
+| D1 | The wire check compares dimensions only: 60 rpm into Hz gives 6.283 Hz; torque wires to energy; Gy to Sv; a port with no unit wires to anything | `src/ganglia/units.ts` (rpm is 2π rad/min) | open | 10.T11 |
+| D2 | `dB` is a plain number with scale 1, so every decibel conversion is wrong | `src/ganglia/units.ts:22` | open | 10.T11 |
+| D3 | `degC` always adds 273.15, so a 10 °C difference becomes 283.15 K | `src/ganglia/units.ts:38` | open | 10.T11 |
+| D4 | The units file's header cites `dimensionsOf` and `ganglia.test.ts`; neither exists | `src/ganglia/units.ts:4` | open | 10.T11 |
 | D5 | No early cutoff: a node's key is built from its inputs' keys, not their values, so a node that reruns to the same value reruns everything below it | `src/nexus/dataflow.ts:289` | open | 11.LW12 |
 | D6 | `stable()` writes every Map and Set as `{}` and every function as `undefined`, so it cannot tell such values apart (group feeds already rely on it) | `src/nexus/dataflow.ts:42` | open | 11.LW15 |
 | D7 | Blocks count as pure unless they say otherwise; nothing checks a block that reads the clock, chance or the network | `src/nexus/dataflow.ts:301` (`b.pure`) | open | 11.LW12 |

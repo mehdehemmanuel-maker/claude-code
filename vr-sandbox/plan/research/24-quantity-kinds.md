@@ -340,7 +340,7 @@ reads Nexus's code again and says how the fix should be built.
 
 ## (C) Questions
 
-The 69 questions of this pass are chapter 20 of `../BOOK-OF-QUESTIONS.md`.
+The 69 questions of this pass were chapter 20 of the book; 9 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q20.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

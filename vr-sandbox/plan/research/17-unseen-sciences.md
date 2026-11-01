@@ -42,7 +42,7 @@ One research pass, 2026-10-31. Marks: [C] checked in that pass with its source; 
 
 ## (C) Questions
 
-The 70 questions of this pass are chapter 13 of `../BOOK-OF-QUESTIONS.md`.
+The 70 questions of this pass were chapter 13 of the book; 2 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q13.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 - Flood forecasting ensembles (EFAS, GloFAS) feeding decisions by cost and loss

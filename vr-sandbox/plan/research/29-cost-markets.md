@@ -293,7 +293,7 @@ exactly the hook embodied carbon needs; cost needs more than a walk (see B1). Ne
 
 ## (C) Questions
 
-The 66 questions of this pass are chapter 25 of `../BOOK-OF-QUESTIONS.md`.
+The 66 questions of this pass were chapter 25 of the book; 3 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q25.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

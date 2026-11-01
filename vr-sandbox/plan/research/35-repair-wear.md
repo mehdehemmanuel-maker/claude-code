@@ -327,7 +327,7 @@ rate, a damage sum or a repair step (grep for weibull, mtbf, fatigue, wear, repa
 
 ## (C) Questions
 
-The 67 questions of this pass are chapter 31 of `../BOOK-OF-QUESTIONS.md`.
+The 67 questions of this pass were chapter 31 of the book; 0 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q31.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
 
 ## (D) New branches
 

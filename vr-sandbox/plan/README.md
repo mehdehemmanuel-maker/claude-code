@@ -18,7 +18,7 @@ Nothing here is built yet. A phase starts when the user says so.
 | `specs/NN-name/` | one per phase. The phases begun soonest are split into `requirements.md` (what it shall do, each line traced to the user's words), `design.md` (how, and which owners it extends) and `tasks.json` (each task failing until its check passes); the later ones are one `spec.md` holding the same three parts, split when they start | the phase's work |
 | `research/` | what the research found (the brief each pass gets is `research/BRIEF.md`; `research/graft.py` grafts a round), with its sources named; `research/00-synthesis.md` says where the passes agree and what they propose; `research/TREE.md` is the map of everything researched, explored and open, grown every round | added to when research is done again |
 | `QUESTIONS.md` | what only the user can decide, and what the research could not answer | as questions are answered |
-| `BOOK-OF-QUESTIONS.md` | every question Nexus must answer, by territory: its own state, engineering, life, mathematics, games and the vast, philosophy, prompts and judges | as research adds and answers them |
+| `BOOK-OF-QUESTIONS.md` | the best questions Nexus must answer (171 of 2,244, cut 2026-11-01, decision 0010), grouped by the spec each bears on and tagged with the task it feeds | as questions are answered; a new round's questions are cut to the best before they stay |
 
 Every spec extends the owners named in `../CLAUDE.md`. Nothing here is a second owner.
 
@@ -46,6 +46,27 @@ the right shape in the wrong place), and **numbers check better than pictures**.
 their interfaces, and checks each mate's residual, removes the failure every other tool has.
 
 Spec: `specs/01-interfaces/`.
+
+## The start queue (what is built first, in order, when the user says go)
+
+Chosen 2026-11-01 from the faults found in the code (`DEFECTS.md`) and phase 0: first the check that guards every later
+change, then the faults that give wrong numbers today, then the structure that judges the work. `compile.py` checks that
+each task here exists and comes after every task it waits on.
+
+1. `00.S6`: the routing test covers `plan/` as it covers `docs/` (cheap; keeps the plan honest from the first change)
+2. `11.LW15`: a cached run equals a fresh run on every quick board; a structural digest (fault D6). Guards everything after
+3. `10.T11`: quantity kinds on every wire (faults D1 to D4: rpm, dB, °C differences, kinds sharing a unit)
+4. `11.LW12`: early cutoff and declared effects (faults D5, D7)
+5. `04.P10`: headset comfort and the panels carried with the player (fault D11; small, no dependencies)
+6. `00.S4`: the provenance, placeholder and secret scans in the gate
+7. `00.S5`: the evaluation sets: the AI's requests with their runner and today's baseline
+8. `00.S7`: the evaluator, the only one that flips a task to passing
+9. `00.S3`: the hooks: push gate, budget, honesty, loop breaker
+10. `10.T3`: claim status on every value
+11. `10.T18`: propose, then certify: every AI change with a certificate
+12. `10.T23`: the kernel that checks certificates
+13. `01.I1`: interfaces begin (then spec 01 in its own order); `10.T24`, interference as a gate (fault D8, D9), as soon as
+    interfaces say where a fastener sits
 
 ## The phases, and where each stands
 

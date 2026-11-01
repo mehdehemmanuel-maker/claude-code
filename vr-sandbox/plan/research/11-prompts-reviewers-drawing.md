@@ -71,4 +71,4 @@ Plus a negative prompt where supported. **No wording removes failure**; what mak
 **Parsing** (no AI): colour classes, contours with holes (OpenCV `findContours`), Douglas–Peucker, lines and arcs (RANSAC with a Taubin circle fit), constraints inferred (horizontal, tangent, concentric, mirror), then a constraint solver snaps the sketch to the request's numbers; a proportion check against the request; letters mapped to the request's values. If digits must be read: a digit-only reader on cropped regions, each value checked against the dimension line's length.
 
 ## Questions
-The 88 questions of this pass are chapter 7 of `../BOOK-OF-QUESTIONS.md`.
+The 88 questions of this pass were chapter 7 of the book; 19 were kept when it was cut to the best on 2026-11-01 (decision 0010), each tagged Q7.n in `../BOOK-OF-QUESTIONS.md`; the rest are in git history.
