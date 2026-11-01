@@ -2,7 +2,7 @@
 
 Task in hand: 00.S2
 Spec in hand: spec 00, the structure (`plan/specs/00-structure/`)
-Last commit the gate passed: 3d3f471 (2026-11-01)
+Last commit the gate passed: 3f28598 (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -12,9 +12,8 @@ Last commit the gate passed: 3d3f471 (2026-11-01)
 
 ## Open, and why
 
-- 00.S2 failed its verdict (the handoff was stale; its test checked form only): this file rewritten, the test now checks
-  the spec, the next three, the commit and CLAUDE.md's loop against the plan; to be judged again.
-- Verdicts still coming on 00.S3, 00.S10, 10.T3 and 04.P10 (each mended after a fail, or claimed).
+- Verdicts in: 00.S1 and 00.S3 pass; 00.S2, 00.S10 and 10.T3 failed, each mended since (the handoff checked against the
+  plan; the line stopped all the way down; figures in lists given a status) and to be judged again. 04.P10's still coming.
 - 11.LW12 and 10.T1 are claimed in part; their open parts are in `plan/DEFECTS.md` (D7) and the task rows.
 - The one test (`npm run eval:one`) passes 2 of its 18 lines; the rest wait on specs 01, 03, 04 and 06.
 

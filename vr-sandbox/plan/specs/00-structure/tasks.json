@@ -34,8 +34,9 @@
    ],
    "owner": ".claude/settings.json, scripts/, package.json, .gitignore",
    "check": "each hook tried once on purpose and refuses: a push without a gate stamp; a commit past its owners; a number with no command; a fourth try",
-   "status": "failing",
-   "after": []
+   "status": "passing",
+   "after": [],
+   "evidence": "the evaluator passed it 2026-11-01 at 956fe8c (verdicts/00.S3.json), after a first fail; 13 of its 19 plants caught by standing tests, the rest refused when tried live (gate.mjs and claude-push.mjs wiring)"
   },
   {
    "id": "S4",

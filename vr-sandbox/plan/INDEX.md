@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 6 passing (by the evaluator), 4 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 130: 7 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (9 fixed) |
 | Rules in the constitution | 29 (13 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -31,8 +31,8 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 6. **00.S4** [passing] The provenance check, the placeholder scan and the secret scan in the gate
 7. **00.S5** [passing] Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them
 8. **00.S7** [passing] The evaluator: its brief, three scored examples, the rule that only it flips a task
-9. **00.S3** [failing, by the evaluator] Hooks: push gate, budget, honesty, loop breaker
-10. **10.T3** [claimed] Claim status on every value (C21)
+9. **00.S3** [passing] Hooks: push gate, budget, honesty, loop breaker
+10. **10.T3** [failing, by the evaluator] Claim status on every value (C21)
 11. **10.T18** [failing] Propose, then certify: every AI change returns the diff and a certificate a small checker verifies; each certificate names what it trusts (C
 12. **10.T23** [failing] The kernel (src/kernel/, research 31): exact rationals and outward-rounded intervals; refuses when it cannot decide; imports nothing outside
 13. **01.I1** [failing] Decision: interfaces.ts owns the interface record, the negative and its tables; rows in CLAUDE.md and OWNERS.md
@@ -80,7 +80,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | --- | --- | --- | --- |
 | S1 | The constitution with its checks and states | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S2 | PROGRESS.md, and the session loop written into CLAUDE.md's working notes | — | failing (evaluator: The next task found is not the next task: PROGRESS.md at 956fe8c names 00.S10 and 10.T3 as next, and both are already bu) |
-| S3 | Hooks: push gate, budget, honesty, loop breaker | — | failing (evaluator: The commit hook does not refuse a commit past its owners in a linked worktree (tried: not refused, three times); the pro) |
+| S3 | Hooks: push gate, budget, honesty, loop breaker | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S4 | The provenance check, the placeholder scan and the secret scan in the gate | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S5 | Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them | — | passing (evaluator claude-sonnet, 2026-11-01) |
 | S6 | The routing test covers plan/ as it covers docs/ | — | passing (evaluator claude-sonnet, 2026-11-01) |
@@ -214,7 +214,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | --- | --- | --- | --- |
 | T1 | CODATA 2022 with correlations | 00 | claimed, in part: values done 2026-10-31 (CODATA 2022); correlations not yet |
 | T2 | Interval and ensemble modes; GUM validity probe | 00 | failing |
-| T3 | Claim status on every value (C21) | 00 S4 | claimed 2026-11-01: every figure in src/data carries a claim status from the evidence vocabulary; the gate refuses one without |
+| T3 | Claim status on every value (C21) | 00 S4 | failing (evaluator: The check says 'fails a value with no status'. The scan (unstated in tests/nexus/scans.ts) only counts a record that has) |
 | T5 | Envelopes on sourced numbers (C22) | T3 | failing |
 | T6 | Ensembles by default where chaos or uncertainty rule; horizon badge | T2 | failing |
 | T7 | Assimilation node | T6 | failing |

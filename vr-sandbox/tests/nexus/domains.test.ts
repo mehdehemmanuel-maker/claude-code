@@ -143,6 +143,14 @@ describe('every domain, in one pass', () => {
     expect(unstated({ PARTS: { m8: { d: 0.008, source: 'ISO 4762' } } }, 'planted', EVIDENCE)).toHaveLength(1);
     expect(unstated({ PARTS: { m8: { d: 0.008, source: 'ISO 4762', status: 'specified' } } }, 'planted', EVIDENCE)).toEqual([]);
     expect(unstated({ P_STATUS: 'probably', PARTS: {} }, 'planted', EVIDENCE), 'a status not in the vocabulary').toHaveLength(1);
+    // (figures held only in lists are figures: a record of number arrays, a bare table, a typed array (the evaluator's
+    // plant E, 2026-11-01); a …_STATUS record names each export's status, and a wrong word or a name it does not hold fails)
+    expect(unstated({ PARTS: { m8: { source: 'ISO 4762', pitches: [1.25, 1.5], loads: [[0.1, 0.2]] } } }, 'planted', EVIDENCE), 'number arrays only').toHaveLength(1);
+    expect(unsourced({ PARTS: { m8: { pitches: [1.25, 1.5] } } }, 'planted'), 'number arrays, no source').toHaveLength(1);
+    expect(unstated({ GRID: [380, 385], CURVE: new Float32Array([1, 2]) }, 'planted', EVIDENCE), 'a bare table and a typed array').toHaveLength(2);
+    expect(unstated({ GRID: [380, 385], T_STATUS: { GRID: 'exact' } }, 'planted', EVIDENCE)).toEqual([]);
+    expect(unstated({ GRID: [380, 385], T_STATUS: { GRID: 'probably' } }, 'planted', EVIDENCE), 'a wrong word for one export').toHaveLength(2);
+    expect(unstated({ GRID: [380, 385], T_STATUS: { GRID: 'exact', CURVE: 'measured' } }, 'planted', EVIDENCE), 'a status for an export not there').toHaveLength(1);
     const data = readdirSync(join(root, 'src/data')).filter((f) => f.endsWith('.ts')), bad: string[] = [];
     for (const f of data) { const m = await import(`../../src/data/${f}`); bad.push(...unsourced(m, `src/data/${f}`), ...unstated(m, `src/data/${f}`, EVIDENCE)); }
     for (const dir of ['src/data', 'src/nexus/kinds', 'src/nexus/book']) for (const f of readdirSync(join(root, dir)).filter((x) => x.endsWith('.ts'))) bad.push(...placeholders(readFileSync(join(root, dir, f), 'utf8'), `${dir}/${f}`));

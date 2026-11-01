@@ -1,0 +1,27 @@
+{
+ "task": "10.T3",
+ "verdict": "fail",
+ "model": "claude-sonnet",
+ "date": "2026-11-01",
+ "commit": "956fe8c",
+ "ran": [
+  "Setup: git checkout --detach 956fe8c, then linked node_modules. The plain symlink makes the check fail with EISDIR: .gitignore's 'node_modules/' does not match a symlink, so the key scan lists it as an untracked file and cannot read it. That is an artefact of the setup, not of the commit. I replaced the symlink with a real node_modules directory of per-package symlinks (ignored by git) and kept going.",
+  "Read the brief (plan/specs/00-structure/evaluator.md), the T3 row in plan/specs/10-trust/spec.md (check: 'the provenance check fails a value with no status'), C21 in plan/CONSTITUTION.md, unstated/SAID in tests/nexus/scans.ts, the test at tests/nexus/domains.test.ts:132-148, the status words in src/data/*.ts, and the REALITY.md entry '2026-11-01: a claim status on every figure in the data files'.",
+  "npx vitest run tests/nexus/domains.test.ts -t 'every figure in data has a source' on the clean tree: 1 passed (38 skipped). Same result on the clean tree at the end.",
+  "Probe of every src/data/*.ts file (a temporary tests/nexus/zz_probe_eval.test.ts, deleted): records holding a scalar number and how each is stated. batteries 9 (BATTERIES_STATUS), constants 16, constituents 313, materials 60, mixes 2, motors 10, periodic 118 (PERIODIC_STATUS), woods 2 (WOODS_STATUS), disciplines/optics/references 0. unstated gave 0 for every file. optics.ts has 0 records counted and 0 statuses, yet it holds the CIE tables NM, CMF_X, CMF_Y, CMF_Z, D65 and 14 metals' and 4 films' n and k, all as number arrays.",
+  "git status clean of my changes at the end (the probe and every planted file removed; node_modules is git-ignored)."
+ ],
+ "planted": [
+  "A: removed status from FLUIDS.freshWater in src/data/materials.ts. CAUGHT: 'src/data/materials.ts: FLUIDS.freshWater'. Restored, diff empty.",
+  "B: deleted 'export const PERIODIC_STATUS' from src/data/periodic.ts. CAUGHT: every element listed ('src/data/periodic.ts: PERIODIC.H', '...He', ...). Restored.",
+  "C: new src/data/zz_planted.ts with { m8: { d: 0.008, source: 'ISO 4762' } } and no status. CAUGHT: 'src/data/zz_planted.ts: ZZ.m8'. Removed.",
+  "D: new file with ZZ_STATUS = 'probably'. CAUGHT: 'ZZ_STATUS = probably, not a status'. Removed.",
+  "E: new file with { m8: { source: 'ISO 4762', pitches: [1.25, 1.5, 1.75], loads: [0.1, 0.2] } }: figures held only as number arrays, with a source and no status. NOT CAUGHT: the test passed. This is the shape of all of optics.ts. Removed.",
+  "G: made unstated() return [] at its top in tests/nexus/scans.ts. CAUGHT by the test's own planted-case assertion at domains.test.ts:138 ('expected [] to have a length of 1 but got +0'). Restored."
+ ],
+ "missing": [
+  "The check says 'fails a value with no status'. The scan (unstated in tests/nexus/scans.ts) only counts a record that has a scalar number among its own values, so a value held in an array is never asked for a status. Planted E passes. In the real data, src/data/optics.ts (the CIE 1931 observer and D65 tables, 14 metals' and 4 films' complex refractive index, about 20 sourced records of number arrays) has no status anywhere and the scan passes it. The same walker is used by unsourced, so these figures are also unseen there, though the file's CIE_SOURCE excuses it. Needed: the scan must treat a record or export holding a number array (or typed array) as a figure needing a status, a planted array-only record must fail, and optics.ts must be given statuses (specified for the CIE tables, measured or specified per metal from its paper).",
+  "docs/REALITY.md says 'Every record of src/data/ that holds numbers now carries a claim status', and its 'Not covered' list names only figures outside src/data/ and the three vocabulary words. It does not say that array-held figures (all of optics.ts) are unseen, so the entry overstates what was checked. Needed: either close the gap, or say it plainly in REALITY.md and C21's state column.",
+  "Acknowledged by the builder, not counted against the pass test alone: C21 and T-R3 name calibrated, inspired only, disputed, myth and target, and EVIDENCE has no kind for them, so no value can say it. The builder's own notes say so."
+ ]
+}

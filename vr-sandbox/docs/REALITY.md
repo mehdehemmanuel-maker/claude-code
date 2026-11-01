@@ -1722,3 +1722,19 @@ given past a refusal still standing, without a word of it, reckless; the page sh
 (an andon on 00.S3 with a task one and two steps down passing, a bare "closed", a closing commit that does not exist, a
 reckless row answered "carry on", a probe in `tests/unit`, `tests/golden` and a folder under `tests/nexus`): each fails the
 test. Checked with `npm run gate`.
+
+## 2026-11-01: the claim-status entry above said too much: figures in lists were unseen (spec 10, T3)
+
+The entry "a claim status on every figure in the data files" said every record of `src/data/` that holds numbers carries a
+status. It did not: the evaluator found that both scans (`unsourced`, `unstated` in `tests/nexus/scans.ts`) asked only a
+record holding a single number, so figures held in lists went unseen, all of `src/data/optics.ts` among them (the CIE eye
+and daylight tables, 14 metals' and 4 films' refractive indices). Now a list of numbers, a table of rows of numbers and a
+typed array are figures to both scans, and a file can name each export's status in one `…_STATUS` record (a wrong word, or
+a name the file does not hold, fails). The optics given their statuses: the wavelength grid exact; the CIE tables
+specified; the metals measured where Johnson and Christy, Querry or Golovashkin measured them, empirical where the figures
+are Rakić's fitted models (aluminium, platinum, tungsten); the four films measured. Run over `src/data/` with the wider
+scan, only `optics.ts` had figures without a status. Planted in the test "every figure in data has a source, no placeholder
+stands in data, no key is written down": a record of number arrays with no status, the same with no source, a bare table
+and a typed array, a wrong status word for one export, a status for an export that is not there; each fails. Still not
+covered: figures outside `src/data/`, and C21's calibrated, disputed, myth and inspired-only, which have no evidence kind.
+Checked with `npm run gate`.

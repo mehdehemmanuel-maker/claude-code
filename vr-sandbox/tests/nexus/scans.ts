@@ -3,6 +3,11 @@
 // repository or the built pages. Each is a function of the text or the values it is given, so the one test runs it on
 // the repository and on planted cases, and a planted case must fail it.
 
+/** A figure: a number, a list of numbers, a table of rows of numbers, or a typed array. (Figures held only in lists went
+ *  unseen by both scans: all of `optics.ts` (the evaluator, judging 10.T3, 2026-11-01).) */
+export const figure = (x: unknown): boolean => typeof x === 'number' || ArrayBuffer.isView(x)
+  || (Array.isArray(x) && x.length > 0 && x.every((y) => typeof y === 'number' || (Array.isArray(y) && y.length > 0 && y.every((z) => typeof z === 'number'))));
+
 /** Keys that say where a record's figures come from, or what kind of figure they are (typical, derived, an estimate). */
 const SOURCED = /^(source|sources|src|ref|refs|reference|references|confidence|basis|label|cite|citation|origin|provenance|evidence)$/i;
 
@@ -14,11 +19,12 @@ export function unsourced(mod: Record<string, unknown>, file: string): string[] 
   if (Object.keys(mod).some((k) => /(^|_)SOURCES?$/.test(k) && typeof mod[k] === 'string' && (mod[k] as string).trim().length > 8)) return [];
   const out: string[] = [];
   const walk = (v: unknown, path: string, ok: boolean, depth: number) => {
-    if (depth > 8 || !v || typeof v !== 'object' || ArrayBuffer.isView(v)) return;
+    if (depth > 8 || !v || typeof v !== 'object') return;
+    if (figure(v)) { if (!ok) out.push(`${file}: ${path}`); return; }
     if (Array.isArray(v)) { v.forEach((x, i) => walk(x, `${path}[${i}]`, ok, depth + 1)); return; }
     const o = v as Record<string, unknown>, has = ok || Object.keys(o).some((k) => SOURCED.test(k) && o[k] !== '' && o[k] !== undefined);
-    if (!has && Object.values(o).some((x) => typeof x === 'number')) out.push(`${file}: ${path}`);
-    for (const [k, x] of Object.entries(o)) if (x && typeof x === 'object') walk(x, `${path}.${k}`, has, depth + 1);
+    if (!has && Object.values(o).some(figure)) out.push(`${file}: ${path}`);
+    for (const [k, x] of Object.entries(o)) if (x && typeof x === 'object' && !figure(x)) walk(x, `${path}.${k}`, has, depth + 1);
   };
   for (const [k, v] of Object.entries(mod)) walk(v, k, false, 0);
   return out;
@@ -38,17 +44,22 @@ export const SAID: Record<string, Record<string, string>> = {
 export function unstated(mod: Record<string, unknown>, file: string, kinds: readonly string[]): string[] {
   const whole = Object.entries(mod).find(([k, v]) => /(^|_)STATUS$/.test(k) && typeof v === 'string');
   if (whole) return kinds.includes(whole[1] as string) ? [] : [`${file}: ${whole[0]} = ${whole[1]}, not a status`];
+  // (or a …_STATUS record naming the status of each export by its name: for tables held as plain lists, which have no
+  // record of their own to carry one)
+  const each = Object.entries(mod).find(([k, v]) => /(^|_)STATUS$/.test(k) && !!v && typeof v === 'object' && !Array.isArray(v)) as [string, Record<string, unknown>] | undefined;
   const out: string[] = [];
+  if (each) for (const [k, v] of Object.entries(each[1])) { if (!(k in mod)) out.push(`${file}: ${each[0]}.${k} names no export`); else if (!kinds.includes(String(v))) out.push(`${file}: ${each[0]}.${k} = ${v}, not a status`); }
   const statusOf = (o: Record<string, unknown>) => { if (typeof o.status === 'string' && kinds.includes(o.status)) return o.status;
     for (const [k, m] of Object.entries(SAID)) if (k in o && String(o[k]) in m) return m[String(o[k])]; return undefined; };
   const walk = (v: unknown, path: string, has: boolean, depth: number) => {
-    if (depth > 8 || !v || typeof v !== 'object' || ArrayBuffer.isView(v)) return;
+    if (depth > 8 || !v || typeof v !== 'object') return;
+    if (figure(v)) { if (!has) out.push(`${file}: ${path}`); return; }
     if (Array.isArray(v)) { v.forEach((x, i) => walk(x, `${path}[${i}]`, has, depth + 1)); return; }
     const o = v as Record<string, unknown>, own = has || !!statusOf(o);
-    if (!own && Object.values(o).some((x) => typeof x === 'number')) out.push(`${file}: ${path}`);
-    for (const [k, x] of Object.entries(o)) if (x && typeof x === 'object') walk(x, `${path}.${k}`, own, depth + 1);
+    if (!own && Object.values(o).some(figure)) out.push(`${file}: ${path}`);
+    for (const [k, x] of Object.entries(o)) if (x && typeof x === 'object' && !figure(x)) walk(x, `${path}.${k}`, own, depth + 1);
   };
-  for (const [k, v] of Object.entries(mod)) walk(v, k, false, 0);
+  for (const [k, v] of Object.entries(mod)) if (k !== each?.[0]) walk(v, k, !!each && kinds.includes(String(each[1][k])), 0);
   return out;
 }
 
