@@ -5,7 +5,8 @@
 
 /** A figure: a number, a list of numbers, a table of rows of numbers, or a typed array. (Figures held only in lists went
  *  unseen by both scans: all of `optics.ts` (the evaluator, judging 10.T3, 2026-11-01).) */
-// (and a list of [name, number] pairs, as a mix's parts are; and a number exported alone (the evaluator, 2026-11-01))
+// (and a list of [name, number] pairs, as a mix's parts are; and a number exported alone; and, walked into, any list
+// holding a number beside anything else (a text, a null), a lone pair, a Map's values (the evaluator, 2026-11-01))
 export const figure = (x: unknown): boolean => typeof x === 'number' || ArrayBuffer.isView(x)
   || (Array.isArray(x) && x.length > 0 && x.every((y) => typeof y === 'number' || (Array.isArray(y) && y.length > 0 && y.some((z) => typeof z === 'number') && y.every((z) => typeof z === 'number' || typeof z === 'string'))));
 
@@ -23,10 +24,11 @@ export function unsourced(mod: Record<string, unknown>, file: string): string[] 
   const named = (k: string) => !!each && typeof each[1][k] === 'string' && (each[1][k] as string).trim().length > 8;
   const out: string[] = [];
   const walk = (v: unknown, path: string, ok: boolean, depth: number) => {
-    if (depth === 0 && typeof v === 'number') { if (!ok) out.push(`${file}: ${path}`); return; }
+    if (typeof v === 'number') { if (!ok) out.push(`${file}: ${path}`); return; }
     if (depth > 8 || !v || typeof v !== 'object') return;
+    if (v instanceof Map) v = Object.fromEntries(v);
     if (figure(v)) { if (!ok) out.push(`${file}: ${path}`); return; }
-    if (Array.isArray(v)) { v.forEach((x, i) => walk(x, `${path}[${i}]`, ok, depth + 1)); return; }
+    if (Array.isArray(v)) { if (v.some((x) => typeof x === 'number')) { if (!ok) out.push(`${file}: ${path}`); return; } v.forEach((x, i) => walk(x, `${path}[${i}]`, ok, depth + 1)); return; }
     const o = v as Record<string, unknown>, has = ok || Object.keys(o).some((k) => SOURCED.test(k) && o[k] !== '' && o[k] !== undefined);
     if (!has && Object.values(o).some(figure)) out.push(`${file}: ${path}`);
     for (const [k, x] of Object.entries(o)) if (x && typeof x === 'object' && !figure(x)) walk(x, `${path}.${k}`, has, depth + 1);
@@ -57,10 +59,11 @@ export function unstated(mod: Record<string, unknown>, file: string, kinds: read
   const statusOf = (o: Record<string, unknown>) => { if (typeof o.status === 'string' && kinds.includes(o.status)) return o.status;
     for (const [k, m] of Object.entries(SAID)) if (k in o && String(o[k]) in m) return m[String(o[k])]; return undefined; };
   const walk = (v: unknown, path: string, has: boolean, depth: number) => {
-    if (depth === 0 && typeof v === 'number') { if (!has) out.push(`${file}: ${path}`); return; }
+    if (typeof v === 'number') { if (!has) out.push(`${file}: ${path}`); return; }
     if (depth > 8 || !v || typeof v !== 'object') return;
+    if (v instanceof Map) v = Object.fromEntries(v);
     if (figure(v)) { if (!has) out.push(`${file}: ${path}`); return; }
-    if (Array.isArray(v)) { v.forEach((x, i) => walk(x, `${path}[${i}]`, has, depth + 1)); return; }
+    if (Array.isArray(v)) { if (v.some((x) => typeof x === 'number')) { if (!has) out.push(`${file}: ${path}`); return; } v.forEach((x, i) => walk(x, `${path}[${i}]`, has, depth + 1)); return; }
     const o = v as Record<string, unknown>, own = has || !!statusOf(o);
     if (!own && Object.values(o).some(figure)) out.push(`${file}: ${path}`);
     for (const [k, x] of Object.entries(o)) if (x && typeof x === 'object' && !figure(x)) walk(x, `${path}.${k}`, own, depth + 1);

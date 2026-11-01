@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { execSync, spawnSync } from 'node:child_process';
 import { placeholders, secrets, unsourced, unstated } from './scans';
 import { EVIDENCE } from '../../src/nexus/evidence';
-import { certifiedOf, certifiedView, gateOf, nearMissesOf, nearMissesView, stepOf } from '../../src/nexus/agent';
+import { certifiedOf, certifiedView, gateOf, nearMissesOf, nearMissesView, runOf, stepOf } from '../../src/nexus/agent';
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
@@ -162,6 +162,14 @@ describe('every domain, in one pass', () => {
     expect(unsourced({ MIX: { m1: { parts: [['cement', 330]] } } }, 'planted'), '[name, number] pairs, no source').toHaveLength(1);
     expect([...unsourced({ LIMIT: 0.0073 }, 'planted'), ...unstated({ LIMIT: 0.0073 }, 'planted', EVIDENCE)], 'a number exported alone').toHaveLength(2);
     expect([...unsourced({ LIMIT: 0.0073, X_SOURCES: { LIMIT: 'ISO 286-1 Table 1' } }, 'planted'), ...unstated({ LIMIT: 0.0073, X_STATUS: { LIMIT: 'specified' } }, 'planted', EVIDENCE)]).toEqual([]);
+    // (a number beside a text or a null in a list, a lone [name, number] pair, a [number, unit] pair, a bare tuple exported,
+    // a Map's values: each a figure, each refused without a status (and without a source))
+    for (const [what, mod] of [['a list with n/a', { P: { a: { source: 's', pitch: [1.25, 'n/a', 1.75] } } }], ['a list with a null', { P: { a: { source: 's', x: [1, null, 3] } } }],
+      ['a lone pair', { P: { a: { source: 's', steel: ['steel', 7850] } } }], ['a number and its unit', { P: { a: { source: 's', t: [20, 'C'] } } }],
+      ['a bare tuple exported', { T: ['steel', 7850] }], ['a Map', { M: new Map([['steel', { source: 's', rho: 7850 }]]) }]] as const) {
+      expect(unstated(mod as Record<string, unknown>, 'planted', EVIDENCE).length, `${what}: no status`).toBeGreaterThan(0);
+    }
+    expect(unsourced({ P: { a: { pitch: [1.25, 'n/a'] } } }, 'planted').length, 'a list with n/a: no source').toBeGreaterThan(0);
     const data = readdirSync(join(root, 'src/data')).filter((f) => f.endsWith('.ts')), bad: string[] = [];
     for (const f of data) { const m = await import(`../../src/data/${f}`); bad.push(...unsourced(m, `src/data/${f}`), ...unstated(m, `src/data/${f}`, EVIDENCE)); }
     for (const dir of ['src/data', 'src/nexus/kinds', 'src/nexus/book']) for (const f of readdirSync(join(root, dir)).filter((x) => x.endsWith('.ts'))) bad.push(...placeholders(readFileSync(join(root, dir, f), 'utf8'), `${dir}/${f}`));
@@ -226,11 +234,12 @@ describe('every domain, in one pass', () => {
   });
   // (stop the line (spec 00, S10; C25): an open andon keeps its task, and every task that waits on it, from passing; each near
   // miss has its kind and its response; the AI in the app logs the near misses its runs caught)
-  it('an open andon stops the line, and every near miss has its kind and its response', () => {
+  it('an open andon stops the line, and every near miss has its kind and its response', async () => {
     const rows = (f: string) => readFileSync(join(root, 'plan', f), 'utf8').split('\n').filter((l) => /^\| /.test(l) && !/^\| (Id|Date) \|/.test(l) && !/^\| -/.test(l)).map((l) => l.split('|').slice(1, -1).map((c) => c.trim()));
     const andons = rows('ANDON.md'), open = andons.filter((r) => !/^closed/.test(r[4]!)).map((r) => r[2]!), bad: string[] = [];
     const git = (...a: string[]) => spawnSync('git', a, { cwd: root, encoding: 'utf8' }), deep = git('rev-parse', '-q', '--verify', 'HEAD~3^{commit}').status === 0;
     for (const r of andons) { if (!/^\d\d\.[A-Z]+\d+$/.test(r[2]!) || !r[3]) bad.push(`andon ${r[0]}: needs a task and what failed`);
+      else if (!readFileSync(join(root, 'plan/INDEX.md'), 'utf8').includes(`| ${r[2]!.slice(3)} |`) || !readdirSync(join(root, 'plan/specs')).some((d) => d.startsWith(r[2]!.slice(0, 2)))) bad.push(`andon ${r[0]}: ${r[2]} is not a task`);
       // (closed only by the change that fixes it, named: "closed <date> by commit <sha>", and the commit is real)
       if (/^closed/.test(r[4]!)) { const c = /^closed \d{4}-\d\d-\d\d by commit ([0-9a-f]{7,40})\b/.exec(r[4]!);
         if (!c) bad.push(`andon ${r[0]}: closed without naming the commit that fixed it`); else if (deep && git('cat-file', '-e', `${c[1]}^{commit}`).status !== 0) bad.push(`andon ${r[0]}: closed by ${c[1]}, which is not a commit`); } }
@@ -275,10 +284,21 @@ describe('every domain, in one pass', () => {
     expect(nearMissesOf([stepOf('build', {}, long, 1)], 'It is refused at b: no input y.', emptyBoard('x')).map((m) => m.what.slice(0, 16)), 'a failure past the cut').toEqual(['node div failed:', 'wire a.x>b.y: no']);
     // (the page shows them beside the answer: the view used, and what it shows)
     const view = nearMissesView(misses, (x) => x);
-    for (const m of misses) expect(view, `the page shows the ${m.kind} near miss`).toContain(m.what);
+    for (const m of misses) expect(view, `the page shows the ${m.kind} near miss, its kind and its response`).toContain(`<b>${m.kind}</b> ${m.what} (${m.response})`);
+    // (a run's record, the one way agentBuild ends: its near misses worked out from its steps as stepOf keeps them; and
+    // agentBuild ends only through it, keeping every step by stepOf (planted otherwise: the evaluator, 2026-11-01))
+    const run = await runOf({ start: emptyBoard('x'), board: emptyBoard('x'), answer: 'All done.', model: 'm', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: [],
+      steps: [stepOf('build', {}, long, 1), stepOf('card', { id: 'nope' }, 'no block "nope"', 1, true)] });
+    expect(run.nearMisses.map((m) => `${m.kind} ${m.tool}`), 'a refusal, a node and a tool failed, an answer past a standing refusal').toEqual(['error build', 'error build', 'error card', 'reckless answer']);
+    const agentSrc = readFileSync(join(root, 'src/nexus/agent.ts'), 'utf8'), body = agentSrc.slice(agentSrc.indexOf('export async function agentBuild'), agentSrc.indexOf('export async function runOf'));
+    expect(body.match(/return runOf\(/g)?.length, 'agentBuild ends, answered or stopped, through runOf').toBe(2);
+    expect(body, 'and returns no run of its own making').not.toMatch(/return \{[^}]*\bsteps\b/);
+    expect(body, 'agentBuild keeps each step by stepOf').toMatch(/steps\.push\(stepOf\(/);
+    expect(body, 'and by nothing else, nor sets its near misses itself').not.toMatch(/steps\.push\(\{|nearMisses:/);
     expect(view, 'open when one is reckless').toMatch(/^<details open>/);
     expect(readFileSync(join(root, 'src/nexus/view/nodes.ts'), 'utf8'), 'the page puts them beside the answer').toMatch(/nearMissesView\(r\.nearMisses, esc\)/);
-    for (const f of ['tests/evals/agent.eval.ts', 'tests/evals/one.eval.ts']) expect(readFileSync(join(root, f), 'utf8'), `${f} prints them`).toMatch(/near miss/);
+    expect(readFileSync(join(root, 'tests/evals/agent.eval.ts'), 'utf8'), 'the evaluation set prints each').toMatch(/for \(const m of \(row\.near[^)]*\)[^)]*\)\s*console\.log\(`\s*near miss/);
+    expect(readFileSync(join(root, 'tests/evals/one.eval.ts'), 'utf8'), 'the one test prints each').toMatch(/for \(const m of r\.nearMisses\) console\.log\(`near miss/);
   });
   // (the kernel (spec 10, T23; research 31): closed (it imports nothing outside its folder, touches no host but BigInt and
   // DataView, and no file of it passes 250 lines); its unit table is the units' own; each kind passes what is true and

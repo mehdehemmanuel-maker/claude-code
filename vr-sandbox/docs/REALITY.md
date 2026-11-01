@@ -1798,3 +1798,20 @@ none of its certificates": a value moved, a point moved, a force wired into an e
 boards' law nodes are all certified or undecided). Ten of T23's thirteen kinds are not built (cover, farkas, lrat,
 model, gap, sweep, rewrite, refines, table, sample); a certificate of one is refused as malformed. Checked with
 `npm run gate`.
+
+## 2026-11-01: the near misses guarded where the run makes them; every number in a data module a figure (spec 00, S10; spec 10, T3)
+
+S10's third verdict: the near misses were tested by calling the functions that make them, not where the AI's run makes
+them, so a run that returned none, or kept its steps the old cut way, passed. A scripted stand-in for the model was
+suggested; the rule here is no mocks, so the run's wiring is guarded another way: every run ends through one function,
+`runOf` in `src/nexus/agent.ts` (its near misses from its steps and answer, its diff and certificates from its boards),
+which the test calls with steps kept as `stepOf` keeps them (a refusal, a node failed past the cut, a tool failed, an
+answer past a standing refusal: error, error, error, reckless); and the test reads that `agentBuild` ends only through
+`runOf`, keeps each step by `stepOf`, and sets no near misses of its own. Also now held: each near miss on the page with
+its kind and response, both evaluation runners printing each one, an andon naming no real task, and (in `compile.py`)
+a closing commit that does not exist. T3's third verdict: a number beside a text or a null in a list, a lone pair, and a
+Map's values went unseen. Now any number in a data module's exports is a figure to both scans, wherever it sits; each of
+the evaluator's shapes planted fails the test "every figure in data has a source, no placeholder stands in data, no key
+is written down", and no record in `src/data/` was newly found without a status. Not seen, and said so in C21's row: a
+number inside a text or a function, and the JSON data files (`src/data/stock.json`, which the builds generate). Checked
+with `npm run gate`.

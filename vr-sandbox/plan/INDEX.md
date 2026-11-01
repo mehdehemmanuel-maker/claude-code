@@ -87,7 +87,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | S7 | The evaluator: its brief, three scored examples, the rule that only it flips a task | S5 | passing (evaluator claude-sonnet, 2026-11-01) |
 | S8 | The first decision records (0001 to 0007) written | — | failing |
 | S9 | The reviewer panel (research 11) with a quorum and stop signals (research 12): code judges with a veto; judges of different families; any gate may … | S7 | failing |
-| S10 | Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response) | S3 | failing (evaluator: The near-miss catcher misses real failures because it reads results that agentBuild has already cut to 300 characters (s) |
+| S10 | Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response) | S3 | failing (evaluator: The run's log is produced by agentBuild, and nothing guards that wiring. Planted: both returns of agentBuild changed to ) |
 | S11 | Dailies: the AI shows what changed since the last session, and the person approves, notes or kills each version; versions never overwritten | S2 | failing |
 | S12 | Prompts as versioned prompt nodes with frozen suites; untrusted text only through a schema-only extractor (CaMeL) | S5 | failing |
 | S13 | Post-mortems as a timeline, contributing factors and a hindsight guard (Allspaw, Dekker, SRE), replacing five whys; Perrow's chart computed from … | S10 | failing |
@@ -214,7 +214,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | --- | --- | --- | --- |
 | T1 | CODATA 2022 with correlations | 00 | claimed, in part: values done 2026-10-31 (CODATA 2022); correlations not yet |
 | T2 | Interval and ensemble modes; GUM validity probe | 00 | failing |
-| T3 | Claim status on every value (C21) | 00 S4 | failing (evaluator: The check says 'fails a value with no status'. Figures held as [name, number] pairs are still unseen by the scan: plante) |
+| T3 | Claim status on every value (C21) | 00 S4 | failing (evaluator: The check says 'fails a value with no status'. A value in a list with anything that is not a number or a list in it ([1.) |
 | T5 | Envelopes on sourced numbers (C22) | T3 | failing |
 | T6 | Ensembles by default where chaos or uncertainty rule; horizon badge | T2 | failing |
 | T7 | Assimilation node | T6 | failing |

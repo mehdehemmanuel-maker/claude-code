@@ -2,7 +2,7 @@
 
 Task in hand: 10.T23
 Spec in hand: spec 10, trust in numbers (`plan/specs/10-trust/`)
-Last commit the gate passed: 2786b4d (2026-11-01)
+Last commit the gate passed: eea0d6b (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -12,7 +12,8 @@ Last commit the gate passed: 2786b4d (2026-11-01)
 
 ## Open, and why
 
-- Verdicts in: 00.S1, 00.S2 and 00.S3 pass; 00.S10 and 10.T3 being judged a third time; 04.P10 failed a third time.
+- Verdicts in: 00.S1, 00.S2 and 00.S3 pass; 00.S10 and 10.T3 failed a third time (mended, to be judged again); 04.P10
+  failed a third time.
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds, and the AI's board taken only when it checks.
 - 11.LW12 and 10.T1 are claimed in part; their open parts are in `plan/DEFECTS.md` (D7) and the task rows.
 - The one test (`npm run eval:one`) passes 2 of its 18 lines; the rest wait on specs 01, 03, 04 and 06.

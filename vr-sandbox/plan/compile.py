@@ -249,8 +249,15 @@ def main() -> None:
                 if x in deps(t) and t['key'] not in down: down.add(t['key']); todo.append(t['key'])
         for k in [r[2]] + sorted(down):
             if by_key.get(k, {}).get('status', '').startswith('passing'): problems.append(f"{k} is passing with andon {r[0]} open (on {r[2]}{'' if k == r[2] else ', which it waits on'})")
+    import subprocess
     for r in andons:
-        if r[4].startswith('closed') and not re.match(r'^closed \d{4}-\d\d-\d\d by commit [0-9a-f]{7,40}\b', r[4]): problems.append(f"andon {r[0]} is closed without naming the commit that fixed it")
+        if r[2] not in by_key: problems.append(f"andon {r[0]} names {r[2]}, which is not a task")
+        m = re.match(r'^closed \d{4}-\d\d-\d\d by commit ([0-9a-f]{7,40})\b', r[4])
+        if r[4].startswith('closed') and not m: problems.append(f"andon {r[0]} is closed without naming the commit that fixed it")
+        # (the commit must exist, where the history is deep enough to hold it (a clone of one commit cannot say))
+        elif m and subprocess.run(['git', 'rev-parse', '-q', '--verify', 'HEAD~3^{commit}'], cwd=PLAN, capture_output=True).returncode == 0 \
+                and subprocess.run(['git', 'cat-file', '-e', m.group(1) + '^{commit}'], cwd=PLAN, capture_output=True).returncode != 0:
+            problems.append(f"andon {r[0]} is closed by {m.group(1)}, which is not a commit")
     w(f'| Andons (stop the line) | {len(open_andons)} open, {len(andons) - len(open_andons)} closed |')
     w(f'| Near misses logged | {len(misses)} ({", ".join(f"{sum(1 for r in misses if r[2] == k)} {k}" for k in ("error", "at-risk", "reckless"))}) |')
     w(f'| Plan problems found by this script | {len(problems)} |')

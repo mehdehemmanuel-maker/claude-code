@@ -202,13 +202,21 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
     if (r.stop_reason === 'refusal') throw new Error(`declined: ${r.stop_details?.explanation ?? ''}`);
     if (r.stop_reason !== 'tool_use') { const answer = r.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
       const checked = o.check === false ? undefined : await checkOf(client, request, steps, answer, o.check ?? 'claude-sonnet-5-5', (u) => { tokIn += u.input_tokens; tokOut += u.output_tokens; }).catch((e) => `not checked: ${(e as Error).message}`);
-      return { board, steps, answer, model: r.model, tokens: { in: tokIn, out: tokOut, cached, written }, made, nearMisses: nearMissesOf(steps, answer, board), ...(await certifiedOf(start, board)), ...(checked ? { checked } : {}) }; }
+      return runOf({ start, board, steps, answer, model: r.model, tokens: { in: tokIn, out: tokOut, cached, written }, made, ...(checked ? { checked } : {}) }); }
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const b of r.content) if (b.type === 'tool_use') { const s0 = Date.now(); let out: string, err = false; try { out = await doTool(b.name, (b.input ?? {}) as Record<string, unknown>); } catch (e) { out = (e as Error).message; err = true; }
       steps.push(stepOf(b.name, b.input, out, Date.now() - s0, err)); results.push({ type: 'tool_result', tool_use_id: b.id, content: out, ...(err ? { is_error: true } : {}) }); }
     messages.push({ role: 'user', content: results });
   }
-  return { board, steps, answer: '', model, tokens: { in: tokIn, out: tokOut, cached, written }, made, stopped, nearMisses: nearMissesOf(steps, '', board), ...(await certifiedOf(start, board)) };
+  return runOf({ start, board, steps, answer: '', model, tokens: { in: tokIn, out: tokOut, cached, written }, made, ...(stopped ? { stopped } : {}) });
+}
+
+/** A run's record, the one way agentBuild ends (answered or stopped): what it did, and what is worked out from that: its
+ *  near misses from its steps and answer, its diff and certificates from the boards. (The wiring is guarded by testing
+ *  this, and by the gate reading that agentBuild ends only through it and keeps each step by `stepOf`.) */
+export async function runOf(r: Omit<AgentRun, 'nearMisses' | 'diff' | 'certificates'> & { start: Board }): Promise<AgentRun> {
+  const { start, ...rest } = r;
+  return { ...rest, nearMisses: nearMissesOf(r.steps, r.answer, r.board), ...(await certifiedOf(start, r.board)) };
 }
 
 const P = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });
