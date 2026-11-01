@@ -402,6 +402,11 @@ describe('every domain, in one pass', () => {
     // (the relay sends the page all of the run: its near misses, diff and certificates)
     const sent = JSON.parse(relayBody(run)) as AgentRun; expect(sent.nearMisses, 'every near miss sent whole: its step, tool, what, kind and response').toEqual(run.nearMisses);
     expect(sent, 'and the whole run as it was made (its certificates and diff too)').toEqual(JSON.parse(JSON.stringify(run))); expect(sent.nearMisses.length).toBe(4); expect(sent).toHaveProperty('diff'); expect(sent).toHaveProperty('certificates');
+    // (and a run with certificates: a law node built, so a relay that dropped them is seen (the run above has none: the
+    // evaluator, 2026-11-01))
+    const lt = await toolsFor(emptyBoard('asked')), ls: AgentStep[] = []; await callTools([{ id: '1', name: 'build', input: { nodes: { m: { b: 'in.number', s: { value: 3, unit: 'kg' } }, a: { b: 'in.number', s: { value: 2.5, unit: 'm/s^2' } }, f: { b: 'law.newton.second' } }, wires: ['m.value>f.m', 'a.value>f.a'] } }], lt.doTool, ls);
+    const lawRun = await runOf({ start: emptyBoard('asked'), board: lt.board(), steps: ls, answer: 'Done: the force is on the board.', model: 'none (the real tools, no model)', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: lt.made });
+    expect(lawRun.certificates.length, 'a run with certificates').toBeGreaterThan(0); expect(JSON.parse(relayBody(lawRun)), 'sent with its certificates, whole').toEqual(JSON.parse(JSON.stringify(lawRun)));
     // (every near miss the run catches has its kind's response, from the one table: a reckless one, to stop and tell the
     // user (the run's own were held to nothing: the evaluator, 2026-11-01))
     // (held as the log's rows are: a reckless act's, to stop and tell the user, said first; an error's or an at-risk act's
@@ -759,6 +764,14 @@ describe('every domain, in one pass', () => {
     const lid = (y: number): Part => ({ ...done, parts: [done.parts![0]!, { name: 'lid', item: 'lid', mat: 'steel-low', shape: { box: [0.1, 0.004, 0.1] }, at: [0, y, 0] }] }), kl = reapplyImprints(lid(0.05)), low = reapplyImprints(lid(0.02));
     expect([kl.kept, kl.lost, kl.part.parts![1]!.cuts?.length ?? 0, kl.part.parts![0]!.cuts?.length], 'a lid well over it: kept on its own plate, the lid not cut').toEqual([['M8 cap screw'], [], 0, 1]);
     expect([low.kept, low.lost.map((x) => /room/.test(x.why))], 'a lid in its key\'s room: lost, by its room check').toEqual([[], [true]]);
+    // (a hex head asks no key's room, so its own-piece check alone holds it: a lid 0.05 mm over the plate, the ray from just
+    // above the plate's face would meet the lid first; lost, said so, the lid not cut (only the socket head's room check
+    // held this before: the evaluator, 2026-11-01); and its keep zones made again at the new top, not kept from before)
+    const hexDone = applyImprint(host, imprint(host, { ...c10.asking, head: 'hex' } as Asking, [r.at[0]! / 1000, 1, r.at[1]! / 1000], [0, -1, 0]) as Imprinted, 'M8 hex bolt').part, top = r.plate[1]! / 2000;
+    const hexLid = reapplyImprints({ ...hexDone, parts: [hexDone.parts![0]!, { name: 'lid', item: 'lid', mat: 'steel-low', shape: { box: [0.1, 0.004, 0.1] }, at: [0, top + 0.00005 + 0.002, 0] }] });
+    expect([hexLid.kept, hexLid.lost.length, hexLid.part.parts![1]!.cuts?.length ?? 0], `a hex head under a lid 0.05 mm over it: lost, the lid not cut (${hexLid.lost.map((x) => x.why).join('; ')})`).toEqual([[], 1, 0]);
+    const keeps = (p: Part) => (p.keep ?? []).map((k) => +((k.at[1] ?? 0) * 1000).toFixed(3));
+    expect(keeps(tp).length, 'its keep zone made again, once').toBe(done.parts![0]!.keep!.length); expect(keeps(tp), 'at the new top, not where the old top was').not.toEqual(keeps(done.parts![0]!));
     // (made too thin for its counterbore: its checks refuse it, so it is lost and said so; made into sub-parts, it has no
     // surface: lost; first put on a step below the piece's top, it keeps to its step when nothing changes, and is lost when
     // the step is raised above... (a face the farthest out at first, made not so, is lost))
@@ -874,6 +887,38 @@ describe('every domain, in one pass', () => {
     const sl = solveJoints([{ name: 'rail' }, { name: 'cart', at: [0.1, 0.02, 0.01] }], [{ name: 'slide', kind: 'slider', a: { part: 'rail', frame: { at: [0, 0.01, 0], n: [0, 0, 1], u: [0, 1, 0] } }, b: { part: 'cart', frame: { at: [0, 0, 0], n: [0, 0, -1], u: [0, 1, 0] } } }]);
     expect([sl.held, sl.freedom, sl.free], 'held, and its slide').toEqual([['rail'], 1, ['the cart slides along (0, 0, 1)']]);
   });
+  // (the interface tools as nodes on a board (spec 01, I13): "Paste a bolt onto anything" stands one M8 cap screw on a
+  // plate from above and on a round boss's side, each cut by its standards and the screw seated by its joints (the turn
+  // about its axis left), and refuses the steel angle's 5 mm leg by its counterbore's rule, nothing cut; "The cover follows
+  // the bore" puts the cover on the flange by its six holes (0 freedom left, every joint holding) and, the bore widened
+  // 40 to 50 mm, the holes and the cover's joints follow; every node of both runs, none failing)
+  it('the interface nodes on their starter boards: a bolt pasted onto anything; the cover follows the bore', async () => {
+    const boards = new Map(starterBoards()), byTitle = (re: RegExp) => [...boards].find(([t]) => re.test(t))!;
+    const [, paste] = byTitle(/^Paste a bolt onto anything/), pb = paste(), pe = new Engine(pb); await pe.run();
+    const po = (id: string) => pe.state.get(id)!.out as Record<string, unknown>;
+    expect(Object.keys(pb.nodes).filter((id) => pe.state.get(id)!.status !== 'ok'), 'every node of the paste board runs').toEqual([]);
+    for (const id of ['on plate', 'on boss']) { const cut = po(id).part as Part, pasted = po(id).pasted as Part;
+      expect([cut.cuts?.length, cut.ports?.length, cut.imprints?.length, po(id).freedom, po(id).violation], `${id}: cut once, its hole an interface, recorded; the screw left only its turn`).toEqual([1, 1, 1, 1, '']);
+      expect(pasted.parts!.map((p) => p.name), `${id}: the part and its screw`).toEqual([cut.name, 'M8 × 30 socket head cap screw']);
+      expect(String(po(id).says), `${id}: seated on the counterbore's floor`).toContain('seated 8.5 mm down'); }
+    // (the screw on the plate: its head's underside 8.5 mm below the top, its axis in the hole, pointing down into it)
+    const sc = (po('on plate').pasted as Part).parts![1]!, q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...sc.rot!));
+    expect(sc.at!.map((x) => +(x * 1000).toFixed(3) + 0), 'the screw stood where it was pasted, seated').toEqual([20, -3.5, 0]); expect(new THREE.Vector3(0, -1, 0).applyQuaternion(q).y, 'down into the plate').toBeCloseTo(-1, 9);
+    expect([(po('on angle').part as Part).cuts ?? [], po('on angle').violation], 'the angle\'s 5 mm leg refused, nothing cut').toEqual([[], expect.stringMatching(/counterbore 8\.5 mm deep.*5\.0 mm plate/)]);
+    expect([po('gained').holds, po('gained').violation], 'its assertion holds: the plate gained its hole as an interface').toEqual([true, '']);
+    expect(pe.state.get('on angle')!.warnings?.join(' '), 'the refusal a warning on its node').toMatch(/refused/);
+    const [, cover] = byTitle(/^The cover follows the bore/), cb = cover(), ce = new Engine(cb); await ce.run();
+    const co = (id: string) => ce.state.get(id)!.out as Record<string, unknown>, holesAt = () => { const t = co('cover on flange').together as Part, cv = t.parts![1]!, qq = new THREE.Quaternion().setFromEuler(new THREE.Euler(...cv.rot!));
+      return (cv.cuts ?? []).map((c) => new THREE.Vector3(...c.at).applyQuaternion(qq).add(new THREE.Vector3(...cv.at!))).map((v) => +(Math.hypot(v.x, v.z) * 1000).toFixed(2)); };
+    expect(Object.keys(cb.nodes).filter((id) => ce.state.get(id)!.status !== 'ok'), 'every node of the cover board runs').toEqual([]);
+    expect([co('cover on flange').freedom, co('cover on flange').violation, (co('cover on flange').table as unknown[]).length], 'the cover on the flange by its six holes and its face: 0 freedom left, all holding').toEqual([0, '', 7]);
+    expect(holesAt(), 'the cover\'s holes over the 30.8 mm circle').toEqual(Array(6).fill(30.8));
+    const bolts = co('bolts').bolts as Part; expect(bolts.parts!.map((x) => [+(Math.hypot(x.at![0], x.at![2]) * 1000).toFixed(2), +(x.at![1] * 1000).toFixed(2), x.parts!.map((y) => y.name).join(', ')]), 'six bolts drawn through both plates, each head\'s washer on the cover (its top 11 mm up)').toEqual(Array(6).fill([30.8, 12.6, 'M8 washer under the head, M8 × 30 hex bolt, M8 washer under the nut, M8 hex nut']));
+    // (the flange is drawn about its middle, 10 mm thick: its top at 5 mm, the cover's at 11 mm, the head's washer on it)
+    expect(+(((co('cover on flange').together as Part).parts![1]!.at![1]) * 1000).toFixed(3) + 0, 'the cover on the flange\'s top').toBe(8);
+    cb.nodes.bore!.set = { ...cb.nodes.bore!.set, value: 0.05 }; ce.touch('bore'); await ce.run();
+    expect([co('cover on flange').freedom, co('cover on flange').violation], 'widened: still on, still held').toEqual([0, '']); expect(holesAt(), 'its holes followed to the 35.8 mm circle').toEqual(Array(6).fill(35.8));
+  }, 120_000);
   // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
   // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the
   // plate's hole is not)

@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 18 passing (by the evaluator), 9 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 130: 21 passing (by the evaluator), 9 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 15 (11 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -89,7 +89,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | S7 | The evaluator: its brief, three scored examples, the rule that only it flips a task | S5 | passing (evaluator claude-sonnet, 2026-11-01) |
 | S8 | The first decision records (0001 to 0007) written | — | failing |
 | S9 | The reviewer panel (research 11) with a quorum and stop signals (research 12): code judges with a veto; judges of different families; any gate may … | S7 | failing |
-| S10 | Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response) | S3 | failing (evaluator: The near-miss half's last link, the page showing what was caught, is still held by text pins, not by what the page does,) |
+| S10 | Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response) | S3 | passing (evaluator claude-sonnet, 2026-11-01) |
 | S11 | Dailies: the AI shows what changed since the last session, and the person approves, notes or kills each version; versions never overwritten | S2 | failing |
 | S12 | Prompts as versioned prompt nodes with frozen suites; untrusted text only through a schema-only extractor (CaMeL) | S5 | failing |
 | S13 | Post-mortems as a timeline, contributing factors and a hindsight guard (Allspaw, Dekker, SRE), replacing five whys; Perrow's chart computed from … | S10 | failing |
@@ -107,11 +107,11 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | I6 | imprint: stand an interface on any surface point (normal, edge rule, turn) | I5 | passing (evaluator claude-sonnet, 2026-11-01) |
 | I7 | The checks before cutting (wall, depth, spacing, room, breaking in), each refusing with its rule, its numbers and its source | I6 | passing (evaluator claude-sonnet, 2026-11-01) |
 | I8 | Apply: cut, add the keep zones, give the host the mirror interface and the imprint record | I7 | passing (evaluator claude-sonnet, 2026-11-01) |
-| I9 | Face queries: an imprint keeps to its face by what the face is (made by, normal and extreme, near); said lost, never moved | I8 | failing (evaluator: The task is 'said lost, never moved' (R10: keep the negative on the same face it was put on). reapplyImprints re-casts a) |
+| I9 | Face queries: an imprint keeps to its face by what the face is (made by, normal and extreme, near); said lost, never moved | I8 | passing (evaluator claude-sonnet, 2026-11-01) |
 | I10 | fastenerFor: the fastener from the catalogue for a stack (through, tapped, insert), said why; mate() lays every fastener through it; boreThrough's … | I8 | passing (evaluator claude-sonnet, 2026-11-01) |
-| I11 | Copy and paste an interface; pattern and relation nodes; a shared pattern read by both parts | I8 | claimed |
+| I11 | Copy and paste an interface; pattern and relation nodes; a shared pattern read by both parts | I8 | passing (evaluator claude-sonnet, 2026-11-01) |
 | I12 | Joints: frame-to-frame joints solved together; residual, flipped, freedom left (Jacobian rank), the fewest that fight named | I8 | claimed |
-| I13 | The nodes (interfaces, negative, imprint, pattern, relation, joint, assert) with their own tests; starter boards 'Paste a bolt onto anything' and … | I11, I12 | failing |
+| I13 | The nodes (interfaces, negative, imprint, pattern, relation, joint, assert) with their own tests; starter boards 'Paste a bolt onto anything' and … | I11, I12 | claimed |
 | I14 | The AI: FOR-AI's rule to mate by joints and imprints; assert nodes; its replies lead with what fails; a shadow board published only when its … | I13 | failing |
 | I15 | The interfaces evaluation set: the twelve cases of design §4, numbers worked out by hand from the sources first | I3 | failing |
 | I16 | Drag to imprint in the 3D view: the negative shown before cutting (remove, keep, contact), its verdict, accept or cancel; copy and paste a face's … | I13 | failing |

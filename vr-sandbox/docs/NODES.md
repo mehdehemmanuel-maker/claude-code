@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 621 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 626 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -35,16 +35,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 335 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 340 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 13 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 86 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 551 tested here (their own tests: that they do what they say, not that the world does); 60 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 556 tested here (their own tests: that they do what they say, not that the world does); 60 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 199 of 621 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 199 of 626 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (15)
 
@@ -66,7 +66,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
 - **ZenRows: read a web page** (`api.zenrows`): A web page fetched through ZenRows (ZENROWS_API_KEY under Node): its scripts run where asked, its words back as Markdown or its HTML as it is. *given, untested*
 
-## 2 · Make: shapes, parts, things (84)
+## 2 · Make: shapes, parts, things (85)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
@@ -108,6 +108,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Higgsfield: pictures and video** (`api.higgsfield`): A request to one of Higgsfield's models (its path, as its docs name it: higgsfield-ai/soul/v2/standard for pictures, a video model's for video), its words and any pictures' addresses, sent with HIGGSFIELD_KEY_ID and … *hypothetical, untested*
 - **House** (`seed.house`): A house: its rooms laid out from the plan you pick (studio, 1, 2 or 3 bed) either side of a hall, each spawned as a Room with its fittings, its doors onto the hall and its windows outside decided by what each wall … *hypothetical, untested, before the update*
 - **Into its cells** (`make.into`): A thing put into each cell of an enclosure (its frames "cell 1", …), every other one turned half round if asked, so each one's plus lies beside the next one's minus. *derived, tested here, before the update*
+- **Joints solved together** (`joints.solve`): Every joint wired in, solved together by least squares (Levenberg–Marquardt): each part's pose found so that all hold, or as near as they let it; each joint's residual in mm and degrees, the parts turned end for end … *derived, tested here*
 - **Kitchen fittings** (`seed.fittings.kitchen`): What makes a room a kitchen: a run of base cabinets and a worktop along the back wall, the sink in it, a stove and a fridge (cabinets 600 deep, 900 high; a 760 mm range; a 750 × 1750 mm fridge: typical) *hypothetical, untested, before the update*
 - **Lithium cell** (`battery.cell`): A cylindrical lithium-ion cell by its format (18650, 21700, 4680): can, sleeve, its jelly roll wound turn by turn (cathode, anode, separator), insulators, cap with its vent disc and gasket *specified, tested here, before the update*
 - **Living fittings** (`seed.fittings.living`): What makes a room a living room: a sofa facing a television on its stand, a low table between (a 2.1 m three-seat sofa, typical) *hypothetical, untested, before the update*
@@ -155,11 +156,12 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Wound roll** (`make.roll`): Strips laid over one another and wound round a core: a lithium cell's cathode, separator and anode; a coil's wire; a film capacitor; a roll of tape. *hypothetical, tested here, before the update*
 - **Wrap in** (`make.wrap`): A part wrapped in an envelope of a sheet folded round it and sealed at its edges, open at its top: a separator round a battery plate, a bag, a sleeve, shrink wrap *hypothetical, tested here, before the update*
 
-## 3 · Arrange and mate (32)
+## 3 · Arrange and mate (35)
 
 Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones and mates as numbers; proximity; routes.
 
 - **Body fitted to a picture (analysis by synthesis)** (`fit.lines`): The vehicle moved until its rendered silhouette meets the outline on the picture, both ways (where it falls short and where it stands past it): its body lines (where its windscreen's foot, its roof, its back glass's … *derived, untested*
+- **Bolts for a pattern** (`fasten.pattern`): The bolt the catalogue sells for two plates through a pattern (ISO 4017, its washers and nut, the shortest sold: fastenerFor), one at each of its points, and why that one; and the bolts themselves, each with its … *derived, tested here*
 - **Bore where it passes** (`bore`): A part bored wherever another runs through it: a hole along the other's line, cut in each piece it passes and in no other; for a bolt, a screw or a stud its standard's clearance hole (ISO 273 medium for its thread), … *derived, tested here*
 - **Clear away** (`clear`): What a thing places, less whatever comes within a distance of another thing (grass under a road, trees where a house stands) or, with "keep", only those: deleting by where things are *derived, tested here, before the update*
 - **Combine** (`combine`): Several things as one assembly, each where it is: a frame and its motors, a city and the swarm over it *derived, tested here, before the update*
@@ -171,6 +173,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Imprint a pattern** (`imprint.pattern`): Each hole of a pattern imprinted where it falls on a part's top face: stood on the face, its negative made for the part's material and depth (a clearance hole for its bolt, ISO 273), checked (edge, spacing, room), … *derived, tested here*
 - **It is** (`tag`): Says what a part is: its name, and the inventory item it is (so the audit holds it to its recipe and anything can find it). *derived, tested here, before the update*
 - **Its mates, measured** (`mates`): Every mate on everything in a thing, measured where it stands, as numbers: what each carries it to, its measure, its value, the range it must hold in, whether it holds, and whether it is in force in the state you give *derived, tested here, before the update*
+- **Joint** (`joint`): Two parts put together by their ports: by their ports, the second's face on the first's and each hole on its partner (the pattern turned as fit() finds it); or one joint of a kind (fixed, a hinge, a slider, a pin in a … *derived, tested here*
 - **Line** (`line`): Cables, hoses, wires, pipes, brake lines, traces and roads are one thing: a section swept along a path. *hypothetical, tested here, before the update*
 - **Look (substrate, treatment, coating, wear)** (`look`): How a thing looks, as layers, each changeable: its material's own colour worked out from its optics (steel grey, copper red, gold yellow: not chosen), then a treatment grown on it (anodised titanium, heat-tinted … *derived, tested here*
 - **Mate** (`mate`): One thing set on another by their frames: its frame lands on the other's, turned to face as it does ("into": a door in its opening, a window in its wall) or back at it ("against": a face on a face). *derived, tested here, before the update*
@@ -178,6 +181,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Mirror** (`mirror`): A thing and its mirror image across a plane through the origin *derived, tested here, before the update*
 - **Onto a shaft** (`onto`): A part with a bore slid onto a round piece of another, their axes made one: a sprocket onto a cam's nose, a bearing onto its shaft, a pulley onto a crank. *derived, tested here, before the update*
 - **Onto a surface (any outline, laid on and following it)** (`onto.surface`): Any flat outline, a vent, a badge, a decal, a sign, a panel, an address number, laid onto any thing's surface: drawn as seen looking along a direction (its u across to the right, its v up), cast onto the thing from a … *derived, tested here*
+- **Paste onto a surface** (`imprint`): A bolt or a screw pasted onto a point of any part: its own thread read off it, stood square to the surface the ray from the point meets (a face, a round side), its negative made for the part's material and depth, … *derived, tested here*
 - **Pattern of** (`array`): A thing many times in a pattern, one thing stored and every one placed: in a row (each a step on from the last), round a ring (about y, each turned to face out: a drone's four motors, a wheel's bolts), or on a grid nx … *hypothetical, tested here, before the update*
 - **Place** (`place`): A thing put at a place (x, y, z), turned about x, y and z, at a scale; or at each point of a table wired in (posts at a chain's free ends, bolts at their holes, lamps along a roof), each moved by x, y, z. *derived, tested here, before the update*
 - **Place a part** (`place.solve`): Where a part should go, found, never typed: it is taken out, the space round where it could go is mapped (heat, motion, reach), and every place it fits whole, standing on something (or within a bracket of it) and … *derived, tested here, before the update*
@@ -217,12 +221,13 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Solve through laws** (`law.solve`): What is known, one a line ("mass = 1000 kg"), and a quantity wanted: the laws of the book chained to reach it, as many as it takes and across fields, each solved forward or backward. *derived, tested here*
 - **What each part needs** (`need`): What every part of a thing needs of where it is, read from what its parts state, never typed: what it is mounted on, what it connects to or passes through, what it keeps out of (heat over its material's limit, what … *derived, tested here, before the update*
 
-## 5 · Check (34)
+## 5 · Check (35)
 
 Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, said with numbers.
 
 - **Accuracy, four ways (silhouette, features, surface, dimensions)** (`check.accuracy`): The model against the picture from the picture's own camera, as four separate answers, never one blended score: its silhouette (does the outline match, both ways), its features (each traced feature against the model's … *derived, untested*
 - **Approved** (`gauntlet.approved`): What has come through the gauntlet so far (read from its verdicts), and what was turned back and why *derived, tested here, before the update*
+- **Assert** (`assert`): A measured quantity (a mass, a volume, a box, a least wall, a clearance, an interference, a joint's residual) held to a target: within a tolerance of it, at most it, or at least it; whether it holds, by how much it is … *derived, tested here*
 - **Blind judge (vision model)** (`ai.judge`): Pictures of anything (a render of a build from several sides, a photograph, a picture an image model drew) shown to a vision model that is told nothing but the criteria, several times apart: what it says the thing is, … *derived, untested*
 - **Candidates** (`gauntlet.candidates`): What is put through the gauntlet: blocks of the library (all, of a kind or a field, or made by you), or entries of the inventory (under a path, or yours), or named ones. *given, tested here, before the update*
 - **Check a limit** (`check.limit`): A value against its limit: whether it passes, the margin left, and the factor of safety *derived, tested here, before the update*
@@ -314,7 +319,6 @@ Every physical law as a calculator, by its field, and formulas you write.
 Tables and rows, research, the gauntlet, money, operations.
 
 - **Bolt circle from a bore** (`relation.boltcircle`): The least radius of a bolt circle round a bore: the bore's radius and the end distance EN 1993-1-8 asks of each hole from the bore's edge, 1.2 d0, d0 its ISO 273 medium clearance hole *derived, tested here*
-- **Bolts for a pattern** (`fasten.pattern`): The bolt the catalogue sells for two plates through a pattern (ISO 4017, its washers and nut, the shortest sold: fastenerFor), one at each of its points, and why that one *derived, tested here*
 - **Break-even analysis (cost–volume–profit)** (`fin.breakeven`): How many must be sold to cover fixed costs, and the sales that takes *derived, tested here*
 - **Column** (`list.column`): One column of a table, as a list *derived, tested here, before the update*
 - **Compile research** (`research.merge`): Several references compiled into one: every source kept, each part once, a later one filling in what an earlier lacks, and where two sources give a different count, a conflict said to be settled *derived, tested here, before the update*
@@ -332,6 +336,7 @@ Tables and rows, research, the gauntlet, money, operations.
 - **Loan amortisation payment (annuity)** (`fin.loan`): The payment each period that pays a loan off, with interest, in so many periods (an annuity) *derived, tested here*
 - **Make a table** (`list.zip`): Lists side by side as the columns of a table *derived, tested here, before the update*
 - **Move rows** (`rows.shift`): Every row moved by dx, dz (and turned by dry): the car in front of each house, the lamp beside each door *derived, tested here, before the update*
+- **Negative of an interface** (`negative`): The negative a fastener asks of the part it goes in, read from its standards: through, a clearance hole (ISO 273) and its counterbore (DIN 974-1) for a cap screw; tapped, the tap drill (ISO 2306) as deep as the … *derived, tested here*
 - **Net present value (NPV)** (`fin.npv`): What a series of cash flows is worth today at a discount rate; the first flow is now *derived, tested here*
 - **Onto the ground** (`rows.ground`): Each row (a house's lot, a tree, a car) set on the ground where it stands: its y the ground's height at its x and z, so what is spawned from them stands on the hills, not in them *derived, tested here, before the update*
 - **Overall equipment effectiveness (OEE)** (`ops.oee`): How much of a machine's time makes good parts: availability × performance × quality *derived, tested here*

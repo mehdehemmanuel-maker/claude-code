@@ -1064,6 +1064,54 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     const sv = placeBlock(b, 'view.show', 1240, 120, {}, 'sv'); wire(b, code, 'firstOver', sv, 'value');
     return b;
   }],
+  ['Paste a bolt onto anything: one cap screw stood on a plate, a round boss and a steel angle, its hole cut by its standards', () => {
+    // (spec 01, I13; R7 to R9): the screw's own thread read off it; on each part, the ray from a point meets its surface, the
+    // screw stood square to it there, its negative made for that part's material and depth (ISO 273's clearance hole,
+    // DIN 974-1's counterbore), checked before anything is cut, cut, the part given the hole as an interface, and the screw
+    // seated in it by its joints (its axis in the hole, its head on the counterbore's floor: the turn about its axis left
+    // free). The steel angle's 5 mm leg is too thin for the counterbore: refused by its rule, nothing cut. Move a point,
+    // change the screw's thread: each paste is made again
+    const b = emptyBoard('Paste a bolt onto anything');
+    placeBlock(b, 'part.family', 0, 0, { family: 'screw', thread: 'M8', length: 30 }, 'screw'); b.nodes.screw!.label = 'The cap screw (ISO 4762, M8 × 30): what is pasted';
+    placeBlock(b, 'shape.box', 0, 200, { name: 'plate', mat: 'steel-low', w: 0.1, h: 0.01, d: 0.1 }, 'plate'); b.nodes.plate!.label = 'A steel plate, 100 × 10 × 100 mm';
+    placeBlock(b, 'shape.cyl', 0, 400, { name: 'round boss', mat: 'al-6061', r: 0.03, h: 0.04 }, 'boss'); b.nodes.boss!.label = 'A round aluminium boss, 60 mm across: pasted on its round side';
+    placeBlock(b, 'part.family', 0, 600, { family: 'angle', size: '50x5', L: 150 }, 'angle'); b.nodes.angle!.label = 'A steel angle, 50 × 5 (EN 10056-1)';
+    placeBlock(b, 'imprint', 320, 200, { x: 0.02, y: 1, z: 0 }, 'on plate'); b.nodes['on plate']!.label = 'Pasted on the plate, from above';
+    placeBlock(b, 'imprint', 320, 400, { x: 1, y: 0, z: 0, toward: '-x' }, 'on boss'); b.nodes['on boss']!.label = 'Pasted on the boss\'s round side';
+    placeBlock(b, 'imprint', 320, 600, { x: 0, y: 0, z: 1, toward: '-z' }, 'on angle'); b.nodes['on angle']!.label = 'Pasted on the angle\'s leg (5 mm: too thin, refused)';
+    for (const [n, h] of [['on plate', 'plate'], ['on boss', 'boss'], ['on angle', 'angle']] as const) { wire(b, 'screw', 'part', n, 'it'); wire(b, h, 'part', n, 'part'); }
+    placeBlock(b, 'place', 640, 200, {}, 'p1'); wire(b, 'on plate', 'pasted', 'p1', 'thing');
+    placeBlock(b, 'place', 640, 400, { x: 0.15 }, 'p2'); wire(b, 'on boss', 'pasted', 'p2', 'thing');
+    placeBlock(b, 'place', 640, 600, { x: 0.3, rx: -Math.PI / 2 }, 'p3'); b.nodes.p3!.label = 'Laid flat, the face it was pasted on up'; wire(b, 'on angle', 'pasted', 'p3', 'thing');
+    placeBlock(b, 'combine', 900, 400, { name: 'pasted' }, 'all'); for (const p of ['p1', 'p2', 'p3']) wire(b, p, 'placed', 'all', 'things');
+    placeBlock(b, 'space.show', 1160, 400, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
+    // (the plate gained its hole as an interface: read back and held)
+    placeBlock(b, 'interfaces', 640, 0, {}, 'its interfaces'); wire(b, 'on plate', 'part', 'its interfaces', 'thing');
+    placeBlock(b, 'assert', 900, 0, { what: 'the plate\'s interfaces', how: 'at least', target: 1 }, 'gained'); b.nodes.gained!.label = 'The plate gained its hole as an interface'; wire(b, 'its interfaces', 'count', 'gained', 'value');
+    placeBlock(b, 'view.show', 900, 160, {}, 'said'); b.nodes.said!.label = 'On the plate, said'; wire(b, 'on plate', 'says', 'said', 'value');
+    return b;
+  }],
+  ['The cover follows the bore: widen the bore and the bolt circle, both parts\' holes, the bolts and the cover\'s place follow', () => {
+    // (spec 01, I11 and I13; R11, R14, R15; evaluation case 9): the bore sets the least bolt circle round it (EN 1993-1-8's
+    // end distance, 1.2 d0, d0 ISO 273's medium hole); one circle both the flange's and the cover's holes read; the bolts
+    // the catalogue sells for the two plates (ISO 4017, washers, nut), drawn through both; the cover put on the flange by its holes (a face and
+    // a joint for each hole, solved together: 0 freedom left). Change the bore from 40 to 50 mm: everything that reads it
+    // runs again in the engine's order, each saying what it made; the plates themselves are not made again
+    const b = emptyBoard('The cover follows the bore');
+    placeBlock(b, 'in.number', 0, 0, { value: 0.04, unit: 'm' }, 'bore'); b.nodes.bore!.label = 'The bore (change it: 40 → 50 mm)';
+    placeBlock(b, 'relation.boltcircle', 260, 0, { thread: 'M8' }, 'circle radius'); placeBlock(b, 'pattern.circle', 520, 0, { thread: 'M8', count: 6 }, 'bolt circle');
+    placeBlock(b, 'in.number', 0, 200, { value: 0.08, unit: 'm' }, 'plate radius'); placeBlock(b, 'in.number', 0, 320, { value: 0.01, unit: 'm' }, 'flange thickness'); placeBlock(b, 'in.number', 0, 440, { value: 0.006, unit: 'm' }, 'cover thickness');
+    placeBlock(b, 'shape.cyl', 260, 240, { name: 'flange', mat: 'steel-low' }, 'flange'); placeBlock(b, 'shape.cyl', 260, 440, { name: 'cover', mat: 'steel-low' }, 'cover');
+    placeBlock(b, 'imprint.pattern', 520, 240, {}, 'flange holes'); placeBlock(b, 'imprint.pattern', 520, 440, {}, 'cover holes'); placeBlock(b, 'fasten.pattern', 780, 0, {}, 'bolts');
+    for (const [f, o, t, i] of [['bore', 'value', 'circle radius', 'bore'], ['circle radius', 'r', 'bolt circle', 'r'], ['plate radius', 'value', 'flange', 'r'], ['flange thickness', 'value', 'flange', 'h'], ['plate radius', 'value', 'cover', 'r'], ['cover thickness', 'value', 'cover', 'h'],
+      ['flange', 'part', 'flange holes', 'part'], ['bolt circle', 'pattern', 'flange holes', 'pattern'], ['cover', 'part', 'cover holes', 'part'], ['bolt circle', 'pattern', 'cover holes', 'pattern'], ['bolt circle', 'pattern', 'bolts', 'pattern'], ['flange thickness', 'value', 'bolts', 't1'], ['cover thickness', 'value', 'bolts', 't2'], ['flange holes', 'part', 'bolts', 'on']] as const) wire(b, f, o, t, i);
+    placeBlock(b, 'joint', 780, 340, {}, 'cover on flange'); b.nodes['cover on flange']!.label = 'The cover on the flange, by its holes'; wire(b, 'flange holes', 'part', 'cover on flange', 'a'); wire(b, 'cover holes', 'part', 'cover on flange', 'b');
+    placeBlock(b, 'combine', 1040, 340, { name: 'flange, cover and bolts' }, 'all'); wire(b, 'cover on flange', 'together', 'all', 'things'); wire(b, 'bolts', 'bolts', 'all', 'things');
+    placeBlock(b, 'space.show', 1300, 340, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
+    placeBlock(b, 'view.show', 1040, 0, {}, 'bolts said'); b.nodes['bolts said']!.label = 'The bolts, and why those'; wire(b, 'bolts', 'says', 'bolts said', 'value');
+    placeBlock(b, 'view.show', 1040, 160, {}, 'joint said'); b.nodes['joint said']!.label = 'The cover\'s joints, solved together'; wire(b, 'cover on flange', 'says', 'joint said', 'value');
+    return b;
+  }],
   ] as [string, Make][]);
   return boards.map(([n, f]) => [n, () => tidy(f())] as [string, Make]);
 }

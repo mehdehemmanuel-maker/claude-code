@@ -2249,3 +2249,22 @@ hinges 1° out of line (0.2847° and 0.7153°, 0.4969 mm each, solved in 18.5 ms
 the hole it fights, the misdrilled one the only one that, left out alone, lets the rest hold. Rigid clusters are not split
 out before solving, and a clearance hole's play is not a range: said in the task's evidence. Checked with `npm run gate`
 (the test "joints solved together: flipped, freedom left by rank, the fewest that fight named").
+
+## 2026-11-01: the interface tools as nodes, and their starter boards; S10, I9 and I11 pass (spec 01, I13; spec 00, S10)
+
+Round thirteen's verdicts: 00.S10 passed on its thirteenth judging (the page now driven, `npm run eval:ask`), 01.I9 on
+its second and 01.I11 on its first. Each named a gap it could not catch; the two that cost a line each are closed: a run
+with kernel certificates (a law node built) so a relay that dropped them fails the test "an open andon stops the line…",
+and a hex head under a lid 0.05 mm over its plate, so the own-piece check that holds an imprint to its plate is tested on
+its own (only the socket head's room check held that before); both checked by planting the fault once and seeing the test
+fail. New nodes, each with its own tests: `negative`, `imprint` (paste a bolt onto a surface), `joint`, `joints.solve` and
+`assert`. Two starter boards: "Paste a bolt onto anything" stands one M8 cap screw on a steel plate from above and on a
+round aluminium boss's side, each hole cut by its standards and the screw seated on the counterbore's floor by its joints
+(the turn about its axis left free), and refuses a steel angle's 5 mm leg (the counterbore is 8.5 mm deep); "The cover
+follows the bore" puts the cover on the flange by its six holes and its face (7 joints, 27 equations of rank 6, 0 freedom
+left), draws the six bolts with their washers and nuts, and follows when the bore is widened from 40 to 50 mm. The test
+"the interface nodes on their starter boards: a bolt pasted onto anything; the cover follows the bore" runs both. Seeing
+them in the page found two faults the tests had not: the bolts were not drawn at all, and then drawn 5 mm too high,
+because a cylinder is drawn about its middle and the bolts stood the plates from y = 0 (now they stand on the face the
+flange's holes were cut in); and the boss was pasted at its rim, not its middle, for the same reason. Screenshots by
+`node tests/evals/board-shot.cjs "<title>" out.png`, of each board, no page errors. Checked with `npm run gate`.
