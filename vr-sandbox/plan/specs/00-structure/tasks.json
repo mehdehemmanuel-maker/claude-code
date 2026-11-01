@@ -118,7 +118,7 @@
    "meets": [
     "S-R6"
    ],
-   "owner": "scripts/hooks/, plan/ANDON.md, plan/NEAR-MISS.md, agent.ts, view/nodes.ts (the page shows the near misses)",
+   "owner": "scripts/hooks/, plan/ANDON.md, plan/NEAR-MISS.md, agent.ts, view/nodes.ts (the page shows the near misses), vite.view.config.ts (the relay sends the whole run)",
    "check": "an open andon blocks 'done'; a caught near miss is logged with its kind",
    "status": "failing",
    "after": [

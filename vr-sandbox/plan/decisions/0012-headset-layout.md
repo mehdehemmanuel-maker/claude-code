@@ -23,7 +23,8 @@ to wire anything, were unmeasured, and the bar's Board button made the board 72�
 ## Choice
 
 The second: the board drawn at a fixed 780 css px in a headset (its 11 px text 0.60°, its 13 px text 0.71°); chat 42°
-to the side at 1.3 m (3.1° clear of the board; past Meta's 30° comfortable turn of the head, inside its 55° most); the
+to the side at 1.3 m (clear of the board, 0.64° between their edges as now measured; past Meta's 30° comfortable turn of
+the head, inside its 55° most); the
 bar in two rows (S over T), 39° wide, every button 2.6° or more; the keyboard 0.62 m wide at 0.9 m, 45° below the eye
 (7.2° clear of the bar). Each limit is checked by `npm run eval:headset`, which fails on any one outside it.
 
@@ -33,7 +34,9 @@ taller and its side panel wider, at the same pixels per metre, so every button o
 0.64° or more. A hand's ray presses only whole blocks on the board, never a port or a wire: the board's zoom keeps the
 smallest block at 2.5° or more (2.64° after zooming out ten times), and a wire is made from the side panel, a block's
 output by its "→ wire" button and the other block's input by its "← here" button, each 2.7°; "✕ cut" takes one away.
-The Board button is not in the headset's bar (the strip's + makes the board larger).
+The Board button is not in the headset's bar, and the B key does nothing there (the strip's + makes the board larger).
+The board's zoom is also held so its text, as drawn, stays readable (13 px at 0.6° or more, 11 px at 0.4° or more), and
+no minimap is drawn in a headset (the sheet is dragged to pan).
 
 ## The assumption it rests on
 

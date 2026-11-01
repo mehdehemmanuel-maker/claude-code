@@ -51,9 +51,18 @@ const srv = http.createServer((q, r) => { const p = path.join(root, decodeURICom
       if (shots) await pg.screenshot({ path: path.join(shots, `headset-side-${mode}.png`) });
     }
     await pg.evaluate(() => window.space.emulate.side('chosen'));
-    // (every block stays a target a hand can press however far the board is zoomed out: ten presses of the strip's −)
+    // (every block stays a target a hand can press, and the board's text as drawn readable, however far the board is
+    // zoomed out: ten presses of the strip's −; no minimap to press there)
     await pg.evaluate(() => { for (let i = 0; i < 10; i++) window.space.wall.zoom(1 / 1.25); }); await pg.waitForTimeout(200);
-    { const v = (await pg.evaluate(() => window.space.comfort())).block?.width, ok = v >= 2.5; console.log(`${ok ? 'ok  ' : 'FAIL'} smallest block after zooming out ten times (°): ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'} (limit 2.5 or more)`); if (!ok) fails++; }
+    { const m = await pg.evaluate(() => window.space.comfort()), mapShown = await pg.evaluate(() => window.space.wall.mapShown());
+      for (const [name, v, lo] of [['smallest block', m.block?.width, 2.5], ['board text, smallest (11 px) as drawn', m.text?.width, 0.4], ['board text, usual (13 px) as drawn', m.text13?.width, 0.6]]) { const ok = v >= lo; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name} after zooming out ten times (°): ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'} (limit ${lo} or more)`); if (!ok) fails++; }
+      console.log(`${mapShown ? 'FAIL' : 'ok  '} no minimap drawn in the headset (it was 1.1° tall)`); if (mapShown) fails++; }
+    // (a ray on a block's port presses no port: ports and wires are wired from the side panel in a headset)
+    { const k = await pg.evaluate(() => { const w = window.space.wall; for (const id of Object.keys(w.board().nodes)) { const p = w.portPoint(id); if (p && p.x > 0 && p.y > 0 && p.x < w.canvas.clientWidth && p.y < w.canvas.clientHeight) return w.probe(p.x, p.y) ?? 'nothing'; } return 'no port in view'; });
+      const ok = k !== 'out' && k !== 'in' && k !== 'wire' && k !== 'no port in view'; console.log(`${ok ? 'ok  ' : 'FAIL'} a ray on a port takes: ${k} (never the port itself)`); if (!ok) fails++; }
+    // (the B key, which on a screen makes the board larger, changes nothing in a headset: every limit held after it)
+    await pg.keyboard.press('b'); await pg.waitForTimeout(300);
+    { const m = await pg.evaluate(() => window.space.comfort()); let n = 0; for (const [name, f, lo, hi] of LIMITS) { let v; try { v = f(m); } catch { v = NaN; } if (!(v >= lo && v <= hi)) { n++; console.log(`FAIL after pressing B: ${name}: ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'}`); } } console.log(`${n ? 'FAIL' : 'ok  '} after pressing B every limit holds`); fails += n; }
     // (a wire made as a hand makes it in a headset: a block's output from the side panel, another block, its input there)
     const wired = await pg.evaluate(() => {
       const w = window.space.wall, n = () => Object.values(w.board().edges).filter((e) => !e.deleted && e.in).length, n0 = n();

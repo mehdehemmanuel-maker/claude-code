@@ -11,7 +11,7 @@ const relay = (): Plugin => {
     let body = ''; for await (const c of req) body += c;
     try { const { request, model, effort, board, blocks } = JSON.parse(body || '{}'); await load(seeds); const m = await load(agent);
       const r = await m.agentBuild(String(request ?? ''), { model, effort, board, blocks, seconds: 180, steps: 40 });
-      res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(r)); }
+      res.setHeader('Content-Type', 'application/json'); res.end(m.relayBody(r)); }
     catch (e) { res.statusCode = 500; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: (e as Error).message })); }
   };
   let dev: ViteDevServer | undefined;

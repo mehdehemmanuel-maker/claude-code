@@ -139,11 +139,31 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
   const { default: Sdk } = await import('@anthropic-ai/sdk'), client = new Sdk({ baseURL: 'https://api.anthropic.com' }), system = await guideOf();
   const model = o.model ?? 'claude-haiku-5-5', steps: AgentStep[] = [], t0 = Date.now(), until = t0 + 1000 * (o.seconds ?? 180);
   const start: Board = o.board ? structuredClone(o.board) : emptyBoard(request.slice(0, 60));
-  let board: Board = o.board ?? emptyBoard(request.slice(0, 60)), engine: Engine | undefined, tokIn = 0, tokOut = 0, cached = 0, written = 0, stopped: string | undefined;
+  let tokIn = 0, tokOut = 0, cached = 0, written = 0, stopped: string | undefined;
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: request }];
+  const t = await toolsFor(o.board ?? emptyBoard(request.slice(0, 60)), o.blocks);
+  for (let turn = 0; ; turn++) {
+    if (steps.length >= (o.steps ?? 30)) { stopped = `stopped at ${steps.length} steps`; break; }
+    if (Date.now() > until) { stopped = `stopped at ${Math.round((Date.now() - t0) / 1000)} s`; break; }
+    // (the guide and the tools are the same every call: cached, read again at a tenth of the price)
+    const r = await client.messages.create({ model, max_tokens: 8000, cache_control: { type: 'ephemeral' }, system, tools: TOOLS, output_config: { effort: o.effort ?? 'low' }, messages }, { signal: o.signal ?? AbortSignal.timeout(Math.max(5000, until - Date.now())) });
+    tokIn += r.usage.input_tokens; tokOut += r.usage.output_tokens; cached += r.usage.cache_read_input_tokens ?? 0; written += r.usage.cache_creation_input_tokens ?? 0; messages.push({ role: 'assistant', content: r.content });
+    if (r.stop_reason === 'refusal') throw new Error(`declined: ${r.stop_details?.explanation ?? ''}`);
+    if (r.stop_reason !== 'tool_use') { const answer = r.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+      const checked = o.check === false ? undefined : await checkOf(client, request, steps, answer, o.check ?? 'claude-sonnet-5-5', (u) => { tokIn += u.input_tokens; tokOut += u.output_tokens; }).catch((e) => `not checked: ${(e as Error).message}`);
+      return runOf({ start, board: t.board(), steps, answer, model: r.model, tokens: { in: tokIn, out: tokOut, cached, written }, made: t.made, ...(checked ? { checked } : {}) }); }
+    messages.push({ role: 'user', content: await callTools(r.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'), t.doTool, steps) });
+  }
+  return runOf({ start, board: t.board(), steps, answer: '', model, tokens: { in: tokIn, out: tokOut, cached, written }, made: t.made, ...(stopped ? { stopped } : {}) });
+}
+
+/** The tools the AI works through (find, card, build, open, change, fold, read, docs), on a board of their own: the same
+ *  code whether the model calls them or a test does with real inputs (no stand-in model: constitution C8). */
+export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ doTool: (name: string, a: Record<string, unknown>) => Promise<string>; board: () => Board; made: AgentBlock[] }> {
+  let board: Board = board0, engine: Engine | undefined;
   const [{ search }, { starterBoards }] = await Promise.all([import('./navigate'), import('./starters')]), made: AgentBlock[] = [];
   // (blocks a person saved, sent with the request: the agent can place them like any other)
-  for (const x of o.blocks ?? []) if (!block(x.id)) register(groupBlock(x.graph, { id: x.id, name: x.name, says: x.says, domains: x.domains, by: 'you' }));
+  for (const x of blocks ?? []) if (!block(x.id)) register(groupBlock(x.graph, { id: x.id, name: x.name, says: x.says, domains: x.domains, by: 'you' }));
   /** The board run, and a line a node: its status and a short reading of its outputs (those asked first; failures always). */
   const runLines = async (only?: Set<string>): Promise<string[]> => {
     engine = new Engine(board); await engine.run();
@@ -193,23 +213,20 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
     }
     throw new Error(`no tool ${name}`);
   };
-  for (let turn = 0; ; turn++) {
-    if (steps.length >= (o.steps ?? 30)) { stopped = `stopped at ${steps.length} steps`; break; }
-    if (Date.now() > until) { stopped = `stopped at ${Math.round((Date.now() - t0) / 1000)} s`; break; }
-    // (the guide and the tools are the same every call: cached, read again at a tenth of the price)
-    const r = await client.messages.create({ model, max_tokens: 8000, cache_control: { type: 'ephemeral' }, system, tools: TOOLS, output_config: { effort: o.effort ?? 'low' }, messages }, { signal: o.signal ?? AbortSignal.timeout(Math.max(5000, until - Date.now())) });
-    tokIn += r.usage.input_tokens; tokOut += r.usage.output_tokens; cached += r.usage.cache_read_input_tokens ?? 0; written += r.usage.cache_creation_input_tokens ?? 0; messages.push({ role: 'assistant', content: r.content });
-    if (r.stop_reason === 'refusal') throw new Error(`declined: ${r.stop_details?.explanation ?? ''}`);
-    if (r.stop_reason !== 'tool_use') { const answer = r.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
-      const checked = o.check === false ? undefined : await checkOf(client, request, steps, answer, o.check ?? 'claude-sonnet-5-5', (u) => { tokIn += u.input_tokens; tokOut += u.output_tokens; }).catch((e) => `not checked: ${(e as Error).message}`);
-      return runOf({ start, board, steps, answer, model: r.model, tokens: { in: tokIn, out: tokOut, cached, written }, made, ...(checked ? { checked } : {}) }); }
-    const results: Anthropic.ToolResultBlockParam[] = [];
-    for (const b of r.content) if (b.type === 'tool_use') { const s0 = Date.now(); let out: string, err = false; try { out = await doTool(b.name, (b.input ?? {}) as Record<string, unknown>); } catch (e) { out = (e as Error).message; err = true; }
-      steps.push(stepOf(b.name, b.input, out, Date.now() - s0, err)); results.push({ type: 'tool_result', tool_use_id: b.id, content: out, ...(err ? { is_error: true } : {}) }); }
-    messages.push({ role: 'user', content: results });
-  }
-  return runOf({ start, board, steps, answer: '', model, tokens: { in: tokIn, out: tokOut, cached, written }, made, ...(stopped ? { stopped } : {}) });
+  return { doTool, board: () => board, made };
 }
+
+/** One turn's tool calls, each run, kept by stepOf (its refusals and failures whole) and answered to the model; a tool that
+ *  throws is kept as failed. agentBuild's every turn goes through it. */
+export async function callTools(uses: readonly { id: string; name: string; input: unknown }[], doTool: (name: string, a: Record<string, unknown>) => Promise<string>, steps: AgentStep[]): Promise<Anthropic.ToolResultBlockParam[]> {
+  const results: Anthropic.ToolResultBlockParam[] = [];
+  for (const b of uses) { const s0 = Date.now(); let out: string, err = false; try { out = await doTool(b.name, (b.input ?? {}) as Record<string, unknown>); } catch (e) { out = (e as Error).message; err = true; }
+    steps.push(stepOf(b.name, b.input, out, Date.now() - s0, err)); results.push({ type: 'tool_result', tool_use_id: b.id, content: out, ...(err ? { is_error: true } : {}) }); }
+  return results;
+}
+
+/** What the relay sends the page of a run: all of it (its near misses, diff and certificates with the rest). */
+export const relayBody = (r: AgentRun): string => JSON.stringify(r);
 
 /** A run's record, the one way agentBuild ends (answered or stopped): what it did, and what is worked out from that: its
  *  near misses from its steps and answer, its diff and certificates from the boards. (The wiring is guarded by testing

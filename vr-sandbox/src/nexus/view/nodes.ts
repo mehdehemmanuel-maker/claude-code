@@ -279,7 +279,9 @@ function paint(): void {
  *  the board is out of view; pressing it goes there. */
 let mapBox: { x: number; y: number; w: number; h: number; x0: number; y0: number; s: number } | null = null;
 function paintMap(dpr: number, W0: number, H0: number): void {
-  mapBox = null; const ns = nodesOf(cur()).map((n) => geo(n.id)); if (ns.length < 2) return;
+  // (no minimap in a headset: on a board of blocks in a row it was 1.1° tall, under the 2.5° a hand's ray needs; the sheet
+  // is dragged to pan there (the evaluator, 2026-11-01))
+  mapBox = null; if (leastTarget) return; const ns = nodesOf(cur()).map((n) => geo(n.id)); if (ns.length < 2) return;
   const x0 = Math.min(...ns.map((n) => n.x)), y0 = Math.min(...ns.map((n) => n.y)), x1 = Math.max(...ns.map((n) => n.x + n.w)), y1 = Math.max(...ns.map((n) => n.y + n.h));
   const [vx0, vy0] = toWorld(0, 0), [vx1, vy1] = toWorld(W0, H0); if (vx0 <= x0 && vy0 <= y0 && vx1 >= x1 && vy1 >= y1) return;
   const mw = Math.min(200, W0 * 0.3), s = mw / (x1 - x0), mh = Math.min(140, (y1 - y0) * s), sc = Math.min(s, mh / (y1 - y0)), bx = W0 - mw - 12, by = H0 - mh - 30;
@@ -339,8 +341,9 @@ type Hit = { kind: 'in' | 'out'; id: string; port: string } | { kind: 'node'; id
 // (in a headset (`leastTarget`, css px, set by the space for 2.5° at the board's distance) a hand's ray presses only whole
 // blocks and the sheet: a port is 20 px across and a wire 14, 1.1° and 0.8°, too small to aim at (the evaluator,
 // 2026-11-01); wiring is done from the side panel's buttons there, and the zoom keeps every block at least that size)
-let leastTarget = 0;
-const kLeast = (): number => { if (!leastTarget) return 0.08; const hs = nodesOf(cur()).map((n) => { const g = geo(n.id); return Math.min(g.w, g.h); }); return hs.length ? leastTarget / Math.min(...hs) : 0.08; };
+let leastTarget = 0, leastZoom = 0;
+// (the least zoom: every block at least leastTarget px, and the text at least leastZoom (its 13 px 0.6° and its 11 px 0.4°))
+const kLeast = (): number => { if (!leastTarget) return 0.08; const hs = nodesOf(cur()).map((n) => { const g = geo(n.id); return Math.min(g.w, g.h); }); return Math.max(leastZoom, hs.length ? leastTarget / Math.min(...hs) : 0.08); };
 function hit(sx: number, sy: number): Hit {
   const [x, y] = toWorld(sx, sy), r = 10 / view.k, ns = nodesOf(cur()).map((n) => n.id).filter((id) => cur().nodes[id]!.block || cur().nodes[id]!.inner).reverse();
   if (!leastTarget) for (const id of ns) { const gg = geo(id); for (const q of gg.outs) if (Math.hypot(x - (gg.x + gg.w), y - q.y) < r) return { kind: 'out', id, port: q.p.name }; for (const q of gg.ins) if (Math.hypot(x - gg.x, y - q.y) < r) return { kind: 'in', id, port: q.p.name }; }
@@ -873,7 +876,15 @@ export const wall = {
   down: (x: number, y: number) => pointerDown({ x, y }, 901), move: (x: number, y: number) => pointerMove({ x, y }, 901), up: (x: number, y: number) => pointerUp({ x, y }, 901),
   fit, tidy: () => { edit((b) => { tidy(b); }); fit(); }, undo: doUndo, redo: doRedo, heat: toggleHeat,
   /** In a headset: the least size, in css px, a press target may be (0 on a screen); blocks only are pressed then. */
-  headset(px: number): void { leastTarget = px; if (wallActive) fit(); },
+  headset(px: number, zoom = 0): void { leastTarget = px; leastZoom = zoom; if (wallActive) fit(); },
+  /** The board's zoom (css px a unit of the sheet): text and blocks are drawn at it. */
+  zoomK: (): number => view.k,
+  /** What a press at a point of the canvas (css px) would take: a block, a port, a wire, or nothing. */
+  probe: (x: number, y: number): string | null => hit(x, y)?.kind ?? null,
+  /** Whether the minimap is drawn (and so can be pressed). */
+  mapShown: (): boolean => !!mapBox,
+  /** Where a block's first output port is drawn, in css px. */
+  portPoint(id: string): { x: number; y: number } | null { const g = geo(id), o = g.outs[0]; if (!o) return null; return { x: (g.x + g.w) * view.k + view.ox, y: o.y * view.k + view.oy }; },
   /** The smallest block as drawn, in css px (its least side): every block is a target a hand presses. */
   smallestBlock: (): number => { const hs = nodesOf(cur()).map((n) => { const g = geo(n.id); return Math.min(g.w, g.h); }); return hs.length ? Math.min(...hs) * view.k : Infinity; },
   /** Wire an output of one block into an input of another, as a drag would, with its checks said. */

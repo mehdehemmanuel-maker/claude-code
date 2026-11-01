@@ -242,7 +242,7 @@ const ui = new THREE.Group(); scene.add(ui);
 ui.add(board.group, bar.mesh, chat.mesh, keyboard.mesh);
 let panelsShown = true, boardBig = false;
 function layPanels(): void {
-  const xr = renderer.xr.isPresenting;
+  const xr = renderer.xr.isPresenting; if (xr) boardBig = false; // (never the larger board in a headset: it covered the chat and the bar)
   // (in a headset, laid to the comfort numbers of research 34 (spec 04, P10; Meta's comfort and panel pages): the board
   // before you, 10° below the eye at 1.25 m and tilted back to face you; the bar under it, within the 58° Meta designs
   // for; the chat to the side at 1.3 m, turned to face you: 42°, so it clears the board (measured: at 30° it
@@ -254,7 +254,9 @@ function layPanels(): void {
     const side = THREE.MathUtils.degToRad(42); chat.mesh.position.set(-1.3 * Math.sin(side), 0, -1.3 * Math.cos(side)); chat.mesh.rotation.set(0, side, 0); chat.mesh.scale.setScalar(1); }
   else bar.shape(...BAR_ONE);
   // (the least a target on the board may be, in its css px: 2.5° at the board's distance; set in a headset, nothing on a screen)
-  if (xr) { boardBig = false; const perPx = (NW * board.group.scale.x) / Math.max(1, wall.canvas.clientWidth), m = 2 * 1.25 * Math.tan(THREE.MathUtils.degToRad(1.25)); wall.headset(Math.ceil(m / perPx) + 1); } else wall.headset(0);
+  // (and the least zoom for its text, as drawn: 13 px at 0.6° and 11 px at 0.4° from 1.25 m)
+  if (xr) { const perPx = (NW * board.group.scale.x) / Math.max(1, wall.canvas.clientWidth), at = (deg: number) => 2 * 1.25 * Math.tan(THREE.MathUtils.degToRad(deg / 2));
+    wall.headset(Math.ceil(at(2.5) / perPx) + 1, Math.max(at(0.6) / (13 * perPx), at(0.4) / (11 * perPx)) * 1.02); } else wall.headset(0);
   if (xr) { /* laid above */ } else if (boardBig) { board.group.scale.setScalar(0.5); board.group.position.set(-0.12, 0.06, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.visible = false; }
   else { chat.mesh.visible = true; board.group.scale.setScalar(0.36); board.group.position.set(0.36, 0.1, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.position.set(-0.78, 0.4, -1.25); chat.mesh.scale.setScalar(0.65); chat.mesh.rotation.set(0, 0, 0); }
   // the panels are drawn over what is made: they are what you work with, never hidden inside it
@@ -281,7 +283,8 @@ function comfort(): Record<string, { distance: number; side: number; below: numb
   // (sizes as the eye sees them, in degrees: the board's smallest and usual text (11 and 13 css px over its drawn width),
   // the smallest dimension of the smallest target on the bar, the chat and the keyboard)
   const sz = (m: number, d: number) => THREE.MathUtils.radToDeg(2 * Math.atan(m / 2 / d)), dist = (o: THREE.Object3D) => new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()).distanceTo(eye);
-  if (board.group.visible) { const perPx = (NW * board.group.scale.x) / Math.max(1, wall.canvas.clientWidth), d = dist(board.group); out.text = { distance: d, side: 0, below: 0, width: sz(11 * perPx, d) }; out.text13 = { distance: d, side: 0, below: 0, width: sz(13 * perPx, d) }; }
+  // (as drawn: the board's text is drawn under its own zoom (the evaluator found it measured at zoom 1, 2026-11-01))
+  if (board.group.visible) { const perPx = (NW * board.group.scale.x) / Math.max(1, wall.canvas.clientWidth), d = dist(board.group), k = wall.zoomK(); out.text = { distance: d, side: 0, below: 0, width: sz(11 * k * perPx, d) }; out.text13 = { distance: d, side: 0, below: 0, width: sz(13 * k * perPx, d) }; }
   const smallest = (p: Panel) => Math.min(...p.hits.map((h) => Math.min((h.x1 - h.x0) * (p.w * p.mesh.scale.x) / p.c.width, (h.y1 - h.y0) * (p.h * p.mesh.scale.y) / p.c.height)));
   for (const [name, p] of [['bar target', bar], ['chat target', chat]] as const) if (p.mesh.visible && p.hits.length) { const d = dist(p.mesh); out[name] = { distance: d, side: 0, below: 0, width: sz(smallest(p), d) }; }
   if (keyboard.mesh.visible) { const d = dist(keyboard.mesh); out['key'] = { distance: d, side: 0, below: 0, width: sz(keyboard.smallestKey(), d) }; }
@@ -358,7 +361,7 @@ window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement).closest('input, textarea')) return;
   if (walker.on) return;
   if (e.key === 'f' || e.key === 'F') fit();
-  else if (e.key === 'b' || e.key === 'B') { boardBig = !boardBig; layPanels(); bar.draw(); }
+  else if ((e.key === 'b' || e.key === 'B') && !renderer.xr.isPresenting) { boardBig = !boardBig; layPanels(); bar.draw(); }
   else if (e.key === 'h' || e.key === 'H' || e.key === 'Tab') { e.preventDefault(); panelsShown = !panelsShown; ui.visible = panelsShown; }
   else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (e.shiftKey) wall.redo(); else wall.undo(); }
 });

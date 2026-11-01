@@ -22,11 +22,13 @@ export function unsourced(mod: Record<string, unknown>, file: string): string[] 
   // (or a …_SOURCES record naming each export's source, for figures exported alone)
   const each = Object.entries(mod).find(([k, v]) => /(^|_)SOURCES?$/.test(k) && !!v && typeof v === 'object' && !Array.isArray(v)) as [string, Record<string, unknown>] | undefined;
   const named = (k: string) => !!each && typeof each[1][k] === 'string' && (each[1][k] as string).trim().length > 8;
-  const out: string[] = [];
+  const out: string[] = [], seen = new WeakSet<object>();
   const walk = (v: unknown, path: string, ok: boolean, depth: number) => {
     if (typeof v === 'number') { if (!ok) out.push(`${file}: ${path}`); return; }
-    if (depth > 8 || !v || typeof v !== 'object') return;
-    if (v instanceof Map) v = Object.fromEntries(v);
+    // (every level down, a loop met once (a visited set, not a depth cap: below eight levels went unseen); a Map's and a
+    // Set's values too (the evaluator, 2026-11-01))
+    if (!v || typeof v !== 'object' || seen.has(v)) return; seen.add(v); void depth;
+    if (v instanceof Map) v = Object.fromEntries(v); else if (v instanceof Set) v = [...v];
     if (figure(v)) { if (!ok) out.push(`${file}: ${path}`); return; }
     if (Array.isArray(v)) { if (v.some((x) => typeof x === 'number')) { if (!ok) out.push(`${file}: ${path}`); return; } v.forEach((x, i) => walk(x, `${path}[${i}]`, ok, depth + 1)); return; }
     const o = v as Record<string, unknown>, has = ok || Object.keys(o).some((k) => SOURCED.test(k) && o[k] !== '' && o[k] !== undefined);
@@ -54,14 +56,16 @@ export function unstated(mod: Record<string, unknown>, file: string, kinds: read
   // (or a …_STATUS record naming the status of each export by its name: for tables held as plain lists, which have no
   // record of their own to carry one)
   const each = Object.entries(mod).find(([k, v]) => /(^|_)STATUS$/.test(k) && !!v && typeof v === 'object' && !Array.isArray(v)) as [string, Record<string, unknown>] | undefined;
-  const out: string[] = [];
+  const out: string[] = [], seen = new WeakSet<object>();
   if (each) for (const [k, v] of Object.entries(each[1])) { if (!(k in mod)) out.push(`${file}: ${each[0]}.${k} names no export`); else if (!kinds.includes(String(v))) out.push(`${file}: ${each[0]}.${k} = ${v}, not a status`); }
   const statusOf = (o: Record<string, unknown>) => { if (typeof o.status === 'string' && kinds.includes(o.status)) return o.status;
     for (const [k, m] of Object.entries(SAID)) if (k in o && String(o[k]) in m) return m[String(o[k])]; return undefined; };
   const walk = (v: unknown, path: string, has: boolean, depth: number) => {
     if (typeof v === 'number') { if (!has) out.push(`${file}: ${path}`); return; }
-    if (depth > 8 || !v || typeof v !== 'object') return;
-    if (v instanceof Map) v = Object.fromEntries(v);
+    // (every level down, a loop met once (a visited set, not a depth cap: below eight levels went unseen); a Map's and a
+    // Set's values too (the evaluator, 2026-11-01))
+    if (!v || typeof v !== 'object' || seen.has(v)) return; seen.add(v); void depth;
+    if (v instanceof Map) v = Object.fromEntries(v); else if (v instanceof Set) v = [...v];
     if (figure(v)) { if (!has) out.push(`${file}: ${path}`); return; }
     if (Array.isArray(v)) { if (v.some((x) => typeof x === 'number')) { if (!has) out.push(`${file}: ${path}`); return; } v.forEach((x, i) => walk(x, `${path}[${i}]`, has, depth + 1)); return; }
     const o = v as Record<string, unknown>, own = has || !!statusOf(o);

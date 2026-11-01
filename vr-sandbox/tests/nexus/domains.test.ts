@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { execSync, spawnSync } from 'node:child_process';
 import { placeholders, secrets, unsourced, unstated } from './scans';
 import { EVIDENCE } from '../../src/nexus/evidence';
-import { certifiedOf, certifiedView, gateOf, nearMissesOf, nearMissesView, runOf, stepOf } from '../../src/nexus/agent';
+import { callTools, certifiedOf, certifiedView, gateOf, nearMissesOf, nearMissesView, relayBody, runOf, stepOf, toolsFor, type AgentRun, type AgentStep } from '../../src/nexus/agent';
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
@@ -173,6 +173,12 @@ describe('every domain, in one pass', () => {
       expect(unstated(mod as Record<string, unknown>, 'planted', EVIDENCE).length, `${what}: no status`).toBeGreaterThan(0);
     }
     expect(unsourced({ P: { a: { pitch: [1.25, 'n/a'] } } }, 'planted').length, 'a list with n/a: no source').toBeGreaterThan(0);
+    // (a Set, bare and in a record; a figure twelve levels down; a record that holds itself, met once)
+    let deep: Record<string, unknown> = { x: 0.5 }; for (let i = 0; i < 12; i++) deep = { [`l${i}`]: deep };
+    const loop: Record<string, unknown> = { source: 's', status: 'specified', x: 1 }; loop.self = loop;
+    for (const [what, mod] of [['a Set', { S: new Set([1.5, 2.5]) }], ['a Set in a record', { P: { a: { source: 's', s: new Set([7850]) } } }], ['twelve levels down', { D: deep }]] as const)
+      expect(unstated(mod as Record<string, unknown>, 'planted', EVIDENCE).length, `${what}: no status`).toBeGreaterThan(0);
+    expect(unstated({ L: loop }, 'planted', EVIDENCE), 'a record that holds itself, met once').toEqual([]);
     const data = readdirSync(join(root, 'src/data')).filter((f) => f.endsWith('.ts')), bad: string[] = [];
     for (const f of data) { const m = await import(`../../src/data/${f}`); bad.push(...unsourced(m, `src/data/${f}`), ...unstated(m, `src/data/${f}`, EVIDENCE)); }
     for (const dir of ['src/data', 'src/nexus/kinds', 'src/nexus/book']) for (const f of readdirSync(join(root, dir)).filter((x) => x.endsWith('.ts'))) bad.push(...placeholders(readFileSync(join(root, dir, f), 'utf8'), `${dir}/${f}`));
@@ -288,18 +294,27 @@ describe('every domain, in one pass', () => {
     // (the page shows them beside the answer: the view used, and what it shows)
     const view = nearMissesView(misses, (x) => x);
     for (const m of misses) expect(view, `the page shows the ${m.kind} near miss, its kind and its response`).toContain(`<b>${m.kind}</b> ${m.what} (${m.response})`);
-    // (a run's record, the one way agentBuild ends: its near misses worked out from its steps as stepOf keeps them; and
-    // agentBuild ends only through it, keeping every step by stepOf (planted otherwise: the evaluator, 2026-11-01))
-    const run = await runOf({ start: emptyBoard('x'), board: emptyBoard('x'), answer: 'All done.', model: 'm', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: [],
-      steps: [stepOf('build', {}, long, 1), stepOf('card', { id: 'nope' }, 'no block "nope"', 1, true)] });
-    expect(run.nearMisses.map((m) => `${m.kind} ${m.tool}`), 'a refusal, a node and a tool failed, an answer past a standing refusal').toEqual(['error build', 'error build', 'error card', 'reckless answer']);
-    const agentSrc = readFileSync(join(root, 'src/nexus/agent.ts'), 'utf8'), body = agentSrc.slice(agentSrc.indexOf('export async function agentBuild'), agentSrc.indexOf('export async function runOf'));
-    expect(body.match(/return runOf\(/g)?.length, 'agentBuild ends, answered or stopped, through runOf').toBe(2);
-    expect(body, 'and returns no run of its own making').not.toMatch(/return \{[^}]*\bsteps\b/);
-    expect(body, 'agentBuild keeps each step by stepOf').toMatch(/steps\.push\(stepOf\(/);
-    expect(body, 'and by nothing else, nor sets its near misses itself').not.toMatch(/steps\.push\(\{|nearMisses:/);
-    expect(view, 'open when one is reckless').toMatch(/^<details open>/);
-    expect(readFileSync(join(root, 'src/nexus/view/nodes.ts'), 'utf8'), 'the page puts them beside the answer').toMatch(/nearMissesView\(r\.nearMisses, esc\)/);
+    // (the run's own code, run for real with no stand-in model (C8): the tools agentBuild uses, a turn of calls through
+    // callTools as agentBuild makes each turn, and runOf as it ends: a build of 23 blocks with a refused wire and a block
+    // that fails past the record's 300-character cut, a card for a block that does not exist, then an answer that says
+    // nothing of the refusal still standing (the evaluator, 2026-11-01))
+    const tools = await toolsFor(emptyBoard('t')), steps: AgentStep[] = [];
+    const nodes: Record<string, { b: string; s?: Record<string, unknown> }> = Object.fromEntries(Array.from({ length: 21 }, (_, i) => [`n${i}`, { b: 'in.number', s: { value: i + 1 } }]));
+    nodes.z = { b: 'in.number', s: { value: 0 } }; nodes.div = { b: 'math.divide' };
+    await callTools([{ id: '1', name: 'build', input: { nodes, wires: ['n0.value>div.a', 'z.value>div.b', 'n1.value>n2.nope'] } }, { id: '2', name: 'card', input: { id: 'nope.nope' } }], tools.doTool, steps);
+    expect(steps[0]!.result.length, 'the build\'s record is cut').toBeLessThanOrEqual(300);
+    const run = await runOf({ start: emptyBoard('t'), board: tools.board(), steps, answer: 'All done. The sum is 4.', model: 'm', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: tools.made });
+    expect(run.nearMisses.map((m) => `${m.kind} ${m.tool}`), 'a refused wire, a block failed past the cut, a tool failed, an answer past a standing refusal').toEqual(['error build', 'error build', 'error card', 'reckless answer']);
+    expect(run.nearMisses[1]!.what, 'the block that failed').toMatch(/^node div failed/);
+    // (agentBuild passes each turn through callTools and ends through runOf with its steps and its answer: read exactly)
+    const agentSrc = readFileSync(join(root, 'src/nexus/agent.ts'), 'utf8'), body = agentSrc.slice(agentSrc.indexOf('export async function agentBuild'), agentSrc.indexOf('export async function toolsFor'));
+    expect(body, 'every turn through callTools').toContain("content: await callTools(r.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'), t.doTool, steps)");
+    expect(body, 'answered, it ends with its steps and its answer').toContain('return runOf({ start, board: t.board(), steps, answer, model: r.model');
+    expect(body, 'stopped, with its steps').toContain("return runOf({ start, board: t.board(), steps, answer: '', model");
+    expect(body.match(/return /g)?.length, 'and no other way').toBe(2);
+    // (the relay sends the page all of the run: its near misses, diff and certificates)
+    const sent = JSON.parse(relayBody(run)) as AgentRun; expect(sent.nearMisses.length).toBe(4); expect(sent).toHaveProperty('diff'); expect(sent).toHaveProperty('certificates');
+    expect(readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), 'the relay answers with relayBody').toMatch(/res\.end\(m\.relayBody\(r\)\)/);
     expect(readFileSync(join(root, 'tests/evals/agent.eval.ts'), 'utf8'), 'the evaluation set prints each').toMatch(/for \(const m of \(row\.near[^)]*\)[^)]*\)\s*console\.log\(`\s*near miss/);
     expect(readFileSync(join(root, 'tests/evals/one.eval.ts'), 'utf8'), 'the one test prints each').toMatch(/for \(const m of r\.nearMisses\) console\.log\(`near miss/);
   });

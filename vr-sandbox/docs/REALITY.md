@@ -1859,3 +1859,22 @@ same text rules, and catches decimal's own overflow. Every one of the 18 is refu
 kernel: closed, exact, each kind refusing what is planted, and a second checker agreeing". Not changed, and said by the
 red team: a value's text is at most 400 characters, so a figure far below 1e-4000 cannot be stated; a square root's grain
 is 2^-96, so claims about roots of numbers under 2^-192 come back undecided. Checked with `npm run gate`.
+
+## 2026-11-01: the AI's run tested by running it; a Set and any depth scanned; the headset's text as drawn (spec 00, S10; spec 10, T3; spec 04, P10)
+
+S10's fourth verdict: the run's wiring was guarded by reading its source, so a run that passed its steps or answer
+wrongly, spelt the same way, still passed. Now the AI's tools are one function (`toolsFor`), each turn's calls another
+(`callTools`, as agentBuild makes every turn), and the test runs them for real, with no stand-in model: a build of 23
+blocks with a refused wire and a block that fails past the record's 300-character cut, a card for a block that does not
+exist, then `runOf` with an answer that says nothing of the refusal still standing; the near misses come back error,
+error, error, reckless. agentBuild's two endings and its one call of `callTools` are held to their exact text, and the
+relay answers the page through `relayBody`, tested to carry the near misses, diff and certificates. T3's fourth verdict:
+the scans stopped eight levels down and never entered a Set. Now they go every level down (a record that holds itself
+met once) and into Sets; a Set of figures, one in a record and a figure twelve levels down, each without a status, fail
+the test. P10's fourth verdict: the board's text was measured at zoom 1, but it is drawn under the board's own zoom (0.57°
+as the board opened); the minimap was 1.1° tall; nothing tried a ray on a port; the B key still made the board larger.
+Now in a headset the board's zoom is held so its 13 px text is 0.6° or more and its 11 px 0.4° or more, as drawn; no
+minimap is drawn; the run probes a port and finds the block taken, not the port; and B does nothing. One run of
+`npm run eval:headset` (an emulated Quest 3): every limit held, the text 0.63° and 0.53° as drawn as the board opens and
+after the strip's − is pressed ten times, the smallest block 4.54°, every limit held again after pressing B. Checked
+with `npm run gate`.
