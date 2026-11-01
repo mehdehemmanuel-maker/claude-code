@@ -68,7 +68,7 @@ function expR(x: Rat): Iv {
 }
 const Math0 = (n: number): number => (n > 0 ? n : 0);
 export function exp(a: Iv): Iv {
-  if (lt(rat(1000n), a.hi)) throw new KernelError('undecided', 'an exponent too large to enclose');
+  if (lt(rat(1000n), a.hi) || lt(a.lo, rat(-1000n))) throw new KernelError('undecided', 'an exponent past 1000 either way: not enclosed in time');
   return { lo: expR(a.lo).lo, hi: expR(a.hi).hi };
 }
 
@@ -94,8 +94,10 @@ export function ln(a: Iv): Iv { if (le(a.lo, ZERO)) throw new KernelError('undec
 
 /** a to a rational power: whole powers exactly, halves by the root, the rest as exp(k·ln a) (a above zero). */
 export function pow(a: Iv, k: Rat): Iv {
-  if (k.d === 1n) return powInt(a, Number(k.n));
-  if (k.d === 2n) return powInt(sqrt(a), Number(k.n));
+  // (the exponent's numerator held to a safe size before it becomes a number: past 2^53 a BigInt's parity is lost)
+  const big = k.n > 1n << 20n || k.n < -(1n << 20n);
+  if (k.d === 1n) { if (big) throw new KernelError('undecided', 'a whole power too large to work out'); return powInt(a, Number(k.n)); }
+  if (k.d === 2n) { if (big) throw new KernelError('undecided', 'a power too large to work out'); return powInt(sqrt(a), Number(k.n)); }
   return exp(mul(point(k), ln(a)));
 }
 

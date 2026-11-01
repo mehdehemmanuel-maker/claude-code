@@ -9,12 +9,12 @@ Fractions; a value is worked out with Python's decimal module at 60 digits (its 
 not by interval series; the value claimed passes only well inside the tolerance, is wrong only well outside it, and is
 undecided between. The unit table is the kernel's data (src/kernel/units.json): shared data, not shared code.
 """
-import json, re, sys
+import decimal, json, re, sys
 from decimal import Decimal, getcontext, InvalidOperation, DivisionByZero
 from fractions import Fraction
 from pathlib import Path
 
-getcontext().prec = 60
+getcontext().prec = 450  # a value's text is at most 400 characters: every input kept whole, not rounded
 getcontext().traps[DivisionByZero] = True
 getcontext().traps[InvalidOperation] = True
 TABLE = json.loads((Path(__file__).resolve().parent.parent / 'src' / 'kernel' / 'units.json').read_text())
@@ -28,11 +28,20 @@ class Refused(Exception):
 
 
 def unit_dim(unit):
-    if not isinstance(unit, str) or len(unit) > 80:
-        raise Refused('malformed', 'a unit that is not a short text')
+    # the same text rules as the kernel's (letters, digits, a few signs; plain spaces or '·' between factors; one '/' with
+    # something each side; '1' and '-' alone, or '1' over something), read by a scanner, not by splitting
+    if not isinstance(unit, str) or len(unit) > 80 or not all(ch.isalpha() or ch.isdigit() or ch in '%°^·./ -' for ch in unit) \
+            or any(ch.isdigit() and not ch.isascii() for ch in unit):
+        raise Refused('malformed', 'a unit that is not a short text of letters, digits and unit signs')
+    toks = re.findall(r'/|[^ /·]+', unit)
+    if toks.count('/') > 1 or (toks and (toks[0] == '/' or toks[-1] == '/')) or not toks:
+        raise Refused('malformed', 'not a unit')
+    num = toks[:toks.index('/')] if '/' in toks else toks
+    den = toks[toks.index('/') + 1:] if '/' in toks else []
+    if any(t in ('1', '-') for t in den) or (len(num) > 1 and any(t in ('1', '-') for t in num)) or (den and num[0] == '-'):
+        raise Refused('malformed', '1 or - in a product')
     dim, sign = list(ZERO), 1
-    for tok in re.finditer(r'/|[^\s/·]+', unit):
-        t = tok.group(0)
+    for t in toks:
         if t == '/':
             sign = -1
             continue
@@ -126,6 +135,12 @@ def value(t, env):
             return env[a[0]]
         if op == 'pow':
             x, k = value(a[0], env), Fraction(a[1])
+            if abs(k.numerator) > (1 << 20) or (k.denominator <= 2 and abs(k.numerator) > 1024 * k.denominator):
+                raise Refused('undecided', 'a power too large')
+            if k == 0:
+                return Decimal(1)
+            if x == 0 and k < 0:
+                raise Refused('undecided', 'a negative power of zero')
             if k.denominator == 1:
                 return x ** int(k)
             if x <= 0:
@@ -158,8 +173,8 @@ def value(t, env):
                 raise Refused('undecided', 'a root of less than zero')
             return v[0].sqrt()
         if op == 'exp':
-            if v[0] > 2000:
-                raise Refused('undecided', 'an exponent too large')
+            if abs(v[0]) > 1000:
+                raise Refused('undecided', 'an exponent past 1000 either way')
             return v[0].exp()
         if v[0] <= 0:
             raise Refused('undecided', 'a logarithm of zero or less')
@@ -169,7 +184,7 @@ def value(t, env):
             return v[0].log10()
         if op == 'log2':
             return v[0].ln() / Decimal(2).ln()
-    except (InvalidOperation, DivisionByZero, OverflowError) as e:
+    except (InvalidOperation, DivisionByZero, OverflowError, decimal.Overflow) as e:
         raise Refused('undecided', f'not worked out: {e}')
     raise Refused('undecided', op)
 
@@ -192,6 +207,8 @@ def judge(c):
     cl = o.get('claim')
     if o['kind'] == 'dims':
         cl = only(cl, {'wire', 'law'}, 'the claim')
+        if ('wire' in cl) == ('law' in cl):
+            raise Refused('malformed', 'a wire or a law, one of them')
         if 'wire' in cl:
             w = only(cl['wire'], {'from', 'to'}, 'the wire')
             if unit_dim(w.get('from')) != unit_dim(w.get('to')):
@@ -212,7 +229,7 @@ def judge(c):
         raise Refused('malformed', 'a tolerance below zero')
     w = dec(rel) * abs(dec(v)) + dec(ab)
     d = abs(value(cl['term'], env) - dec(v))
-    margin = w * Decimal('1e-30') + Decimal('1e-50')
+    margin = w * Decimal('1e-30') + Decimal('1e-400')
     if d <= w - margin:
         return
     if d >= w + margin:

@@ -353,10 +353,18 @@ describe('every domain, in one pass', () => {
     const ref = spawnSync('python3', ['-c', `import json,sys\nfrom decimal import Decimal as D, getcontext\ngetcontext().prec=60\nprint(json.dumps([str(getattr(D(x), {'exp':'exp','ln':'ln','sqrt':'sqrt'}[f])()) for f,x in json.loads(sys.argv[1])]))`, JSON.stringify(pts)], { encoding: 'utf8' });
     expect(ref.status, ref.stderr).toBe(0);
     (JSON.parse(ref.stdout) as string[]).forEach((r, i) => { const [f, x] = pts[i]!, v = check(W([f, ['var', 'x']], { x }, r, '1e-25')); expect(v.ok, `${f}(${x}) encloses ${r}: ${v.why.slice(0, 200)}`).toBe(true); });
-    const corpus = [...right, ...Object.values(planted).flat(), C('judged', {}), ...edges, ...book];
+    // (every false certificate a red team made the kernel pass (tests/nexus/kernel.red.json, 2026-11-01: whole powers past
+    // 2^31 worked in 32 bits, an invisible character inside a unit, a dims claim with a wire and a law), each now refused by
+    // both checkers)
+    const red = JSON.parse(readFileSync(join(root, 'tests/nexus/kernel.red.json'), 'utf8')) as unknown[];
+    expect(red.length, 'the red teams\' certificates').toBeGreaterThan(15);
+    for (const c of red) expect(check(c).ok, `a red team's false certificate refused: ${JSON.stringify(c).slice(0, 120)}`).toBe(false);
+    const corpus = [...right, ...Object.values(planted).flat(), C('judged', {}), ...edges, ...red, ...book];
     const two = spawnSync('python3', ['scripts/kernel2.py'], { cwd: root, input: JSON.stringify(corpus), encoding: 'utf8', maxBuffer: 1 << 26 });
     expect(two.status, two.stderr).toBe(0);
-    const theirs = JSON.parse(two.stdout) as { ok: boolean }[], differ = corpus.map((c, i) => [check(c).ok, theirs[i]!.ok, i] as const).filter(([a, b]) => a !== b);
+    const theirs = JSON.parse(two.stdout) as { ok: boolean }[];
+    expect(red.map((_, i) => theirs[right.length + Object.values(planted).flat().length + 1 + edges.length + i]!.ok).filter(Boolean).length, 'the second checker passes none of them either').toBe(0);
+    const differ = corpus.map((c, i) => [check(c).ok, theirs[i]!.ok, i] as const).filter(([a, b]) => a !== b);
     expect(differ.map(([a, b, i]) => `${i}: kernel ${a}, second ${b}: ${JSON.stringify(corpus[i]).slice(0, 120)}`), 'the two checkers agree').toEqual([]);
   }, 60_000);
   // (propose, then certify (spec 10, T18; C29): a change's certificates come from the boards and the nodes' own runs; the

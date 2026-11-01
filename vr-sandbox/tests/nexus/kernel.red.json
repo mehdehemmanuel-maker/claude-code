@@ -1,0 +1,409 @@
+[
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "var",
+     "x"
+    ],
+    "2147483648"
+   ],
+   "at": {
+    "x": "1.0000000001"
+   },
+   "value": "1",
+   "tol": {
+    "rel": "1e-9",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "var",
+     "x"
+    ],
+    "4294967298"
+   ],
+   "at": {
+    "x": "1.0000000001"
+   },
+   "value": "1.00000000020000000001",
+   "tol": {
+    "rel": "1e-9",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "var",
+     "x"
+    ],
+    "9007199254740993"
+   ],
+   "at": {
+    "x": "-1"
+   },
+   "value": "1",
+   "tol": {
+    "rel": "1e-9",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "add",
+    [
+     "pow",
+     [
+      "var",
+      "x"
+     ],
+     "2147483648"
+    ],
+    [
+     "var",
+     "y"
+    ]
+   ],
+   "at": {
+    "x": "3",
+    "y": "5"
+   },
+   "value": "6",
+   "tol": {
+    "rel": "1e-9",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red"
+ },
+ {
+  "kind": "dims",
+  "claim": {
+   "wire": {
+    "from": "m﻿N",
+    "to": "J"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red"
+ },
+ {
+  "kind": "dims",
+  "claim": {
+   "law": {
+    "term": [
+     "mul",
+     [
+      "var",
+      "F"
+     ],
+     [
+      "var",
+      "d"
+     ]
+    ],
+    "vars": {
+     "F": "N",
+     "d": "m"
+    },
+    "out": "m﻿N"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red"
+ },
+ {
+  "kind": "dims",
+  "claim": {
+   "wire": {
+    "from": "N m",
+    "to": "J"
+   },
+   "law": {
+    "term": [
+     "mul",
+     [
+      "var",
+      "m"
+     ],
+     [
+      "var",
+      "a"
+     ]
+    ],
+    "vars": {
+     "m": "kg",
+     "a": "m/s^2"
+    },
+    "out": "J"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "var",
+     "x"
+    ],
+    "1e62"
+   ],
+   "at": {
+    "x": "1.0000000000000000000000000000000000000000000000000000000000001"
+   },
+   "value": "1",
+   "tol": {
+    "rel": "1e-12",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red-arith"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "num",
+     "0"
+    ],
+    "4294967296"
+   ],
+   "at": {},
+   "value": "1",
+   "tol": {
+    "rel": "0",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red-arith"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "num",
+     "2"
+    ],
+    "4294967296"
+   ],
+   "at": {},
+   "value": "1",
+   "tol": {
+    "rel": "0",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red-arith"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "num",
+     "2"
+    ],
+    "2147483648"
+   ],
+   "at": {},
+   "value": "1",
+   "tol": {
+    "rel": "0",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red-arith"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "num",
+     "2"
+    ],
+    "4294967299"
+   ],
+   "at": {},
+   "value": "8",
+   "tol": {
+    "rel": "0",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red-arith"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "num",
+     "-1"
+    ],
+    "9007199254740993"
+   ],
+   "at": {},
+   "value": "1",
+   "tol": {
+    "rel": "0",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red-arith"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "num",
+     "4"
+    ],
+    "4294967297/2"
+   ],
+   "at": {},
+   "value": "2",
+   "tol": {
+    "rel": "0",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red-arith"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "num",
+     "0"
+    ],
+    "-4294967296"
+   ],
+   "at": {},
+   "value": "1",
+   "tol": {
+    "rel": "0",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red-arith"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "num",
+     "1.0000001"
+    ],
+    "12884901890"
+   ],
+   "at": {},
+   "value": "1.00000020000001",
+   "tol": {
+    "rel": "1e-20",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red-arith"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "pow",
+    [
+     "num",
+     "7"
+    ],
+    "1e30"
+   ],
+   "at": {},
+   "value": "1",
+   "tol": {
+    "rel": "0",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red-arith"
+ },
+ {
+  "kind": "witness",
+  "claim": {
+   "term": [
+    "mul",
+    [
+     "var",
+     "N0"
+    ],
+    [
+     "pow",
+     [
+      "num",
+      "0.5"
+     ],
+     "4294967296"
+    ]
+   ],
+   "at": {
+    "N0": "1000"
+   },
+   "value": "1000",
+   "tol": {
+    "rel": "0",
+    "abs": "0"
+   }
+  },
+  "trustedBase": [],
+  "producer": "red-arith"
+ }
+]

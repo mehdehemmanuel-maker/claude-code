@@ -25,11 +25,19 @@ function factor(tok: string): Dim {
   return powDim(row.map((x) => rat(BigInt(x))), m[2] ? fromText(m[2]) : rat(1n));
 }
 /** A unit as the laws write it: factors by spaces or "·", all after the first "/" below the line ("W/m^2 K"). */
+// (a unit is letters, digits and a few signs, its factors parted by plain spaces or "·", one "/" at most with something on
+// each side; "1" and "-" only alone. Anything else, an invisible character among them, is refused: the red team, 2026-11-01,
+// hid a zero-width character inside "mN" and the kernel read it as "m N", an energy)
+const UNIT_TEXT = /^[\p{L}\p{N}%°^·./ -]+$/u;
 export function dimOfUnit(unit: string): Dim {
-  if (typeof unit !== 'string' || unit.length > 80) throw new KernelError('malformed', 'a unit that is not a short text');
-  const [num, ...rest] = unit.replace(/·/g, ' ').trim().split('/');
+  if (typeof unit !== 'string' || unit.length > 80 || !UNIT_TEXT.test(unit)) throw new KernelError('malformed', 'a unit that is not a short text of letters, digits and unit signs');
+  const parts = unit.replace(/·/g, ' ').split('/');
+  if (parts.length > 2 || parts.some((p) => !p.trim())) throw new KernelError('malformed', `not a unit: ${unit.slice(0, 30)}`);
+  const num = parts[0]!.trim().split(/ +/), den = parts[1]?.trim().split(/ +/) ?? [];
+  // ("1" alone over something is a per: 1/s)
+  if (den.some((t) => t === '1' || t === '-') || (num.length > 1 && num.some((t) => t === '1' || t === '-')) || (den.length && num[0] === '-')) throw new KernelError('malformed', `"1" or "-" in a product: ${unit.slice(0, 30)}`);
   let d = DIMLESS;
-  for (const t of (num ?? '').trim().split(/\s+/).filter(Boolean)) d = mulDim(d, factor(t));
-  for (const t of rest.join(' ').trim().split(/\s+/).filter(Boolean)) d = divDim(d, factor(t));
+  for (const t of num) d = mulDim(d, factor(t));
+  for (const t of den) d = divDim(d, factor(t));
   return d;
 }

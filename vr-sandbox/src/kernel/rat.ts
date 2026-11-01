@@ -25,10 +25,14 @@ export const cmp = (a: Rat, b: Rat): number => { const x = a.n * b.d - b.n * a.d
 export const lt = (a: Rat, b: Rat): boolean => cmp(a, b) < 0, le = (a: Rat, b: Rat): boolean => cmp(a, b) <= 0;
 export const minR = (a: Rat, b: Rat): Rat => (le(a, b) ? a : b), maxR = (a: Rat, b: Rat): Rat => (le(a, b) ? b : a);
 export const sign = (a: Rat): number => (a.n < 0n ? -1 : a.n > 0n ? 1 : 0);
+/** A whole power, exactly. The exponent is held to MAX_POWER either way (the red team, 2026-11-01: a power of 2^31 or more
+ *  was worked with 32-bit steps, so 3^(2^31) + 5 passed as 6); past it the kernel cannot decide in time, and refuses. */
+export const MAX_POWER = 1024;
 export function powInt(a: Rat, k: number): Rat {
-  if (!Number.isInteger(k)) throw new KernelError('malformed', 'a power that is not a whole number');
+  if (!Number.isSafeInteger(k)) throw new KernelError('malformed', 'a power that is not a whole number');
+  if (k > MAX_POWER || k < -MAX_POWER) throw new KernelError('undecided', `a whole power past ${MAX_POWER} either way`);
   if (k < 0) return div(ONE, powInt(a, -k));
-  let r = ONE, b = a, e = k; while (e > 0) { if (e & 1) r = mul(r, b); b = mul(b, b); e >>= 1; } return r;
+  let r = ONE, b = a, e = BigInt(k); while (e > 0n) { if (e & 1n) r = mul(r, b); b = mul(b, b); e >>= 1n; } return r;
 }
 export const pow2 = (k: number): Rat => (k >= 0 ? rat(1n << BigInt(k)) : rat(1n, 1n << BigInt(-k)));
 
@@ -55,7 +59,7 @@ export function fromText(t: string): Rat {
 const Math_abs = (x: number): number => (x < 0 ? -x : x);
 
 /** The number of bits in a positive BigInt. */
-export function bits(x: bigint): number { x = abs(x); let n = 0; while (x > 0n) { x >>= 1n; n++; } return n; }
+export function bits(x: bigint): number { return x === 0n ? 0 : abs(x).toString(2).length; }
 /** Rounded to `p` significant bits, down or up: the enclosure kept, the size bounded. */
 export function roundTo(a: Rat, p: number, up: boolean): Rat {
   if (a.n === 0n) return a;

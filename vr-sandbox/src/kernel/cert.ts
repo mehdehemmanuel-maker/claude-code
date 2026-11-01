@@ -37,6 +37,7 @@ export function parseCertificate(c: unknown): Certificate {
 /** dims: a wire joins two units of one dimension; or a law's term has its output's dimension. Nothing to supply. */
 function checkDims(claim: unknown): { level: Verdict['level']; why: string; trusts: string[] } {
   const o = only(claim, ['wire', 'law'], 'the dims claim');
+  if ((o.wire === undefined) === (o.law === undefined)) throw new KernelError('malformed', 'a dims claim is a wire or a law, one of them');
   if (o.wire !== undefined) {
     const w = only(o.wire, ['from', 'to'], 'the wire'), a = dimOfUnit(str(w.from, 'from')), b = dimOfUnit(str(w.to, 'to'));
     if (!sameDim(a, b)) throw new KernelError('wrong', `${w.from} is ${dimText(a)} and ${w.to} is ${dimText(b)}`);

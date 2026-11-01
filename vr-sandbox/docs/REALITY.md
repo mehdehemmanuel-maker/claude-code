@@ -1843,3 +1843,19 @@ same after reading it, and every id the same as a build in another process wrote
 `mate.ts` now reads the part-placing function from `interfaces.ts`, so there is one. Not yet: every starter board's
 things (the task's whole check), frames for old interfaces (read from drawn bores and shafts, the next step), and the
 standards' tables (I3). Checked with `npm run gate`.
+
+## 2026-11-01: two red teams broke the kernel; each way they found is closed (spec 10, T23)
+
+Two agents were set to make the kernel pass a false certificate, one through its arithmetic and one through its reading.
+They found 18 (`tests/nexus/kernel.red.json`). Whole powers of 2^31 or more were worked with 32-bit steps, and powers past
+2^53 lost their parity on the way to a number, so 3^(2^31) + 5 passed as 6, 2^(2^32 + 3) as 8 and (−1)^(2^53 + 1) as 1;
+a zero-width character inside "mN" was read as a space, so a millinewton passed as an energy; and a dims claim holding a
+wire and a law was decided on the wire alone. Now a whole power is worked with BigInt steps and held to 1,024 either way
+(past it, undecided), an exponent's numerator is checked before it becomes a number, a unit may hold only letters,
+digits and unit signs with one "/" between two sides, a dims claim is a wire or a law, never both, and an exponential
+past 1,000 either way is undecided rather than worked for minutes. The second checker (`scripts/kernel2.py`) now keeps
+every input whole (450 digits; at 60 one red certificate rounded 1 + 1e-61 to 1 and passed both checkers), follows the
+same text rules, and catches decimal's own overflow. Every one of the 18 is refused by both checkers in the test "the
+kernel: closed, exact, each kind refusing what is planted, and a second checker agreeing". Not changed, and said by the
+red team: a value's text is at most 400 characters, so a figure far below 1e-4000 cannot be stated; a square root's grain
+is 2^-96, so claims about roots of numbers under 2^-192 come back undecided. Checked with `npm run gate`.
