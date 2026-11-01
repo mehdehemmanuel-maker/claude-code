@@ -8,8 +8,8 @@ const root = path.resolve(__dirname, '../../dist-view'), shots = process.argv[2]
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.json': 'application/json', '.png': 'image/png', '.md': 'text/plain' };
 // The limits (research 34 from Meta's comfort and panel pages; decision 0012 for the chat's place and the bar's size):
 const LIMITS = [
-  ['board distance (m)', (m) => m.board.distance, 1.15, 1.35],
-  ['board below the eye (°)', (m) => m.board.below, 8, 12],
+  // (the board's distance and angle below the eye are its canvas's (below); the group, strip and side panel with it, is
+  // what is centred)
   ['board off centre (°)', (m) => Math.abs(m.board.side), 0, 2],
   ['bar width (°, within the 58° Meta designs for)', (m) => m.bar.width, 0, 58],
   ['bar rows (two in a headset)', (m) => m.bar.rows, 2, 2],
@@ -29,6 +29,14 @@ const LIMITS = [
   ['strip text, smallest (°, 0.6 comfortable)', (m) => m['strip text'].width, 0.6, 5],
   ['side panel text, smallest (°, 0.6 comfortable)', (m) => m['side text'].width, 0.6, 5],
   ['smallest block on the board (°: a hand chooses and moves it; ports are wired from the side panel)', (m) => m.block.width, 2.5, 90],
+  // (as the eye sees them: every target, each from its corners where it stands; the board's text at nine points across its
+  // canvas; the canvas itself, its width in css px and where it stands (the evaluator, 2026-11-01))
+  ['every target a hand presses, the smallest as seen (°)', (m) => m['every target'].width, 2.5, 90],
+  ['board text as seen, 13 px, the least across the canvas (°)', (m) => m['board text seen'].width, 0.6, 5],
+  ['board text as seen, 11 px, the least across the canvas (°)', (m) => m['board text seen'].height, 0.4, 5],
+  ['board canvas drawn at 780 css px', (m) => m.canvas.width, 780, 780],
+  ['board canvas below the eye (°, 10 by the task)', (m) => m.canvas.below, 8, 12],
+  ['board canvas distance (m, 1.25 by the task)', (m) => m.canvas.distance, 1.15, 1.35],
 ];
 const srv = http.createServer((q, r) => { const p = path.join(root, decodeURIComponent(q.url.split('?')[0])); fs.readFile(p, (e, d) => { if (e) { r.writeHead(404); r.end(); return; } r.writeHead(200, { 'Content-Type': types[path.extname(p)] || 'application/octet-stream' }); r.end(d); }); }).listen(4179);
 (async () => {
@@ -42,6 +50,7 @@ const srv = http.createServer((q, r) => { const p = path.join(root, decodeURICom
     await pg.evaluate(() => window.space.keyboard()); await pg.waitForTimeout(300);
     const before = await pg.evaluate(() => window.space.comfort());
     for (const [name, f, lo, hi] of LIMITS) { let v; try { v = f(before); } catch { v = NaN; } const ok = v >= lo && v <= hi; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}: ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'} (limit ${lo} to ${hi})`); if (!ok) fails++; }
+    console.log(`     (the smallest target seen: ${before['every target']?.what})`);
     if (shots) await pg.screenshot({ path: path.join(shots, 'headset-panels.png') });
     // (the side panel in its other states: a block chosen, with inputs a hand changes, and the library; each target and
     // each text measured there too)
@@ -55,8 +64,11 @@ const srv = http.createServer((q, r) => { const p = path.join(root, decodeURICom
     // zoomed out: ten presses of the strip's −; no minimap to press there)
     await pg.evaluate(() => { for (let i = 0; i < 10; i++) window.space.wall.zoom(1 / 1.25); }); await pg.waitForTimeout(200);
     { const m = await pg.evaluate(() => window.space.comfort()), mapShown = await pg.evaluate(() => window.space.wall.mapShown());
-      for (const [name, v, lo] of [['smallest block', m.block?.width, 2.5], ['board text, smallest (11 px) as drawn', m.text?.width, 0.4], ['board text, usual (13 px) as drawn', m.text13?.width, 0.6]]) { const ok = v >= lo; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name} after zooming out ten times (°): ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'} (limit ${lo} or more)`); if (!ok) fails++; }
+      for (const [name, v, lo] of [['smallest block', m.block?.width, 2.5], ['every target, the smallest as seen', m['every target']?.width, 2.5], ['board text as seen (11 px), the least', m['board text seen']?.height, 0.4], ['board text as seen (13 px), the least', m['board text seen']?.width, 0.6]]) { const ok = v >= lo; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name} after zooming out ten times (°): ${Number.isFinite(v) ? v.toFixed(2) : 'not measured'} (limit ${lo} or more)`); if (!ok) fails++; }
       console.log(`${mapShown ? 'FAIL' : 'ok  '} no minimap drawn in the headset (it was 1.1° tall)`); if (mapShown) fails++; }
+    // (the whole canvas scanned, every 10 css px: a ray takes a block or the sheet, never a port, a wire or anything else)
+    { const kinds = await pg.evaluate(() => { const w = window.space.wall, out = {}; for (let x = 2; x < w.canvas.clientWidth; x += 10) for (let y = 2; y < w.canvas.clientHeight; y += 10) { const k = w.probe(x, y) ?? 'sheet'; out[k] = (out[k] ?? 0) + 1; } return out; });
+      const bad = Object.keys(kinds).filter((k) => k !== 'node' && k !== 'sheet'); console.log(`${bad.length ? 'FAIL' : 'ok  '} the canvas scanned: a ray takes ${JSON.stringify(kinds)}`); if (bad.length) fails++; }
     // (a ray on a block's port presses no port: ports and wires are wired from the side panel in a headset)
     { const k = await pg.evaluate(() => { const w = window.space.wall; for (const id of Object.keys(w.board().nodes)) { const p = w.portPoint(id); if (p && p.x > 0 && p.y > 0 && p.x < w.canvas.clientWidth && p.y < w.canvas.clientHeight) return w.probe(p.x, p.y) ?? 'nothing'; } return 'no port in view'; });
       const ok = k !== 'out' && k !== 'in' && k !== 'wire' && k !== 'no port in view'; console.log(`${ok ? 'ok  ' : 'FAIL'} a ray on a port takes: ${k} (never the port itself)`); if (!ok) fails++; }

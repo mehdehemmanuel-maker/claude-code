@@ -39,6 +39,8 @@ export class Keyboard {
   }
   /** Where a key is on the board (its texture coordinates, at its middle), for whoever points at it. */
   /** The smallest dimension of the smallest key, in metres on the panel (for checking it against a target's least size). */
+  /** Every key's rectangle, in the keyboard's canvas pixels (its canvas `width` and `height` with them). */
+  keyRects(): { cw: number; ch: number; rects: { x0: number; y0: number; x1: number; y1: number }[] } { return { cw: this.canvas.width, ch: this.canvas.height, rects: this.keys.map((k) => ({ x0: k.x, y0: k.y, x1: k.x + k.w, y1: k.y + k.h })) }; }
   smallestKey(): number { const g = this.mesh.geometry as THREE.PlaneGeometry, mPerPx = g.parameters.width / this.canvas.width; return Math.min(...this.keys.map((k) => Math.min(k.w, k.h))) * mPerPx * this.mesh.scale.x; }
   keyUv(label: string): THREE.Vector2 | null { const k = this.keys.find((x) => x.label === label); return k ? new THREE.Vector2((k.x + k.w / 2) / this.canvas.width, 1 - (k.y + k.h / 2) / this.canvas.height) : null; }
   /** Press a key: what it does to the text, or 'send' / 'mic' for the caller to act on. */

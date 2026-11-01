@@ -881,6 +881,8 @@ export const wall = {
   zoomK: (): number => view.k,
   /** What a press at a point of the canvas (css px) would take: a block, a port, a wire, or nothing. */
   probe: (x: number, y: number): string | null => hit(x, y)?.kind ?? null,
+  /** Every block on the board as drawn, in the canvas's css px. */
+  blockRects: (): { x0: number; y0: number; x1: number; y1: number }[] => nodesOf(cur()).map((n) => { const g = geo(n.id); return { x0: g.x * view.k + view.ox, y0: g.y * view.k + view.oy, x1: (g.x + g.w) * view.k + view.ox, y1: (g.y + g.h) * view.k + view.oy }; }),
   /** Whether the minimap is drawn (and so can be pressed). */
   mapShown: (): boolean => !!mapBox,
   /** Where a block's first output port is drawn, in css px. */

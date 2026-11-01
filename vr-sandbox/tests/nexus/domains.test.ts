@@ -316,6 +316,11 @@ describe('every domain, in one pass', () => {
     const run = await runOf({ start: emptyBoard('t'), board: tools.board(), steps, answer: 'All done. The sum is 4.', model: 'm', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: tools.made });
     expect(run.nearMisses.map((m) => `${m.kind} ${m.tool}`), 'a refused wire, a block failed past the cut, a tool failed, an answer past a standing refusal').toEqual(['error build', 'error build', 'error card', 'reckless answer']);
     expect(run.nearMisses[1]!.what, 'the block that failed').toMatch(/^node div failed/);
+    // (and through runOf its answer reaches the near misses: numbers with no board are at-risk; a refusal the answer owns
+    // up to is an error only, not reckless (the answer dropped at runOf's door passed before: the evaluator, 2026-11-01))
+    const rec = (st: AgentStep[], answer: string) => runOf({ start: emptyBoard('t'), board: emptyBoard('t'), steps: st, answer, model: 'm', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: [] }).then((x) => x.nearMisses.map((m) => m.kind));
+    expect(await rec([], 'The spring weighs 19.6 N.'), 'numbers with no board').toEqual(['at-risk']);
+    expect(await rec([stepOf('build', {}, '! wire a.x>b.y: no input "y"', 1)], 'The wire into b was refused: it has no input y.'), 'a refusal owned up to').toEqual(['error']);
     // (the page shows each near miss with its kind and its response, open when one is reckless, and it is called with the
     // run's own (the guard of this was lost in a rewrite once: the evaluator, 2026-11-01))
     const pageView = nearMissesView(run.nearMisses, (x) => x);

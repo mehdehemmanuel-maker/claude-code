@@ -162,14 +162,15 @@ let tMode: 'auto' | 'clock' | 'history' = 'auto';
 // the bar could not keep within the 58° Meta designs for and give its buttons the 2.5° a target needs (measured, research 34))
 const BAR_ONE = [1.7, 0.1, 2400] as const, BAR_TWO = [0.9, 0.2, 1400] as const;
 const bar = new Panel(...BAR_ONE, (p) => {
-  const g = p.g, two = p.h / p.w > 0.15, H = two ? p.c.height / 2 : p.c.height, bw = (w: number) => (two ? Math.max(w, 90) : w);
+  // (in two rows every button at least 100 px wide: as the eye sees the bar's ends at a slant, 90 px was 2.49°)
+  const g = p.g, two = p.h / p.w > 0.15, H = two ? p.c.height / 2 : p.c.height, bw = (w: number) => (two ? Math.max(w, 100) : w);
   g.fillStyle = '#0b1220ee'; round(g, 0, 0, p.c.width, p.c.height, 24); g.fill();
   g.textBaseline = 'middle'; g.font = `700 22px ${FONT}`; g.fillStyle = '#ffd740'; g.fillText('S · SCALE', 24, H / 2 - 18);
   g.font = `600 28px ${FONT}`; g.fillStyle = '#e6eef8'; g.fillText(`1 cell = ${lengthSaid(grid.cell || 1)}`, 24, H / 2 + 16);
   let x = two ? 250 : 300; for (const [name, cell] of [['nm', 1e-9], ['µm', 1e-6], ['mm', 1e-3], ['m', 1], ['km', 1e3], ['Mm', 1e6]] as const) { p.button(name, x, 22, bw(84), H - 44, () => { jump(cell); }, Math.abs(Math.log10((grid.cell || 1) / cell)) < 0.5); x += bw(84) + 8; }
   // (no Board button in a headset: there the board at its larger size covered the chat and the bar (the evaluator,
   // 2026-11-01); its own zoom, the strip's + and −, makes it larger)
-  p.button('Fit', x, 22, 90, H - 44, fit); x += 100; if (!two) { p.button('Board', x, 22, 110, H - 44, () => { boardBig = !boardBig; layPanels(); }, boardBig); x += 130; }
+  p.button('Fit', x, 22, bw(90), H - 44, fit); x += bw(90) + 10; if (!two) { p.button('Board', x, 22, 110, H - 44, () => { boardBig = !boardBig; layPanels(); }, boardBig); x += 130; }
   for (const k of ['xz', 'xy', 'yz'] as const) { p.button(k.toUpperCase(), x, 22, bw(84), H - 44, () => { grid.planes[k] = !grid.planes[k]; grid.dirty = true; }, grid.planes[k]); x += bw(84) + 8; }
   // (in two rows, T begins the second row; its buttons are moved down by a row's height, and its mode button made full height)
   const T0 = two ? H : 0; if (two) x = 24; else x += 22;
@@ -229,7 +230,7 @@ const back = document.createElement('a'); back.href = './index.html'; back.textC
 back.style.cssText = 'position:fixed;left:16px;bottom:16px;padding:8px 14px;border-radius:10px;border:1px solid #5a3f9a;background:linear-gradient(90deg,#1b3a5a,#3a1b5a);color:#e6eef8;font:14px system-ui;text-decoration:none;z-index:5';
 document.body.appendChild(back);
 // (0.62 m wide: each key 40.7 mm tall, 2.59° from 0.9 m; at 0.56 m they were 2.34°, under the 2.5° a target needs)
-const keyboard = new Keyboard(false, 0.62); keyboard.mesh.visible = false;
+const keyboard = new Keyboard(false, 0.7); keyboard.mesh.visible = false; // (0.70 m: its end keys, seen at a slant from 0.9 m, are 2.5° or more (at 0.62 m they were 2.45°))
 // (in a headset, 0.9 m from the eye and below it: nearer than 1 m it is in the band Meta's comfort pages say to avoid,
 // 0.5 to 0.8 m, where the eyes strain to focus (research 34; spec 04, P10))
 // 45° below the eye, tilted to face it, so it clears the bar above it (measured: at 34° below it covered the bar)
@@ -255,8 +256,10 @@ function layPanels(): void {
   else bar.shape(...BAR_ONE);
   // (the least a target on the board may be, in its css px: 2.5° at the board's distance; set in a headset, nothing on a screen)
   // (and the least zoom for its text, as drawn: 13 px at 0.6° and 11 px at 0.4° from 1.25 m)
-  if (xr) { const perPx = (NW * board.group.scale.x) / Math.max(1, wall.canvas.clientWidth), at = (deg: number) => 2 * 1.25 * Math.tan(THREE.MathUtils.degToRad(deg / 2));
-    wall.headset(Math.ceil(at(2.5) / perPx) + 1, Math.max(at(0.6) / (13 * perPx), at(0.4) / (11 * perPx)) * 1.02); } else wall.headset(0);
+  // (worked from where the board stands as the eye at the ui's origin sees it, at nine points of the canvas, the least of
+  // them: its text 0.6° (13 px) and 0.4° (11 px), every block 2.5°, each with 3 % to spare)
+  if (xr) { ui.updateWorldMatrix(true, true); const eye0 = ui.getWorldPosition(new THREE.Vector3()), t = boardText(eye0, 1);
+    wall.headset(Math.ceil((2.5 / t.px) * 1.03), Math.max(0.6 / t.t13, 0.4 / t.t11) * 1.03); } else wall.headset(0);
   if (xr) { /* laid above */ } else if (boardBig) { board.group.scale.setScalar(0.5); board.group.position.set(-0.12, 0.06, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.visible = false; }
   else { chat.mesh.visible = true; board.group.scale.setScalar(0.36); board.group.position.set(0.36, 0.1, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.position.set(-0.78, 0.4, -1.25); chat.mesh.scale.setScalar(0.65); chat.mesh.rotation.set(0, 0, 0); }
   // the panels are drawn over what is made: they are what you work with, never hidden inside it
@@ -264,6 +267,38 @@ function layPanels(): void {
 }
 /** Where the panels stand in a headset: before you, where you are when you ask. */
 function recentre(): void { const head = renderer.xr.getCamera(), p = head.getWorldPosition(new THREE.Vector3()), f = head.getWorldDirection(new THREE.Vector3()); f.y = 0; f.normalize(); ui.position.copy(p); ui.lookAt(p.clone().sub(f)); xrPivot.copy(p).addScaledVector(f, 0.9).setY(p.y - 0.4); }
+
+// ---- every target a hand presses, as the eye sees it (spec 04, P10): each rectangle's angle across its middle, each
+// way, from where the eye is, its corners where they stand (a flat panel's end buttons are seen at a slant: measured at the
+// panel's centre, square on, they read larger than they are: the evaluator, 2026-11-01) -------------------------------------
+type Rect = { x0: number; y0: number; x1: number; y1: number };
+function seen(mesh: THREE.Object3D, w: number, h: number, cw: number, ch: number, r: Rect, eye: THREE.Vector3): number {
+  mesh.updateWorldMatrix(true, false);
+  const P = (px: number, py: number) => new THREE.Vector3((px / cw - 0.5) * w, (0.5 - py / ch) * h, 0).applyMatrix4(mesh.matrixWorld).sub(eye);
+  const xm = (r.x0 + r.x1) / 2, ym = (r.y0 + r.y1) / 2;
+  return THREE.MathUtils.radToDeg(Math.min(P(r.x0, ym).angleTo(P(r.x1, ym)), P(xm, r.y0).angleTo(P(xm, r.y1))));
+}
+/** Every target a hand presses in a headset, each as seen: the bar's and the chat's buttons, every key, the strip's and the
+ *  side panel's buttons, and every block wholly in view on the board (a block cut by the canvas's edge is pressed where it
+ *  shows, and is measured once it is in view). */
+function everyTarget(eye: THREE.Vector3): { name: string; deg: number }[] {
+  const out: { name: string; deg: number }[] = [];
+  for (const [name, p] of [['bar', bar], ['chat', chat]] as const) if (p.mesh.visible) for (const r of p.hits) out.push({ name, deg: seen(p.mesh, p.w, p.h, p.c.width, p.c.height, r, eye) });
+  if (keyboard.mesh.visible) { const k = keyboard.keyRects(), g = keyboard.mesh.geometry as THREE.PlaneGeometry; for (const r of k.rects) out.push({ name: 'key', deg: seen(keyboard.mesh, g.parameters.width, g.parameters.height, k.cw, k.ch, r, eye) }); }
+  if (board.group.visible) {
+    for (const z of board.hitRects()) for (const r of z.rects) out.push({ name: z.name, deg: seen(z.mesh, z.w, z.h, z.cw, z.ch, r, eye) });
+    const cw = wall.canvas.clientWidth, chh = wall.canvas.clientHeight;
+    for (const r of wall.blockRects()) if (r.x0 >= 0 && r.y0 >= 0 && r.x1 <= cw && r.y1 <= chh) out.push({ name: 'block', deg: seen(board.canvasMesh, NW, NH, cw, chh, r, eye) });
+  }
+  return out;
+}
+/** The board's text as seen, at nine points across its canvas: the least height of its 13 px and its 11 px (at zoom k). */
+function boardText(eye: THREE.Vector3, k = wall.zoomK()): { t13: number; t11: number; px: number } {
+  const cw = wall.canvas.clientWidth, chh = wall.canvas.clientHeight; let t13 = Infinity, t11 = Infinity, px = Infinity;
+  for (const u of [0.05, 0.5, 0.95]) for (const v of [0.05, 0.5, 0.95]) { const x = u * cw, y = v * chh, at = (hpx: number) => seen(board.canvasMesh, NW, NH, cw, chh, { x0: x - hpx / 2, y0: y - hpx / 2, x1: x + hpx / 2, y1: y + hpx / 2 }, eye);
+    t13 = Math.min(t13, at(13 * k)); t11 = Math.min(t11, at(11 * k)); px = Math.min(px, at(10) / 10); }
+  return { t13, t11, px };
+}
 
 /** You move, and what you work with comes with you: the panels and the point the zoom turns about go where you go, so
  *  walking never leaves them behind (fault D11: they were left where they stood until you squeezed to bring them). */
@@ -292,6 +327,12 @@ function comfort(): Record<string, { distance: number; side: number; below: numb
   // evaluator found them unmeasured, at 1.1° and 0.9°, 2026-11-01); and the bar's rows)
   if (board.group.visible) for (const z of board.sizes()) { const d = dist(z.mesh); if (z.target !== undefined) out[`${z.name} target`] = { distance: d, side: 0, below: 0, width: sz(z.target, d) }; out[`${z.name} text`] = { distance: d, side: 0, below: 0, width: sz(z.text, d) }; }
   if (out.bar) out.bar.rows = bar.h / bar.w > 0.15 ? 2 : 1;
+  // (every target a hand presses, as seen: the smallest, and which; the board's text as seen across its canvas; the canvas
+  // itself (its css width, where it stands))
+  { const all = everyTarget(eye), least = all.reduce((a, b) => (b.deg < a.deg ? b : a), { name: 'none', deg: Infinity }); out['every target'] = { distance: 0, side: 0, below: 0, width: least.deg, what: `${least.name} (of ${all.length})` } as never;
+    if (board.group.visible) { const t = boardText(eye); out['board text seen'] = { distance: 0, side: 0, below: 0, width: t.t13, height: t.t11 };
+      const cm = board.canvasMesh; cm.updateWorldMatrix(true, false); const c = cm.getWorldPosition(new THREE.Vector3()).sub(eye), d = c.length();
+      out['canvas'] = { distance: d, side: THREE.MathUtils.radToDeg(Math.atan2(c.x, -c.z) - yaw), below: THREE.MathUtils.radToDeg(-Math.asin(c.y / d)), width: wall.canvas.clientWidth }; } }
   // (every block on the board is a target a hand presses (to choose it, to move it): the smallest, as drawn)
   if (board.group.visible && Number.isFinite(wall.smallestBlock())) { const perPx = (NW * board.group.scale.x) / Math.max(1, wall.canvas.clientWidth), d = dist(board.group); out['block'] = { distance: d, side: 0, below: 0, width: sz(wall.smallestBlock() * perPx, d) }; }
   return out;

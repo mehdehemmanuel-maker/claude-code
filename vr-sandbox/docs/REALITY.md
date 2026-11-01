@@ -1944,3 +1944,19 @@ test "the kernel: closed, exact, each kind refusing what is planted, and a secon
 most 3 laws undecided): 327 of 330 laws certified for their dimensions and their value at the worked example (318
 before), 3 undecided (two integrals, one erf). Eleven points across sine's family each pass at their true value and are
 refused moved a millionth, and the two checkers agree on all of them. Checked with `npm run gate`.
+
+## 2026-11-01: every headset target measured as the eye sees it; I1 passes (spec 04, P10; spec 01, I1; spec 00, S10)
+
+P10's fifth verdict: targets were measured at each panel's centre, square on, but a flat panel's end buttons are seen at a
+slant (the bar's 2.36°, the keyboard's end keys 2.35°); the board's text was measured from the centre of the board's whole
+group, not from its canvas; wires were not probed; the 780 px was not measured. Now `comfort()` in
+`src/nexus/view/space.ts` lists every target a hand presses (the bar's and chat's buttons, every key, the strip's and side
+panel's buttons, every block wholly in view) and measures each as the eye sees it, from its corners where they stand; the
+board's text is measured at nine points across the canvas; the board's zoom floor and the least size of a block are worked
+from that same geometry; and the run scans the whole canvas and finds a ray takes only blocks and the sheet. To hold the
+limits so measured, the board's strip is in two rows in a headset, the bar's least button is 100 px, and the keyboard is
+0.70 m wide. One run of `npm run eval:headset`: every limit held; the smallest target as seen 2.68° (2.59° after zooming
+out ten times), the board's text as seen 0.62° (13 px) and 0.52° (11 px), the canvas 780 px wide, 9.90° below the eye at
+1.28 m. I1 passed its second judging. S10's sixth verdict: the answer reached `runOf` but not, there, the near-miss check;
+now `runOf` is run with numbers and no board (at-risk) and with a refusal owned up to (an error only). Checked with
+`npm run gate`.

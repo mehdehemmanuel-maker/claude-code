@@ -16,7 +16,7 @@ export const NW = 2.4, NH = 1.35, SH = 0.09, SIDE_W = 0.62, GAP = 0.015;
 // (in a headset the strip and the side panel are drawn larger, so every target is 2.5° or more and every text 0.6° or more
 // from the eye with the board at its smaller scale (spec 04, P10): on a screen their buttons were 1.1° and 0.9°, their text
 // 0.3° to 0.6° (the evaluator, 2026-11-01). The same pixels per metre as on a screen; more metres.)
-const SH_XR = 0.16, SIDE_W_XR = 0.92;
+const SH_XR = 0.38, SIDE_W_XR = 0.92; // (the strip in two rows in a headset: measured as the eye sees them, its end buttons in one row of 0.16 were 2.21°, seen at a slant)
 const SPX = 2048, LPX0 = 900, PX_PER_M = LPX0 / SIDE_W;
 interface Hit { x0: number; y0: number; x1: number; y1: number; act: () => void; label?: string }
 /** The side panel's sizes, in its pixels: on a screen, and in a headset. */
@@ -86,6 +86,12 @@ export class NodesWall {
     }
     return out;
   }
+  /** Every button on the strip and the side panel, with its mesh and that mesh's size in metres and in its canvas's pixels:
+   *  for measuring each as the eye sees it. And the board's canvas mesh, for its blocks and its text. */
+  hitRects(): { name: string; mesh: THREE.Mesh; w: number; h: number; cw: number; ch: number; rects: { x0: number; y0: number; x1: number; y1: number }[] }[] {
+    return [{ name: 'strip', mesh: this.strip.mesh, w: NW, h: this.sh, cw: SPX, ch: this.spy, rects: this.stripHits }, { name: 'side panel', mesh: this.side.mesh, w: this.sw, h: NH + this.sh + GAP, cw: this.lpx, ch: this.lpy, rects: this.sideHits }];
+  }
+  get canvasMesh(): THREE.Mesh { return this.board.mesh; }
   /** A side-panel button pressed by its label: what a hand's ray on it sets off (for a browser test). */
   pressLabel(label: string, nth = 0): boolean { const h = this.sideHits.filter((x) => x.label === label)[nth]; h?.act(); return !!h; }
   /** The library shown in the side panel, or the chosen block (as the strip's ＋ Blocks button does). */
@@ -128,20 +134,22 @@ export class NodesWall {
   drawStrip(): void {
     const g = this.stripC.getContext('2d')!, H = this.spy; this.stripHits = []; this.stripFonts = [];
     g.clearRect(0, 0, SPX, H); g.fillStyle = '#0b1220ee'; round(g, 0, 0, SPX, H, 18); g.fill();
-    // (in a headset each button at least as wide as the strip is tall, its label at 40 px: 2.5° and 0.6° from the eye)
-    const font = this.xr ? 40 : 30, least = this.xr ? H : 0, pad = this.xr ? 6 : 10;
-    let x = this.xr ? 8 : 14;
+    // (in a headset two rows, each button at least as wide as its row is tall (and a tenth more), its label at 48 px: 2.5°
+    // and 0.6° or more as the eye sees them, the ends at a slant included)
+    const font = this.xr ? 48 : 30, RH = this.xr ? H / 2 : H, least = this.xr ? RH * 1.1 : 0, pad = this.xr ? 6 : 10;
+    let x = this.xr ? 8 : 14, row = 0;
     const btn = (label: string, act: () => void, hue = '#1c2a3d', w?: number) => {
-      g.font = `600 ${font}px ${FONT}`; const bw = Math.max(least, w ?? g.measureText(label).width + 40);
-      g.fillStyle = hue; round(g, x, pad, bw, H - 2 * pad, 12); g.fill(); g.fillStyle = '#e6eef8'; g.textBaseline = 'middle'; const tw = g.measureText(label).width; g.fillText(label, x + Math.max(20, (bw - tw) / 2), H / 2); this.stripFonts.push(font);
-      this.stripHits.push({ x0: x, y0: 0, x1: x + bw, y1: H, act }); x += bw + (this.xr ? 6 : 10);
+      g.font = `600 ${font}px ${FONT}`; const bw = Math.max(least, w ?? g.measureText(label).width + 40), y0 = row * RH;
+      g.fillStyle = hue; round(g, x, y0 + pad, bw, RH - 2 * pad, 12); g.fill(); g.fillStyle = '#e6eef8'; g.textBaseline = 'middle'; const tw = g.measureText(label).width; g.fillText(label, x + Math.max(20, (bw - tw) / 2), y0 + RH / 2); this.stripFonts.push(font);
+      this.stripHits.push({ x0: x, y0, x1: x + bw, y1: y0 + RH, act }); x += bw + (this.xr ? 6 : 10);
     };
+    const nextRow = () => { if (this.xr) { row = 1; x = 8; } };
     const names = wall.demos();
     btn('◀', () => { this.demo = (this.demo + names.length - 1) % names.length; this.say(wall.demo(this.demo)); this.drawStrip(); });
-    btn(clip(names[this.demo] ?? '', this.xr ? 13 : 34), () => { this.say(wall.demo(this.demo)); this.drawStrip(); }, '#173a2c', this.xr ? 330 : 560);
+    btn(clip(names[this.demo] ?? '', this.xr ? 20 : 34), () => { this.say(wall.demo(this.demo)); this.drawStrip(); }, '#173a2c', this.xr ? 560 : 560);
     btn('▶', () => { this.demo = (this.demo + 1) % names.length; this.say(wall.demo(this.demo)); this.drawStrip(); });
     btn('Fit', () => wall.fit()); btn('Tidy', () => wall.tidy()); btn('−', () => wall.zoom(1 / 1.25)); btn('+', () => wall.zoom(1.25));
-    btn('↶', () => wall.undo()); btn('↷', () => wall.redo()); btn('Heat', () => wall.heat()); btn('↑ Out', () => { wall.up1(); this.drawSide(); });
+    nextRow(); btn('↶', () => wall.undo()); btn('↷', () => wall.redo()); btn('Heat', () => wall.heat()); btn('↑ Out', () => { wall.up1(); this.drawSide(); });
     btn(this.library ? '✕ Library' : '＋ Blocks', () => { this.library = !this.library; this.page = 0; this.drawStrip(); this.drawSide(); }, this.library ? '#3a2a10' : '#2a1c3d');
     this.strip.tex.needsUpdate = true;
   }

@@ -36,7 +36,9 @@ smallest block at 2.5° or more (2.64° after zooming out ten times), and a wire
 output by its "→ wire" button and the other block's input by its "← here" button, each 2.7°; "✕ cut" takes one away.
 The Board button is not in the headset's bar, and the B key does nothing there (the strip's + makes the board larger).
 The board's zoom is also held so its text, as drawn, stays readable (13 px at 0.6° or more, 11 px at 0.4° or more), and
-no minimap is drawn in a headset (the sheet is dragged to pan).
+no minimap is drawn in a headset (the sheet is dragged to pan). Every target is measured as the eye sees it, from its
+corners where it stands, not at its panel's centre square on: so the board's strip is drawn in two rows in a headset, the
+bar's least button is 100 px, and the keyboard is 0.70 m wide (at 0.62 m its end keys were 2.45° seen at a slant).
 
 ## The assumption it rests on
 

@@ -8,7 +8,7 @@
    "meets": [],
    "owner": "plan/decisions, CLAUDE.md, docs/OWNERS.md",
    "check": "the routing test passes with interfaces.ts named; the decision record exists",
-   "status": "claimed",
+   "status": "passing",
    "after": [],
    "evidence": "decisions 0004 and 0014; interfaces.ts named in CLAUDE.md and docs/OWNERS.md, and the routing test now requires every file directly in src/nexus/ to be named by its own name (it named the folder before); the record only: the negatives and tables are I3 onward (2026-11-01)"
   },
