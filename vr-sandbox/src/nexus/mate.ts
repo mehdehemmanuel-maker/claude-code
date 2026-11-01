@@ -314,15 +314,17 @@ export function standOn(host: Part, from: V3, dir: V3, o: { turn?: number; geome
       for (const [y, ny] of [[y0, -1], [y1, 1]] as const) { if (Math.abs(d2.y) < 1e-12) continue; const t = (y - o2.y) / d2.y; if (t <= 0) continue; const p = o2.clone().addScaledVector(d2, t); if (p.x ** 2 + p.z ** 2 <= r * r + 1e-15) hits.push({ t, n: new THREE.Vector3(0, ny, 0), u: new THREE.Vector3(1, 0, 0) }); } }
     else if ('sphere' in s) { const r = s.sphere, b = 2 * o2.dot(d2), c = o2.lengthSq() - r * r, disc = b * b - 4 * d2.lengthSq() * c;
       if (disc >= 0) for (const t of [(-b - Math.sqrt(disc)) / (2 * d2.lengthSq()), (-b + Math.sqrt(disc)) / (2 * d2.lengthSq())]) if (t > 0) { const p = o2.clone().addScaledVector(d2, t), n = p.clone().normalize(); hits.push({ t, n, u: new THREE.Vector3(0, 1, 0).sub(n.clone().multiplyScalar(n.y)).lengthSq() > 1e-9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0) }); } }
-    else if (o.geometry) { const g = o.geometry(s); if (g) { const mesh = new THREE.Mesh(g), hit = new THREE.Raycaster(o2, d2.clone().normalize()).intersectObject(mesh, false)[0];
-      if (hit?.face) { const nn = g.attributes.normal, f = hit.face, bc = hit.barycoord; const n = nn && bc ? new THREE.Vector3().fromBufferAttribute(nn as THREE.BufferAttribute, f.a).multiplyScalar(bc.x).add(new THREE.Vector3().fromBufferAttribute(nn as THREE.BufferAttribute, f.b).multiplyScalar(bc.y)).add(new THREE.Vector3().fromBufferAttribute(nn as THREE.BufferAttribute, f.c).multiplyScalar(bc.z)).normalize() : f.normal.clone();
+    // (both sides of each triangle met: a profile drawn top-down winds its triangles inward, and a front-only ray went
+    // through to the far wall (the evaluator, 2026-11-01); each vertex normal made unit before they are blended)
+    else if (o.geometry) { const g = o.geometry(s); if (g) { const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), hit = new THREE.Raycaster(o2, d2.clone().normalize()).intersectObject(mesh, false)[0];
+      if (hit?.face) { const nn = g.attributes.normal, f = hit.face, bc = hit.barycoord, vn = (i: number) => new THREE.Vector3().fromBufferAttribute(nn as THREE.BufferAttribute, i).normalize(); const n = nn && bc ? vn(f.a).multiplyScalar(bc.x).add(vn(f.b).multiplyScalar(bc.y)).add(vn(f.c).multiplyScalar(bc.z)).normalize() : f.normal.clone();
         if (n.dot(d2) > 0) n.negate(); hits.push({ t: hit.distance / d2.length(), n, u: new THREE.Vector3(1, 0, 0) }); } } }
     for (const h of hits) {
       const tw = h.t / sc; if (best && tw >= best.t) continue; // (the ray's length in the thing's frame: the piece may be scaled)
       const nW = h.n.clone().transformDirection(q.m), at = o2.clone().addScaledVector(d2, h.t).applyMatrix4(q.m);
       let u = h.u.clone().transformDirection(q.m); u.sub(nW.clone().multiplyScalar(u.dot(nW))); if (u.lengthSq() < 1e-12) u = new THREE.Vector3(1, 0, 0).sub(nW.clone().multiplyScalar(nW.x)); u.normalize();
       if (o.turn) u.applyAxisAngle(nW, o.turn);
-      best = { t: tw, at, n: nW, u, piece: q.p.name, exact: !('prism' in s || 'lathe' in s || 'loft' in s || 'tube' in s || 'surf' in s || 'cone' in s || ('cyl' in s && s.cyl[2] !== undefined && s.cyl[2] !== s.cyl[0])) };
+      best = { t: tw, at, n: nW, u, piece: q.p.name, exact: 'box' in s || 'sphere' in s || ('cyl' in s && (s.cyl[2] === undefined || s.cyl[2] === s.cyl[0])) };
     }
   }
   return best ? { at: best.at.toArray() as V3, n: best.n.toArray() as V3, u: best.u.toArray() as V3, piece: best.piece, exact: best.exact } : null;
@@ -330,7 +332,7 @@ export function standOn(host: Part, from: V3, dir: V3, o: { turn?: number; geome
 
 // ---- the checks before cutting (spec 01, I7; design §2.4, step 3) -------------------------------------------------------
 export interface CutCheck { check: 'depth' | 'edge distance' | 'spacing' | 'room' | 'breaking in'; ok: boolean; need: number; have: number; unit: 'mm'; rule: string; source: string }
-export interface Imprinted { frame: { at: V3; n: V3; u: V3 }; piece: string; path: number[]; turn: number; negative: Negative; checks: CutCheck[] }
+export interface Imprinted { frame: { at: V3; n: V3; u: V3 }; piece: string; path: number[]; turn: number; asking: Asking; negative: Negative; checks: CutCheck[] }
 /** An interface imprinted where a ray meets a host: stood on the surface (standOn), the host measured along the hole's
  *  line (its depth there) and across it (its edge, by rays from the hole's middle), the negative made for the host's
  *  material and that depth (negativeOf), then checked before anything is cut: the depth the negative asks, the edge
@@ -362,7 +364,7 @@ export function imprint(host: Part, asking: Asking, from: V3, dir: V3, o: { turn
     const other = piecesIn(host).find((x) => x.p !== q.p && !!x.p.shape && (() => { const bx = new THREE.Box3(); const s = x.p.shape!; const half = 'box' in s ? s.box.map((y) => y / 2) : null; if (!half) return false; for (let c = 0; c < 8; c++) bx.expandByPoint(new THREE.Vector3(c & 1 ? half[0]! : -half[0]!, c & 2 ? half[1]! : -half[1]!, c & 4 ? half[2]! : -half[2]!).applyMatrix4(x.m)); return bx.intersectsBox(box); })());
     if (!put({ check: 'room', ok: !other, need: +(((k.length ?? 0)) / mm).toFixed(3), have: other ? 0 : +((k.length ?? 0) / mm).toFixed(3), unit: 'mm', rule: `room along the axis for ${k.why.split(':')[0]}${other ? `: the ${other.p.name} is in it` : ''}`, source: 'its keep' })) return refusal(checks); }
   put({ check: 'depth', ok: true, need: +(depth / mm).toFixed(3), have: +(depth / mm).toFixed(3), unit: 'mm', rule: 'the negative made for the depth found', source: neg.mirror.std ?? '' });
-  return { frame: { at: f.at, n: f.n, u: f.u }, piece: f.piece, path: q.path, turn: o.turn ?? 0, negative: neg, checks };
+  return { frame: { at: f.at, n: f.n, u: f.u }, piece: f.piece, path: q.path, turn: o.turn ?? 0, asking, negative: neg, checks };
 }
 
 /** An imprint applied (spec 01, I8; R9): its negative's remove bodies cut into the piece (turned cuts, its own frame), its
@@ -383,9 +385,37 @@ export function applyImprint(host: Part, im: Imprinted, of: string): { part: Par
   const thread = String(neg.mirror.size.thread ?? ''), sex: Port['sex'] = neg.mirror.kind === 'hole.tapped' || neg.mirror.kind === 'hole.insert' ? 'threads' : 'holes';
   const depth = Math.max(...holes.map((x) => Math.max(...x.prof!.map((p) => p[1])))), name = `${of} (imprinted)`;
   const port: Port = { name, sex, thread, pattern, at: at.toArray() as V3, n: n.toArray() as V3, u: u.toArray() as V3, t: depth };
-  const rec = { of, at: port.at, n: port.n, u: port.u, turn: im.turn, mirror: neg.mirror.kind, port: name, why: neg.why };
+  const rec = { of, at: port.at, n: port.n, u: port.u, turn: im.turn, mirror: neg.mirror.kind, port: name, why: neg.why, asking: im.asking, face: { normal: port.n, extreme: 'max' as const, near: port.at }, made: { cuts, keep: keeps } };
   const swap = (p: Part, path: number[]): Part => path.length ? { ...p, parts: p.parts!.map((c, i) => (i === path[0] ? swap(c, path.slice(1)) : c)) } : { ...p, cuts: [...(p.cuts ?? []), ...cuts], keep: [...(p.keep ?? []), ...keeps], ports: [...(p.ports ?? []), port], imprints: [...(p.imprints ?? []), rec] };
   return { part: swap(host, q.path), port, says: `${cuts.length} cut${cuts.length > 1 ? 's' : ''} in the ${q.p.name} for ${of}, ${keeps.length} keep zone${keeps.length === 1 ? '' : 's'}; it gains ${sex} ${thread} (${neg.mirror.std ?? ''})` };
+}
+/** Every imprint on a thing made again where its face now is (spec 01, I9; R10): each imprint's cuts, keep zones and port
+ *  taken off its piece, its face found again by what the face is, not by a number (the face whose normal is the one it
+ *  stood on, the farthest out along it, met from outside at the point it stood over), and the imprint made there afresh
+ *  from what asked it (its negative for the depth the piece now has, its checks run again). Where no face answers (the
+ *  point no longer over the piece; the surface there facing otherwise; another face with that normal lying farther out),
+ *  or the checks now refuse it, it is lost and said so, with why: never moved to some other face. */
+export function reapplyImprints(host: Part, o: { geometry?: (s: Shape) => THREE.BufferGeometry | null } = {}): { part: Part; kept: string[]; lost: { of: string; why: string }[] } {
+  let part = host; const kept: string[] = [], lost: { of: string; why: string }[] = [];
+  const at = (p: Part, path: number[]): Part => path.reduce((x, i) => x.parts![i]!, p);
+  const swap = (p: Part, path: number[], f: (x: Part) => Part): Part => (path.length ? { ...p, parts: p.parts!.map((c, i) => (i === path[0] ? swap(c, path.slice(1), f) : c)) } : f(p));
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  for (const q of piecesIn(host)) for (const rec of q.p.imprints ?? []) {
+    if (rec.lost || !rec.face || !rec.asking || !rec.made) continue;
+    // (off: its cuts, keep zones, port and record)
+    part = swap(part, q.path, (p) => ({ ...p, cuts: (p.cuts ?? []).filter((c) => !rec.made!.cuts.some((m) => same(m, c))), keep: (p.keep ?? []).filter((k) => !rec.made!.keep.some((m) => same(m, k))), ports: (p.ports ?? []).filter((x) => x.name !== rec.port), imprints: (p.imprints ?? []).filter((x) => x !== rec) }));
+    const piece = at(part, q.path), m = piecesIn(part).find((x) => x.path.join('/') === q.path.join('/'))!.m, n = new THREE.Vector3(...rec.face.normal).normalize(), near = new THREE.Vector3(...rec.face.near);
+    const solo: Part = { name: 'piece', parts: [{ ...piece, parts: undefined, at: [0, 0, 0], rot: [0, 0, 0] }] }, h = standOn(solo, near.clone().addScaledVector(n, 10).toArray() as V3, n.clone().negate().toArray() as V3, o);
+    const loseIt = (why: string) => { lost.push({ of: rec.of, why }); part = swap(part, q.path, (p) => ({ ...p, imprints: [...(p.imprints ?? []), { ...rec, lost: why }] })); };
+    if (!h) { loseIt('no face answers there: the point it stood over is off the piece now'); continue; }
+    const hn = new THREE.Vector3(...h.n); if (hn.dot(n) < Math.cos((0.5 * Math.PI) / 180)) { loseIt(`the surface there faces otherwise now (${((Math.acos(Math.min(1, hn.dot(n))) * 180) / Math.PI).toFixed(1)}° from the face it stood on)`); continue; }
+    const bx = boxIn(piece.shape!, piece.base); if (bx) { const far = Math.max(...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => new THREE.Vector3(bx[k & 1 ? 1 : 0][0]!, bx[k & 2 ? 1 : 0][1]!, bx[k & 4 ? 1 : 0][2]!).dot(n))); if (new THREE.Vector3(...h.at).dot(n) < far - 1e-6) { loseIt('another face with its normal lies farther out: not the face it stood on'); continue; } }
+    const W = (v: THREE.Vector3) => v.applyMatrix4(m).toArray() as V3, from = W(new THREE.Vector3(...h.at).addScaledVector(n, 0.5)), dir = n.clone().negate().transformDirection(m).toArray() as V3;
+    const im = imprint(part, rec.asking as Asking, from, dir, { turn: rec.turn, ...(o.geometry ? { geometry: o.geometry } : {}) });
+    if ('refused' in im) { loseIt(`its checks refuse it there now: ${im.why}`); continue; }
+    part = applyImprint(part, im, rec.of).part; kept.push(rec.of);
+  }
+  return { part, kept, lost };
 }
 /** A fastener's interface as a port fit() reads: a bolt's or a screw's thread (its shank) as a pin of its size, where its
  *  head bears, along its shank. */

@@ -48,5 +48,11 @@
   "01.I5": [
     "src/nexus/interfaces.ts",
     "evals/interfaces/cases.json"
+  ],
+  "01.I9": [
+    "src/nexus/mate.ts",
+    "src/nexus/brep.ts",
+    "src/nexus/kits.ts",
+    "evals/interfaces/cases.json"
   ]
 }

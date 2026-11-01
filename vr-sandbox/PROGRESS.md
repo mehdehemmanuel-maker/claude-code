@@ -6,15 +6,15 @@ Last commit the gate passed: c997966 (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
-1. 01.I9: face queries: an imprint keeps to its face by what the face is; said lost, never moved
-2. 01.I10: fastenerFor: the fastener from the catalogue for a stack (through, tapped, insert), said why
-3. 01.I11: copy and paste an interface; pattern and relation nodes; a shared pattern read by both parts
+1. 01.I10: fastenerFor: the fastener from the catalogue for a stack (through, tapped, insert), said why
+2. 01.I11: copy and paste an interface; pattern and relation nodes; a shared pattern read by both parts
+3. 01.I12: joints: frame-to-frame joints solved together, with their residual and the freedom left
 
 ## Open, and why
 
-- Verdicts in: 00.S1, S2, S3, 10.T3, 01.I1, 01.I3, 01.I4, 01.I5 and 04.P10 pass. 00.S10 failed a tenth time; mended (what
+- Verdicts in: 00.S1, S2, S3, 10.T3, 01.I1, 01.I3 to I7, and 04.P10 pass. 00.S10 failed a tenth time; mended (what
   the pinned lines call is agent.ts's own, the relay's handler read whole, compile.py's andon refusal shown).
-- 01.I6, I7 and I8 claimed: an interface stood on any surface, the checks before cutting, an imprint applied; being judged (`npm run gate`).
+- 01.I8 and I9 claimed: an imprint applied, and kept to its face when the part changes; being judged (`npm run gate`).
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
 - 10.T24 claimed in part: nothing excused by name; fault D14 open (the small caliper mended; the Cascadia's frame not).

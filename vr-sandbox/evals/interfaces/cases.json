@@ -187,6 +187,49 @@
         "pilot_upper_um": 21
       },
       "worked": "NEMA 17's face: four M3 on a 31 mm square, a 22 mm pilot; ISO 273 medium for M3: 3.4; the pilot's bore 22 H7: 0 to +21 µm (ISO 286-1 Table 1, IT7 at 18 to 30 mm)"
+    },
+    {
+      "case": 10,
+      "what": "a box made 10 mm taller after an imprint on its top",
+      "asking": {
+        "kind": "thread.external",
+        "thread": "M8",
+        "head": "socket",
+        "through": true
+      },
+      "host": {
+        "material": "steel-low",
+        "thickness": 10
+      },
+      "reapply": {
+        "plate": [
+          100,
+          10,
+          100
+        ],
+        "at": [
+          10,
+          -20
+        ],
+        "taller": [
+          100,
+          20,
+          100
+        ],
+        "narrower": [
+          15,
+          10,
+          100
+        ],
+        "expect": {
+          "kept_top": 10,
+          "kept_depth": 20,
+          "cuts": 1,
+          "lost_narrower": true,
+          "lost_round": true
+        },
+        "worked": "the imprint at x 10, z −20 mm on the top of a 100 × 10 × 100 plate; the plate made 20 mm tall about its middle: its top is now at y = 10 mm, so the imprint is made again there and its hole runs the new 20 mm; one cut, the old one gone. The plate made 15 mm wide: x = 10 mm is off it, no face answers: lost. The plate made a ball: the surface there faces otherwise: lost."
+      }
     }
   ]
 }

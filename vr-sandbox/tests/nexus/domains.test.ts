@@ -41,7 +41,7 @@ import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, INSERT, 
 import { CLEAR } from '../../src/nexus/kinds/motion';
 import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
-import { applyImprint, boreGrips, fit, imprint, portOfInterface, standOn, type Imprinted } from '../../src/nexus/mate';
+import { applyImprint, boreGrips, fit, imprint, portOfInterface, reapplyImprints, standOn, type Imprinted } from '../../src/nexus/mate';
 import { rulesOf } from '../../src/nexus/make/rules';
 import { KITS, makeKit, type Part, type V3 } from '../../src/nexus/kits';
 import type { Assembly } from '../../src/nexus/assembly';
@@ -675,6 +675,12 @@ describe('every domain, in one pass', () => {
     for (const c of cases) { const f = standOn(c.host, c.from, c.dir, { geometry: (sh) => geometry(sh, undefined) })!; expect(f, `${c.what}: met`).toBeTruthy();
       expect(deg(f.n, c.n), `${c.what}: n within 0.5° of the surface's normal`).toBeLessThan(0.5); expect(gap(f.at, c.at), `${c.what}: where pointed within 0.1 mm`).toBeLessThan(0.0001);
       expect(Math.abs(f.u[0]! * f.n[0]! + f.u[1]! * f.n[1]! + f.u[2]! * f.n[2]!), `${c.what}: u in the surface`).toBeLessThan(1e-9); }
+    // (a turned solid drawn top-down, met on its near wall through the views' mesh (it was met on its far wall: the
+    // evaluator, 2026-11-01); and of two pieces stacked, the one the ray meets first)
+    const lathe = standOn({ name: 'h', parts: [{ name: 'turned', shape: { lathe: [[0, 0.08], [0.02, 0.08], [0.02, 0], [0, 0]] }, at: [0, 0, 0] }] }, [0.5, 0.04, 0], [-1, 0, 0], { geometry: (sh) => geometry(sh, undefined) })!;
+    expect([lathe.at[0]! > 0.019, deg(lathe.n, [1, 0, 0]) < 0.5, lathe.exact], 'a lathe drawn top-down: its near wall, square to it, said not exact').toEqual([true, true, false]);
+    const stack = standOn({ name: 'h', parts: [{ name: 'low', shape: { box: [0.1, 0.02, 0.1] }, at: [0, 0, 0] }, { name: 'high', shape: { box: [0.1, 0.02, 0.1] }, at: [0, 0.05, 0] }] }, [0, 1, 0], [0, -1, 0])!;
+    expect([stack.piece, +stack.at[1]!.toFixed(6)], 'the piece met first').toEqual(['high', 0.06]);
     const turned = standOn(cases[0]!.host, cases[0]!.from, cases[0]!.dir, { turn: Math.PI / 2 })!, plain = standOn(cases[0]!.host, cases[0]!.from, cases[0]!.dir)!;
     expect(deg(turned.u, plain.u), 'turned a quarter about n').toBeCloseTo(90, 6); expect(standOn(cases[0]!.host, [0, 0.5, 0], [0, 1, 0]), 'a ray that meets nothing').toBeNull();
   });
@@ -691,6 +697,23 @@ describe('every domain, in one pass', () => {
     expect(got.keep?.length, 'its keep a zone').toBe(1); expect(got.imprints?.map((x) => [x.of, x.mirror]), 'the imprint recorded').toEqual([['M8 cap screw', 'hole.clearance']]);
     const bolt = portOfInterface(interfacesOf(use('bolt M8x30')).list.find((x) => x.kind === 'thread.external')!)!, big = portOfInterface(interfacesOf(use('bolt M10x30')).list.find((x) => x.kind === 'thread.external')!)!;
     expect(done.port.sex, 'it gains holes').toBe('holes'); expect(fit(done.port, bolt), 'the hole finds its bolt').toEqual({ turn: expect.any(Number) }); expect(typeof fit(done.port, big), 'an M10 does not fit an M8\'s hole').toBe('string');
+  });
+  // (an imprint keeps to its face by what the face is (spec 01, I9; R10; evaluation case 10): the plate made 10 mm taller,
+  // the imprint is made again on its top, its hole through the new depth, the old cut gone; the plate made too narrow for
+  // where it stood, or made round, it is lost and said so, never moved)
+  it('a box made taller keeps its imprint on the top; a face removed says it is lost', () => {
+    const c10 = (JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; asking: Asking; host: { material: string }; reapply?: { plate: number[]; at: number[]; taller: number[]; narrower: number[]; expect: { kept_top: number; kept_depth: number; cuts: number } } }[] }).cases.find((c) => c.case === 10)!;
+    const r = c10.reapply!, box = (b: number[]): Part['shape'] => ({ box: b.map((x) => x / 1000) as V3 }), withShape = (h: Part, sh: Part['shape']): Part => ({ ...h, parts: [{ ...h.parts![0]!, shape: sh }] });
+    const host: Part = { name: 'host', parts: [{ name: 'plate', item: 'plate', mat: c10.host.material, shape: box(r.plate), at: [0, 0, 0] }] };
+    const im = imprint(host, c10.asking, [r.at[0]! / 1000, 1, r.at[1]! / 1000], [0, -1, 0]) as Imprinted, done = applyImprint(host, im, 'M8 cap screw').part;
+    const taller = reapplyImprints(withShape(done, box(r.taller))), tp = taller.part.parts![0]!;
+    expect([taller.kept, taller.lost], 'kept').toEqual([['M8 cap screw'], []]);
+    expect(tp.cuts!.length, 'one cut: the old one gone').toBe(r.expect.cuts);
+    expect([+(tp.cuts![0]!.at[1] * 1000).toFixed(4), +(tp.cuts![0]!.depth * 1000).toFixed(4), +(tp.cuts![0]!.at[0] * 1000).toFixed(4), +(tp.cuts![0]!.at[2] * 1000).toFixed(4)], 'on the new top, through the new depth, where it stood').toEqual([r.expect.kept_top, r.expect.kept_depth, r.at[0], r.at[1]]);
+    expect([tp.ports?.length, tp.imprints?.length, tp.imprints?.[0]?.lost], 'its port and its record once').toEqual([1, 1, undefined]);
+    for (const [what, sh] of [['narrower', box(r.narrower)], ['round', { sphere: 0.05 }]] as const) { const g = reapplyImprints(withShape(done, sh)), gp = g.part.parts![0]!;
+      expect([g.kept, g.lost.map((x) => x.of)], `${what}: lost`).toEqual([[], ['M8 cap screw']]); expect(g.lost[0]!.why.length).toBeGreaterThan(20);
+      expect([gp.cuts?.length ?? 0, gp.ports?.length ?? 0, gp.imprints?.[0]?.lost], `${what}: nothing of it moved anywhere; its record says it is lost`).toEqual([0, 0, g.lost[0]!.why]); }
   });
   // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
   // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the

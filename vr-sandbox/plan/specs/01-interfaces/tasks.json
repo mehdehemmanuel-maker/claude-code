@@ -81,7 +81,7 @@
    ],
    "owner": "mate.ts",
    "check": "on a box's top, a cylinder's side and a sloped face, the frame's n is within 0.5° of the surface normal and the hole lies where pointed within 0.1 mm",
-   "status": "claimed",
+   "status": "passing",
    "after": [
     "I5"
    ],
@@ -95,7 +95,7 @@
    ],
    "owner": "mate.ts, make/rules.ts",
    "check": "evaluation cases 2, 4, 5 are refused with the right rule and value; case 1 passes",
-   "status": "claimed",
+   "status": "passing",
    "after": [
     "I6"
    ],
@@ -123,10 +123,11 @@
    ],
    "owner": "mate.ts, brep.ts",
    "check": "evaluation case 10: a box made taller keeps its imprint on the top; a face removed says the imprint is lost",
-   "status": "failing",
+   "status": "claimed",
    "after": [
     "I8"
-   ]
+   ],
+   "evidence": "2026-11-01: an imprint's record keeps what asked it and a query for its face (its normal, the farthest along it, near where it stood); reapplyImprints in mate.ts takes each imprint's cuts, keep zones and port off its piece, finds its face again by that query (met from outside at the point it stood over), and makes it afresh there (the negative for the depth the piece now has, its checks run again); where no face answers, the surface faces otherwise, or the checks refuse, it is lost and said so, nothing of it moved; evaluation case 10: the plate made 10 mm taller keeps its imprint on its top, its hole through the new 20 mm; made too narrow or round, the imprint is lost"
   },
   {
    "id": "I10",

@@ -2153,3 +2153,18 @@ page asks; holds each runtime response as the log's rows are held (a reckless on
 error's or at-risk's names the check or rule that caught it), and each caught thing to its own entry; and shows
 `plan/compile.py`'s own andon refusal on a copy of the plan with an open andon. The three uncaught faults, each tried once,
 now fail it. Checked with `npm run gate`.
+
+## 2026-11-01: I6 and I7 pass; an imprint keeps to its face when the part is changed (spec 01, I6, I7, I9)
+
+I6 and I7 passed their first judging. I6's evaluator found faults outside its check's surfaces, now mended in `standOn`
+(`src/nexus/mate.ts`): through the views' mesh a turned solid drawn top-down was met on its far wall (the ray met only the
+triangles' front sides, and such a profile winds them inward), its vertex normals were blended without being made unit
+first, and a torus or a capsule was said exact; now both sides are met, the normals made unit, and only boxes, plain
+cylinders and spheres are said exact. The one test now meets a top-down lathe on its near wall and, of two stacked pieces,
+the one the ray meets first. For I9, an imprint's record keeps what asked it and a query for its face (its normal, the
+farthest out along it, near where it stood), and `reapplyImprints` takes each imprint's cuts, keep zones and port off, finds
+its face again by that query, and makes it afresh there; where no face answers, the surface faces otherwise, or its checks
+now refuse it, it is lost and said so, nothing of it moved. Evaluation case 10 (the test "a box made taller keeps its
+imprint on the top; a face removed says it is lost"): the plate made 10 mm taller keeps its imprint on its new top, its hole
+through the new 20 mm, the old cut gone; made too narrow for where it stood, or made a ball, the imprint is lost. Checked
+with `npm run gate`.
