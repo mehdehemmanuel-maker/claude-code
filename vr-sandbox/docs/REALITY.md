@@ -1575,3 +1575,14 @@ whole gate was red: the verdict files were not routed from `plan/README.md`, and
 being run first (the builder's fault, against the rule that a push waits on the gate). Both fixed: the key scan now reads
 untracked files too (a planted key in a new file fails it), and the README routes the verdicts. S6 passing and P10
 failing, judged rightly against what was known of them, meet S7's own check.
+
+## 2026-11-01: the cache check made to see what the evaluator showed it could not (spec 11, LW15)
+
+The evaluator failed LW15: with the shared cache made to alter what it gave, with `valueKey` made a constant, and with
+`valueKey` put back to the old `stable()` (fault D6 itself), the gate still passed, because no quick board was ever
+served from the shared cache and nothing fed a Map down a wire. Two checks added: each quick board is run a third time on
+the fresh run's own memo, where every pure node must be served from that cache (counted) and give the same; and a board
+where a node fed a Map has it changed to another Map (the old writing wrote both `{}`) must run its reader again and give
+the new value. Planted again: the old key and an altering cache each fail the gate now. Gate: 33 passed in 65.0 s (one
+run; over the one-minute aim; earlier runs 50.0 s here and 63.8 s in the evaluator's: run-to-run variance is large and
+not separated from the new check's cost).

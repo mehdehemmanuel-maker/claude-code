@@ -149,6 +149,19 @@ describe('every domain, in one pass', () => {
   });
   // (keys tell apart what the old writing could not (spec 11, LW15; fault D6): two Maps, two Sets, NaN and null, −0 and 0,
   // two functions, a typed array's kind; and the same value, built in another order, keys the same)
+  // (the engine's keys use it: a node fed a Map changed to another Map, which the old writing wrote the same ({}), runs
+  // again and gives the new answer; the evaluator found the gate passing with the old writing put back (2026-11-01))
+  it('a node fed a Map that changes runs again', async () => {
+    const mk = (id: string, ports: BlockDef['ports'], run: BlockDef['run']): BlockDef => ({ id, name: id, kind: 'calculator', ability: 'calculate', domains: [], says: 'a block for this test only', version: 1, by: 'a test', pure: true, ports, run } as unknown as BlockDef);
+    LIBRARY.set('zz.map', mk('zz.map', { inputs: [], outputs: [{ name: 'm', type: 'any' }] }, (_i, c) => ({ m: new Map([['k', Number(c.set.n)]]) })));
+    LIBRARY.set('zz.read', mk('zz.read', { inputs: [{ name: 'm', type: 'any' }], outputs: [{ name: 'v', type: 'number' }] }, (i) => ({ v: (i.m as Map<string, number>).get('k') })));
+    try {
+      const b = emptyBoard('map'); placeBlock(b, 'zz.map', 0, 0, { n: 1 }, 'a'); placeBlock(b, 'zz.read', 0, 0, {}, 'r'); wire(b, 'a', 'm', 'r', 'm');
+      const e = new Engine(b, env, new Memo()); await e.run(); expect(e.state.get('r')?.out?.v).toBe(1);
+      b.nodes.a!.set = { n: 2 }; e.touch('a'); await e.run();
+      expect(e.state.get('r')?.out?.v, 'the reader saw the new Map').toBe(2);
+    } finally { LIBRARY.delete('zz.map'); LIBRARY.delete('zz.read'); }
+  });
   it('a value\'s digest tells apart what is different and only that', () => {
     const differ: [unknown, unknown][] = [[new Map([[1, 2]]), new Map()], [new Set([1]), new Set([2])], [NaN, null], [-0, 0], [() => 1, () => 1],
       [new Float32Array([1]), new Float64Array([1])], [{ a: undefined }, {}], [new Map([[1, 2]]), { 1: 2 }]];
@@ -233,10 +246,15 @@ describe('every domain, in one pass', () => {
         const first = outs(e);
         for (const id of e.sequence) e.touch(id);
         await e.run();
-        const again = outs(e), f = new Engine(board![1](), env, new Memo()); await f.run(); const fresh = outs(f);
+        const again = outs(e), memo = new Memo(), f = new Engine(board![1](), env, memo); await f.run(); const fresh = outs(f);
+        // (and a third engine on the fresh one's memo: every pure node served from that shared cache, never run)
+        const h = new Engine(board![1](), env, memo); await h.run(); const hit = outs(h);
+        const unserved = [...hit.keys()].filter((id) => !h.state.get(id)?.cached);
+        if (unserved.length) bad.push(`board "${quick}": ${unserved.length} pure nodes ran again with their answers in the shared cache (${unserved.slice(0, 3).join(', ')})`);
         for (const [id, dg] of first) {
           if (again.get(id) !== dg) bad.push(`board "${quick}": ${b.nodes[id]?.label || id} gives another answer when run again from the cache`);
           if (fresh.get(id) !== dg) bad.push(`board "${quick}": ${b.nodes[id]?.label || id} gives another answer run fresh than from the cache`);
+          if (hit.get(id) !== dg) bad.push(`board "${quick}": ${b.nodes[id]?.label || id} gives another answer served from the shared cache`);
         }
       }
       expect(bad).toEqual([]);
