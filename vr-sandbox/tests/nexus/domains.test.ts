@@ -210,6 +210,10 @@ describe('every domain, in one pass', () => {
       if (/unenforced|^partly/.test(state)) { const named = [...state.matchAll(/spec (\d\d), tasks? ([A-Z]+\d+)(?: and ([A-Z]+\d+))?/g)];
         if (/unenforced/.test(state) && !named.length) bad.push(`${id}: unenforced and names no task that will enforce it`);
         for (const m of named) for (const t of [m[2], m[3]].filter(Boolean)) if (!ids.has(`${m[1]} ${t}`)) bad.push(`${id}: names spec ${m[1]} task ${t}, which does not exist`); } }
+    // (every decision a task cites, by its number, exists: deleting one a task rests on fails here (the evaluator, 2026-11-01))
+    const have = new Set(readdirSync(join(root, 'plan/decisions')).map((f) => f.slice(0, 4)));
+    for (const d of readdirSync(join(root, 'plan/specs'))) for (const f of ['tasks.json', 'spec.md']) { const p = join(root, 'plan/specs', d, f); if (!existsSync(p)) continue;
+      for (const m of readFileSync(p, 'utf8').matchAll(/\bdecisions? (\d{4})(?:(?:,| and) (\d{4}))*/g)) for (const n of m[0].match(/\d{4}/g) ?? []) if (!have.has(n)) bad.push(`${d}/${f} cites decision ${n}, which does not exist`); }
     for (const f of readdirSync(join(root, 'plan/decisions')).filter((x) => x.endsWith('.md') && x !== 'README.md')) { const t = readFileSync(join(root, 'plan/decisions', f), 'utf8');
       if (!/^\d{4}-[a-z0-9-]+\.md$/.test(f)) bad.push(`${f}: a decision is named NNNN-words.md`);
       for (const h of ['## Context', '## Options', '## Choice', '## The assumption it rests on', '## When to test it again']) {
@@ -610,7 +614,12 @@ describe('every domain, in one pass', () => {
   it('every source file has an owner in the docs', () => {
     const said = readFileSync(join(root, 'CLAUDE.md'), 'utf8') + readFileSync(join(root, 'docs/OWNERS.md'), 'utf8');
     const orphan = sources().map((f) => relative(join(root, 'src'), f)).filter((f) => { const dir = dirname(f), base = f.split('/').pop()!;
+      // (a file directly in src/nexus/ is named by its own name: a row naming the folder "nexus/" excused all of them, so
+      // the test passed with interfaces.ts named or not (the evaluator, 2026-11-01); a subfolder may be named whole)
+      if (dir === 'nexus' || dir === '.') return !said.includes(base);
       return !said.includes(base) && !said.includes(`${dir}/\``) && !said.includes(`${dir.replace(/^nexus\//, '')}/\``) && !said.includes(`\`${dir}/`) && !said.includes(`${dir.replace(/^nexus\//, '')}/\` `); });
+    // (the interface record's owner named in both, as its task says (spec 01, I1))
+    for (const doc of ['CLAUDE.md', 'docs/OWNERS.md']) expect(readFileSync(join(root, doc), 'utf8'), `${doc} names interfaces.ts`).toMatch(/interfaces\.ts/);
     expect(orphan, `files no owner row names: ${orphan.join(', ')}`).toEqual([]);
     // (and every document is routed to from CLAUDE.md's table, and every document it routes to is there)
     const claude = readFileSync(join(root, 'CLAUDE.md'), 'utf8'), docs = readdirSync(join(root, 'docs')).filter((f) => f.endsWith('.md'));

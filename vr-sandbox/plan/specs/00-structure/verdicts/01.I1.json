@@ -1,0 +1,28 @@
+{
+ "task": "01.I1",
+ "verdict": "fail",
+ "model": "claude-sonnet",
+ "date": "2026-11-01",
+ "commit": "d20a29c",
+ "ran": [
+  "git checkout --detach d20a29c; ln -s node_modules; git rev-parse HEAD = d20a29cc31d2f26bc538d63071b38b21a218f6bd",
+  "Read plan/specs/00-structure/evaluator.md and the I1 entry in plan/specs/01-interfaces/tasks.json. The check reads: 'the routing test passes with interfaces.ts named; the decision record exists'.",
+  "npx vitest run tests/nexus/domains.test.ts -t 'every source file has an owner in the docs': 1 passed",
+  "Read plan/decisions/0004-interfaces-owner.md (accepted, 2026-10-31) and 0014-interfaces-read-first.md (accepted, 2026-11-01, refines 0004). Both exist and state the choice, the assumption and when to retest it.",
+  "grep: CLAUDE.md line 91 has a row for nexus/interfaces.ts (decisions 0004, 0014). docs/OWNERS.md line 19 has a row for src/nexus/interfaces.ts. src/nexus/interfaces.ts exists (75 lines, interfacesOf and the Interface record only). It says the negatives come next (I3 onward), so no negatives or tables are built.",
+  "Read the routing test body (tests/nexus/domains.test.ts:569-590). A src file is excused if CLAUDE.md or OWNERS.md contains its base name, or contains the string '`nexus/' (the folder clause). CLAUDE.md contains '`nexus/' 48 times, so every file directly in src/nexus/ is excused whether or not its own name appears.",
+  "Control: planted src/zzi1dir/zzi1stray.ts (a folder no row names). The routing test failed with 'files no owner row names: zzi1dir/zzi1stray.ts'. So the test works outside src/nexus/.",
+  "git status --short after the restores shows only the node_modules symlink from setup, and git diff is empty."
+ ],
+ "planted": [
+  "Deleted every line naming interfaces.ts from CLAUDE.md and docs/OWNERS.md (grep count 0 in both). The routing test still PASSED, so the check did not catch the fault it names. Restored from backup.",
+  "Planted src/nexus/zz-i1-stray.ts, a new file named in no row, with interfaces.ts still unnamed. The routing test PASSED, so it cannot see any unnamed file in src/nexus/. Removed.",
+  "Moved decisions 0004 and 0014 out of plan/decisions/. The routing test still PASSED, because plan/README routes decisions/ by folder and no test requires a particular decision file. 'The decision record exists' was shown only by ls and reading, not by any check. Restored; the count is back to 14."
+ ],
+ "missing": [
+  "The routing test passes whether or not interfaces.ts is named. With the rows in CLAUDE.md and OWNERS.md deleted it still passes, because the folder clause (`said.includes('`nexus/')`, true from 48 other rows) excuses every file in src/nexus/. The check says the test passes 'with interfaces.ts named', but the test cannot tell named from unnamed, so a check that would pass whatever the docs said is a failing check.",
+  "Nothing mechanical checks that the interfaces.ts rows exist. They exist at this commit (I read CLAUDE.md:91 and OWNERS.md:19) but nothing would fail if they were deleted. The fix is to make the routing test require a file directly in src/nexus/ to be named by its own file name, or to add an assertion that interfaces.ts is named in both CLAUDE.md and OWNERS.md.",
+  "Nothing checks that the decision record exists. Deleting both 0004 and 0014 leaves every test passing. The task needs a check that names decision 0004 or 0014, or a rule that a task's cited decisions exist.",
+  "The task title says interfaces.ts owns 'the negative and its tables'. The decisions say so (0004: 'what an interface is and what its negative is (data and derivation)'). The code and both rows cover only the record. Both rows list the negatives and tables as 'Next' or 'I3', so this is acceptable for a decision task, but the claim should not be read as the negatives being built."
+ ]
+}

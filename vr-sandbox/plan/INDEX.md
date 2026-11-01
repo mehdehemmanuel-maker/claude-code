@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 9 passing (by the evaluator), 8 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 130: 9 passing (by the evaluator), 7 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 14 (11 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -35,7 +35,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 10. **10.T3** [passing] Claim status on every value (C21)
 11. **10.T18** [claimed in part] Propose, then certify: every AI change returns the diff and a certificate a small checker verifies; each certificate names what it trusts (C
 12. **10.T23** [claimed in part] The kernel (src/kernel/, research 31): exact rationals and outward-rounded intervals; refuses when it cannot decide; imports nothing outside
-13. **01.I1** [claimed] Decision: interfaces.ts owns the interface record, the negative and its tables; rows in CLAUDE.md and OWNERS.md
+13. **01.I1** [failing, by the evaluator] Decision: interfaces.ts owns the interface record, the negative and its tables; rows in CLAUDE.md and OWNERS.md
 
 ## Waiting on the user
 
@@ -98,7 +98,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | Id | Task | After | State |
 | --- | --- | --- | --- |
-| I1 | Decision: interfaces.ts owns the interface record, the negative and its tables; rows in CLAUDE.md and OWNERS.md | — | claimed |
+| I1 | Decision: interfaces.ts owns the interface record, the negative and its tables; rows in CLAUDE.md and OWNERS.md | — | failing (evaluator: The routing test passes whether or not interfaces.ts is named. With the rows in CLAUDE.md and OWNERS.md deleted it still) |
 | I2 | The Interface record, and every part's interfaces read from its ports, old interfaces, bore and shaft (no part changed) | I1 | claimed, in part |
 | I3 | The tables negatives need, each row sourced: ISO 273 fine and coarse (and M24), tap drills (ISO 2306 or derived d − P), counterbores (DIN 974-1), … | I1 | failing |
 | I4 | Cuts as solids: a lathe-profile cut (counterbore, countersink, drill point) in brep.ts and in the views' drill; Keep as a cylinder | I2 | failing |

@@ -68,20 +68,20 @@ known gaps are there too.
 | Concern | Owner |
 | --- | --- |
 | Constants, quantities, units | `data/constants.ts`, `nexus/quantities.ts` |
-| Laws (terms, kinds, nodes, solving, chains) | `nexus/book/`, `lawBlocks` in `blocks.ts`, `lawgraph.ts` |
+| Laws (terms, kinds, nodes, solving, chains) | `nexus/book/`, `lawBlocks` in `blocks.ts`, `lawgraph.ts`; the algebra under them: `term.ts`, `dimension.ts`, `evaluate.ts`, `status.ts`, `identity.ts`, `law.ts` |
 | Numeric methods (roots, integrals, slopes, ODEs, linear systems) | `nexus/numeric.ts` |
 | Materials and everything known of them; any mix worked out from its phases | `nexus/matter.ts`, `nexus/mixture.ts` (data: `mass.ts`, `elements.ts`, `data/materials.ts`, `periodic.ts`, `woods.ts`, `mixes.ts`, `constituents.ts`) |
 | What a thing is made of; mass, centre, inertia, heat capacity | `nexus/madeof.ts` |
 | Evidence, ±, nonphysical results, balances | `nexus/evidence.ts`; `judge`, `spreadOf` in `dataflow.ts` |
 | The kernel: it checks certificates, never searches; exact rationals and outward-rounded intervals; imports nothing outside itself; a second checker apart (`scripts/kernel2.py`) | `kernel/` (its one door `check`); the certificates Nexus builds for it, and an AI change's diff | `nexus/certify.ts` |
 | The hooks that refuse: the push gate (a push only of what the gate passed), the change budget (a commit within its task's owners), honesty (a number with its command), the loop breaker (three failed gate runs, then ask whether a pipeline is missing) | `scripts/gate.mjs`, `scripts/hooks/` (`npm run hooks` installs git's; Claude Code's in `../.claude/settings.json`) |
-| The one test (every domain), the scans of what is written (sources, placeholders, keys), and the generated docs (NODES, ATLAS, DEPENDENCIES, nodes' dates) | `tests/nexus/domains.test.ts`, `tests/nexus/scans.ts`, `tests/nexus/docs.ts` (`UPDATE_DOCS=1`) |
+| The one test (every domain), the scans of what is written (sources, placeholders, keys), and the generated docs (NODES, ATLAS, DEPENDENCIES, nodes' dates) | `tests/nexus/domains.test.ts`, `tests/nexus/scans.ts`, `tests/nexus/docs.ts` (`UPDATE_DOCS=1`; it writes the nodes' dates to `nexus/built.ts`) |
 | Nodes: blocks, stages, the library catalogue | `nexus/blocks.ts` (`docs/NODES.md` generated) |
 | The built-parts library: every piece every build makes, stored by design, and its law | `nexus/stock.ts` (`src/data/stock.json` generated) |
-| Running boards (cache, lists, units on wires, groups, clock) | `nexus/dataflow.ts` |
+| Running boards (cache, lists, units on wires, groups, clock) | `nexus/dataflow.ts`; a board's own record `boards.ts` |
 | Running many trials at once (workers, one for each core, each with the whole library) | `nexus/pool.ts`, `nexus/trial-worker.ts` |
 | Starter boards | `nexus/starters.ts` |
-| Navigation (libraries, flows, search) | `nexus/navigate.ts` (`docs/ATLAS.md` generated) |
+| Navigation (libraries, flows, search) | `nexus/navigate.ts` (`docs/ATLAS.md` generated); pipelines you run as boards `flows.ts` |
 | Only what the app reaches is kept | the reach check in `tests/nexus/domains.test.ts` |
 | Things placed, never copied; frames; fit in; take apart | `nexus/assembly.ts` |
 | Layout, contacts, contact patches of a placed tree | `nexus/make/space.ts` |
@@ -93,13 +93,13 @@ known gaps are there too.
 | Mates as measures in ranges; proximity | `nexus/placement/proximity.ts`, `relate.ts` |
 | Placement, fields, sizing, repair, lines and routing | `nexus/placement/` |
 | Loads on made parts; stress sweeps | `nexus/loads.ts` |
-| Rigid-body physics (Jolt) | `nexus/sim.ts` |
+| Rigid-body physics (Jolt) | `nexus/sim.ts`; its realization of bodies `realize.ts` |
 | Servo motion | `nexus/motion.ts` |
 | Power: engines run from their numbers, powertrains | `nexus/power/` |
-| Parts: kits, shapes, cuts, mass | `nexus/kits.ts`, `mass.ts`, `form.ts`, `surface.ts`, `finish.ts` (and the surface a process leaves) |
+| Parts: kits, shapes, cuts, mass | `nexus/kits.ts`, `mass.ts`, `form.ts`, `surface.ts`, `finish.ts` (and the surface a process leaves), the share of its box a shape fills `boxfill.ts` |
 | The level of detail every maker and the renderer read; a spatial index over points | `nexus/lod.ts`; `PointGrid` in `nexus/make/space.ts` |
 | How a part looks: colour from optics, films, the look stack | `nexus/colour.ts`, `appearance.ts`, `data/optics.ts` |
-| Parts from standards; components; catalogue | `nexus/families.ts`, `catalogue.ts`, `components.ts` |
+| Parts from standards; components; catalogue | `nexus/families.ts`, `catalogue.ts`, `components.ts`; ISO metric threads `threads.ts` |
 | Kinds of bought part as data (sizes, materials, standards, mass), by trade: each becomes a family | `nexus/kinds/` (`core.ts` says how one is written) |
 | Units and dimensions; the typed knowledge the laws are checked against | `ganglia/units.ts`, `ganglia/types.ts` |
 | Engineering by its own equations: springs (Shigley), DC motors, heat, fusion of materials, joining | `engineering/` (`springs.ts`, `dcmotor.ts`, `thermal.ts`, `fusion.ts`, `joining.ts`) |
@@ -107,8 +107,9 @@ known gaps are there too.
 | Engines, gearboxes, fittings, closures | `nexus/engines.ts`, `drivetrain.ts`, `fittings.ts` |
 | Vehicles, tyres, machines | `nexus/machines.ts`, `panels.ts` |
 | Computers from transistors; chips from netlists | `nexus/computer.ts`, `nexus/logic/` |
-| Inventory, pieces, looks, breakdown queue | `nexus/inventory.ts`, `pieces.ts`, `looks.ts`, `breakdown.ts` |
+| Inventory, pieces, looks, breakdown queue | `nexus/inventory.ts`, `pieces.ts`, `looks.ts`, `breakdown.ts` (run as a program by `breakdown-main.ts`) |
 | Research and the gap map | `nexus/research.ts`, `data/references.ts` |
+| Picture to model: reconstruction from photographs, step by step, and what is marked on them (`docs/RECONSTRUCT.md`) | `nexus/reconstruct.ts`, `photo-marks.ts` |
 | Models and services over the web: pictures judged blind as a measurement, drawn from words, wordings tried; every service a node of its own (`api.claude`, `api.gemini.see`, `api.gemini.draw`, `api.fal.draw`, `api.higgsfield`, `api.zenrows`) | `nexus/genai.ts` (keys under Node only: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `FAL_KEY`, `HIGGSFIELD_KEY_ID` and `HIGGSFIELD_KEY_SECRET`, `ZENROWS_API_KEY`) |
 | The AI in the app: Claude working through the node system's own eight tools (find, card, build a board from a short plan, open a starter board, change the board in place, read, fold into a saved block, docs), on the board open and with the blocks you saved, its answer checked by a second model against its steps, told only `docs/FOR-AI.md` (keep that file short: it is sent with every call, cached), never the app's code; its relay (`npm run app`) keeps the key off the page | `nexus/agent.ts` (node Claude builds a board; panel Ask Claude; relay in `vite.view.config.ts`) |
 | The engineering compiler: one design record through stages (requirements, BOM, checks with their engine and input hash), the release gate | `nexus/compiler.ts` (`docs/COMPILER.md`) |
@@ -116,7 +117,7 @@ known gaps are there too.
 | Stress by an engine apart: CalculiX (Node only, where installed), set against the book and our frame analysis | `nexus/fea.ts` (node Stress three ways) |
 | The gauntlet | `nexus/gauntlet.ts`, `view/gauntlet.ts` |
 | Seeds (window to city) | `nexus/seeds.ts` |
-| Bodies, agents, awareness, gases | `nexus/act/`, `nexus/aware/`, `nexus/life/segments.ts` |
+| Bodies, agents, awareness, gases | `nexus/act/`, `nexus/aware/`, `nexus/life/segments.ts`; a human body laid out `anatomy.ts`; creatures as kits `creatures.ts` |
 | Expressions in words and units (the formula language nodes take); embodied machines | `nexus/generate.ts`, `nexus/embody/` |
 | Controls worked by hand while it runs (Button, Stick, Slider; a button put on a thing); being in it (walking, keys, phone controls, gamepad) | `nexus/controls.ts`, `nexus/view/pad.ts` |
 | The app: dashboard, board, 3D dock, space, renderer, look | `nexus/view/` (`dashboard.ts`, `nodes.ts`, `dock3d.ts`, `space.ts`, `space3d.ts`, `kit3d.ts`, `look.ts`) |

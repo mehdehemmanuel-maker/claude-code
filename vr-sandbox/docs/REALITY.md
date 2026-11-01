@@ -1922,3 +1922,14 @@ reply through `turnOf`, pass its answer on and hand its calls to `callTools`; th
 so a step dropped between turns or any other change to it fails the test "an open andon stops the line, and every near
 miss has its kind and its response" until the loop is read again and pinned on purpose; and the relay is held to sending
 the run as agentBuild made it. Checked with `npm run gate`.
+
+## 2026-11-01: every file directly in src/nexus/ named by its own name; every decision a task cites must exist (spec 01, I1)
+
+I1's first verdict: the routing test let any file in `src/nexus/` pass because some row named the folder "nexus/", so it
+passed with interfaces.ts named or not, and nothing checked the decisions the task rests on. Now a file directly in
+`src/nexus/` must be named by its own name (17 were covered only by the folder: each now named in the owner row of its
+concern in CLAUDE.md's table: the laws' algebra under the laws' row, `boards.ts` under running boards, `threads.ts` under
+parts from standards, and so on); the test also holds interfaces.ts named in both CLAUDE.md and docs/OWNERS.md; and the
+rules test fails when a task cites a decision by its number that does not exist. Checked with `npm run gate`
+(the tests "every source file has an owner in the docs" and "every rule names its check and its task, and every decision
+its options, choice, assumption and re-test").
