@@ -498,3 +498,44 @@ export async function fitByBatchAsync(costs: (xs: number[][]) => Promise<number[
   const pm = keys.map((k, i) => { const curv = (v[2 * i]! + v[2 * i + 1]! - 2 * best.value) / (k.step * k.step); return curv > 1e-15 ? Math.sqrt((2 * (o.rise ?? 1)) / curv) : Infinity; });
   return { x: best.x, before: before!, after: best.value, pm, fixed: keys.map((k, i) => pm[i]! < (k.hi - k.lo) / 2), evaluations: r.evaluations + 1 + sides.length };
 }
+
+// ---- least squares: residuals driven to their least, and how many of them are independent -------------------------------
+/** A least-squares answer: where it stopped, its residuals there, their Jacobian there (rows the residuals, columns the
+ *  unknowns' steps), half the sum of squares before and after, and whether it converged. */
+export interface LeastSquares { x: number[]; r: number[]; J: number[][]; before: number; after: number; steps: number; evaluations: number; converged: boolean; method: string }
+/** The residuals r(x) brought to their least sum of squares by Levenberg–Marquardt (Moré, The Levenberg–Marquardt
+ *  algorithm: implementation and theory, Lecture Notes in Mathematics 630, 1978; the damping raised and lowered as
+ *  Nielsen, Damping parameter in Marquardt's method, IMM DTU 1999), the Jacobian by central differences. Where the
+ *  unknowns do not add (a turn), `plus(x, dx)` is the step taken from x and `n` the step's length (Absil, Mahony &
+ *  Sepulchre, Optimization Algorithms on Matrix Manifolds, 2008, §4.1: a retraction). */
+export function leastSquares(res: (x: number[]) => number[], x0: number[], o: { n?: number; plus?: (x: number[], dx: number[]) => number[]; most?: number; gtol?: number; ftol?: number; h?: number } = {}): LeastSquares {
+  const n = o.n ?? x0.length, plus = o.plus ?? ((x: number[], dx: number[]) => x.map((v, i) => v + dx[i]!)), h = o.h ?? 1e-6, most = o.most ?? 200, gtol = o.gtol ?? 1e-12, ftol = o.ftol ?? 1e-24;
+  let evals = 0; const R = (x: number[]) => { evals++; return res(x); }, half = (r: number[]) => r.reduce((s, v) => s + v * v, 0) / 2;
+  const jac = (x: number[]) => { const cols: number[][] = []; for (let j = 0; j < n; j++) { const e = new Array<number>(n).fill(0); e[j] = h; const up = R(plus(x, e)); e[j] = -h; const dn = R(plus(x, e)); cols.push(up.map((u, i) => (u - dn[i]!) / (2 * h))); }
+    const m = cols[0]?.length ?? 0; return Array.from({ length: m }, (_, i) => cols.map((c) => c[i]!)); };
+  let x = x0.slice(), r = R(x), f = half(r); const before = f; let J = jac(x), lambda = 1e-3, nu = 2, steps = 0, converged = false;
+  for (; steps < most; steps++) {
+    const A = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => J.reduce((s, row) => s + row[i]! * row[j]!, 0))), g = Array.from({ length: n }, (_, i) => J.reduce((s, row, k) => s + row[i]! * r[k]!, 0));
+    if (f <= ftol || Math.max(0, ...g.map(Math.abs)) <= gtol) { converged = true; break; }
+    const dA = A.map((row, i) => Math.max(row[i]!, 1e-12)), M = A.map((row, i) => row.map((v, j) => (i === j ? v + lambda * dA[i]! : v))), dx = solveLinear(M, g.map((v) => -v));
+    if (!dx) { lambda *= nu; nu *= 2; continue; }
+    const x1 = plus(x, dx), r1 = R(x1), f1 = half(r1), pred = dx.reduce((s, v, i) => s + v * (lambda * dA[i]! * v - g[i]!), 0) / 2;
+    const rho = pred > 0 ? (f - f1) / pred : -1;
+    if (rho > 0) { x = x1; r = r1; const stalled = f - f1 <= 1e-12 * f; f = f1; J = jac(x); lambda *= Math.max(1 / 3, 1 - (2 * rho - 1) ** 3); nu = 2;
+      // (it stops where a step no longer lowers the sum by a part in 10¹²: the least, where residuals fight)
+      if (stalled) { converged = true; break; } }
+    else { lambda *= nu; nu *= 2; if (lambda > 1e16) break; }
+  }
+  return { x, r, J, before, after: f, steps, evaluations: evals, converged, method: 'levenberg-marquardt' };
+}
+
+/** A matrix's numerical rank and the steps it leaves free: its singular values (the roots of JᵀJ's eigenvalues), those
+ *  above tol × the largest counted (Golub & Van Loan, Matrix Computations, 4th ed., §5.4.1, numerical rank), and the
+ *  eigenvectors of the rest: unit columns, each a step that moves no residual (its null space). */
+export function rankOf(J: number[][], tol = 1e-6): { rank: number; singular: number[]; free: number[][] } {
+  const n = J[0]?.length ?? 0; if (!n) return { rank: 0, singular: [], free: [] };
+  const A = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => J.reduce((s, row) => s + row[i]! * row[j]!, 0))), { values, V } = eigenSym(A);
+  const s = values.map((v) => Math.sqrt(Math.max(0, v))), top = Math.max(0, ...s), order = s.map((_, i) => i).sort((a, b) => s[b]! - s[a]!);
+  const kept = order.filter((i) => s[i]! > tol * top && top > 0);
+  return { rank: kept.length, singular: order.map((i) => s[i]!), free: order.filter((i) => !kept.includes(i)).map((i) => V.map((row) => row[i]!)) };
+}

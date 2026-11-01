@@ -167,10 +167,11 @@
    ],
    "owner": "placement/proximity.ts, numeric.ts",
    "check": "a flipped part is reported; a motor on four holes has 0 freedom left; a hinge has 1; two fighting joints are named",
-   "status": "failing",
+   "status": "claimed",
    "after": [
     "I8"
-   ]
+   ],
+   "evidence": "2026-11-01: solveJoints in placement/proximity.ts: a joint holds a frame on one part to a frame on another (given, or read off a port and one hole of its pattern), its kind (fixed, revolute, slider, cylindrical, planar, ball) saying which of their six differences it holds; each moving part's pose unknown, started where it meets the parts placed before it (Horn's best fit, its free turn kept as given), then every joint's residuals driven to their least together by Levenberg-Marquardt (numeric.ts leastSquares, a turn stepped on its own manifold); the sets the joints connect solved apart, one with nothing fixed holding its first part where it stands and saying so; each joint says how far off it is (mm, degrees) and whether its part was given facing the wrong way and turned end for end to meet; the freedom left is six for each part moved less the rank of the joints' Jacobian where they stop (numeric.ts rankOf), each free motion said in words; where they cannot all hold, the deletion filter (Chinneck & Dravnieks 1991) leaves each out in turn and names the fewest that fight, and which of them, left out alone, let the rest hold; jointsOfPorts makes a port mated on another its face and a joint for each hole, fit() pairing them. The test 'joints solved together: flipped, freedom left by rank, the fewest that fight named': a NEMA 17 motor on its four holes, 19 equations of rank 6, 0 freedom left; given upside down, reported turned end for end and still placed; a hinge 1 freedom left (one revolute joint, or a pin in a knuckle and the knuckles' faces: 7 equations of rank 5), the turn about its pin said; a latch 5 mm off the lid's arc and the hinge named as the two that fight, the handle fixed on the lid not; two hinges 1° out of line named, each off in degrees; a misdrilled hole named with the hole it fights, and alone as the one to leave out. Not done: rigid clusters are not split out before solving (every part of a set the joints connect is solved together); a fit's play (a clearance hole's) is not a range: joints hold exactly"
   },
   {
    "id": "I13",

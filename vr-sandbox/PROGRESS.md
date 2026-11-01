@@ -1,20 +1,21 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 00.S10
-Spec in hand: spec 00, structure (`plan/specs/00-structure/`)
-Last commit the gate passed: a236d46 (2026-11-01)
+Task in hand: 01.I12
+Spec in hand: spec 01, interfaces (`plan/specs/01-interfaces/`)
+Last commit the gate passed: b5f0162 (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
-1. 01.I12: joints: frame-to-frame joints solved together, with their residual and the freedom left
-2. 01.I13: the nodes (interfaces, negative, imprint, pattern, relation, joint, assert) and their starter boards
-3. 01.I14: the AI mates by joints and imprints (FOR-AI's rule); assert nodes; its replies lead with what fails
+1. 01.I13: the nodes (interfaces, negative, imprint, pattern, relation, joint, assert) and their starter boards
+2. 01.I14: the AI mates by joints and imprints (FOR-AI's rule); assert nodes; its replies lead with what fails
+3. 01.I15: the interfaces evaluation set: every case of `design.md §4`, each worked out by hand first
 
 ## Open, and why
 
 - Verdicts in: 00.S1, S2, S3, 10.T3, 01.I1, 01.I3 to I7, and 04.P10 pass; 01.I8 and 01.I10 pass too. 00.S10 failed
   a twelfth time and 01.I9 its first; both mended (the page now checked by driving it, `npm run eval:ask`).
 - 01.I9 and I11 claimed: an imprint kept to its face when the part changes, the cover that follows the bore; being judged (`npm run gate`).
+- 01.I12 claimed: parts put together by joints solved together (flipped, freedom left by rank, the fewest that fight); to be judged.
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
 - 10.T24 claimed in part: nothing excused by name; fault D14 open (the small caliper mended; the Cascadia's frame not).

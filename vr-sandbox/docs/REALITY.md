@@ -2232,3 +2232,20 @@ is re-made only on its own piece, from just above its own face; lost, said why, 
 its checks now refuse it (a lid in its key's room; a plate too thin for its counterbore) or the face it stood on as the
 farthest out is no longer so; and an imprint on a step keeps to its step. A face "made by" a feature is not held: there is
 no shape history here, said in the task's evidence. Checked with `npm run gate` and `npm run eval:ask`.
+
+## 2026-11-01: parts put together by joints, solved together: flipped, freedom left by rank, the fewest that fight (spec 01, I12)
+
+`solveJoints` (placement/proximity.ts, the one solver) puts parts together frame to frame: a joint holds a frame on one
+part to a frame on another, its kind (fixed, revolute, slider, cylindrical, planar, ball) saying which of their six
+differences it holds. Every part's pose is unknown; each starts where it meets the parts placed before it, then all the
+joints' residuals are brought to their least together by Levenberg–Marquardt (`leastSquares`, new in numeric.ts, its
+turns stepped on their own manifold). The freedom left is six for each part moved less the rank of the joints' Jacobian
+where they stop (`rankOf`), not a count of joints: a NEMA 17 motor on its face and four holes is 19 equations of rank 6,
+0 freedom left; a hinge leaves 1, as one revolute joint or as a pin in a knuckle with the knuckles' faces (7 equations,
+rank 5), said as "the lid turns about (1, 0, 0) through (0, 100, -100) mm". A motor given upside down is reported turned
+end for end and still placed. Where joints cannot all hold, each is left out in turn (the deletion filter) and the fewest
+that fight are named: a latch 5 mm off the lid's arc and the hinge (2.5 mm each), not the handle fixed on the lid; two
+hinges 1° out of line (0.2847° and 0.7153°, 0.4969 mm each, solved in 18.5 ms in one probe run); a misdrilled hole and
+the hole it fights, the misdrilled one the only one that, left out alone, lets the rest hold. Rigid clusters are not split
+out before solving, and a clearance hole's play is not a range: said in the task's evidence. Checked with `npm run gate`
+(the test "joints solved together: flipped, freedom left by rank, the fewest that fight named").

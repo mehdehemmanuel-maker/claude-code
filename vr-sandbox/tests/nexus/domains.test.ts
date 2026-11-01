@@ -44,6 +44,8 @@ import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
 import { applyImprint, boreGrips, boreThrough, fastenerFor, fit, imprint, portOfInterface, reapplyImprints, standOn, type Fastener, type Imprinted } from '../../src/nexus/mate';
 import { rulesOf } from '../../src/nexus/make/rules';
+import { jointsOfPorts, solveJoints, type Joint, type JointsSolved } from '../../src/nexus/placement/proximity';
+import { NEMA_FACE } from '../../src/nexus/families';
 import { KITS, makeKit, type Part, type V3 } from '../../src/nexus/kits';
 import type { Assembly } from '../../src/nexus/assembly';
 import { Engine, Memo, digest, emptyBoard, placeBlock, wire, type Env } from '../../src/nexus/dataflow';
@@ -817,6 +819,61 @@ describe('every domain, in one pass', () => {
     expect(log.slice(1).every((l) => /\d/.test(l)), 'each step says what it made').toBe(true);
     expect((out('cover holes').part as Part).ports!.length, 'the cover\'s holes a port its bolts find').toBe(c9.expect.holes);
   }, 120_000);
+  // (joints solved together (spec 01, I12; R13; design §2.7): a NEMA 17 motor on its plate by its face and its four holes,
+  // 19 equations whose rank is 6, so 0 freedom left (a count of equations would say 13 too many); the same motor given
+  // upside down reported turned end for end and still placed; a lid on a hinge 1 freedom left, the turn about its pin,
+  // whether the hinge is one revolute joint or a pin in a knuckle and the knuckles' faces (7 equations, rank 5); a latch
+  // 5 mm off the lid's arc fights the hinge and the two are named, the handle fixed on the lid not; a misdrilled hole
+  // fights its neighbour and is the one that, left out alone, lets the rest hold)
+  it('joints solved together: flipped, freedom left by rank, the fewest that fight named', () => {
+    const f = NEMA_FACE['17']!, h = f.holes / 2 / 1000, sq: [number, number][] = [[h, h], [-h, h], [-h, -h], [h, -h]];
+    const plate = (pattern = sq): Part => ({ name: 'plate', ports: [{ name: 'motor mount', sex: 'holes', thread: f.thread, pattern, at: [0, 0.003, 0], n: [0, 1, 0], u: [1, 0, 0], t: 0.006, std: 'NEMA 17' }] });
+    const motor = (rot: V3): Part => ({ name: 'motor', at: [0.05, 0.08, 0.02], rot, ports: [{ name: 'face', sex: 'threads', thread: f.thread, pattern: sq, at: [0, -0.02, 0], n: [0, -1, 0], u: [1, 0, 0], t: 0.0045, std: 'NEMA 17' }] });
+    const faceOf = (s: JointsSolved) => { const p = s.poses.motor!, q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...p.rot)); return { at: new THREE.Vector3(0, -0.02, 0).applyQuaternion(q).add(new THREE.Vector3(...p.at)), n: new THREE.Vector3(0, -1, 0).applyQuaternion(q) }; };
+    for (const [rot, turned] of [[[0.3, 0.5, 0.1], false], [[Math.PI, 0.2, 0], true]] as [V3, boolean][]) {
+      const m = motor(rot), js = jointsOfPorts(plate(), 'motor mount', m, 'face') as Joint[], s = solveJoints([plate(), m], js, { fixed: ['plate'] });
+      expect(js.map((j) => j.kind), 'its face and its four holes').toEqual(['planar', 'cylindrical', 'cylindrical', 'cylindrical', 'cylindrical']);
+      expect([s.equations, s.rank, s.unknowns, s.freedom], 'a motor on four holes: 19 equations of rank 6, 0 freedom left').toEqual([19, 6, 6, 0]);
+      expect(s.joints.every((r) => r.holds && r.mm < 1e-3 && r.deg < 1e-3), s.says).toBe(true);
+      const face = faceOf(s); expect(face.at.distanceTo(new THREE.Vector3(0, 0.003, 0)), 'its face on the plate\'s').toBeLessThan(1e-9); expect(face.n.y, 'facing it').toBeCloseTo(-1, 9);
+      expect(s.flipped, turned ? 'given upside down: reported turned end for end' : 'given the right way up: not').toEqual(turned ? ['motor'] : []);
+      expect(s.joints.every((r) => r.flipped === (turned ? 'motor' : null)), 'on each joint it met so').toBe(true);
+      if (turned) expect(s.says).toContain('turned end for end to meet: motor');
+    }
+    // (a hinge: one revolute joint; or a pin in a knuckle and the knuckles' faces against each other)
+    // (the lid given 30 mm along its pin from where its hinge holds it, turned 0.2 rad about it: drawn back along the pin, its turn kept)
+    const box: Part = { name: 'box' }, lid: Part = { name: 'lid', at: [0.03, 0.1 - 0.1 * Math.sin(0.2), -0.1 + 0.1 * Math.cos(0.2)], rot: [0.2, 0, 0] }, handle: Part = { name: 'handle', at: [0, 0.13, 0.11] };
+    const knuckle = { a: { part: 'box', frame: { at: [0, 0.1, -0.1] as V3, n: [1, 0, 0] as V3, u: [0, 1, 0] as V3 } }, b: { part: 'lid', frame: { at: [0, 0, -0.1] as V3, n: [-1, 0, 0] as V3, u: [0, 1, 0] as V3 } } };
+    const hinge: Joint = { name: 'hinge', kind: 'revolute', ...knuckle };
+    for (const js of [[hinge], [{ name: 'pin in knuckle', kind: 'cylindrical', ...knuckle }, { name: 'knuckle faces', kind: 'planar', ...knuckle }]] as Joint[][]) {
+      const s = solveJoints([box, lid], js, { fixed: ['box'] });
+      expect([s.equations, s.rank, s.freedom], `a hinge has 1 (${js.length} joint${js.length > 1 ? 's' : ''})`).toEqual([js.length === 1 ? 5 : 7, 5, 1]);
+      expect(s.free, 'the turn about its pin').toEqual(['the lid turns about (1, 0, 0) through (0, 100, -100) mm']);
+      expect(s.joints.every((r) => r.holds) && s.fight === null, s.says).toBe(true);
+      expect(s.poses.lid!.rot[0], 'what the hinge leaves free, left as it was given').toBeCloseTo(0.2, 4); expect(s.poses.lid!.at[0], 'drawn back along its pin').toBeCloseTo(0, 9);
+    }
+    // (two fighting joints named: a latch 5 mm off the lid's arc; the handle fixed on the lid is not in the fight)
+    const latch: Joint = { name: 'latch', kind: 'ball', a: { part: 'box', frame: { at: [0, 0.1, 0.105], n: [0, 1, 0], u: [1, 0, 0] } }, b: { part: 'lid', frame: { at: [0, 0, 0.1], n: [0, -1, 0], u: [1, 0, 0] } } };
+    const grip: Joint = { name: 'handle on lid', kind: 'fixed', a: { part: 'lid', frame: { at: [0, 0.005, 0.1], n: [0, 1, 0], u: [1, 0, 0] } }, b: { part: 'handle', frame: { at: [0, 0, 0], n: [0, -1, 0], u: [1, 0, 0] } } };
+    const s = solveJoints([box, lid, handle], [hinge, grip, latch], { fixed: ['box'] });
+    expect(s.fight, 'the fewest that fight').toEqual(['hinge', 'latch']); expect(s.leaveOut, 'either left out, the rest hold').toEqual(['hinge', 'latch']);
+    expect(s.joints.filter((r) => !r.holds).map((r) => r.joint), 'the two that do not hold').toEqual(['hinge', 'latch']);
+    expect(s.joints.find((r) => r.joint === 'hinge')!.mm + s.joints.find((r) => r.joint === 'latch')!.mm, 'their 5 mm shared between them').toBeCloseTo(5, 2);
+    expect(s.joints.find((r) => r.joint === 'handle on lid')!.holds, 'the handle holds to its lid').toBe(true);
+    // (two hinges not in line, the second's pin 1° off the first's: they bind, each off in degrees, and are named)
+    const tilt = (1 * Math.PI) / 180, second: Joint = { name: 'second hinge', kind: 'revolute', a: { part: 'box', frame: { at: [0.2, 0.1, -0.1], n: [Math.cos(tilt), Math.sin(tilt), 0], u: [-Math.sin(tilt), Math.cos(tilt), 0] } }, b: { part: 'lid', frame: { at: [0.2, 0, -0.1], n: [-1, 0, 0], u: [0, 1, 0] } } };
+    const bind = solveJoints([box, lid], [hinge, second], { fixed: ['box'] });
+    expect(bind.fight, 'they bind').toEqual(['hinge', 'second hinge']); expect(bind.joints.every((r) => r.deg > 0.2 && r.deg < 1), `each off in degrees: ${bind.says}`).toBe(true);
+    // (a misdrilled hole: 0.5 mm off; it fights its neighbour across 31 mm, and leaving it out alone, the rest hold)
+    const off = sq.map((p, i) => (i === 2 ? [p[0] + 0.0005, p[1]] : p) as [number, number]), m = motor([0.3, 0.5, 0.1]);
+    expect(typeof jointsOfPorts(plate(off), 'motor mount', m, 'face'), 'fit refuses a pattern not its mirror').toBe('string');
+    const js: Joint[] = [{ name: 'face', kind: 'planar', a: { part: 'plate', port: 'motor mount' }, b: { part: 'motor', port: 'face' } }, ...[0, 1, 2, 3].map((i) => ({ name: `hole ${i + 1}`, kind: 'cylindrical' as const, a: { part: 'plate', port: 'motor mount', hole: i }, b: { part: 'motor', port: 'face', hole: [0, 3, 2, 1][i]! } }))];
+    const mis = solveJoints([plate(off), m], js, { fixed: ['plate'] });
+    expect(mis.fight, 'hole 3 and the hole it fights').toEqual(['hole 3', 'hole 4']); expect(mis.leaveOut, 'hole 3 alone').toEqual(['hole 3']);
+    // (nothing fixed: the first part held where it stands, and said; a slider leaves its slide)
+    const sl = solveJoints([{ name: 'rail' }, { name: 'cart', at: [0.1, 0.02, 0.01] }], [{ name: 'slide', kind: 'slider', a: { part: 'rail', frame: { at: [0, 0.01, 0], n: [0, 0, 1], u: [0, 1, 0] } }, b: { part: 'cart', frame: { at: [0, 0, 0], n: [0, 0, -1], u: [0, 1, 0] } } }]);
+    expect([sl.held, sl.freedom, sl.free], 'held, and its slide').toEqual([['rail'], 1, ['the cart slides along (0, 0, 1)']]);
+  });
   // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
   // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the
   // plate's hole is not)
