@@ -148,11 +148,11 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
     // (the guide and the tools are the same every call: cached, read again at a tenth of the price)
     const r = await client.messages.create({ model, max_tokens: 8000, cache_control: { type: 'ephemeral' }, system, tools: TOOLS, output_config: { effort: o.effort ?? 'low' }, messages }, { signal: o.signal ?? AbortSignal.timeout(Math.max(5000, until - Date.now())) });
     tokIn += r.usage.input_tokens; tokOut += r.usage.output_tokens; cached += r.usage.cache_read_input_tokens ?? 0; written += r.usage.cache_creation_input_tokens ?? 0; messages.push({ role: 'assistant', content: r.content });
-    if (r.stop_reason === 'refusal') throw new Error(`declined: ${r.stop_details?.explanation ?? ''}`);
-    if (r.stop_reason !== 'tool_use') { const answer = r.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+    const turn = turnOf(r);
+    if (turn.ends) { const answer = turn.answer;
       const checked = o.check === false ? undefined : await checkOf(client, request, steps, answer, o.check ?? 'claude-sonnet-5-5', (u) => { tokIn += u.input_tokens; tokOut += u.output_tokens; }).catch((e) => `not checked: ${(e as Error).message}`);
       return runOf({ start, board: t.board(), steps, answer, model: r.model, tokens: { in: tokIn, out: tokOut, cached, written }, made: t.made, ...(checked ? { checked } : {}) }); }
-    messages.push({ role: 'user', content: await callTools(r.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'), t.doTool, steps) });
+    messages.push({ role: 'user', content: await callTools(turn.uses, t.doTool, steps) });
   }
   return runOf({ start, board: t.board(), steps, answer: '', model, tokens: { in: tokIn, out: tokOut, cached, written }, made: t.made, ...(stopped ? { stopped } : {}) });
 }
@@ -223,6 +223,14 @@ export async function callTools(uses: readonly { id: string; name: string; input
   for (const b of uses) { const s0 = Date.now(); let out: string, err = false; try { out = await doTool(b.name, (b.input ?? {}) as Record<string, unknown>); } catch (e) { out = (e as Error).message; err = true; }
     steps.push(stepOf(b.name, b.input, out, Date.now() - s0, err)); results.push({ type: 'tool_result', tool_use_id: b.id, content: out, ...(err ? { is_error: true } : {}) }); }
   return results;
+}
+
+/** What a model's reply is: its answer (every text block, in order) when it ends, or the tools it calls; a refusal is an
+ *  error. agentBuild reads every reply through it (plain data in, no model needed to test it). */
+export function turnOf(r: { stop_reason: string | null; stop_details?: { explanation?: string | null } | null; content: readonly { type: string; text?: string; id?: string; name?: string; input?: unknown }[] }): { ends: true; answer: string } | { ends: false; uses: { id: string; name: string; input: unknown }[] } {
+  if (r.stop_reason === 'refusal') throw new Error(`declined: ${r.stop_details?.explanation ?? ''}`);
+  if (r.stop_reason !== 'tool_use') return { ends: true, answer: r.content.map((b) => (b.type === 'text' ? b.text ?? '' : '')).join('') };
+  return { ends: false, uses: r.content.filter((b) => b.type === 'tool_use').map((b) => ({ id: String(b.id), name: String(b.name), input: b.input })) };
 }
 
 /** What the relay sends the page of a run: all of it (its near misses, diff and certificates with the rest). */

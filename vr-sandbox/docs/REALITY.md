@@ -1909,3 +1909,16 @@ gate, counted by a probe: the Freightliner Cascadia 506 interference findings ag
 and washers with no holes, gussets in cross members), the Honda Rancher 9 against 1 (bleed screws in caliper bodies,
 caliper bolts through the pads), the go-kart none: fault D14, to fix in those builds. The interface ids of the engines'
 rod bolts changed with their place, as decision 0014 says they do. Checked with `npm run gate`.
+
+## 2026-11-01: T3 passes; the page's near-miss guard put back, the model's reply read by one function, the loop pinned (spec 10, T3; spec 00, S10)
+
+The evaluator passed T3 at its fifth judging (claim status on every figure in the data files, `verdicts/10.T3.json`).
+S10's fifth verdict found that the last rewrite of its test had dropped the guard on the page's view (the near misses
+shown with each kind and response, open when one is reckless), and that the model's reply was turned into an answer by a
+line nothing ran. Now: the page's view is tested again on the run's own near misses, and the page is held to calling it
+with them; every reply is read by `turnOf` in `src/nexus/agent.ts` (its answer every text block in order, its tool
+calls, a refusal an error), tested on real reply data with no model; agentBuild is held to the exact lines that read a
+reply through `turnOf`, pass its answer on and hand its calls to `callTools`; the loop's whole text is pinned by its hash,
+so a step dropped between turns or any other change to it fails the test "an open andon stops the line, and every near
+miss has its kind and its response" until the loop is read again and pinned on purpose; and the relay is held to sending
+the run as agentBuild made it. Checked with `npm run gate`.

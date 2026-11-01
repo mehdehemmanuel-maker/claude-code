@@ -2,18 +2,18 @@
 
 Task in hand: 10.T24
 Spec in hand: spec 10, trust in numbers (`plan/specs/10-trust/`)
-Last commit the gate passed: b3ef2b6 (2026-11-01)
+Last commit the gate passed: 770d2e3 (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
 1. 04.P10: its fifth verdict, and mend it if it fails
-2. 10.T3: its fifth verdict, and mend it if it fails
+2. 00.S10: its sixth verdict, and mend it if it fails
 3. 01.I3: the standards' tables the negatives need, each row from a document actually opened
 
 ## Open, and why
 
-- Verdicts in: 00.S1, S2, S3 pass. 00.S10, 10.T3 and 04.P10 failed a fourth time; each mended (the run tested by running
-  it; Sets and any depth scanned; the headset's text as drawn, no minimap, ports probed, B ignored), to be judged again.
+- Verdicts in: 00.S1, S2, S3 and 10.T3 pass. 00.S10 failed a fifth time (mended: the page's guard put back, the
+  reply read by turnOf, the loop pinned); 04.P10's fifth and 01.I1's first are being judged.
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate two red teams found now refused),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
 - 10.T24 claimed in part: nothing excused by name; the Cascadia's and Rancher's hidden clashes now seen (fault D14).

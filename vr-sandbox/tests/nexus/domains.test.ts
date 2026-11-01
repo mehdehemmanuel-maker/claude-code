@@ -12,7 +12,10 @@ import { tmpdir } from 'node:os';
 import { execSync, spawnSync } from 'node:child_process';
 import { placeholders, secrets, unsourced, unstated } from './scans';
 import { EVIDENCE } from '../../src/nexus/evidence';
-import { callTools, certifiedOf, certifiedView, gateOf, nearMissesOf, nearMissesView, relayBody, runOf, stepOf, toolsFor, type AgentRun, type AgentStep } from '../../src/nexus/agent';
+import { callTools, certifiedOf, certifiedView, gateOf, nearMissesOf, nearMissesView, relayBody, runOf, stepOf, toolsFor, turnOf, type AgentRun, type AgentStep } from '../../src/nexus/agent';
+import { createHash } from 'node:crypto';
+/** agentBuild's loop, its text pinned (the test "an open andon stops the line…" says why). */
+const LOOP_PIN = 'e7c58c011e23a80e';
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
@@ -307,12 +310,30 @@ describe('every domain, in one pass', () => {
     const run = await runOf({ start: emptyBoard('t'), board: tools.board(), steps, answer: 'All done. The sum is 4.', model: 'm', tokens: { in: 0, out: 0, cached: 0, written: 0 }, made: tools.made });
     expect(run.nearMisses.map((m) => `${m.kind} ${m.tool}`), 'a refused wire, a block failed past the cut, a tool failed, an answer past a standing refusal').toEqual(['error build', 'error build', 'error card', 'reckless answer']);
     expect(run.nearMisses[1]!.what, 'the block that failed').toMatch(/^node div failed/);
+    // (the page shows each near miss with its kind and its response, open when one is reckless, and it is called with the
+    // run's own (the guard of this was lost in a rewrite once: the evaluator, 2026-11-01))
+    const pageView = nearMissesView(run.nearMisses, (x) => x);
+    for (const m of run.nearMisses) expect(pageView, `the page shows the ${m.kind} near miss, its kind and its response`).toContain(`<b>${m.kind}</b> ${m.what} (${m.response})`);
+    expect(pageView, 'open when one is reckless').toMatch(/^<details open>/);
+    expect(nearMissesView(run.nearMisses.filter((m) => m.kind !== 'reckless'), (x) => x), 'and only then').toMatch(/^<details>/);
+    expect(readFileSync(join(root, 'src/nexus/view/nodes.ts'), 'utf8'), 'the page puts the run\'s near misses beside the answer').toContain('${nearMissesView(r.nearMisses, esc)}');
+    // (a model's reply read by turnOf, as agentBuild reads every one: its answer every text block in order; its tool calls;
+    // a refusal an error)
+    expect(turnOf({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'All ' }, { type: 'thinking' }, { type: 'text', text: 'done.' }] })).toEqual({ ends: true, answer: 'All done.' });
+    expect(turnOf({ stop_reason: 'tool_use', content: [{ type: 'text', text: 'first' }, { type: 'tool_use', id: 't1', name: 'build', input: { a: 1 } }] })).toEqual({ ends: false, uses: [{ id: 't1', name: 'build', input: { a: 1 } }] });
+    expect(() => turnOf({ stop_reason: 'refusal', stop_details: { explanation: 'no' }, content: [] })).toThrow(/declined/);
     // (agentBuild passes each turn through callTools and ends through runOf with its steps and its answer: read exactly)
     const agentSrc = readFileSync(join(root, 'src/nexus/agent.ts'), 'utf8'), body = agentSrc.slice(agentSrc.indexOf('export async function agentBuild'), agentSrc.indexOf('export async function toolsFor'));
-    expect(body, 'every turn through callTools').toContain("content: await callTools(r.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'), t.doTool, steps)");
     expect(body, 'answered, it ends with its steps and its answer').toContain('return runOf({ start, board: t.board(), steps, answer, model: r.model');
     expect(body, 'stopped, with its steps').toContain("return runOf({ start, board: t.board(), steps, answer: '', model");
     expect(body.match(/return /g)?.length, 'and no other way').toBe(2);
+    for (const line of ['const turn = turnOf(r);', 'if (turn.ends) { const answer = turn.answer;', 'content: await callTools(turn.uses, t.doTool, steps)']) expect(body, 'every reply read by turnOf, its calls by callTools').toContain(line);
+    // (its loop's text pinned: a change to it (a step dropped between turns, an answer garbled) fails here until the loop is
+    // read again and its new text pinned on purpose)
+    const loop = body.slice(body.indexOf('for (let turn = 0'), body.indexOf("return runOf({ start, board: t.board(), steps, answer: ''"));
+    expect(createHash('sha256').update(loop).digest('hex').slice(0, 16), "agentBuild's loop changed: read it again (each reply through turnOf, each turn's calls through callTools, its end through runOf) and pin its new text").toBe(LOOP_PIN);
+    const relay = readFileSync(join(root, 'vite.view.config.ts'), 'utf8');
+    for (const line of ["const r = await m.agentBuild(String(request ?? ''), { model, effort, board, blocks, seconds: 180, steps: 40 });", "res.end(m.relayBody(r));"]) expect(relay, 'the relay sends the run as agentBuild made it').toContain(line);
     // (the relay sends the page all of the run: its near misses, diff and certificates)
     const sent = JSON.parse(relayBody(run)) as AgentRun; expect(sent.nearMisses.length).toBe(4); expect(sent).toHaveProperty('diff'); expect(sent).toHaveProperty('certificates');
     expect(readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), 'the relay answers with relayBody').toMatch(/res\.end\(m\.relayBody\(r\)\)/);

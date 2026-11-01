@@ -9,7 +9,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 8 passing (by the evaluator), 8 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 130: 9 passing (by the evaluator), 8 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 14 (11 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
@@ -32,7 +32,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 7. **00.S5** [passing] Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them
 8. **00.S7** [passing] The evaluator: its brief, three scored examples, the rule that only it flips a task
 9. **00.S3** [passing] Hooks: push gate, budget, honesty, loop breaker
-10. **10.T3** [failing, by the evaluator] Claim status on every value (C21)
+10. **10.T3** [passing] Claim status on every value (C21)
 11. **10.T18** [claimed in part] Propose, then certify: every AI change returns the diff and a certificate a small checker verifies; each certificate names what it trusts (C
 12. **10.T23** [claimed in part] The kernel (src/kernel/, research 31): exact rationals and outward-rounded intervals; refuses when it cannot decide; imports nothing outside
 13. **01.I1** [claimed] Decision: interfaces.ts owns the interface record, the negative and its tables; rows in CLAUDE.md and OWNERS.md
@@ -88,7 +88,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | S7 | The evaluator: its brief, three scored examples, the rule that only it flips a task | S5 | passing (evaluator claude-sonnet, 2026-11-01) |
 | S8 | The first decision records (0001 to 0007) written | — | failing |
 | S9 | The reviewer panel (research 11) with a quorum and stop signals (research 12): code judges with a veto; judges of different families; any gate may … | S7 | failing |
-| S10 | Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response) | S3 | failing (evaluator: The run's wiring is still not guarded, only its spelling. The test never executes agentBuild's loop; it calls runOf with) |
+| S10 | Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response) | S3 | failing (evaluator: The run's tools, each turn's calls and runOf are now guarded by running them, and the andon half is fully guarded (open ) |
 | S11 | Dailies: the AI shows what changed since the last session, and the person approves, notes or kills each version; versions never overwritten | S2 | failing |
 | S12 | Prompts as versioned prompt nodes with frozen suites; untrusted text only through a schema-only extractor (CaMeL) | S5 | failing |
 | S13 | Post-mortems as a timeline, contributing factors and a hindsight guard (Allspaw, Dekker, SRE), replacing five whys; Perrow's chart computed from … | S10 | failing |
@@ -215,7 +215,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | --- | --- | --- | --- |
 | T1 | CODATA 2022 with correlations | 00 | claimed, in part: values done 2026-10-31 (CODATA 2022); correlations not yet |
 | T2 | Interval and ensemble modes; GUM validity probe | 00 | failing |
-| T3 | Claim status on every value (C21) | 00 S4 | failing (evaluator: The check says 'fails a value with no status', and the words C21 and REALITY.md give for what is covered say 'a number a) |
+| T3 | Claim status on every value (C21) | 00 S4 | passing (evaluator claude-sonnet, 2026-11-01) |
 | T5 | Envelopes on sourced numbers (C22) | T3 | failing |
 | T6 | Ensembles by default where chaos or uncertainty rule; horizon badge | T2 | failing |
 | T7 | Assimilation node | T6 | failing |
