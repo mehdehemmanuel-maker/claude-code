@@ -16,6 +16,7 @@ import { Engine, collapse, emptyBoard, groupBlock, makeBlock, placeBlock, wire }
 // change the order the library's modules start in, and a worker that loads the whole library then fails to start)
 import type { Board } from './boards';
 import { edgesOf, nodesOf } from './boards';
+import { certificatesOf, check, diffOf, type Certificate, type Verdict } from './certify';
 
 /** The docs the agent may read, by topic: the router in CLAUDE.md, as files under docs/. */
 const DOCS: Record<string, string> = { wanted: 'WANTED.md', owners: 'OWNERS.md', reality: 'REALITY.md', compiler: 'COMPILER.md', placement: 'PLACEMENT.md', life: 'LIFE.md', reconstruct: 'RECONSTRUCT.md', gaps: 'GAP-MAP.md', nodes: 'NODES.md', atlas: 'ATLAS.md' };
@@ -75,7 +76,30 @@ export interface AgentBlock { id: string; name: string; says: string; domains: s
  * page with the answer and printed by the evaluation runners.
  */
 export interface NearMiss { step: number; tool: string; what: string; kind: 'error' | 'at-risk' | 'reckless'; response: string }
-export interface AgentRun { board: Board; steps: AgentStep[]; answer: string; model: string; tokens: { in: number; out: number; cached: number; written: number }; made: AgentBlock[]; checked?: string; stopped?: string; nearMisses: NearMiss[] }
+export interface AgentRun { board: Board; steps: AgentStep[]; answer: string; model: string; tokens: { in: number; out: number; cached: number; written: number }; made: AgentBlock[]; checked?: string; stopped?: string; nearMisses: NearMiss[];
+  /** Propose, then certify (spec 10, T18; C29): what the run changed, from the boards themselves, and a certificate for each
+   *  law node it changed (its value where it ran) and each wire it made (their units' dimensions), for the kernel to check;
+   *  the page checks them again itself before it takes the board, and takes none a certificate refuses as wrong. */
+  diff: ReturnType<typeof diffOf>; certificates: { what: string; certificate: Certificate }[] }
+/** Each certificate checked by the kernel here, wherever this runs (the page checks again what the relay sent: a verdict
+ *  is never taken on its word); the board is taken only when none is refused as wrong (C29: the checker is the gate). */
+export function gateOf(certs: readonly { what: string; certificate: unknown }[] = []): { take: boolean; verdicts: (Verdict & { what: string })[] } {
+  const verdicts = certs.map((c) => ({ what: c.what, ...check(c.certificate) }));
+  return { take: !verdicts.some((v) => v.refused === 'wrong'), verdicts };
+}
+/** What the page shows of it: the change, then how many certificates the kernel checked, and each one it did not. */
+export function certifiedView(diff: AgentRun['diff'] | undefined, g: ReturnType<typeof gateOf>, esc: (s: string) => string): string {
+  const d = diff ? `${diff.added.length} node(s) added, ${diff.removed.length} taken away, ${diff.changed.length} set otherwise, ${diff.wired.length} wire(s) made, ${diff.cut.length} cut` : 'no diff came back';
+  const ok = g.verdicts.filter((v) => v.ok).length, not = g.verdicts.filter((v) => !v.ok);
+  return `<details${g.take ? '' : ' open'}><summary>${g.take ? '' : '<b>Not taken: </b>'}Certified by the kernel: ${ok} of ${g.verdicts.length} (${esc(d)})</summary>${not.map((v) => `${esc(v.what)}: <b>${esc(v.refused ?? '')}</b> ${esc(v.why)}`).join('<br>') || 'every one checked'}</details>`;
+}
+
+/** The diff and the certificates of a run's board, against the board it started from. */
+export async function certifiedOf(before: Board, after: Board): Promise<Pick<AgentRun, 'diff' | 'certificates'>> {
+  const diff = diffOf(before, after), touched = new Set([...diff.added, ...diff.changed, ...diff.wired.flatMap((w) => [w.split('>')[0]!.split('.')[0]!, w.split('>')[1]!.split('.')[0]!])]);
+  const e = new Engine(after); await e.run();
+  return { diff, certificates: certificatesOf(after, e, touched) };
+}
 /** The near misses of a run, from its steps (each refusal the engine said back) and its answer. */
 export function nearMissesOf(steps: AgentStep[], answer: string, board: Board): NearMiss[] {
   const out: NearMiss[] = [];
@@ -114,6 +138,7 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
   if (typeof process === 'undefined' || !process.env?.ANTHROPIC_API_KEY) throw new Error('no ANTHROPIC_API_KEY where this runs: the agent runs under Node with it set (the environment\'s secrets); a page holds no keys');
   const { default: Sdk } = await import('@anthropic-ai/sdk'), client = new Sdk({ baseURL: 'https://api.anthropic.com' }), system = await guideOf();
   const model = o.model ?? 'claude-haiku-5-5', steps: AgentStep[] = [], t0 = Date.now(), until = t0 + 1000 * (o.seconds ?? 180);
+  const start: Board = o.board ? structuredClone(o.board) : emptyBoard(request.slice(0, 60));
   let board: Board = o.board ?? emptyBoard(request.slice(0, 60)), engine: Engine | undefined, tokIn = 0, tokOut = 0, cached = 0, written = 0, stopped: string | undefined;
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: request }];
   const [{ search }, { starterBoards }] = await Promise.all([import('./navigate'), import('./starters')]), made: AgentBlock[] = [];
@@ -177,13 +202,13 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
     if (r.stop_reason === 'refusal') throw new Error(`declined: ${r.stop_details?.explanation ?? ''}`);
     if (r.stop_reason !== 'tool_use') { const answer = r.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
       const checked = o.check === false ? undefined : await checkOf(client, request, steps, answer, o.check ?? 'claude-sonnet-5-5', (u) => { tokIn += u.input_tokens; tokOut += u.output_tokens; }).catch((e) => `not checked: ${(e as Error).message}`);
-      return { board, steps, answer, model: r.model, tokens: { in: tokIn, out: tokOut, cached, written }, made, nearMisses: nearMissesOf(steps, answer, board), ...(checked ? { checked } : {}) }; }
+      return { board, steps, answer, model: r.model, tokens: { in: tokIn, out: tokOut, cached, written }, made, nearMisses: nearMissesOf(steps, answer, board), ...(await certifiedOf(start, board)), ...(checked ? { checked } : {}) }; }
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const b of r.content) if (b.type === 'tool_use') { const s0 = Date.now(); let out: string, err = false; try { out = await doTool(b.name, (b.input ?? {}) as Record<string, unknown>); } catch (e) { out = (e as Error).message; err = true; }
       steps.push(stepOf(b.name, b.input, out, Date.now() - s0, err)); results.push({ type: 'tool_result', tool_use_id: b.id, content: out, ...(err ? { is_error: true } : {}) }); }
     messages.push({ role: 'user', content: results });
   }
-  return { board, steps, answer: '', model, tokens: { in: tokIn, out: tokOut, cached, written }, made, stopped, nearMisses: nearMissesOf(steps, '', board) };
+  return { board, steps, answer: '', model, tokens: { in: tokIn, out: tokOut, cached, written }, made, stopped, nearMisses: nearMissesOf(steps, '', board), ...(await certifiedOf(start, board)) };
 }
 
 const P = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });

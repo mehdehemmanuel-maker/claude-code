@@ -998,7 +998,11 @@ function runLaw(law: Law, i: Record<string, unknown>, set: Record<string, unknow
     if (got === null || Math.abs(got - want) > 1e-6 * Math.max(Math.abs(want), 1e-300)) caution = [caution, `put back, it gives ${got === null ? 'nothing' : +fromSI(got, law.output.unit).toPrecision(6)} rather than ${+fromSI(want, law.output.unit).toPrecision(6)}: another root may be the one meant`].filter(Boolean).join('; ');
   }
   const v = valueIn(d, x.unit); if (v === null) throw new Error(`${law.name}: ${d.because ?? 'no value'}`);
-  return { [x.sym]: v, caution, status: /extrapolated/.test(caution) ? 'outside-validity (extrapolated)' : d.status, why: breakdown(d).join('\n') };
+  // (the point it ran at, in SI, for the kernel to work again (spec 10, T18): every input, the one solved for among them,
+  // and the output; within 1e-9 when the output was worked out, within the solver's 1e-6 when an input was)
+  const at = Object.fromEntries(law.inputs.map((p) => [p.sym, p === x ? d.value : env[p.sym]?.value]).filter((e): e is [string, number] => typeof e[1] === 'number'));
+  const _witness = { law: law.id, at, value: x === law.output ? d.value : env[law.output.sym]?.value, rel: x === law.output ? 1e-9 : 1e-6 };
+  return { [x.sym]: v, caution, status: /extrapolated/.test(caution) ? 'outside-validity (extrapolated)' : d.status, why: breakdown(d).join('\n'), _witness };
 }
 
 /** A problem's knowns, one a line: "mass = 1000 kg", with its quantity named where its unit is not enough ("[stress]")

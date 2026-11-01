@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+"""The kernel's second checker (spec 10, T23; research 31 B3.6): written apart from src/kernel/, in another language and
+by other methods, for the commonest kinds (dims and witness). Reads a JSON list of certificates on stdin; prints a JSON
+list of verdicts, {"ok": bool, "refused": str|null}, one for each. The gate runs both checkers over the same certificates
+and fails where they disagree.
+
+Its methods, unlike the kernel's: a unit is read by a scanner over its text, not by splitting; a dimension is a tuple of
+Fractions; a value is worked out with Python's decimal module at 60 digits (its exp, ln and sqrt are correctly rounded),
+not by interval series; the value claimed passes only well inside the tolerance, is wrong only well outside it, and is
+undecided between. The unit table is the kernel's data (src/kernel/units.json): shared data, not shared code.
+"""
+import json, re, sys
+from decimal import Decimal, getcontext, InvalidOperation, DivisionByZero
+from fractions import Fraction
+from pathlib import Path
+
+getcontext().prec = 60
+getcontext().traps[DivisionByZero] = True
+getcontext().traps[InvalidOperation] = True
+TABLE = json.loads((Path(__file__).resolve().parent.parent / 'src' / 'kernel' / 'units.json').read_text())
+ZERO = (Fraction(0),) * 6
+
+
+class Refused(Exception):
+    def __init__(self, kind, why):
+        super().__init__(why)
+        self.kind = kind
+
+
+def unit_dim(unit):
+    if not isinstance(unit, str) or len(unit) > 80:
+        raise Refused('malformed', 'a unit that is not a short text')
+    dim, sign = list(ZERO), 1
+    for tok in re.finditer(r'/|[^\s/·]+', unit):
+        t = tok.group(0)
+        if t == '/':
+            sign = -1
+            continue
+        m = re.fullmatch(r'([^\^]+)(?:\^(-?\d+(?:\.\d+)?|-?\d+/\d+))?', t)
+        if not m:
+            raise Refused('malformed', f'not a unit factor: {t}')
+        row = TABLE.get(m.group(1))
+        if row is None:
+            raise Refused('undecided', f'a unit not in the table: {m.group(1)}')
+        p = Fraction(m.group(2)) if m.group(2) else Fraction(1)
+        dim = [d + sign * p * r for d, r in zip(dim, row)]
+    return tuple(dim)
+
+
+UN = {'neg', 'abs', 'exp', 'ln', 'log10', 'log2', 'sqrt'}
+BI = {'sub', 'div', 'min', 'max'}
+NA = {'add', 'mul'}
+
+
+def num(x):
+    if not isinstance(x, str) or len(x) > 400 or not re.fullmatch(r'-?\d+(\.\d+)?([eE][+-]?\d+)?|-?\d+/\d+', x):
+        raise Refused('malformed', f'not a number: {str(x)[:30]}')
+    return Fraction(x)
+
+
+def shape(t, depth=0):
+    if depth > 64 or not isinstance(t, list) or not t or not isinstance(t[0], str):
+        raise Refused('malformed', 'not a term')
+    op, a = t[0], t[1:]
+    if op == 'num':
+        num(a[0] if len(a) == 1 else None)
+    elif op == 'var':
+        if len(a) != 1 or not isinstance(a[0], str):
+            raise Refused('malformed', 'a variable')
+    elif op == 'pow':
+        if len(a) != 2:
+            raise Refused('malformed', 'a power')
+        num(a[1]); shape(a[0], depth + 1)
+    elif op in UN or op in BI or op in NA:
+        if (op in UN and len(a) != 1) or (op in BI and len(a) != 2) or (op in NA and len(a) < 2):
+            raise Refused('malformed', f'{op} arity')
+        for x in a:
+            shape(x, depth + 1)
+    else:
+        raise Refused('undecided', f'an operator not here: {op}')
+
+
+def dim_of(t, dims):
+    op, a = t[0], t[1:]
+    if op == 'num':
+        return ZERO
+    if op == 'var':
+        if a[0] not in dims:
+            raise Refused('malformed', f'{a[0]} has no unit')
+        return dims[a[0]]
+    ds = [dim_of(x, dims) for x in a if isinstance(x, list)]
+    if op in ('add', 'sub', 'min', 'max'):
+        if any(d != ds[0] for d in ds):
+            raise Refused('wrong', f'{op} of unlike dimensions')
+        return ds[0]
+    if op == 'mul':
+        out = ZERO
+        for d in ds:
+            out = tuple(x + y for x, y in zip(out, d))
+        return out
+    if op == 'div':
+        return tuple(x - y for x, y in zip(ds[0], ds[1]))
+    if op in ('neg', 'abs'):
+        return ds[0]
+    if op == 'sqrt':
+        return tuple(x / 2 for x in ds[0])
+    if op == 'pow':
+        return tuple(x * Fraction(a[1]) for x in ds[0])
+    if ds[0] != ZERO:
+        raise Refused('wrong', f'{op} of a quantity with a dimension')
+    return ZERO
+
+
+def dec(fr):
+    return Decimal(fr.numerator) / Decimal(fr.denominator)
+
+
+def value(t, env):
+    op, a = t[0], t[1:]
+    try:
+        if op == 'num':
+            return dec(num(a[0]))
+        if op == 'var':
+            if a[0] not in env:
+                raise Refused('malformed', f'no value for {a[0]}')
+            return env[a[0]]
+        if op == 'pow':
+            x, k = value(a[0], env), Fraction(a[1])
+            if k.denominator == 1:
+                return x ** int(k)
+            if x <= 0:
+                raise Refused('undecided', 'a power of zero or less')
+            return (dec(k) * x.ln()).exp()
+        v = [value(x, env) for x in a]
+        if op == 'add':
+            return sum(v, Decimal(0))
+        if op == 'mul':
+            out = Decimal(1)
+            for x in v:
+                out *= x
+            return out
+        if op == 'sub':
+            return v[0] - v[1]
+        if op == 'div':
+            if v[1] == 0:
+                raise Refused('undecided', 'a division by zero')
+            return v[0] / v[1]
+        if op == 'min':
+            return min(v)
+        if op == 'max':
+            return max(v)
+        if op == 'neg':
+            return -v[0]
+        if op == 'abs':
+            return abs(v[0])
+        if op == 'sqrt':
+            if v[0] < 0:
+                raise Refused('undecided', 'a root of less than zero')
+            return v[0].sqrt()
+        if op == 'exp':
+            if v[0] > 2000:
+                raise Refused('undecided', 'an exponent too large')
+            return v[0].exp()
+        if v[0] <= 0:
+            raise Refused('undecided', 'a logarithm of zero or less')
+        if op == 'ln':
+            return v[0].ln()
+        if op == 'log10':
+            return v[0].log10()
+        if op == 'log2':
+            return v[0].ln() / Decimal(2).ln()
+    except (InvalidOperation, DivisionByZero, OverflowError) as e:
+        raise Refused('undecided', f'not worked out: {e}')
+    raise Refused('undecided', op)
+
+
+def only(o, keys, what):
+    if not isinstance(o, dict):
+        raise Refused('malformed', f'{what} is not a record')
+    for k in o:
+        if k not in keys:
+            raise Refused('malformed', f'{what} has {k}')
+    return o
+
+
+def judge(c):
+    o = only(c, {'kind', 'claim', 'trustedBase', 'producer'}, 'the certificate')
+    if o.get('kind') not in ('dims', 'witness', 'judged') or not isinstance(o.get('trustedBase'), list) or not isinstance(o.get('producer'), str):
+        raise Refused('malformed', 'the envelope')
+    if o['kind'] == 'judged':
+        raise Refused('undecided', 'a verdict is not a check')
+    cl = o.get('claim')
+    if o['kind'] == 'dims':
+        cl = only(cl, {'wire', 'law'}, 'the claim')
+        if 'wire' in cl:
+            w = only(cl['wire'], {'from', 'to'}, 'the wire')
+            if unit_dim(w.get('from')) != unit_dim(w.get('to')):
+                raise Refused('wrong', 'unlike dimensions')
+            return
+        law = only(cl.get('law'), {'term', 'vars', 'out'}, 'the law')
+        shape(law.get('term'))
+        dims = {k: unit_dim(u) for k, u in only(law.get('vars'), set(law.get('vars') or {}), 'vars').items()}
+        if dim_of(law['term'], dims) != unit_dim(law.get('out')):
+            raise Refused('wrong', 'the term and its output differ')
+        return
+    cl = only(cl, {'term', 'at', 'value', 'tol'}, 'the claim')
+    shape(cl.get('term'))
+    env = {k: dec(num(v)) for k, v in only(cl.get('at'), set(cl.get('at') or {}), 'at').items()}
+    tol = only(cl.get('tol'), {'rel', 'abs'}, 'tol')
+    rel, ab, v = num(tol.get('rel')), num(tol.get('abs')), num(cl.get('value'))
+    if rel < 0 or ab < 0:
+        raise Refused('malformed', 'a tolerance below zero')
+    w = dec(rel) * abs(dec(v)) + dec(ab)
+    d = abs(value(cl['term'], env) - dec(v))
+    margin = w * Decimal('1e-30') + Decimal('1e-50')
+    if d <= w - margin:
+        return
+    if d >= w + margin:
+        raise Refused('wrong', 'outside the tolerance')
+    raise Refused('undecided', 'at the edge of the tolerance')
+
+
+def main():
+    out = []
+    for c in json.load(sys.stdin):
+        try:
+            judge(c)
+            out.append({'ok': True, 'refused': None})
+        except Refused as e:
+            out.append({'ok': False, 'refused': e.kind})
+        except Exception:  # anything else refuses: it fails closed, as the kernel does
+            out.append({'ok': False, 'refused': 'malformed'})
+    json.dump(out, sys.stdout)
+
+
+if __name__ == '__main__':
+    main()

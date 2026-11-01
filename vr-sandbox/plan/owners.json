@@ -23,5 +23,16 @@
   "src/nexus/view/keyboard.ts",
   "src/nexus/view/nodes-wall.ts",
   "package.json"
+ ],
+ "10.T23": [
+  "src/kernel/",
+  "src/nexus/certify.ts",
+  "scripts/kernel2.py"
+ ],
+ "10.T18": [
+  "src/nexus/certify.ts",
+  "src/nexus/agent.ts",
+  "src/nexus/blocks.ts",
+  "src/nexus/view/nodes.ts"
  ]
 }

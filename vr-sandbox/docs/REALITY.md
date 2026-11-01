@@ -1772,3 +1772,29 @@ re-exports one. Each of the evaluators' misses planted again fails the tests "an
 miss has its kind and its response" and "every figure in data has a source, no placeholder stands in data, no key is
 written down". What the scans call a figure is still their own idea of one: a number inside a text, or in a function's
 body, is not seen. Checked with `npm run gate`.
+
+## 2026-11-01: the kernel's first version, and the AI's board taken only when it checks (spec 10, T23 and T18; decision 0013)
+
+`src/kernel/` checks certificates and never searches: exact BigInt rationals (a double read exactly from its bits),
+intervals with rational endpoints rounded outward to 96 bits, exp, ln and roots by series with their remainders bounded,
+never the host's `Math`; dimensions as six rational exponents from a unit table that is the units' own; a strict
+envelope; the kinds dims (a wire's two units, a law's term against its output), witness (a term's value at a point lies
+within a tolerance of what is claimed: inside passes, wholly outside is wrong, across the edge undecided) and judged
+(never a pass). It imports nothing outside its folder. `src/nexus/certify.ts` builds certificates for it: a law's
+dimensions (each constant carried with its unit), a law node's value at the point it ran (each law node now reports that
+point, in SI), a wire's units, and an AI change's diff from the boards themselves. Run over the book (the test "the
+kernel: closed, exact, each kind refusing what is planted, and a second checker agreeing"): of 330 laws, 318 certified
+for their dimensions and for their value at the worked example, 12 refused as undecided (sine, cosine, tangent, their
+inverses, erf and integrals: not in this kernel yet), none wrong; each of the 318 values moved by a millionth refused.
+A second checker in Python (`scripts/kernel2.py`: fractions, and decimal at 60 digits) agrees with the kernel on every
+certificate tried, the planted ones and values half and one and a half tolerances off included; each enclosure of exp,
+ln and a root at nine points lies within 1e-25 of Python's 60-digit value. Planted, and caught: every dimension made
+equal, anything outside a tolerance passed, an import from outside the folder, `Math` used, an exponential's series cut
+at 12 terms, a logarithm's at 6 with no bound, a second checker twice as lax. Not caught: the exponential's remainder
+dropped altogether (its error, about 1e-32, sits under the 96-bit rounding). The AI in the app (`certifiedOf`,
+`gateOf`, `src/nexus/agent.ts`) returns its change's diff and certificates; the page checks them again with the kernel
+and takes the board only when none is refused as wrong (the test "an AI change is taken only when the kernel refuses
+none of its certificates": a value moved, a point moved, a force wired into an energy, each stops it; the starter
+boards' law nodes are all certified or undecided). Ten of T23's thirteen kinds are not built (cover, farkas, lrat,
+model, gap, sweep, rewrite, refines, table, sample); a certificate of one is refused as malformed. Checked with
+`npm run gate`.

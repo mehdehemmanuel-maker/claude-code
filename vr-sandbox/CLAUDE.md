@@ -73,6 +73,7 @@ known gaps are there too.
 | Materials and everything known of them; any mix worked out from its phases | `nexus/matter.ts`, `nexus/mixture.ts` (data: `mass.ts`, `elements.ts`, `data/materials.ts`, `periodic.ts`, `woods.ts`, `mixes.ts`, `constituents.ts`) |
 | What a thing is made of; mass, centre, inertia, heat capacity | `nexus/madeof.ts` |
 | Evidence, ±, nonphysical results, balances | `nexus/evidence.ts`; `judge`, `spreadOf` in `dataflow.ts` |
+| The kernel: it checks certificates, never searches; exact rationals and outward-rounded intervals; imports nothing outside itself; a second checker apart (`scripts/kernel2.py`) | `kernel/` (its one door `check`); the certificates Nexus builds for it, and an AI change's diff | `nexus/certify.ts` |
 | The hooks that refuse: the push gate (a push only of what the gate passed), the change budget (a commit within its task's owners), honesty (a number with its command), the loop breaker (three failed gate runs, then ask whether a pipeline is missing) | `scripts/gate.mjs`, `scripts/hooks/` (`npm run hooks` installs git's; Claude Code's in `../.claude/settings.json`) |
 | The one test (every domain), the scans of what is written (sources, placeholders, keys), and the generated docs (NODES, ATLAS, DEPENDENCIES, nodes' dates) | `tests/nexus/domains.test.ts`, `tests/nexus/scans.ts`, `tests/nexus/docs.ts` (`UPDATE_DOCS=1`) |
 | Nodes: blocks, stages, the library catalogue | `nexus/blocks.ts` (`docs/NODES.md` generated) |

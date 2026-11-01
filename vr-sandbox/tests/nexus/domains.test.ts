@@ -12,13 +12,19 @@ import { tmpdir } from 'node:os';
 import { execSync, spawnSync } from 'node:child_process';
 import { placeholders, secrets, unsourced, unstated } from './scans';
 import { EVIDENCE } from '../../src/nexus/evidence';
-import { nearMissesOf, nearMissesView, stepOf } from '../../src/nexus/agent';
+import { certifiedOf, certifiedView, gateOf, nearMissesOf, nearMissesView, stepOf } from '../../src/nexus/agent';
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
 import { DOMAINS, LIBRARY, SPEC_FROM, defaultsOf, fits as fitsPorts, portsOf, specProblems, testBlock, type BlockDef } from '../../src/nexus/blocks';
-import { relate } from '../../src/ganglia/units';
+import { relate, UNITS, fromSI } from '../../src/ganglia/units';
+import { check } from '../../src/kernel';
+import { lawDims, lawWitness, wireDims } from '../../src/nexus/certify';
+import { setting } from '../../src/nexus/lawgraph';
+import { apply } from '../../src/nexus/law';
+import { BOOK } from '../../src/nexus/book';
 import { Engine, Memo, digest, emptyBoard, placeBlock, wire, type Env } from '../../src/nexus/dataflow';
+import { nodesOf } from '../../src/nexus/boards';
 import { starterBoards } from '../../src/nexus/starters';
 import { APP, fieldOf, search } from '../../src/nexus/navigate';
 import { builtOf } from '../../src/nexus/evidence';
@@ -274,6 +280,92 @@ describe('every domain, in one pass', () => {
     expect(readFileSync(join(root, 'src/nexus/view/nodes.ts'), 'utf8'), 'the page puts them beside the answer').toMatch(/nearMissesView\(r\.nearMisses, esc\)/);
     for (const f of ['tests/evals/agent.eval.ts', 'tests/evals/one.eval.ts']) expect(readFileSync(join(root, f), 'utf8'), `${f} prints them`).toMatch(/near miss/);
   });
+  // (the kernel (spec 10, T23; research 31): closed (it imports nothing outside its folder, touches no host but BigInt and
+  // DataView, and no file of it passes 250 lines); its unit table is the units' own; each kind passes what is true and
+  // refuses three planted wrong certificates; every law in the book is certified or refused as undecided, never wrong,
+  // and its value moved a millionth is refused; and a second checker, written apart in Python, agrees on every one)
+  it('the kernel: closed, exact, each kind refusing what is planted, and a second checker agreeing', () => {
+    const kdir = join(root, 'src/kernel'), files = readdirSync(kdir).filter((f) => f.endsWith('.ts'));
+    for (const f of files) {
+      const t = readFileSync(join(kdir, f), 'utf8'), code = t.split('\n').filter((l) => l.trim() && !/^\s*\/\//.test(l));
+      for (const m of t.matchAll(/^\s*(?:import|export)\b[^;]*?\bfrom\s*['"]([^'"]+)['"]/gm)) expect(m[1], `${f} imports only from its own folder`).toMatch(/^\.\/[\w.-]+$/);
+      expect(t, `${f} loads nothing at run time`).not.toMatch(/\bimport\s*\(/);
+      expect(t, `${f} uses no host but BigInt and DataView`).not.toMatch(/\b(Math\.|Date\b|fetch\(|document\.|window\.|globalThis|process\.|require\(|eval\(|Function\(|setTimeout|localStorage|XMLHttpRequest)/);
+      expect(code.length, `${f} within 250 lines`).toBeLessThanOrEqual(250);
+    }
+    const table = JSON.parse(readFileSync(join(kdir, 'units.json'), 'utf8')), want = Object.fromEntries(Object.entries(UNITS).map(([k, v]) => [k, v.dim]));
+    if (process.env.UPDATE_DOCS && JSON.stringify(table) !== JSON.stringify(want)) writeFileSync(join(kdir, 'units.json'), JSON.stringify(want) + '\n');
+    else expect(table, "the kernel's unit table is the units' own (UPDATE_DOCS=1 writes it)").toEqual(want);
+    const C = (kind: string, claim: unknown) => ({ kind, claim, trustedBase: [], producer: 'test' });
+    const W = (term: unknown, at: Record<string, string>, value: string, rel = '1e-12') => C('witness', { term, at, value, tol: { rel, abs: '0' } });
+    const fma = ['mul', ['var', 'm'], ['var', 'a']];
+    const right = [C('dims', { wire: { from: 'N m', to: 'J' } }), C('dims', { law: { term: fma, vars: { m: 'kg', a: 'm/s^2' }, out: 'N' } }),
+      W(fma, { m: '2', a: '3' }, '6'), W(['exp', ['var', 'x']], { x: '1' }, '2.718281828459045'), W(['pow', ['var', 'x'], '1/3'], { x: '27' }, '3')];
+    const planted = { dims: [C('dims', { wire: { from: 'N', to: 'J' } }), C('dims', { law: { term: fma, vars: { m: 'kg', a: 'm/s^2' }, out: 'J' } }), C('dims', { law: { term: ['add', ['var', 'm'], ['var', 'a']], vars: { m: 'kg', a: 'm/s^2' }, out: 'N' } })],
+      witness: [W(fma, { m: '2', a: '3' }, '6.000001'), W(['exp', ['var', 'x']], { x: '1' }, '2.7182'), W(['ln', ['var', 'x']], { x: '2' }, '0.69')],
+      malformed: [{ ...C('dims', { wire: { from: 'N', to: 'N' } }), extra: 1 }, C('farkas', {}), W(['num', 3], {}, '3')] };
+    for (const c of right) expect(check(c), JSON.stringify(c).slice(0, 80)).toMatchObject({ ok: true });
+    for (const [k, cs] of Object.entries(planted)) for (const c of cs) { const v = check(c); expect(v.ok, `a planted ${k} certificate refused: ${JSON.stringify(c).slice(0, 80)}`).toBe(false); expect(v.refused).toBe(k === 'malformed' ? 'malformed' : 'wrong'); }
+    expect(check(C('judged', { verdict: 'fine' })), 'a judge never passes (C29)').toMatchObject({ ok: false, level: 'judged' });
+    const book: unknown[] = []; let undecided = 0;
+    for (const l of BOOK) {
+      const d = check(lawDims(l)); book.push(lawDims(l));
+      if (!d.ok) { expect(d.refused, `${l.id}: its dimensions ${d.why}`).toBe('undecided'); expect(d.why).toMatch(/not in the kernel/); undecided++; }
+      const ex = l.example; if (!ex) continue;
+      const env = Object.fromEntries(l.inputs.filter((p) => ex.inputs[p.sym] !== undefined).map((p) => [p.sym, setting(p.name, ex.inputs[p.sym]!, p.unit, 'the worked example')]));
+      const r = apply(l, env); if (r.value === null) continue; const out = fromSI(r.value, l.output.unit);
+      const w = check(lawWitness(l, ex.inputs, out)), moved = lawWitness(l, ex.inputs, out * (1 + 1e-6)); book.push(lawWitness(l, ex.inputs, out), moved);
+      if (!w.ok) { expect(w.refused, `${l.id}: its value ${w.why}`).toBe('undecided'); continue; }
+      expect(check(moved).refused, `${l.id}: its value moved a millionth is refused`).toBe('wrong');
+    }
+    expect(undecided, 'laws the kernel cannot yet decide (sine and its kin, erf, integrals)').toBeLessThanOrEqual(12);
+    // (at the tolerance's edge, so a checker more lax or more strict than the claim disagrees: half the band inside, one
+    // and a half outside)
+    const edge = (x: string, f: string, v: number, k: number) => W([f, ['var', 'x']], { x }, String(v * (1 + k * 1e-9)), '1e-9');
+    const edges = [edge('2', 'ln', Math.log(2), 0.5), edge('2', 'ln', Math.log(2), 1.5), edge('3', 'exp', Math.exp(3), 0.5), edge('3', 'exp', Math.exp(3), -1.5), edge('7', 'sqrt', Math.sqrt(7), 1.5)];
+    expect(edges.map((c) => check(c).ok), 'inside the band passes, outside is refused').toEqual([true, false, true, false, false]);
+    // (each enclosure lies within 1e-25 of the value Python's decimal module works out at 60 digits (the kernel keeps about 29 digits): a series cut short, or a bound
+    // dropped that matters at this precision, leaves it outside)
+    const pts = [['exp', '1'], ['exp', '-40'], ['exp', '0.001'], ['exp', '25.5'], ['ln', '2'], ['ln', '1e-9'], ['ln', '123456.789'], ['sqrt', '2'], ['sqrt', '1e-7']] as const;
+    const ref = spawnSync('python3', ['-c', `import json,sys\nfrom decimal import Decimal as D, getcontext\ngetcontext().prec=60\nprint(json.dumps([str(getattr(D(x), {'exp':'exp','ln':'ln','sqrt':'sqrt'}[f])()) for f,x in json.loads(sys.argv[1])]))`, JSON.stringify(pts)], { encoding: 'utf8' });
+    expect(ref.status, ref.stderr).toBe(0);
+    (JSON.parse(ref.stdout) as string[]).forEach((r, i) => { const [f, x] = pts[i]!, v = check(W([f, ['var', 'x']], { x }, r, '1e-25')); expect(v.ok, `${f}(${x}) encloses ${r}: ${v.why.slice(0, 200)}`).toBe(true); });
+    const corpus = [...right, ...Object.values(planted).flat(), C('judged', {}), ...edges, ...book];
+    const two = spawnSync('python3', ['scripts/kernel2.py'], { cwd: root, input: JSON.stringify(corpus), encoding: 'utf8', maxBuffer: 1 << 26 });
+    expect(two.status, two.stderr).toBe(0);
+    const theirs = JSON.parse(two.stdout) as { ok: boolean }[], differ = corpus.map((c, i) => [check(c).ok, theirs[i]!.ok, i] as const).filter(([a, b]) => a !== b);
+    expect(differ.map(([a, b, i]) => `${i}: kernel ${a}, second ${b}: ${JSON.stringify(corpus[i]).slice(0, 120)}`), 'the two checkers agree').toEqual([]);
+  }, 60_000);
+  // (propose, then certify (spec 10, T18; C29): a change's certificates come from the boards and the nodes' own runs; the
+  // kernel checks them with no second model; a planted wrong one stops the board being taken; every starter board with
+  // law nodes is certified or undecided, never wrong)
+  it('an AI change is taken only when the kernel refuses none of its certificates', async () => {
+    const after = emptyBoard('change'); placeBlock(after, 'law.newton.second', 0, 0, {}, 'f');
+    placeBlock(after, 'in.number', -200, 0, { value: 3, unit: 'kg' }, 'm'); placeBlock(after, 'in.number', -200, 100, { value: 2.5, unit: 'm/s^2' }, 'a');
+    wire(after, 'm', 'value', 'f', 'm'); wire(after, 'a', 'value', 'f', 'a');
+    const cut = await certifiedOf(emptyBoard('before'), after);
+    expect(cut.diff.added.sort()).toEqual(['a', 'f', 'm']);
+    const g = gateOf(cut.certificates);
+    expect(g.verdicts.length, 'a certificate for the law node').toBeGreaterThan(0);
+    expect(g.take, g.verdicts.map((v) => `${v.what}: ${v.refused} ${v.why}`).join('; ')).toBe(true);
+    for (const v of g.verdicts) expect(v.ok, `${v.what}: ${v.why}`).toBe(true);
+    // (planted: the law node's value moved; its point moved; a wire of a force into an energy)
+    const law = cut.certificates.find((c) => c.certificate.kind === 'witness')!;
+    const moved = structuredClone(law), claim = moved.certificate.claim as { value: string; at: Record<string, string> };
+    claim.value = String(Number(claim.value) * 1.001);
+    const shifted = structuredClone(law), at = (shifted.certificate.claim as { at: Record<string, string> }).at; at[Object.keys(at)[0]!] = String(Number(at[Object.keys(at)[0]!]) * 2 + 1);
+    for (const bad of [moved, shifted, { what: 'a force wired into an energy', certificate: wireDims('N', 'J') }]) {
+      const gb = gateOf([...cut.certificates, bad]); expect(gb.take, `not taken with ${bad.what} planted`).toBe(false);
+      expect(certifiedView(cut.diff, gb, (x) => x), 'the page says it was not taken').toMatch(/Not taken/);
+    }
+    let laws = 0;
+    for (const [title, make] of starterBoards()) {
+      const b = make(); if (!nodesOf(b).some((n) => b.nodes[n.id]?.block?.startsWith('law.'))) continue;
+      const c = await certifiedOf(emptyBoard('none'), b), gs = gateOf(c.certificates); laws += c.certificates.filter((x) => x.certificate.kind === 'witness').length;
+      expect(gs.verdicts.filter((v) => v.refused === 'wrong').map((v) => `${title}: ${v.what}: ${v.why}`), 'no starter board certificate wrong').toEqual([]);
+    }
+    expect(laws, 'law nodes on the starter boards certified at the point they ran').toBeGreaterThan(0);
+  }, 60_000);
   // (probes are deleted before the gate: one left behind was run by it, and once committed (2026-11-01)); looked for
   // wherever the gate's own include reaches (vite.config.ts), every folder down, not only the top of tests/nexus (the
   // evaluator planted one in tests/unit, tests/golden and a folder under tests/nexus, 2026-11-01)

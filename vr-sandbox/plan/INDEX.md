@@ -9,9 +9,9 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 8 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
+| Tasks in the specs | 130: 8 passing (by the evaluator), 5 claimed by the builder and not yet judged, the rest failing |
 | Faults found in the code | 13 (9 fixed) |
-| Rules in the constitution | 29 (13 not yet enforced by a check) |
+| Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
 | Findings in the synthesis | 45 |
@@ -33,8 +33,8 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 8. **00.S7** [passing] The evaluator: its brief, three scored examples, the rule that only it flips a task
 9. **00.S3** [passing] Hooks: push gate, budget, honesty, loop breaker
 10. **10.T3** [failing, by the evaluator] Claim status on every value (C21)
-11. **10.T18** [failing] Propose, then certify: every AI change returns the diff and a certificate a small checker verifies; each certificate names what it trusts (C
-12. **10.T23** [failing] The kernel (src/kernel/, research 31): exact rationals and outward-rounded intervals; refuses when it cannot decide; imports nothing outside
+11. **10.T18** [claimed in part] Propose, then certify: every AI change returns the diff and a certificate a small checker verifies; each certificate names what it trusts (C
+12. **10.T23** [claimed in part] The kernel (src/kernel/, research 31): exact rationals and outward-rounded intervals; refuses when it cannot decide; imports nothing outside
 13. **01.I1** [failing] Decision: interfaces.ts owns the interface record, the negative and its tables; rows in CLAUDE.md and OWNERS.md
 
 ## Waiting on the user
@@ -160,7 +160,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | P6 | Sights, each with its legend | — | failing |
 | P7 | The corrector's ghost and band | P1 | failing |
 | P9 | Honesty in the view (C24): measured and commanded state apart; nothing that matters changed during a teleport, cut or blink, but queued and … | P1 | failing |
-| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11; decision 0012): the board 10° below the eye at 1.25 m, drawn at a fixed 780 css … | — | failing (evaluator: 'Every target at least 2.5 deg' is not met and not measured: the board's strip buttons (1.1 deg tall, press zone 1.5 deg) |
+| P10 | Headset comfort with numbers (absorbs P8; research 34; fault D11; decision 0012): the board 10° below the eye at 1.25 m, drawn at a fixed 780 css … | — | failing (evaluator: 'Every target at least 2.5 deg' is still not met for the board's own canvas, and is not measured: an output or input por) |
 | P11 | Moving comfortably: fixed speeds (stopped, 1.4, 3 m/s), snap turn 30°/45° on the right stick, a vignette while moving, zoom rate capped and about … | P10 | failing |
 
 ### 05-civil (7)
@@ -227,12 +227,12 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | T14 | Values linked to the decisions they bear on; a new estimate reopens them; two readings of one quantity that disagree stop the line (C28) | T3, 00 S10 | failing |
 | T15 | The AI's stated confidence Brier-scored as forecasts resolve; labelled "uncalibrated" until it is | 00 S5 | failing |
 | T17 | Imports declare each value's kind at the boundary (Mars Climate Orbiter, the Gimli Glider) | T11 | failing |
-| T18 | Propose, then certify: every AI change returns the diff and a certificate a small checker verifies; each certificate names what it trusts (C29) | T3 | failing |
+| T18 | Propose, then certify: every AI change returns the diff and a certificate a small checker verifies; each certificate names what it trusts (C29) | T3 | claimed, in part, 2026-11-01: the AI's board taken only when the kernel, run again in the page, refuses none of its certificates (law nodes at the point they ran, wires' units); blocks folded and parts placed carry none yet |
 | T19 | The AI's formal requirements shown in plain words and run against known-bad designs before use | T18 | failing |
 | T20 | Rigour class per node, computed from the worst harm downstream (IEC 62304, V&V 40); the class sets the mandatory checks | T3 | failing |
 | T21 | GRADE-shaped certainty per use, with indirectness computed from metadata (another alloy, population, temperature); acceptance criteria frozen … | T3, T5 | failing |
 | T22 | Base rates on every alarm: prior, sensitivity, specificity, shown as natural frequencies | T15 | failing |
-| T23 | The kernel (`src/kernel/`, research 31): exact rationals and outward-rounded intervals; refuses when it cannot decide; imports nothing outside … | T18 | failing |
+| T23 | The kernel (`src/kernel/`, research 31): exact rationals and outward-rounded intervals; refuses when it cannot decide; imports nothing outside … | T18 | claimed, in part, 2026-11-01: the envelope and the kinds dims, witness and judged, exact and closed, with a second checker in Python (decision 0013); the other ten kinds not built |
 | T24 | Interference as a gate: no exemption by name; a fastener excused only where its interface says it sits (its hole, its thread engagement); the 0.5 … | T23, 01 | failing |
 
 ### 11-living-world (14)
@@ -278,7 +278,6 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 - **C26** Folding preserves behaviour exactly: a folded block computes what its inside computes (unenforced: spec 09, task P3)
 - **C27** AI-written values sit beside sourced ones and never replace them; the AI never cites AI-written entries as evidence, and never invents a value (a price, a carbon factor, any figure): an estimate is labelled with its method (absorbs C30, decision 0010) (unenforced: spec 10, task T13; spec 12, task CC1)
 - **C28** Two readings of one quantity that disagree stop the line until reconciled (unenforced: spec 10, task T14)
-- **C29** Where a sound checker exists (units, residuals, a solver, interference), it is the gate; a model rereading its own work, or a second model, is a judge beside it, never the gate (unenforced: spec 10, task T18)
 
 ## Research passes
 

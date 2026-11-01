@@ -20,6 +20,8 @@ STATE = {
     '10.T11': 'claimed 2026-11-01: kinds on wires (rpm/Hz, J/N m, Gy/Sv, dB, ΔK); a law\'s dimensionless input takes only a number (fault D1 closed)',
     '11.LW12': 'claimed, in part, 2026-11-01: early cutoff counted in the gate; effects scanned only in each block\'s own run',
     '04.P10': 'claimed 2026-11-01: every limit of the task measured in an emulated Quest 3 (`npm run eval:headset`), the board\'s strip and side panel too, walking by the left stick; no real Quest yet (spec 03, W5)',
+    '10.T23': 'claimed, in part, 2026-11-01: the envelope and the kinds dims, witness and judged, exact and closed, with a second checker in Python (decision 0013); the other ten kinds not built',
+    '10.T18': 'claimed, in part, 2026-11-01: the AI\'s board taken only when the kernel, run again in the page, refuses none of its certificates (law nodes at the point they ran, wires\' units); blocks folded and parts placed carry none yet',
     '10.T3': 'claimed 2026-11-01: every figure in src/data carries a claim status from the evidence vocabulary; the gate refuses one without',
     '11.LW15': 'claimed 2026-11-01: the gate compares each quick board cached, again and fresh; a planted cache fault fails it',
 }
