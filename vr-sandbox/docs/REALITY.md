@@ -1892,3 +1892,20 @@ framed (the rest are parts with several studs), all 187 internal threads, 19 of 
 bores with no round bore drawn and 2 where the size said and the size drawn differ, 11 shafts with no round piece drawn,
 and the drives, chains and the one mount, which have no frame rule yet. The test holds every bolt's shank framed, every
 framed bore and shaft within 0.5 mm of its said size, and every unframed one saying why. Checked with `npm run gate`.
+
+## 2026-11-01: interference as a gate: nothing excused by its name, no depth skipped (spec 10, T24; faults D8, D9)
+
+The interference check excused any pair where either piece was named like a fastener (bolt, clip, plug, …), against
+everything, and skipped overlaps shallower than 0.5 mm. Both are gone (`candidates` in `src/nexus/make/rules.ts`): a bolt
+is excused against a part only where a hole is cut in that part on the bolt's axis (the existing `inCut`), or where one
+is said to pass the other; the triangle test's own touch tolerance is the only tolerance left until interfaces state their
+fits. Measured before changing anything (a probe that turned the excuse off): it hid nothing on the go-kart and a bolted
+joint, 8 clashes on the Honda Rancher; in the gate only the engine turned over (`check.turning`) showed two: its rod bolts
+ran through their bosses, where no hole was cut, and through the cap's ring, their axes too close to it. The rod now has a
+clearance hole in each boss (1.125 times the bolt's diameter, near ISO 273's medium series) and its bolts' axes clear the
+ring; it turns clean. The test "a bolt crossing a wall it does not pass through is caught" puts an M8 bolt through a plate
+with no hole (caught) and through the same plate with the hole cut (clean). What the two changes now show outside the
+gate, counted by a probe: the Freightliner Cascadia 506 interference findings against 302 before (its frame rails' bolts
+and washers with no holes, gussets in cross members), the Honda Rancher 9 against 1 (bleed screws in caliper bodies,
+caliper bolts through the pads), the go-kart none: fault D14, to fix in those builds. The interface ids of the engines'
+rod bolts changed with their place, as decision 0014 says they do. Checked with `npm run gate`.

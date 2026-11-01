@@ -201,16 +201,22 @@ export function pistonAssembly(s: EngineSpec, d = engineDims(s)): Part {
  *  along x), its small end up +y at its length. */
 export function conRod(s: EngineSpec, d = engineDims(s)): Part {
   const { B, L, pinD, rp, rodW, shellT } = d, bigI = rp + shellT, bigO = bigI + 0.11 * B, eyeO = pinD / 2 + 0.1 * B, beamW = 0.13 * B, iron = { mat: 'steel-alloy', color: 0x6a6c70, finish: 'forged', one: true };
+  // (each boss has the hole its rod bolt passes through, on the bolt's axis: a clearance of 1.125 times the bolt's
+  // diameter, as ISO 273's medium series gives near M8 to M10 (9 mm for M8); the rules no longer excuse a bolt by its name
+  // (spec 10, T24))
+  const t = threadFor(B * 0.85), dB = Number(t.replace(/^M/, '').split('x')[0]) / 1000, hole = (h: number, up: boolean) => [{ r: (1.125 * dB) / 2, depth: h, at: [0, up ? h / 2 : -h / 2, 0] as V3, dir: [0, up ? -1 : 1, 0] as V3 }];
+  // (the bolts' axes far enough out that a shank clears the big end's ring (at 0.03 of the bore it cut 1.6 mm into the cap))
+  const zb = bigO + Math.max(0.03 * B, 0.6 * dB);
   const rod = group('connecting rod', [
     ringX('small end', pinD / 2, eyeO, rodW * 0.8, [0, L, 0], iron),
     box('rod beam', [rodW * 0.7, L - eyeO - bigO + 0.004, beamW * 1.6], [0, (bigO + L - eyeO) / 2, 0], { ...iron, fill: 0.62, says: 'its I-section (about 0.6 of the box round it, typical)' }),
     halfRing('big end', bigI, bigO, rodW, [0, 0, 0], true, iron),
-    ...[-1, 1].map((sd) => box('bolt boss', [rodW, 0.09 * B, 0.12 * B], [0, 0.045 * B, sd * (bigO + 0.03 * B)], iron))], { item: 'con-rod', says: `forged, ${(L * 1000).toFixed(0)} mm between its centres` });
-  const cap = group('rod cap', [halfRing('rod cap', bigI, bigO, rodW, [0, 0, 0], false, iron), ...[-1, 1].map((sd) => box('cap boss', [rodW, 0.09 * B, 0.12 * B], [0, -0.045 * B, sd * (bigO + 0.03 * B)], iron))], { item: 'rod-cap' });
+    ...[-1, 1].map((sd) => box('bolt boss', [rodW, 0.09 * B, 0.12 * B], [0, 0.045 * B, sd * zb], { ...iron, cuts: hole(0.09 * B, true) }))], { item: 'con-rod', says: `forged, ${(L * 1000).toFixed(0)} mm between its centres` });
+  const cap = group('rod cap', [halfRing('rod cap', bigI, bigO, rodW, [0, 0, 0], false, iron), ...[-1, 1].map((sd) => box('cap boss', [rodW, 0.09 * B, 0.12 * B], [0, -0.045 * B, sd * zb], { ...iron, cuts: hole(0.09 * B, false) }))], { item: 'rod-cap' });
   const shell = (up: boolean) => halfRing(`rod bearing shell (${up ? 'upper' : 'lower'})`, rp, bigI, rodW * 0.86, [0, 0, 0], up, { item: 'rod-bearing-shell', mat: 'steel-low', color: 0xb89a6a, finish: 'machined', says: 'a steel back lined with bearing alloy' });
-  const t = threadFor(B * 0.85), bL = 0.09 * B + 0.12 * B + 0.004;
+  const bL = 0.09 * B + 0.12 * B + 0.004;
   // (rod bolts are class 10.9 or 12.9, typical: they carry the cap against the piston's inertia every turn)
-  const bolts = [-1, 1].map((sd) => bolt(t, bL, [0, -0.09 * B, sd * (bigO + 0.03 * B)], [PI, 0, 0], 'rod bolt', '10.9'));
+  const bolts = [-1, 1].map((sd) => bolt(t, bL, [0, -0.09 * B, sd * zb], [PI, 0, 0], 'rod bolt', '10.9'));
   return group('connecting rod and cap', [rod, cap, shell(true), shell(false), ...bolts], { item: 'con-rod-assembly' });
 }
 /** Its crankshaft, forged in one: a main journal between each pair of cylinders and at each end, a pin for each throw

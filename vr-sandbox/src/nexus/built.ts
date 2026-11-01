@@ -114,7 +114,7 @@ export const BUILT: Record<string, string> = {
   "in.table":"2026-10-25T09:05:20.000Z",
   "in.text":"2026-10-27T08:19:24.000Z",
   "in.toggle":"2026-10-27T08:19:24.000Z",
-  "interfaces":"2026-11-01T13:42:56.000Z",
+  "interfaces":"2026-11-01T13:48:23.000Z",
   "law.absorbed.solar":"2026-10-06T02:11:20.000Z",
   "law.acoustic.mass-law":"2026-10-06T02:11:20.000Z",
   "law.amount.concentration":"2026-10-08T00:13:36.000Z",

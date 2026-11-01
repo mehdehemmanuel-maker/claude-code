@@ -2,8 +2,8 @@
 // drawn (triangle against triangle: the critic's meshClashes and leastDistance), not on boxes round them.
 //
 //   interference   no two pieces cross, unless they are one piece (a casting's walls, a pressing's patches), one is
-//                  said to pass through the other (an axle through its hub), one is a fastener in what it fastens (its
-//                  hole not cut in what it holds), or one sits in a bore cut for it (a piston in its cylinder)
+//                  said to pass through the other (an axle through its hub), or one sits in a hole or bore cut for it
+//                  (a bolt in its hole, a piston in its cylinder); never excused by its name (a fastener was: fault D8)
 //   clearance      a piece that moves or must breathe (a belt, a fan's blades, a chain) keeps the gap it says
 //                  (Part.clear) from everything but what it runs on
 //   heat           a hot piece (Part.hot, its surface's temperature) heats what is near it, the heat falling off with
@@ -39,15 +39,12 @@ export function trianglesOf(root: Part): Mesh3[] {
   }
   return out;
 }
-// (a pin is a fastener only as a dowel, a split pin or a cotter: a wrist pin, a crank pin or a hinge pin is a part in its own right)
-const fastenerRe = /\b(bolt|screw|stud|nut|rivet|washer|dowel|split pin|cotter pin|keeper|clip|circlip|spider|plug)\b/i;
 // (the nearest holder it is one piece with, or the thing it is a fastener of: what it may meet)
 const ownerOf = (n: Node): Node => { let x = n; while (x.parent && (x.p.one || !x.p.item)) x = x.parent; return x; };
 // (the unit made whole that it is in, under the thing checked: a chain, a bearing, a bought part fitted as it comes; its
 // own pieces are its maker's to fit, not the build's)
 const unitOf = (n: Node): Node | null => { let u: Node | null = null; for (let x: Node | null = n; x && x.parent; x = x.parent) if (x.p.sealed) u = x; return u; };
 const linked = (a: Mesh3, b: Mesh3) => { const A = ownerOf(a.node), B = ownerOf(b.node), ua = unitOf(a.node); if (ua && ua === unitOf(b.node)) return true; return A === B || a.node.path.startsWith(B.path + '/') || b.node.path.startsWith(A.path + '/'); };
-const fastens = (a: Mesh3, b: Mesh3) => fastenerRe.test(a.name) || fastenerRe.test(b.name) || fastenerRe.test(ownerOf(a.node).p.name) || fastenerRe.test(ownerOf(b.node).p.name);
 // (a guest in a hole cut in its host, on the hole's axis and no wider than it: a valve in its seat's bore, a piston in its
 // cylinder, a bolt in its hole; it cannot run into the host, and is not tried)
 const inCut = (host: Mesh3, guest: Mesh3): boolean => {
@@ -64,12 +61,13 @@ const names = (n: Node): Set<string> => new Set(upFrom(n).map((p) => p.name));
 const tells = (a: Node, b: Node): boolean => { const nb = names(b); return upFrom(a).some((p) => p.passes?.some((x) => nb.has(x)) || p.joins?.some((x) => nb.has(x))); };
 const said = (a: Mesh3, b: Mesh3) => inCut(a, b) || inCut(b, a) || tells(a.node, b.node) || tells(b.node, a.node);
 
-/** What runs into what: pieces whose surfaces cross, that are not one piece, not fitted one through the other, not a
- *  fastener in what it fastens. */
+/** What runs into what: pieces whose surfaces cross, that are not one piece, not fitted one through the other (a bolt in
+ *  the hole cut for it, a part said to pass another). No piece is excused by its name: a fastener was, against everything
+ *  (fault D8; spec 10, T24), and a bolt drawn through a wall with no hole passed. */
 /** The pairs whose oriented boxes press into each other and that the rules do not excuse: what is tried exactly. */
 export function candidates(ms: Mesh3[]): [Mesh3, Mesh3][] {
   const byNode = new Map<Node, Mesh3>(); for (const m of ms) byNode.set(m.node, m);
-  return contacts(ms.map((m) => m.node)).filter((c) => c.depth > 0.0005).map((c) => [byNode.get(c.a)!, byNode.get(c.b)!] as [Mesh3, Mesh3]).filter(([a, b]) => a && b && !linked(a, b) && !fastens(a, b) && !said(a, b));
+  return contacts(ms.map((m) => m.node)).filter((c) => c.depth > 0).map((c) => [byNode.get(c.a)!, byNode.get(c.b)!] as [Mesh3, Mesh3]).filter(([a, b]) => a && b && !linked(a, b) && !said(a, b));
 }
 const CAST_ROUND = /mould-compound|potting|encapsula/;
 /** Whether a point is inside a closed surface: a ray from it, slightly skewed off the axes so it misses edges, crosses

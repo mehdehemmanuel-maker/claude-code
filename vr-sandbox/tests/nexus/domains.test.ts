@@ -24,7 +24,8 @@ import { setting } from '../../src/nexus/lawgraph';
 import { apply } from '../../src/nexus/law';
 import { BOOK } from '../../src/nexus/book';
 import { interfacesOf } from '../../src/nexus/interfaces';
-import { DESIGNED, exampleOf, use } from '../../src/nexus/components';
+import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
+import { rulesOf } from '../../src/nexus/make/rules';
 import { KITS, makeKit, type Part } from '../../src/nexus/kits';
 import type { Assembly } from '../../src/nexus/assembly';
 import { Engine, Memo, digest, emptyBoard, placeBlock, wire, type Env } from '../../src/nexus/dataflow';
@@ -442,6 +443,18 @@ describe('every domain, in one pass', () => {
     const file = join(root, 'tests/nexus/interfaces.ids.json');
     if (process.env.UPDATE_DOCS || !existsSync(file)) writeFileSync(file, JSON.stringify(ids, null, 1) + '\n');
     else expect(ids, 'the same ids as the build that wrote tests/nexus/interfaces.ids.json (UPDATE_DOCS=1 writes it again)').toEqual(JSON.parse(readFileSync(file, 'utf8')));
+  }, 60_000);
+  // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
+  // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the
+  // plate's hole is not)
+  it('a bolt crossing a wall it does not pass through is caught', () => {
+    const plate = (cuts?: Part['cuts']): Part => ({ name: 'wall plate', item: 'flat bar 60x6', shape: { box: [0.06, 0.006, 0.06] }, at: [0, -0.003, 0], mat: 'steel-low', ...(cuts ? { cuts } : {}) });
+    const bolt = { ...boltedJoint('M8', 0.006), name: 'the bolt' };
+    const without = rulesOf({ name: 'joint', parts: [plate(), bolt] }).findings.filter((f) => f.rule === 'interference');
+    expect(without.map((f) => `${f.a} × ${f.b}`), 'a bolt through a wall with no hole').not.toEqual([]);
+    const withHole = rulesOf({ name: 'joint', parts: [plate([{ r: 0.0045, depth: 0.006, at: [0, 0.003, 0], dir: [0, -1, 0] }]), bolt] }).findings.filter((f) => f.rule === 'interference' && /wall plate/.test(`${f.a} ${f.b}`));
+    expect(withHole.map((f) => `${f.a} × ${f.b}: ${f.says}`), 'the same bolt in the hole cut for it').toEqual([]);
+    expect(readFileSync(join(root, 'src/nexus/make/rules.ts'), 'utf8'), 'nothing excused by a name').not.toMatch(/fastenerRe|\bfastens\(/);
   }, 60_000);
   // (probes are deleted before the gate: one left behind was run by it, and once committed (2026-11-01)); looked for
   // wherever the gate's own include reaches (vite.config.ts), every folder down, not only the top of tests/nexus (the

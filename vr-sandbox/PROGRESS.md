@@ -1,14 +1,14 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 00.S10
-Spec in hand: spec 00, the structure (`plan/specs/00-structure/`)
-Last commit the gate passed: d20a29c (2026-11-01)
+Task in hand: 10.T24
+Spec in hand: spec 10, trust in numbers (`plan/specs/10-trust/`)
+Last commit the gate passed: b3ef2b6 (2026-11-01)
 
 ## Next three (from the start queue in `plan/README.md`)
 
-1. 04.P10: its fourth verdict (blocks only on the board, wires from the side panel), and mend it if it fails
-2. 10.T3: its fourth verdict, and mend it if it fails
-3. 10.T24: interference as a gate (faults D8, D9): a fastener excused only where its interface says it sits
+1. 04.P10: its fifth verdict, and mend it if it fails
+2. 10.T3: its fifth verdict, and mend it if it fails
+3. 01.I3: the standards' tables the negatives need, each row from a document actually opened
 
 ## Open, and why
 
@@ -16,6 +16,7 @@ Last commit the gate passed: d20a29c (2026-11-01)
   it; Sets and any depth scanned; the headset's text as drawn, no minimap, ports probed, B ignored), to be judged again.
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate two red teams found now refused),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
+- 10.T24 claimed in part: nothing excused by name; the Cascadia's and Rancher's hidden clashes now seen (fault D14).
 - 11.LW12 and 10.T1 are claimed in part; their open parts are in `plan/DEFECTS.md` (D7) and the task rows.
 - The one test (`npm run eval:one`) passes 2 of its 18 lines; the rest wait on specs 01, 03, 04 and 06.
 

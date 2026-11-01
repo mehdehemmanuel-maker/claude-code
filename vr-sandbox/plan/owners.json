@@ -35,5 +35,12 @@
   "src/nexus/agent.ts",
   "src/nexus/blocks.ts",
   "src/nexus/view/nodes.ts"
+ ],
+ "10.T24": [
+  "src/nexus/make/rules.ts",
+  "src/nexus/engines.ts",
+  "src/nexus/machines.ts",
+  "src/data/stock.json",
+  "src/nexus/built.ts"
  ]
 }
