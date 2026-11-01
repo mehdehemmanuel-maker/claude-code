@@ -1680,3 +1680,13 @@ nothing folded and placed three times (15); the second model found an unsupporte
 step set). 20 steps, 3,637 tokens in fresh and 71,866 read from the cache, 6,164 out, 34 s. The AI said plainly that the
 lamp does not light yet and the wall is not joined to the shelf. An earlier run of the runner scored line 3 wrongly (it
 read a node's block from the wrong record); fixed before this run.
+
+## 2026-11-01: a law's dimensionless input refuses a length (spec 10, T11; fault D1, its last part)
+
+A law's input without a dimension (an efficiency, a ratio, a coefficient) had no unit on its port, so the wire check let
+anything into it: a length wired into Carnot's efficiency passed. Now such an input keeps its unit, 1 (`unitAt` in
+`lawBlocks`, `src/nexus/blocks.ts`), so a quantity with a dimension is refused and a plain number is still taken; the
+value shown hides the 1. The test "a value goes along a wire only into its own kind, converted rightly" wires a length
+into `law.carnot` solved for Tc and is refused. The other wires from a unit into a port with none, on the starter boards,
+all go into generic ports (the math, view and check.limit blocks), which take any quantity by design; fault D1 is closed.
+Checked with `npm run gate`.

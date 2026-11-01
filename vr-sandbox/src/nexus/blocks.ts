@@ -297,7 +297,7 @@ export function show(v: unknown, unit?: string): string {
     const pick = unit ? READABLE[unit]?.find(([, k]) => Math.abs(v) >= k * 0.9999) : undefined;
     const [u, k] = pick ?? [unit ?? '', 1];
     const x = v / k, s = Math.abs(x) >= 1e6 || (Math.abs(x) < 1e-3 && x !== 0) ? x.toExponential(3).replace(/e\+?(-?)(\d+)$/, (_, m: string, d: string) => `×10${sup(m + d)}`) : String(Number(x.toPrecision(4)));
-    return u && u !== '-' ? `${s} ${prettyUnit(u)}` : s;
+    return u && u !== '-' && u !== '1' ? `${s} ${prettyUnit(u)}` : s;
   }
   if (typeof v === 'boolean') return v ? 'yes' : 'no';
   if (typeof v === 'string') return v === '' ? 'none' : v.length > 60 ? `${v.slice(0, 59)}…` : v;
@@ -1025,7 +1025,9 @@ export function lawBlocks(): BlockDef[] {
     const all = [...law.inputs, law.output], tags = TAGS[law.id] ?? [], field = FIELD_OF.get(law.id), [kind, why] = LAW_KINDS[law.id] ?? ['derived', ''];
     // (a temperature difference takes a difference's unit, so a temperature wired into it is refused, not offset by
     // 273.15 (spec 10, T11): the law's own term keeps K, the same number)
-    const unitAt = (p: (typeof all)[number]) => { const u0 = unitOf(p.unit); return u0 === 'K' && quantityOf(law, p)?.id === 'temperature-difference' ? 'ΔK' : u0; };
+    // (and a dimensionless term keeps its unit, 1, so a quantity with a dimension wired into it (a length into an
+    // efficiency) is refused, where before the port had no unit and took anything (fault D1, its last part))
+    const unitAt = (p: (typeof all)[number]) => { const u0 = unitOf(p.unit); return u0 === 'K' && quantityOf(law, p)?.id === 'temperature-difference' ? 'ΔK' : u0 ?? (p.unit === '1' || p.unit === '-' ? '1' : u0); };
     const portOf = (p: (typeof all)[number], out = false) => N(p.sym, unitAt(p), { label: `${p.name} (${p.sym})`, ...(!out && LAW_DEFAULTS[law.id]?.[p.sym] !== undefined ? { optional: true, default: LAW_DEFAULTS[law.id]![p.sym] } : {}) });
     const ex = law.example, inTerm = new Set(varsOf(law.term).map((v) => v.sym));
     return def({

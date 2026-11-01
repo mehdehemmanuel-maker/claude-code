@@ -106,6 +106,11 @@ describe('every domain, in one pass', () => {
     expect(dT.unit).toBe('ΔK');
     expect(fitsPorts({ name: 'T', type: 'number', unit: 'degC' }, dT).ok).toBe(false);
     expect(fitsPorts({ name: 'rise', type: 'number', unit: 'ΔdegC' }, dT).ok).toBe(true);
+    // (a law's dimensionless input carries 1: a length is refused into it; a plain number goes in)
+    const eta = portsOf(LIBRARY.get('law.carnot')!, { ...defaultsOf(LIBRARY.get('law.carnot')!), solve: 'Tc' }).inputs.find((p) => p.unit === '1');
+    expect(eta, 'law.carnot solved for Tc takes its efficiency in 1').toBeTruthy();
+    expect(fitsPorts({ name: 'L', type: 'number', unit: 'm' }, eta!).ok, 'a length into an efficiency').toBe(false);
+    expect(fitsPorts({ name: 'x', type: 'number' }, eta!).ok).toBe(true);
   });
   // (early cutoff (spec 11, LW12; fault D5): a node run again that gives what it gave before leaves what it feeds alone,
   // counted; and a block that says it is pure reads no clock, chance, network or AI in its own run, unless what it reads

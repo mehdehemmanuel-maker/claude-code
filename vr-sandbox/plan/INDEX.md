@@ -10,7 +10,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | What | Count |
 | --- | --- |
 | Tasks in the specs | 130: 5 passing (by the evaluator), 3 claimed by the builder and not yet judged, the rest failing |
-| Faults found in the code | 13 (8 fixed) |
+| Faults found in the code | 13 (9 fixed) |
 | Rules in the constitution | 29 (14 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
@@ -44,7 +44,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | Id | Fault | Where | State | Task |
 | --- | --- | --- | --- | --- |
-| D1 | The wire check compares dimensions only: 60 rpm into Hz gives 6.283 Hz; torque wires to energy; Gy to Sv; a port with no unit wires to anything | `src/ganglia/units.ts` (rpm is 2π rad/min) | partly fixed 2026-11-01: rpm into Hz gives 1, torque and energy and Gy and Sv refused, a wire of another kind fails its node; a port with no unit still takes anything (42 starter wires rely on it: open) | 10.T11 |
+| D1 | The wire check compares dimensions only: 60 rpm into Hz gives 6.283 Hz; torque wires to energy; Gy to Sv; a port with no unit wires to anything | `src/ganglia/units.ts` (rpm is 2π rad/min) | fixed 2026-11-01: rpm into Hz gives 1, torque and energy and Gy and Sv refused, a wire of another kind fails its node; a law's dimensionless input keeps its unit, 1, and refuses a quantity with a dimension (a length into an efficiency). A generic port (math, view, check.limit) takes any quantity by design: the 42 starter wires with a unit into a port without one all go into such ports | 10.T11 |
 | D2 | `dB` is a plain number with scale 1, so every decibel conversion is wrong | `src/ganglia/units.ts:22` | fixed 2026-11-01: dB goes only into dB | 10.T11 |
 | D3 | `degC` always adds 273.15, so a 10 °C difference becomes 283.15 K | `src/ganglia/units.ts:38` | fixed 2026-11-01: ΔK, ΔdegC, ΔdegF; the laws' temperature differences take ΔK; a temperature into one is refused | 10.T11 |
 | D4 | The units file's header cites `dimensionsOf` and `ganglia.test.ts`; neither exists | `src/ganglia/units.ts:4` | fixed 2026-11-01: the header says what checks the units | 10.T11 |
