@@ -44,6 +44,14 @@ export function stable(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(stable).join(',')}]`;
   return `{${Object.keys(v as object).sort().filter((k) => (v as Record<string, unknown>)[k] !== undefined).map((k) => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`).join(',')}}`;
 }
+const valueKeys = new WeakMap<object, string>();
+/** What a value that comes in along a wire adds to a node's key (spec 11, LW12; fault D5): the value itself, digested,
+ *  not the key of what made it. So a node run again that gives what it gave before leaves what it feeds alone: the cut
+ *  off early. An object is digested once and kept by its identity (an output is never changed after it is given). */
+export function valueKey(v: unknown): string {
+  if (v === null || typeof v !== 'object') return hash(digest(v));
+  let k = valueKeys.get(v); if (k === undefined) { k = hash(digest(v)); valueKeys.set(v, k); } return k;
+}
 const fnIds = new WeakMap<object, number>(); let fnNext = 0;
 /** A value written so two values write the same only when they are the same (spec 11, LW15; fault D6): what `stable`
  *  cannot tell apart, this does. A Map or a Set by its entries (in a sorted order, so the order they were added in does
@@ -319,7 +327,7 @@ export class Engine {
           if (!s || s.status !== 'ok' || !s.out || !(w.out! in s.out)) { missing.push(`${p.label ?? p.name} (from ${this.board.nodes[w.from]?.label || w.from}, ${s?.status === 'failed' ? 'which failed' : 'which has nothing yet'})`); continue; }
           const fromUnit = this.ports(w.from).outputs.find((o) => o.name === w.out)?.unit, u = s.uncertainty?.[w.out!];
           let v: unknown; try { v = convert(s.out[w.out!], fromUnit, p.unit); } catch (e) { refused.push(`${p.label ?? p.name} (from ${this.board.nodes[w.from]?.label || w.from}): ${(e as Error).message}`); continue; }
-          vals.push(v); keys.push(`${p.name}<${s.key}.${w.out}${u ? `±${u}` : ''}`);
+          vals.push(v); keys.push(`${p.name}=${valueKey(v)}${u ? `±${u}` : ''}`);
           if (u && typeof s.out[w.out!] === 'number' && typeof v === 'number') { const src = `${w.from}.${w.out}`, du = Math.abs((convert((s.out[w.out!] as number) + u, fromUnit, p.unit) as number) - v); spreadIn.set(src, [...(spreadIn.get(src) ?? []), { input: p.name, ...(p.many ? { at: vals.length - 1 } : {}), du }]); }
         }
         inputs[p.name] = p.many ? vals : vals[0];

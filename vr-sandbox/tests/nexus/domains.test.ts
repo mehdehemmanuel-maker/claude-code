@@ -101,6 +101,25 @@ describe('every domain, in one pass', () => {
     expect(fitsPorts({ name: 'T', type: 'number', unit: 'degC' }, dT).ok).toBe(false);
     expect(fitsPorts({ name: 'rise', type: 'number', unit: 'ΔdegC' }, dT).ok).toBe(true);
   });
+  // (early cutoff (spec 11, LW12; fault D5): a node run again that gives what it gave before leaves what it feeds alone,
+  // counted; and a block that says it is pure reads no clock, chance, network or AI in its own run, unless what it reads
+  // it gives only on ports that measure the run)
+  it('a node that gives what it gave before reruns nothing below it, and pure blocks read no clock or chance', async () => {
+    const b = emptyBoard('cutoff');
+    placeBlock(b, 'in.number', 0, 0, { ...defaultsOf(LIBRARY.get('in.number')!), value: '2.1' }, 'x');
+    placeBlock(b, 'math.expr', 0, 0, { expr: 'round(a)' }, 'r'); placeBlock(b, 'math.expr', 0, 0, { expr: 'b + 1' }, 'n');
+    wire(b, 'x', 'value', 'r', 'a'); wire(b, 'r', 'result', 'n', 'b');
+    const e = new Engine(b, env, new Memo()); await e.run(); expect(e.state.get('n')?.out?.result).toBe(3);
+    b.nodes.x!.set = { ...b.nodes.x!.set, value: '2.2' }; e.touch('x');
+    const r = await e.run();
+    expect(e.state.get('r')?.cached, 'the rounding ran again: its input moved').toBe(false);
+    expect(e.state.get('n')?.cached, 'what it feeds did not: its value came in the same').toBe(true);
+    expect(r.ran).toBe(2);
+    const reads: string[] = [];
+    for (const d of LIBRARY.values()) { if (!d.pure || !d.run) continue; const src = d.run.toString().replace(/new Date\(0\)/g, '');
+      if (/Math\.random|Date\.now|new Date\(|performance\.now|fetch\(|\bc\.ai\b/.test(src) && !portsOf(d, defaultsOf(d)).outputs.some((o) => o.measured)) reads.push(d.id); }
+    expect(reads, 'pure blocks that read the clock, chance, the network or the AI: say pure: false, or give what they read as measured').toEqual([]);
+  });
   // (keys tell apart what the old writing could not (spec 11, LW15; fault D6): two Maps, two Sets, NaN and null, −0 and 0,
   // two functions, a typed array's kind; and the same value, built in another order, keys the same)
   it('a value\'s digest tells apart what is different and only that', () => {

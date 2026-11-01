@@ -16,6 +16,8 @@ problems: list[str] = []
 # Task states the tables cannot carry (a spec.md table has no status column): what is done, said here with its date.
 STATE = {
     '10.T1': 'values done 2026-10-31 (CODATA 2022); correlations not yet',
+    '10.T11': 'mostly passing 2026-11-01: kinds on wires (rpm/Hz, J/N m, Gy/Sv, dB, ΔK); unitless ports still take anything',
+    '11.LW12': 'partly passing 2026-11-01: early cutoff counted in the gate; effects scanned only in each block\'s own run',
     '11.LW15': 'passing 2026-11-01: the gate compares each quick board cached, again and fresh; a planted cache fault fails it',
 }
 

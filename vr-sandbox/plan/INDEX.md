@@ -9,8 +9,8 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 129 (3 begun, the rest not started) |
-| Faults found in the code | 13 (3 fixed) |
+| Tasks in the specs | 129 (5 begun, the rest not started) |
+| Faults found in the code | 13 (7 fixed) |
 | Rules in the constitution | 29 (21 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
@@ -42,13 +42,13 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | Id | Fault | Where | State | Task |
 | --- | --- | --- | --- | --- |
-| D1 | The wire check compares dimensions only: 60 rpm into Hz gives 6.283 Hz; torque wires to energy; Gy to Sv; a port with no unit wires to anything | `src/ganglia/units.ts` (rpm is 2π rad/min) | open | 10.T11 |
-| D2 | `dB` is a plain number with scale 1, so every decibel conversion is wrong | `src/ganglia/units.ts:22` | open | 10.T11 |
-| D3 | `degC` always adds 273.15, so a 10 °C difference becomes 283.15 K | `src/ganglia/units.ts:38` | open | 10.T11 |
-| D4 | The units file's header cites `dimensionsOf` and `ganglia.test.ts`; neither exists | `src/ganglia/units.ts:4` | open | 10.T11 |
-| D5 | No early cutoff: a node's key is built from its inputs' keys, not their values, so a node that reruns to the same value reruns everything below it | `src/nexus/dataflow.ts:289` | open | 11.LW12 |
+| D1 | The wire check compares dimensions only: 60 rpm into Hz gives 6.283 Hz; torque wires to energy; Gy to Sv; a port with no unit wires to anything | `src/ganglia/units.ts` (rpm is 2π rad/min) | partly fixed 2026-11-01: rpm into Hz gives 1, torque and energy and Gy and Sv refused, a wire of another kind fails its node; a port with no unit still takes anything (42 starter wires rely on it: open) | 10.T11 |
+| D2 | `dB` is a plain number with scale 1, so every decibel conversion is wrong | `src/ganglia/units.ts:22` | fixed 2026-11-01: dB goes only into dB | 10.T11 |
+| D3 | `degC` always adds 273.15, so a 10 °C difference becomes 283.15 K | `src/ganglia/units.ts:38` | fixed 2026-11-01: ΔK, ΔdegC, ΔdegF; the laws' temperature differences take ΔK; a temperature into one is refused | 10.T11 |
+| D4 | The units file's header cites `dimensionsOf` and `ganglia.test.ts`; neither exists | `src/ganglia/units.ts:4` | fixed 2026-11-01: the header says what checks the units | 10.T11 |
+| D5 | No early cutoff: a node's key is built from its inputs' keys, not their values, so a node that reruns to the same value reruns everything below it | `src/nexus/dataflow.ts:289` | fixed 2026-11-01: keys from the values wired in (`valueKey`); a node rerun to the same value reruns nothing below it, counted in the gate | 11.LW12 |
 | D6 | `stable()` writes every Map and Set as `{}` and every function as `undefined`, so it cannot tell such values apart (group feeds already rely on it) | `src/nexus/dataflow.ts:42` | fixed 2026-11-01: keys use `digest` (Maps, Sets, typed arrays, NaN, −0, functions told apart); the gate checks cached against fresh | 11.LW15 |
-| D7 | Blocks count as pure unless they say otherwise; nothing checks a block that reads the clock, chance or the network | `src/nexus/dataflow.ts:301` (`b.pure`) | open | 11.LW12 |
+| D7 | Blocks count as pure unless they say otherwise; nothing checks a block that reads the clock, chance or the network | `src/nexus/dataflow.ts:301` (`b.pure`) | partly fixed 2026-11-01: the gate fails a pure block whose own run reads the clock, chance, the network or the AI (unless as a measured port); what it calls further down is not yet seen | 11.LW12 |
 | D8 | The interference check excuses any pair where either part is named like a fastener (bolt, clip, plug, …), against every other part | `src/nexus/make/rules.ts:43`, `:50` | open | 10.T24 |
 | D9 | The interference check ignores overlaps shallower than 0.5 mm | `src/nexus/make/rules.ts:72` | open | 10.T24 |
 | D10 | A wire into an input a folded block lacks was kept silently; the AI's guide taught one (`k.value>s.rate`, `rate` being an output) and the spring ran on its defaults (11,308.6 N/m, not 40,000) | `src/nexus/dataflow.ts:425`, `docs/FOR-AI.md` | fixed 2026-10-31: refused with the input named; the guide wires `n`; the gate runs the guide's plan | — |
@@ -218,7 +218,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | T8 | Forward-mode differentiation through boards | 00 | failing |
 | T9 | The "cannot simulate" register, read by the AI | 00 | failing |
 | T10 | Floating-point lint | 00 | failing |
-| T11 | **First**: quantity kinds on every wire (research 18, 24; faults D1–D4): every number port gets `quantity`, proposed by `quantityOf` and … | — | failing |
+| T11 | **First**: quantity kinds on every wire (research 18, 24; faults D1–D4): every number port gets `quantity`, proposed by `quantityOf` and … | — | mostly passing 2026-11-01: kinds on wires (rpm/Hz, J/N m, Gy/Sv, dB, ΔK); unitless ports still take anything |
 | T12 | Retraction check: source DOIs against Crossref's open Retraction Watch data; everything derived marked | T3 | failing |
 | T13 | AI-written values beside sourced ones, never replacing them (C27); the share of AI-made inputs on every derived value | T3 | failing |
 | T14 | Values linked to the decisions they bear on; a new estimate reopens them; two readings of one quantity that disagree stop the line (C28) | T3, 00 S10 | failing |
@@ -246,7 +246,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | LW9 | Determinism across browsers: a Jolt build with its cross-platform determinism option; a deterministic maths module (V8 and JavaScriptCore differ … | LW2 | failing |
 | LW10 | A `grow` node family: demand field, local rule, budget, load or damage ensemble, stop condition; resilience with an n − 1 check (research 22) | 09 P1 | failing |
 | LW11 | Space measures as nodes (justified depth, integration, intimacy gradient, egress distance, daylight), each with its stability under small edits … | — | failing |
-| LW12 | **First, before LW13**: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as … | — | failing |
+| LW12 | **First, before LW13**: early cutoff (research 25): every block declares its effect (pure, seeded, clock, volatile, io, agent; unknown counts as … | — | partly passing 2026-11-01: early cutoff counted in the gate; effects scanned only in each block's own run |
 | LW13 | Push a mark, pull the work (absorbs LW1, lazy evaluation): observers (view, panels, checks, exports, the agent) pull; only stale nodes on their … | LW12 | failing |
 | LW15 | Before LW12: a gate check that a cached run equals a fresh run on every quick board; a structural digest (Maps, Sets, typed arrays, geometry by … | — | passing 2026-11-01: the gate compares each quick board cached, again and fresh; a planted cache fault fails it |
 | LW16 | Every simulated world carries an ODD description, its update order, one label (demo, calibrated, compared, docked, forecast) and its worker count … | LW2 | failing |

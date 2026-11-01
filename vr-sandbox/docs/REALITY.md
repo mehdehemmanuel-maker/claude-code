@@ -1485,3 +1485,31 @@ read the gauntlet's state, shared across the app, which grows between runs. The 
 the gauntlet nodes are not pure, so they are never served from the cache and are not compared. A planted fault (a
 cached node given back with one field changed) failed the check on three nodes of the mechanical quick board. Gate:
 29 passed in 51.3 s (one run).
+
+## 2026-11-01: a value goes along a wire only into its own kind (spec 10, T11; faults D1 to D4)
+
+`relate(from, to)` in `src/ganglia/units.ts` decides whether a value may go from one unit into another and how it
+converts: the same dimension and the same kind. A turn is a cycle (60 rpm → 1 Hz; 1 Hz → 2π rad/s; before, 60 rpm into
+Hz gave 6.283); an energy (J, Wh, eV) is not a torque (a force times a length); an absorbed dose (Gy) is not a dose
+equivalent (Sv); a level in dB goes only into dB; a temperature (K, degC, degF) is not a temperature difference (new
+units ΔK, ΔdegC, ΔdegF, no offset: 10 ΔdegC → 10 ΔK, where degC into K adds 273.15). The laws' temperature differences
+(their quantity is `temperature-difference` in `quantities.ts`) take ΔK on their ports, the law's own term keeping K.
+The wire check (`fits`) and the engine (`convert`) both use it; a wire of another dimension or kind now fails the node it
+goes into, saying why, where before `convert` passed the number on unconverted. Tests written first (they failed),
+now passing: 11 conversions and 10 refusals, and a °C temperature refused by a law's dT while a ΔdegC rise converts.
+
+Measured before changing anything: across all 64 starter boards no wire joins two different units, so no stored result
+moved (book question Q14.4). 42 wires join a port with a unit to one without; refusing those would break them, so a port
+with no unit still takes anything (D1 stays partly open). A sweep running every starter board after the change found no
+refused wire in the boards it finished; boards that call the AI or run past two minutes were not finished (the sweep's
+log was overwritten midway by a gate run that picked up the probe: not every board is accounted for).
+
+## 2026-11-01: early cutoff (spec 11, LW12; faults D5, D7)
+
+A node's key is now made from the values wired into it (`valueKey`: the value's `digest`, kept by identity for objects),
+not from the keys of the nodes that made them. So a node run again that gives what it gave before leaves what it feeds
+alone. The one test counts it: a rounding fed 2.1 then 2.2 runs again; the node after it does not (2 nodes ran, not 3);
+with the old key the same test fails. It also fails any block that says it is pure but reads the clock, chance, the
+network or the AI in its own run, unless what it reads it gives as `measured` (two found: the 6502's speed, now measured;
+`compile.start`'s `new Date(0)`, a fixed date). What a block calls further down is not seen by that scan. Gate: 30 passed
+in 50.0 s (one run; 51.3 s before the change).
