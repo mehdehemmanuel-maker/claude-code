@@ -40,6 +40,15 @@ the task list and lose the why. So the why lives here, and every round is checke
   (`place.solve`, `auto.loop`, the placement fields and routes in `nexus/placement/`). Entries in `docs/REALITY.md`
   before 2026-11-02 describe builds that are gone.
 
+## The critic, every session (the user, 2026-11-02: "why do I have to say all of this")
+
+The user should never have to say that code is broken or left over, that a build is blocky or has pieces through each
+other, or that something researched was never built. At the start of every session, and before telling the user that
+anything is done, run the critic (`../.claude/agents/critic.md`: it opens every board with `node scripts/audit.cjs`,
+looks at every picture, holds the app to `docs/WANTED.md`, finds dead code and planned work never built, and fixes the
+worst). What it finds that a person would see comes before any planned task. What the user has to point out is the
+critic's miss: add it to the critic's checks.
+
 ## Where to read for what (targeted context: read only what the work needs)
 
 | If the work is about | Read |

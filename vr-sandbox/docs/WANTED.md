@@ -463,3 +463,7 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   the builds onto the operations; asked which old builds go, answered "All hand-placed builds (Recommended)": the
   builders, their nodes, starter boards and stored parts deleted; materials, laws, standard parts, physics and the space
   of operations kept; the docs and CLAUDE.md pointing only at the operations)
+- 2026-11-02: "Also we need an agent who really make this app functional like everything I’m saying I shouldn’t have to
+  say why would I have to tell you to get rid of broken code that would cause problems in the future why would I have to
+  tell you the engine that was generated had intersections and was blocky an unrealistic why would I have to say you
+  need a node generator wasn’t there a whole research why do I have to say all of this wtuff"

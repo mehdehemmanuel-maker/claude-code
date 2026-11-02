@@ -13,3 +13,4 @@ bench-out/
 data/ext/
 .gate-ok
 .gate-fails.json
+.audit/
