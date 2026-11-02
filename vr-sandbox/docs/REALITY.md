@@ -2425,3 +2425,16 @@ now reads every function of the three files that make, measure and cut a negativ
 "the negative is rows: the engine names no kind; a row given at run time is answered" and "the rest of R18 by rows:
 imprinted, cut, and found by their own interfaces"). It also found the gate red at 2be7424 itself: PROGRESS.md named a
 commit four behind, past the rule's three. Checked with `npm run gate`.
+
+## 2026-11-02: what the sharper clash rule showed in the engines at rest (fault D25; spec 10, T24)
+
+No gate test checks an engine at rest, only turned over, so after D24 the gate stayed green while the gate's own
+one-cylinder air-cooled engine (bore 77, stroke 58 mm) at rest showed 29 clashes where it had shown 9 (one probe each
+way). Each was mended in the engine builder, the general way where there is one: holes where the head bolts and pan bolts
+pass, cut by the bore-where-a-bolt-passes rule (`boreThrough`); clearance holes in the main caps and tapped holes over
+them; the flywheel holed for its bolts and turning with the crank; each port bored along its valve as the valve is
+turned; the plug tower's bore sized to clear the coil and the plug's hex it carries; the plug's ground electrode bent under
+the centre electrode's tip; the oil filter's can drawn open at its foot over its base plate; the pan's corner bolts set on
+its rail and its drain plug away from the pickup. That engine now shows none at rest (one probe). The larger engines are
+not clean, measured at rest by one probe each: a twin-cam four (80.5 × 97.6 mm) 22, a diesel ohv six (137 × 169 mm) 68, a
+60° V6 (89 × 80 mm) 105. They stay open in fault D25. Checked with `npm run gate`.

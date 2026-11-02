@@ -31,6 +31,8 @@ import { chainPath, chainRun, coil, housing, mouldedChip, ringClip, toothed, tur
 import { boundsOfAll, frame, partOf } from './assembly';
 import { prismVolume } from './form';
 import { METRIC } from './threads';
+import { CLEARANCE } from './interfaces';
+import { boreThrough } from './mate';
 import { use } from './components';
 import { massOf } from './mass';
 import { CHAINS } from './families';
@@ -310,22 +312,29 @@ export function cylinderBlock(s: EngineSpec, d = engineDims(s)): Part {
   // (its top, its bores through it (a vee's along each bank), its lifters' bores)
   const topAt: V3 = [0, yb0 - wc / 2, 0], bankBore = (c: { x: number; lean: number }) => boreAlong(fromBank([c.x, (yb0 + 0.02) / Math.cos(c.lean), 0], c.lean), fromBank([c.x, (yb0 - wc - 0.02) / Math.cos(c.lean), 0], c.lean), bore, topAt);
   parts.push(box('crankcase top', [len, wc, Wc], topAt, { ...cast, cuts: [...(d.vee ? cyl.map(bankBore) : cyl.map((c) => ({ r: bore, depth: wc, at: [c.x, wc / 2, 0] as V3, dir: [0, -1, 0] as V3 }))), ...liftBoresAll(topAt)] }));
+  // (each main cap's two bolts, rm + 0.12 bore out from the axis either side (typical), screwed 0.35 bore up into what is
+  // over the cap: tapped there, d − P (ISO 2306's rule), 2 mm deeper than the thread; drawn with no holes, the bolts ran
+  // into the bulkheads and the crankcase ends (fault D25))
+  const capT = threadFor(B), capZ = rm + 0.12 * B, capTap = (Number(capT.slice(1)) - (METRIC[capT]?.p ?? 0.15 * Number(capT.slice(1)))) / 2000;
+  const tappedUp = (x0: number, half: number, yBottom: number): { r: number; depth: number; at: V3; dir: V3 }[] => mainsOf(d).filter((m) => Math.abs(m - x0) < half + capTap).flatMap((m) => [-1, 1].map((sz) => ({ r: capTap, depth: 0.35 * B + 0.002, at: [m - x0, yBottom, sz * capZ] as V3, dir: [0, 1, 0] as V3 })));
   // (its ends: over the end mains, their saddles bored in them, and down each side of the end main caps to the pan's rail)
   const capW0 = 2 * (rm + 0.22 * B), endSaddle = rm + shellT;
   for (const sd of [-1, 1]) {
-    parts.push(box('crankcase end', [we, yb0, Wc - 2 * wc], [sd * (len / 2 - we / 2), yb0 / 2, 0], { ...cast, cuts: [{ r: endSaddle, depth: we, at: [we / 2, -yb0 / 2, 0], dir: [-1, 0, 0] }, ...camBore([0, yb0 / 2, 0], we)] }));
+    parts.push(box('crankcase end', [we, yb0, Wc - 2 * wc], [sd * (len / 2 - we / 2), yb0 / 2, 0], { ...cast, cuts: [{ r: endSaddle, depth: we, at: [we / 2, -yb0 / 2, 0], dir: [-1, 0, 0] }, ...camBore([0, yb0 / 2, 0], we), ...tappedUp(sd * (len / 2 - we / 2), we / 2, -yb0 / 2)] }));
     for (const sz of [-1, 1]) { const z0 = capW0 / 2, z1 = Wc / 2 - wc; parts.push(box('crankcase end', [we, -ysk, z1 - z0], [sd * (len / 2 - we / 2), ysk / 2, sz * (z0 + z1) / 2], cast)); }
   }
   const bw = wm, bh = yb0 - wc, saddle = rm + shellT;
-  for (const x of mains) parts.push(box('bulkhead', [bw, bh, Wc - 2 * wc], [x, bh / 2, 0], { ...cast, cuts: [{ r: saddle, depth: bw, at: [bw / 2, -bh / 2, 0], dir: [-1, 0, 0] }, ...(d.banked ? cyl.filter((c) => Math.abs(c.x - x) < bore + bw / 2).map((c) => boreAlong(fromBank([c.x, deck, 0], c.lean), fromBank([c.x, 0, 0], c.lean), bore, [x, bh / 2, 0])) : []), ...camBore([x, bh / 2, 0], bw).map((k) => ({ ...k, at: [bw / 2, k.at[1], k.at[2]] as V3 })), ...liftBoresAll([x, bh / 2, 0])], says: 'its main saddle bored in it' }));
+  for (const x of mains) parts.push(box('bulkhead', [bw, bh, Wc - 2 * wc], [x, bh / 2, 0], { ...cast, cuts: [{ r: saddle, depth: bw, at: [bw / 2, -bh / 2, 0], dir: [-1, 0, 0] }, ...tappedUp(x, bw / 2, -bh / 2), ...(d.banked ? cyl.filter((c) => Math.abs(c.x - x) < bore + bw / 2).map((c) => boreAlong(fromBank([c.x, deck, 0], c.lean), fromBank([c.x, 0, 0], c.lean), bore, [x, bh / 2, 0])) : []), ...camBore([x, bh / 2, 0], bw).map((k) => ({ ...k, at: [bw / 2, k.at[1], k.at[2]] as V3 })), ...liftBoresAll([x, bh / 2, 0])], says: 'its main saddle bored in it' }));
   const casting = group('block casting', parts, { item: 'block-casting', mat: cast.mat, says: `cast ${iron ? 'iron' : 'aluminium'} round its cores, ${(len * 1000).toFixed(0)} × ${((deck - ysk) * 1000).toFixed(0)} × ${(Wc * 1000).toFixed(0)} mm` });
   const out: Part[] = [casting];
   if (liner) for (const c of cyl) out.push(P('cylinder liner', { lathe: [[B / 2, 0], [bore, 0], [bore, H], [B / 2, H], [B / 2, 0]] }, [c.x, yb0 * Math.cos(c.lean), yb0 * Math.sin(c.lean)], { rot: [c.lean, 0, 0], item: 'cylinder-liner', mat: 'cast-iron', color: 0x5a5c60, finish: 'machined', says: d.diesel ? 'a wet liner, its coolant against it' : 'cast in' }));
   // (its main caps: each under its bulkhead, its saddle's other half, bolted up into the bulkhead by two bolts)
   const capH = saddle + 0.12 * B, capW = 2 * (rm + 0.22 * B), t = threadFor(B);
   for (const x of mains) {
-    out.push(box('main cap', [bw, capH, capW], [x, -capH / 2, 0], { item: 'main-cap', mat: 'cast-iron', color: 0x5a5c60, finish: 'cast', cuts: [{ r: saddle, depth: bw, at: [bw / 2, capH / 2, 0], dir: [-1, 0, 0] }] }));
-    for (const sd of [-1, 1]) out.push(bolt(t, capH + 0.35 * B, [x, -capH, sd * (rm + 0.12 * B)], [PI, 0, 0], 'main cap bolt'));
+    // (its two bolts through it in clearance holes, ISO 273 medium)
+    const capClear = (CLEARANCE[t]?.medium ?? 1.1 * Number(t.slice(1))) / 2000;
+    out.push(box('main cap', [bw, capH, capW], [x, -capH / 2, 0], { item: 'main-cap', mat: 'cast-iron', color: 0x5a5c60, finish: 'cast', cuts: [{ r: saddle, depth: bw, at: [bw / 2, capH / 2, 0], dir: [-1, 0, 0] }, ...[-1, 1].map((sz) => ({ r: capClear, depth: capH, at: [0, -capH / 2, sz * capZ] as V3, dir: [0, 1, 0] as V3 }))] }));
+    for (const sd of [-1, 1]) out.push(bolt(t, capH + 0.35 * B, [x, -capH, sd * capZ], [PI, 0, 0], 'main cap bolt'));
     for (const up of [true, false]) out.push(halfRing(`main bearing shell (${up ? 'upper' : 'lower'})`, rm, saddle, wm * 0.9, [x, 0, 0], up, { item: 'main-bearing-shell', mat: 'steel-low', color: 0xb89a6a, finish: 'machined' }));
   }
   return group('engine block', out, { item: 'engine-block' });
@@ -345,7 +354,9 @@ export function sparkPlug(B: number): Part {
     P('plug shell', { lathe: [[th * 0.62, 0], [th, 0], [th, reach], [hexR * 1.15, reach], [hexR * 1.15, reach + 0.012], [th * 0.9, reach + 0.016], [th * 0.62, reach + 0.016], [th * 0.62, 0]] }, [0, 0, 0], { item: 'spark-plug-shell', mat: 'steel-low', color: 0xc8ccd2, finish: 'plate', facets: 6 }),
     P('plug insulator', { lathe: [[0.0012, -0.002], [th * 0.6, -0.002], [th * 0.6, reach + 0.016], [0.0045, reach + 0.02], [0.0045, reach + 0.045], [0.0012, reach + 0.045], [0.0012, -0.002]] }, [0, 0, 0], { item: 'spark-plug-insulator', mat: 'alumina', color: 0xf2f0ea, finish: 'gloss' }),
     P('centre electrode', { cyl: [0.0011, 0.022] }, [0, 0.008, 0], { item: 'centre-electrode', mat: 'nickel-alloy', color: 0x9a9ca0 }),
-    box('ground electrode', [0.0026, 0.0045, 0.0013], [0, -0.0025, 0.0015], { item: 'ground-electrode', mat: 'nickel-alloy', color: 0x9a9ca0 }),
+    // (its ground electrode welded under the shell's end and bent over the centre electrode's tip, 0.8 mm below it (a gap
+    // of 0.7 to 1.1 mm, typical); drawn as a short bar, it lay in the insulator's nose (fault D25))
+    group('ground electrode', [box('ground electrode leg', [0.0026, 0.0051, 0.0013], [0, -0.00255, th * 0.62 + 0.00065]), box('ground electrode bend', [0.0026, 0.0013, th * 0.62 + 0.0024], [0, -0.00445, (th * 0.62 + 0.0013 - 0.0011) / 2])], { item: 'ground-electrode', mat: 'nickel-alloy', color: 0x9a9ca0 }),
     P('glass seal', { cyl: [0.0011, 0.004] }, [0, reach + 0.0, 0], { item: 'glass', mat: 'glass', color: 0x6a8a9a }),
     P('terminal stud', { cyl: [0.002, 0.03] }, [0, reach + 0.033, 0], { item: 'terminal-stud', mat: 'steel-low', color: 0xc8ccd2, finish: 'plate' }),
     P('sealing washer', { lathe: [[th, reach - 0.0015], [th + 0.0035, reach - 0.0015], [th + 0.0035, reach], [th, reach], [th, reach - 0.0015]] }, [0, 0, 0], { item: 'sealing-washer', mat: 'steel-low', color: 0xc8ccd2 })], { item: 'spark-plug' });
@@ -442,11 +453,18 @@ export function cylinderHead(s: EngineSpec, d = engineDims(s), bank?: number, gi
   const camZs = cams === 'dohc' ? [-xs * 0.21 * B, xs * 0.21 * B] : cams === 'sohc' ? [0] : [], rockY = d.tip + 0.12 * B, rockZ = cams === 'ohv' ? -xs * 0.15 * B : 0;
   for (const sd of [-1, 1]) parts.push(box('head end', [tw, Hh - td, Wh - 2 * tw], [x0 + sd * (Lh / 2 - tw / 2), sideY, 0], { ...cast, cuts: [...camZs.map((z) => ({ r: 0.125 * B, depth: tw, at: [tw / 2, d.camY - sideY, z] as V3, dir: [-1, 0, 0] as V3 })), ...(cams !== 'dohc' ? [{ r: 0.09 * B + 0.0005, depth: tw, at: [tw / 2, rockY - sideY, rockZ] as V3, dir: [-1, 0, 0] as V3 }] : [])] }));
   // (a port from each valve's seat out through its side, cored in the casting: a bent tube of it)
-  for (const v of vs) { const sd = v.ex ? xs : -xs; parts.push(P(v.ex ? 'exhaust port' : 'intake port', { tube: { r: pr, wall: 0.006, pts: [[v.x, y0 + td, v.z], [v.x, portY, sd * 0.3 * B], [v.x, portY, sd * (Wh / 2 - tw)]] } }, [0, 0, 0], cast)); }
+  // (each port bored along its valve as the valve is turned, 0.5 mm clear: its head, its neck, its stem up out of the port to
+  // its guide: drawn whole, the neck and stem ran through the port's wall where it bends away (fault D25))
+  for (const v of vs) { const sd = v.ex ? xs : -xs, top = portY + pr + 0.008, vr = valveR(d, v.ex), hH = 0.16 * vr, nH = 0.6 * vr, c = 0.0005;
+    const prof: [number, number][] = [[vr + c, 0], [vr + c, hH], [0.45 * vr + c, hH], [0.45 * vr + c, hH + nH], [stemOf(d) + c, hH + nH], [stemOf(d) + c, top - y0]];
+    parts.push(P(v.ex ? 'exhaust port' : 'intake port', { tube: { r: pr, wall: 0.006, pts: [[v.x, y0 + td, v.z], [v.x, portY, sd * 0.3 * B], [v.x, portY, sd * (Wh / 2 - tw)]] } }, [0, 0, 0], { ...cast, cuts: [{ r: stemOf(d) + c, depth: top - y0, at: [v.x, y0, v.z], dir: [0, 1, 0], prof }] })); }
   // (the floor its springs sit on, over its ports, its guides' bores and its towers through it)
-  parts.push(box('spring floor', [Lh - 2 * tw, floorT, Wh - 2 * tw], [x0, seat - floorT / 2, 0], { ...cast, cuts: [...vs.map((v) => ({ r: Math.max(0.0025, 0.035 * B) + 0.003, depth: floorT, at: [v.x - x0, floorT / 2, v.z] as V3, dir: [0, -1, 0] as V3 })), ...cyl.map((c) => ({ r: d.diesel ? 0.09 * B : 0.09 * B, depth: floorT, at: [plugAt(d, c).x - x0, floorT / 2, plugAt(d, c).z] as V3, dir: [0, -1, 0] as V3 })), ...rodBores([x0, seat - floorT / 2, 0])] }));
+  parts.push(box('spring floor', [Lh - 2 * tw, floorT, Wh - 2 * tw], [x0, seat - floorT / 2, 0], { ...cast, cuts: [...vs.map((v) => ({ r: Math.max(0.0025, 0.035 * B) + 0.003, depth: floorT, at: [v.x - x0, floorT / 2, v.z] as V3, dir: [0, -1, 0] as V3 })), ...cyl.map((c) => ({ r: d.diesel ? 0.09 * B : Math.max(0.12 * B, ((B < 0.085 ? 0.014 : 0.016) / Math.sqrt(3)) * 1.15) + 0.001, depth: floorT, at: [plugAt(d, c).x - x0, floorT / 2, plugAt(d, c).z] as V3, dir: [0, -1, 0] as V3 })), ...rodBores([x0, seat - floorT / 2, 0])] }));
   // (a tower down the middle of each cylinder for its plug or its injector)
-  const tw0 = d.diesel ? 0.08 * B : 0.06 * B, tw1 = d.diesel ? 0.088 * B : 0.09 * B;
+  // (a plug tower's bore clears what goes down it, 1 mm round: its coil (0.12 bore round, typical of a pencil coil) and its
+  // plug's hex; its wall 3 mm (typical). Drawn 0.06 bore round, narrower than the plug's own thread, the plug and its coil ran
+  // into it (fault D25))
+  const plugHex = ((B < 0.085 ? 0.014 : 0.016) / Math.sqrt(3)) * 1.15, tw0 = d.diesel ? 0.08 * B : Math.max(0.06 * B, 0.12 * B + 0.001, plugHex + 0.001), tw1 = d.diesel ? 0.088 * B : tw0 + 0.003;
   for (const c of cyl) parts.push(P(d.diesel ? 'injector bore' : 'plug tower', { lathe: [[tw0, 0], [tw1, 0], [tw1, Hh - td], [tw0, Hh - td], [tw0, 0]] }, [plugAt(d, c).x, y0 + td, plugAt(d, c).z], cast));
   const casting = group('head casting', parts, { item: 'head-casting', mat: cast.mat, says: `cast ${iron ? 'iron' : 'aluminium'} round its port and jacket cores, ${(Hh * 1000).toFixed(0)} mm tall` });
   const out: Part[] = [casting];
@@ -510,6 +528,9 @@ export function cylinderHead(s: EngineSpec, d = engineDims(s), bank?: number, gi
     if (!d.diesel) { out.push(placed(piece('spark plug'), [pa.x, y0 + Math.min(s.stroke / ((s.cr ?? 10.5) - 1), td - 0.003), pa.z])); out.push(placed(piece('ignition coil'), [pa.x, y0 + 0.08, pa.z]));
     } else out.push(group('fuel injector', [turned({ name: 'injector body', steps: [[0.05 * B, td + 0.02], [0.075 * B, 0.18]], cavity: [[0.012 * B + 0.0003, 0.01, 0.165], [0.07 * B + 0.0004, 0.1396, 0.1804]], mat: 'stainless-304', item: 'injector-body' }), turned({ name: 'injector needle', steps: [[0.012 * B, 0.15]], mat: 'steel-alloy', item: 'injector-needle', at: [0, 0.01, 0] }), { ...wound({ name: 'injector coil', ri: 0.02 * B, ro: 0.07 * B, L: 0.04, d: 0.0003 }), at: [0, 0.14, 0] as V3 }], { item: 'fuel-injector', at: [pa.x, y0, pa.z] }));
   }
+  // (its casting bored where each head bolt passes down through its deck, ISO 273 medium for the bolt's thread: drawn
+  // with no holes, the bolts ran into the deck (fault D25))
+  const headBolts = out.filter((p) => p.name === 'head bolt'); out[0] = headBolts.reduce((c, b) => boreThrough(c, { ...b, name: `${hb} head bolt` }).part, out[0]!);
   return group(bank === undefined ? 'cylinder head' : `cylinder head ${bank + 1}`, out, { item: 'cylinder-head' });
 }
 
@@ -578,6 +599,11 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   const hs = headsOf(d, cyl, len), heads = d.vee ? hs.map((h, i) => ({ ...cylinderHead(s, d, i), rot: [h.lean, 0, 0] as V3 })) : [given.head ? { ...given.head, at: [0, 0, 0] as V3 } : cylinderHead(s, d)];
   out.push(...heads);
   for (const c of hs) out.push(box('head gasket', [d.vee ? c.L : len, gasket, Wb], [d.vee ? c.x : 0, (deck + gasket / 2) * Math.cos(c.lean), (deck + gasket / 2) * Math.sin(c.lean)], { rot: [c.lean, 0, 0], item: 'head-gasket', mat: 'stainless-304', color: 0x9a9c9e, cuts: [...(d.vee ? c.cyl.map((q) => ({ x: q.x - c.x })) : cyl).map((q) => ({ r: B / 2, depth: gasket, at: [q.x, gasket / 2, 0] as V3, dir: [0, -1, 0] as V3 })), ...(d.cams === 'ohv' ? ohvTrain(d, cyl).rods.filter((q) => Math.abs(q.lean - c.lean) < 1e-6).map((q) => boreAlong(q.hi, q.lo, 0.03 * B + 0.0015, [d.vee ? c.x : 0, deck + gasket / 2, 0])) : [])] }));
+  // (the head gasket and the block bored where the head bolts pass down into them, each bolt in its head's own place (a
+  // vee's heads leaning with their banks): drawn with no holes, the bolts ran into the barrel and the gasket (fault D25))
+  const hbT = threadFor(B), headBolts = heads.flatMap((h) => (h.parts ?? []).filter((p) => p.name === 'head bolt').map((b): Part => ({ name: `${hbT} head bolt`, parts: [b], at: h.at ?? [0, 0, 0], rot: h.rot ?? [0, 0, 0] })));
+  const boredByBolts = (p: Part) => headBolts.reduce((c, b) => boreThrough(c, b).part, p);
+  out[0] = boredByBolts(out[0]!); for (let k = 0; k < out.length; k++) if (out[k]!.name === 'head gasket') out[k] = boredByBolts(out[k]!);
   // (its cam cover over each head, its gasket in its groove, its bolts round it)
   const top = deck + gasket + Hh, ctop = d.cams === 'dohc' ? top + 0.45 * B : top + 0.35 * B, coverMat = d.diesel ? 'al-a380' : d.cams === 'ohv' ? 'steel-low' : 'nylon';
   for (const c of hs) {
@@ -641,9 +667,13 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   }
   // (its flywheel on the crank's flange at the back: about 3.5 bores across (typical), its ring gear shrunk on; its bolts)
   const plate = fit.drive === 'drive-plate', small = d.n <= 2 && !d.diesel, fwR = (small ? 1.15 : 1.75) * B, fwT = plate ? 0.004 : (d.diesel ? 0.35 : small ? 0.22 : 0.3) * B, fx = back - 0.12 * B - fwT / 2 - 0.004, electric = s.starter !== 'recoil', rgM = d.diesel ? 0.0042 : 0.0025;
-  const fw: Part[] = [plate ? ringX('drive plate', 0.12 * B, fwR, fwT, [0, 0, 0], { item: 'drive-plate', mat: 'steel-low', color: 0x6a6c70, finish: 'machined', fill: 0.85, says: 'pressed from 4 mm steel (typical), its torque converter bolted to its rim: an automatic\'s or a CVT\'s, with no clutch' }) : ringX('flywheel', 0.12 * B, fwR, fwT, [0, 0, 0], { item: 'flywheel-disc', mat: 'cast-iron', color: 0x5a5c60, finish: 'machined', fill: 0.85, says: 'its face ground (its pockets and lightening about 0.15 of it, typical)' })];
+  // (its six bolts' clearance holes on their circle (ISO 273 medium), through it to the crank's tapped flange: drawn whole,
+  // the bolts lay inside it (fault D25))
+  const fwHoles = Array.from({ length: 6 }, (_, k) => ({ r: (CLEARANCE[threadFor(B)]?.medium ?? 1.1 * Number(threadFor(B).slice(1))) / 2000, depth: fwT, at: [0.3 * B * Math.cos((k * PI) / 3), fwT / 2, 0.3 * B * Math.sin((k * PI) / 3)] as V3, dir: [0, -1, 0] as V3 }));
+  const fw: Part[] = [plate ? ringX('drive plate', 0.12 * B, fwR, fwT, [0, 0, 0], { cuts: fwHoles, item: 'drive-plate', mat: 'steel-low', color: 0x6a6c70, finish: 'machined', fill: 0.85, says: 'pressed from 4 mm steel (typical), its torque converter bolted to its rim: an automatic\'s or a CVT\'s, with no clutch' }) : ringX('flywheel', 0.12 * B, fwR, fwT, [0, 0, 0], { cuts: fwHoles, item: 'flywheel-disc', mat: 'cast-iron', color: 0x5a5c60, finish: 'machined', fill: 0.85, says: 'its face ground (its pockets and lightening about 0.15 of it, typical)' })];
   if (electric) fw.push({ ...toothed({ name: 'starter ring gear', m: rgM, z: Math.round((2 * (fwR + 0.006)) / rgM), b: 0.012 + 0.04 * B, bore: 2 * fwR, mat: 'steel-alloy', item: 'starter-ring-gear' }), at: [0, 0, 0], rot: [0, PI / 2, 0] });
-  out.push(electric ? group(plate ? 'drive plate and ring gear' : 'flywheel and ring gear', fw, { item: plate ? 'flywheel-drive-plate' : 'flywheel', at: [fx, 0, 0] }) : { ...fw[0]!, name: 'flywheel', at: [fx, 0, 0], says: 'its fan cast in its face, its magneto\'s magnets in its rim (not drawn)' });
+  // (it turns with the crank it is bolted to, its bolts with it)
+  out.push(electric ? group(plate ? 'drive plate and ring gear' : 'flywheel and ring gear', fw, { item: plate ? 'flywheel-drive-plate' : 'flywheel', at: [fx, 0, 0], ...(th ? { rot: [th, 0, 0] as V3 } : {}) }) : { ...fw[0]!, name: 'flywheel', at: [fx, 0, 0], ...(th ? { rot: [th, 0, PI / 2] as V3 } : {}), says: 'its fan cast in its face, its magneto\'s magnets in its rim (not drawn)' });
   // (its bolts turn with the crank they are screwed into)
   for (let k = 0; k < 6; k++) { const a = (k * PI) / 3 + th; out.push(bolt(threadFor(B), fwT + 0.12 * B, [fx - fwT / 2, 0.3 * B * Math.cos(a), 0.3 * B * Math.sin(a)], [0, 0, PI / 2], plate ? 'drive plate bolt' : 'flywheel bolt')); }
   // (its oiling: the pan under its crankcase, its gasket and bolts; the pump on the crank's nose; its pickup to the sump;
@@ -663,10 +693,19 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   const endStrip = (xe: number): Part[] => { const g = gapAt(xe), gm = { mat: 'nbr', color: 0x1a1a1a }; return g ? [-1, 1].map((sz) => box('gasket', [0.01, 0.003, panW / 2 - g], [xe, 0, sz * (g + (panW / 2 - g) / 2)], gm)) : [box('gasket', [0.01, 0.003, panW], [xe, 0, 0], gm)]; };
   out.push(group('oil pan gasket', [box('gasket', [panL, 0.003, 0.01], [0, 0, panW / 2 - 0.006], { mat: 'nbr', color: 0x1a1a1a }), box('gasket', [panL, 0.003, 0.01], [0, 0, -panW / 2 + 0.006], { mat: 'nbr', color: 0x1a1a1a }), ...endStrip(panL / 2 - 0.006), ...endStrip(-panL / 2 + 0.006)], { item: 'pan-gasket', at: [panX, panTop - 0.0015, 0] }));
   const npb = Math.max(8, Math.round((2 * (panL + panW)) / 0.09));
-  for (let k = 0; k < npb; k++) { const f = k / npb, per = 2 * (panL + panW), sAt = f * per; let x: number, z: number; if (sAt < panL) { x = -panL / 2 + sAt; z = panW / 2 - 0.006; } else if (sAt < panL + panW) { x = panL / 2 - 0.006; z = panW / 2 - (sAt - panL); } else if (sAt < 2 * panL + panW) { x = panL / 2 - (sAt - panL - panW); z = -panW / 2 + 0.006; } else { x = -panL / 2 + 0.006; z = -panW / 2 + (sAt - 2 * panL - panW); }
+  // (round the rail 6 mm in from its edges, where its gasket lies: a corner's bolt had stood on the pan's outer edge, over its
+  // end wall (fault D25))
+  const Li = panL - 0.012, Wi = panW - 0.012;
+  for (let k = 0; k < npb; k++) { const f = k / npb, per = 2 * (Li + Wi), sAt = f * per; let x: number, z: number; if (sAt < Li) { x = -Li / 2 + sAt; z = Wi / 2; } else if (sAt < Li + Wi) { x = Li / 2; z = Wi / 2 - (sAt - Li); } else if (sAt < 2 * Li + Wi) { x = Li / 2 - (sAt - Li - Wi); z = -Wi / 2; } else { x = -Li / 2; z = -Wi / 2 + (sAt - 2 * Li - Wi); }
     if (Math.abs(Math.abs(x) - (panL / 2 - 0.006)) < 1e-9 && Math.abs(z) < gapAt(x) + 0.006) continue;
     out.push(bolt(d.diesel ? 'M8' : 'M6', 0.02, [panX + x, panTop - 0.012, z], [PI, 0, 0], 'oil pan bolt')); }
-  out.push(bolt(d.diesel ? 'M16' : 'M14', 0.016, [-panL * 0.3, panBot - 0.002, 0], [PI, 0, 0], 'oil drain plug'));
+  // (the block's rail, the gasket and the pan bored where each pan bolt passes up into them (fault D25))
+  const panT0 = d.diesel ? 'M8' : 'M6', panBolts = out.filter((p) => p.name === 'oil pan bolt').map((b) => ({ ...b, name: `${panT0} oil pan bolt` }));
+  for (let k = 0; k < out.length; k++) if (k === 0 || ['oil pan gasket', 'oil pan', 'oil pan end'].includes(out[k]!.name)) out[k] = panBolts.reduce((c, b) => boreThrough(c, b).part, out[k]!);
+  // (its drain plug in the pan's floor, in the half of it away from the pickup's strainer: on a short engine the two had
+  // stood one on the other (fault D25))
+  const strX0 = Math.max(front - 0.126, panBack + 0.012);
+  out.push(bolt(d.diesel ? 'M16' : 'M14', 0.016, [panX + (strX0 > panX ? -0.3 : 0.3) * panL, panBot - 0.002, 0], [PI, 0, 0], 'oil drain plug'));
   // (a gerotor round the crank's nose: its inner rotor about 0.9 bore across, its outer ring round it, typical)
   const gm = (0.9 * B) / 11;
   out.push(group('oil pump', [P('oil pump body', { lathe: (() => { const w = 0.025, g = 0.0004, a = 0.2 * B, o = 0.65 * B, rr = 0.57 * B + g, h = 0.006 + g; return [[a, -w / 2], [o, -w / 2], [o, w / 2], [a, w / 2], [a, h], [rr, h], [rr, -h], [a, -h], [a, -w / 2]] as [number, number][]; })() }, [0, 0, 0], { rot: CYL_X, item: 'oil-pump-body', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast', says: 'its body and cover round the rotors, 0.4 mm clear of them (typical)' }), { ...toothed({ name: 'oil pump inner rotor', m: gm, z: 9, b: 0.012, bore: 0.42 * B, mat: 'steel-low', item: 'gerotor-inner' }), at: [0, 0, 0], rot: [0, PI / 2, 0] }, ringX('oil pump outer rotor', 0.45 * B + 0.002, 0.57 * B, 0.012, [0, 0, 0], { item: 'gerotor-outer', mat: 'steel-low', color: 0x6a6c70, finish: 'machined' })], { item: 'oil-pump', at: [front + 0.0125, 0, 0] }));
@@ -677,7 +716,7 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   const fr = Math.max(0.033, 0.45 * B), fh = Math.max(0.065, 0.85 * B), fz = Wc / 2 + 0.004, fSide = d.banked ? -1 : 1,
     // (and along it away from the middle, where a banked vee's exhaust crosses down that side)
     fX = d.banked ? -0.35 * len : -0.15 * len;
-  out.push(group('oil filter', [P('filter can', { cyl: [fr, fh] }, [0, fh / 2, 0], { shell: 0.0005, item: 'filter-can', mat: 'steel-low', color: 0x1a4a8a, finish: 'paint' }), P('filter element', { lathe: [[fr * 0.4, 0.004], [fr * 0.85, 0.004], [fr * 0.85, fh - 0.006], [fr * 0.4, fh - 0.006], [fr * 0.4, 0.004]] }, [0, 0, 0], { item: 'filter-element', mat: 'paper', color: 0xd8c890, fill: 0.45, says: 'pleated paper, about 0.45 of its ring (typical)' }), P('filter base plate', { lathe: [[0.01, 0], [fr * 0.9, 0], [fr * 0.9, 0.003], [0.01, 0.003], [0.01, 0]] }, [0, 0, 0], { item: 'filter-base', mat: 'steel-low', color: 0x8a8c90 }), P('filter gasket', { torus: [fr * 0.75, 0.0025] }, [0, -0.002, 0], { rot: [PI / 2, 0, 0], mat: 'nbr', color: 0x1a1a1a })], { item: 'oil-filter', ...(d.vee ? { at: [fX, ysk, fSide * (Wc / 2 + fr + 0.006)] as V3, rot: [PI, 0, 0] as V3 } : { at: [-0.15 * len, 0.1 * B, fz] as V3, rot: [PI / 2, 0, 0] as V3 }) }));
+  out.push(group('oil filter', [P('filter can', { lathe: [[fr * 0.9, 0], [fr, 0], [fr, fh], [0, fh], [0, fh - 0.0005], [fr - 0.0005, fh - 0.0005], [fr - 0.0005, 0.0035], [fr * 0.9, 0.0035], [fr * 0.9, 0]] }, [0, 0, 0], { item: 'filter-can', mat: 'steel-low', color: 0x1a4a8a, finish: 'paint', says: 'pressed from 0.5 mm steel (typical), open at its foot, its lip rolled over the base plate\'s rim: drawn as a closed can, it ran through its own base plate (fault D25)' }), P('filter element', { lathe: [[fr * 0.4, 0.004], [fr * 0.85, 0.004], [fr * 0.85, fh - 0.006], [fr * 0.4, fh - 0.006], [fr * 0.4, 0.004]] }, [0, 0, 0], { item: 'filter-element', mat: 'paper', color: 0xd8c890, fill: 0.45, says: 'pleated paper, about 0.45 of its ring (typical)' }), P('filter base plate', { lathe: [[0.01, 0], [fr * 0.9, 0], [fr * 0.9, 0.003], [0.01, 0.003], [0.01, 0]] }, [0, 0, 0], { item: 'filter-base', mat: 'steel-low', color: 0x8a8c90 }), P('filter gasket', { torus: [fr * 0.75, 0.0025] }, [0, -0.002, 0], { rot: [PI / 2, 0, 0], mat: 'nbr', color: 0x1a1a1a })], { item: 'oil-filter', ...(d.vee ? { at: [fX, ysk, fSide * (Wc / 2 + fr + 0.006)] as V3, rot: [PI, 0, 0] as V3 } : { at: [-0.15 * len, 0.1 * B, fz] as V3, rot: [PI / 2, 0, 0] as V3 }) }));
   if (d.vee) out.push(box('filter adapter', [2 * fr + 0.012, 0.008, 2 * fr + 0.012], [fX, ysk + 0.004, fSide * (Wc / 2 + fr + 0.006)], { item: 'filter-adapter', mat: 'al-a380', color: 0x9a9c9e, finish: 'cast', says: 'cast, its oil ways from the crankcase\'s side to the filter under it' }));
   // (its intake on the +z side: a runner from each port up to a plenum along the engine, its throttle at the plenum's
   // front; its injectors in the runners and their rail; a diesel's from its turbo's compressor)
