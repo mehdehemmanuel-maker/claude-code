@@ -1005,8 +1005,8 @@ describe('every domain, in one pass', () => {
     type Case = { case: number; what: string; expect: Record<string, number | string | number[]>; worked?: string; by?: string[]; waits?: string; sources?: { url: string; publisher: string }[] };
     const set = JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: Case[] }, design = readFileSync(join(root, 'plan/specs/01-interfaces/design.md'), 'utf8');
     const sec = design.slice(design.indexOf('## 4. How we will know'), design.indexOf('## 5.')), rows = sec.split('\n').filter((l) => /^\| [a-z]/.test(l) && !/^\| Case/.test(l)).map((l) => l.split('|')[1]!.trim());
-    expect(set.cases.map((c) => c.case), 'twelve cases').toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
-    expect(rows.length, 'the design\'s twelve rows').toBe(12); set.cases.forEach((c, k) => expect(c.what.startsWith(rows[k]!), `case ${c.case} is the design's row ${k + 1}: "${rows[k]}"`).toBe(true));
+    expect(set.cases.map((c) => c.case), 'the design\'s cases, in order').toEqual(rows.map((_, k) => k + 1));
+    expect(rows.length, 'the design\'s rows: its first twelve, then a pipe port and a cut-out (spec 01, I17)').toBe(14); set.cases.forEach((c, k) => expect(c.what.startsWith(rows[k]!), `case ${c.case} is the design's row ${k + 1}: "${rows[k]}"`).toBe(true));
     const tests = new Set([...readFileSync(join(root, 'tests/nexus/domains.test.ts'), 'utf8').matchAll(/^  it\('((?:[^'\\]|\\.)*)'/gm)].map((m) => m[1]!.replace(/\\'/g, "'")));
     const tasks = new Map((JSON.parse(readFileSync(join(root, 'plan/specs/01-interfaces/tasks.json'), 'utf8')) as { tasks: { id: string; status: string }[] }).tasks.map((t) => [`01.${t.id}`, t.status]));
     for (const c of set.cases) {

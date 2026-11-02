@@ -1,5 +1,5 @@
 {
-  "says": "The interface evaluation set (spec 01, design §4): each case's inputs and its expected numbers, worked out by hand from the sources of §2.3 (cases 1 to 5 and 7 to 10 committed with the code that runs them, so their order cannot be shown; cases 6, 11 and 12 before theirs) (ISO 273, DIN 974-1, ISO 4762 in threads.ts, ISO 2306, Bossard's engagement lengths, ISO 286-1's Table 1, NEMA ICS 16 in kinds/motion.ts, the insert maker's table); cases 6, 11 and 12 from SKF's catalogue, ISO 286-2, ISO 8734 and ISO 2338, DIN 6885-1 and ISO/R 773, each read by two readers apart. Each case names the tests that run it, or the task it waits on. Sizes in mm.",
+  "says": "The interface evaluation set (spec 01, design §4): each case's inputs and its expected numbers, worked out by hand from the sources of §2.3 (cases 1 to 5 and 7 to 10 committed with the code that runs them, so their order cannot be shown; cases 6, 11, 12, 13 and 14 before theirs) (ISO 273, DIN 974-1, ISO 4762 in threads.ts, ISO 2306, Bossard's engagement lengths, ISO 286-1's Table 1, NEMA ICS 16 in kinds/motion.ts, the insert maker's table); cases 6, 11 and 12 from SKF's catalogue, ISO 286-2, ISO 8734 and ISO 2338, DIN 6885-1 and ISO/R 773, each read by two readers apart. Each case names the tests that run it, or the task it waits on. Sizes in mm.",
   "cases": [
     {
       "case": 1,
@@ -496,6 +496,109 @@
         }
       ],
       "read": "2026-11-01, by two readers apart, every value agreeing but one cutter maker's N9 row (said)"
+    },
+    {
+      "case": 13,
+      "what": "a G 1/2 port (ISO 1179-1) in a 6061 aluminium block 30 mm thick",
+      "waits": "01.I17",
+      "host": {
+        "material": "al-6061",
+        "thickness": 30
+      },
+      "expect": {
+        "thread": "G1/2",
+        "major": 20.955,
+        "pitch": 1.814,
+        "minor": 18.631,
+        "tap_drill": 19.0,
+        "drill_depth_min": 19,
+        "thread_depth_min": 15,
+        "spot_face_min": 28,
+        "spot_face_depth_max": 2.5,
+        "chamfer": 21,
+        "chamfer_tol": [
+          0,
+          0.2
+        ],
+        "refused_below": 19
+      },
+      "worked": "ISO 228-1:2000 Table 1, G 1/2: 14 threads in 25.4 mm (pitch 1.814 mm), major 20.955 mm, minor 18.631 mm. A cutting tap's drill 19.0 mm (Newman Tools, Emuge, Trask). ISO 1179-1:2013 Table 1, G 1/2 port: the tap drill at least 19 mm deep (with a bottoming tap), full thread at least 15 mm, a 90° chamfer to 21 mm (+0.2), a spot face at least 28 mm across (type N; 29.6 for type W, which Parker gives as 34) no more than 2.5 mm below the surface. In a 30 mm block it fits; a block thinner than the drill's 19 mm is refused.",
+      "sources": [
+        {
+          "url": "https://cdn.standards.iteh.ai/samples/33777/842b7c5409454ceba69c7dad9c308be1/ISO-228-1-2000.pdf",
+          "publisher": "ISO 228-1:2000, Table 1 (sample via iTeh)"
+        },
+        {
+          "url": "https://cdn.standards.iteh.ai/samples/60250/561ffb56c93146bc84ccdccb047bf4bd/ISO-1179-1-2013.pdf",
+          "publisher": "ISO 1179-1:2013, Table 1 (sample via iTeh)"
+        },
+        {
+          "url": "https://www.parker.com/content/dam/Parker-com/Literature/Tube-Fittings-Division/4300_Catalog_Cover.pdf",
+          "publisher": "Parker Hannifin, Catalog 4300, ISO 1179-1 port table"
+        },
+        {
+          "url": "https://www.newmantools.com/taps/bsp.htm",
+          "publisher": "Newman Tools, BSP taps and drills"
+        }
+      ],
+      "read": "2026-11-01, by two readers apart, every value agreeing but the wide spot face (ISO 29.6 mm, Parker 34): the standard rules"
+    },
+    {
+      "case": 14,
+      "what": "a 22 mm push button (IEC 60947-5-1) in a 2 mm steel panel",
+      "waits": "01.I17",
+      "host": {
+        "material": "steel-low",
+        "thickness": 2
+      },
+      "expect": {
+        "hole": 22.3,
+        "hole_tol": [
+          0,
+          0.4
+        ],
+        "notch_width": 3.2,
+        "notch_width_tol": [
+          0,
+          0.2
+        ],
+        "across_notch": 24.1,
+        "across_notch_tol": [
+          0,
+          0.4
+        ],
+        "notch_depth": 1.8,
+        "corner_r_max": 0.8,
+        "panel": [
+          1,
+          6
+        ],
+        "spacing_min": [
+          30,
+          50
+        ],
+        "refused_panel": 7
+      },
+      "worked": "IEC 60947-5-1 (a D22 control device), its mounting hole 22.3 mm (+0.4/0) with an optional key recess 3.2 mm (+0.2/0) wide, the hole and recess 24.1 mm (+0.4/0) across (so the recess 1.8 mm past the hole), its corners at most 0.8 mm round; a panel 1 to 6 mm thick; centres at least 30 mm apart in a row and 50 between rows (the standard's preferred; makers give 30 × 40). Siemens 3SU1, Schneider XB4 and Eaton M22 agree. A 2 mm steel panel takes it; a 7 mm one is refused.",
+      "sources": [
+        {
+          "url": "https://law.resource.org/pub/in/bis/S05/is.iec.60947.5.1.2003.pdf",
+          "publisher": "IS/IEC 60947-5-1 (Bureau of Indian Standards, identical)"
+        },
+        {
+          "url": "https://cache.industry.siemens.com/dl/files/462/107542462/att_893544/v1/manual_SIRIUS_ACT_3SU1_en-US.pdf",
+          "publisher": "Siemens, SIRIUS ACT 3SU1 system manual"
+        },
+        {
+          "url": "https://iportal2.schneider-electric.com/Contents/docs/SQD-XB4BA42.PDF",
+          "publisher": "Schneider Electric, Harmony XB4 data sheet"
+        },
+        {
+          "url": "https://docs.rs-online.com/5719/A700000007339188.pdf",
+          "publisher": "Eaton M22 (via RS Components)"
+        }
+      ],
+      "read": "2026-11-01, by two readers apart, every value agreeing; the notch optional (cut here, as for a key washer or locking device)"
     }
   ]
 }

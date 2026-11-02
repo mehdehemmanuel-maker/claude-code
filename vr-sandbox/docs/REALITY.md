@@ -2363,3 +2363,15 @@ was never taken out and a drill's point counted as full depth: an M8 counterbore
 1272.3 mm³ where its profile holds 2222.4 mm³, 43 % short (one probe run). A turned cut now takes its profile's volume
 of revolution, frustum by frustum, as far as it runs inside the part. The test "a counterbore cut as a solid, its volume
 its profile's, its STEP the same" now holds the mass to the profile too. Checked with `npm run gate`.
+
+## 2026-11-01: a pipe port and a panel cut-out in the evaluation set, before their code (spec 01, I15, I17)
+
+I17 asks for a pipe thread and a cut-out by the same model. Their numbers went into the set first, so the history shows
+them before any code that makes them (what I15's verdict found missing for the earlier cases): case 13, a G 1/2 port in a
+30 mm 6061 block (ISO 228-1: pitch 1.814, major 20.955, minor 18.631 mm; a cutting tap's drill 19.0 mm; ISO 1179-1: drilled
+at least 19 deep, threaded at least 15, a spot face at least 28 across and no more than 2.5 deep, a chamfer to 21), and case
+14, a 22 mm push button in a 2 mm steel panel (IEC 60947-5-1: a 22.3 mm hole, +0.4/0, with its 3.2 mm key recess to 24.1
+across, corners at most 0.8 mm round; a panel 1 to 6 mm; centres 30 apart in a row, 50 between rows). Each read by two
+readers apart from the standards' own sample pages and makers' sheets (Parker, Newman; Siemens, Schneider, Eaton), every
+value agreeing but the wide spot face (ISO 29.6 mm, Parker 34: the standard rules). Both wait on 01.I17. Checked with
+`npm run gate` (the test "the interfaces evaluation set…", now the design's fourteen rows).

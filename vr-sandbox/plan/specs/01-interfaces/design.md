@@ -216,6 +216,8 @@ Each case gives its inputs and the numbers expected, from the sources in §2.3, 
 | a box made 10 mm taller after an imprint on its top | the imprint stays on the top face |
 | a dowel 6 m6 into two plates | H7 holes (derived); a fixed joint |
 | a key 8 × 7 in a 30 mm shaft and its hub | keyways from the key's standard |
+| a G 1/2 port (ISO 1179-1) in a 6061 aluminium block 30 mm thick | drilled 19.0 at least 19 deep, threaded at least 15, spot face at least 28 across (ISO 228-1, ISO 1179-1) |
+| a 22 mm push button (IEC 60947-5-1) in a 2 mm steel panel | a 22.3 mm hole with its 3.2 mm key recess to 24.1 across; panel 1 to 6 mm |
 
 Scored on placement as well as shape (BenchCAD 2.0's lesson). Later, licences permitting, the public assembly datasets
 (AutoMate's Onshape mates, Fusion 360 Gallery's joints) as a larger set for the joint finder (`QUESTIONS.md` R4).
