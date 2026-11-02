@@ -247,24 +247,24 @@ function surfGeometry(pt: Patch): THREE.BufferGeometry {
 const drilled = new Map<string, THREE.BufferGeometry>(), csg = new Evaluator(), UP = new THREE.Vector3(0, 1, 0);
 csg.attributes = ['position', 'normal']; csg.useGroups = false;
 const clean = (g: THREE.BufferGeometry) => { const h = g.index ? g.toNonIndexed() : g.clone(); for (const k of Object.keys(h.attributes)) if (k !== 'position' && k !== 'normal') h.deleteAttribute(k); if (!h.getAttribute('normal')) h.computeVertexNormals(); h.clearGroups(); return h; };
-/** How many facets a round of radius r (m) is drawn with: enough that a facet's chord lies within 0.05 mm of the true
- *  circle (n = ⌈π / acos(1 − e/r)⌉, e = 0.05 mm: a drawing choice, half a pixel where a 100 mm part fills 1000 px),
- *  at least 24 and at most 96 (a cost choice), fewer at a coarser detail (lod.ts). An 80 mm boss gets 89 (a 0.05 mm
- *  sag) where 24 sagged 0.684 mm (fault D16). */
+/** How many facets a round of radius r (m) is drawn with: enough that a facet's chord lies within 0.02 mm of the true
+ *  circle (n = ⌈π / acos(1 − e/r)⌉, e = 0.02 mm: a drawing choice; 0.05 mm still showed at a part's outline framed
+ *  close, two blind readers in four runs said "faceted"), at least 24 and at most 96 (a cost choice), fewer at a coarser
+ *  detail (lod.ts). An 80 mm boss gets 96 (a 0.043 mm sag) where 24 sagged 0.684 mm (fault D16). */
 /* (only where it is drawn: the clash rules (make/rules.ts) and the fields read the same leaves with the 24 facets they had,
- *  as finer ones cost the engine board's checks five times their time (49.7 s to 263 s, measured 2026-11-02): fault D28,
+ *  as finer ones cost the engine board's checks five times their time (49.7 s to 263 s, measured 2026-11-02): fault D29,
  *  the checks' own sag, is 10.T24's to answer with an exact test, not the view's) */
-export function roundSegments(r: number): number { const e = 5e-5, n = r > e ? Math.ceil(Math.PI / Math.acos(1 - e / r)) : 24; return divisions(Math.max(24, Math.min(96, n)), 24); }
+export function roundSegments(r: number): number { const e = 2e-5, n = r > e ? Math.ceil(Math.PI / Math.acos(1 - e / r)) : 24; return divisions(Math.max(24, Math.min(96, n)), 24); }
 /** The solid a cut takes away, placed in its piece's frame (what `drill` subtracts, and what a preview draws before
  *  anything is cut: spec 01, I16): a cylinder from just outside its face to its depth inside, its axis along the hole; a
  *  turned cut its profile turned about that axis, from just outside its face; a cut of any section (a keyway, a panel's
  *  cut-out) its outline pushed in along its axis from just outside its face, turned so its x lies along its u, run on a
  *  tenth of a millimetre past its depth where it goes `through` (so no skin is left on the far face). */
-export function cutSolid(c: Cut, through = false, drawn = true): THREE.BufferGeometry {
+export function cutSolid(c: Cut, through = false, drawn = true, segments?: number): THREE.BufferGeometry {
   if (c.sect) { const f = cutFrame(c), g2 = new THREE.ExtrudeGeometry(new THREE.Shape(c.sect.map(([x, y]) => new THREE.Vector2(x, y))), { depth: c.depth + (through ? 2e-4 : 1e-4), bevelEnabled: false, curveSegments: 1 }); g2.translate(0, 0, -1e-4);
     const g = clean(g2); g.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(...f.u), new THREE.Vector3(...f.w), new THREE.Vector3(...f.d)).setPosition(...c.at)); return g; }
   const dir = new THREE.Vector3(...c.dir).normalize(), turned = c.prof ? [[0, -1e-4], [c.prof[0]![0], -1e-4], ...c.prof, [0, c.prof[c.prof.length - 1]![1]]].map(([a, y]) => new THREE.Vector2(a!, y!)) : null;
-  const n = c.n ?? (drawn ? roundSegments(Math.max(c.r, ...(c.prof ?? []).map((p) => p[0]))) : 24), g = clean(turned ? new THREE.LatheGeometry(turned, n) : new THREE.CylinderGeometry(c.r, c.r, c.depth + 2e-4, n));
+  const n = segments ?? c.n ?? (drawn ? roundSegments(Math.max(c.r, ...(c.prof ?? []).map((p) => p[0]))) : 24), g = clean(turned ? new THREE.LatheGeometry(turned, n) : new THREE.CylinderGeometry(c.r, c.r, c.depth + 2e-4, n));
   const at = new THREE.Vector3(...c.at); if (!turned) at.addScaledVector(dir, c.depth / 2 - 1e-4);
   g.applyMatrix4(new THREE.Matrix4().compose(at, new THREE.Quaternion().setFromUnitVectors(UP, dir), new THREE.Vector3(1, 1, 1))); return g;
 }

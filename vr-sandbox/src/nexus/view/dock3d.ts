@@ -286,7 +286,8 @@ export class PasteSession implements PasteHooks {
     const M = new THREE.Matrix4().fromArray(im.m.length === 16 ? im.m : new THREE.Matrix4().toArray()), col = (c: string) => new THREE.Color(c);
     const solid = (g: THREE.BufferGeometry, c: string, fill: number, top: boolean) => { const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col(c), transparent: true, opacity: fill, depthTest: !top, depthWrite: false, side: THREE.DoubleSide }));
       const edges = new THREE.LineSegments(new THREE.EdgesGeometry(g, 30), new THREE.LineBasicMaterial({ color: col(c), transparent: true, opacity: 0.9, depthTest: !top })); mesh.renderOrder = edges.renderOrder = 30; this.preview.add(mesh, edges); };
-    for (const c of im.cuts) { const g = cutSolid(c); g.applyMatrix4(M); solid(g, ROLE_COLOUR.remove, 0.45, true); this.counts.remove++; }
+    // (a preview's cut drawn finely round, 96 facets: it is framed close, and it is one solid, not a city's thousands)
+    for (const c of im.cuts) { const g = cutSolid(c, false, true, 96); g.applyMatrix4(M); solid(g, ROLE_COLOUR.remove, 0.45, true); this.counts.remove++; }
     for (const k of im.keep) { if (!k.size) continue; const g = new THREE.BoxGeometry(...k.size); g.translate(...k.at); g.applyMatrix4(M); solid(g, ROLE_COLOUR.keep, 0.18, false); this.counts.keep++; }
     for (const r of im.contact) { const g = new THREE.RingGeometry(Math.max(1e-6, r.r0), r.r, 64); g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...r.n))); g.translate(...r.at); g.applyMatrix4(M);
       const ring = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col(ROLE_COLOUR.contact), transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthTest: false, depthWrite: false })); ring.renderOrder = 31; this.preview.add(ring); this.counts.contact++; }
@@ -302,7 +303,7 @@ export class PasteSession implements PasteHooks {
 }
 
 /** The view's backdrop and its grid's lines: drawing choices (fault D16), the grid's just lighter than the backdrop. */
-const BACKDROP = 0x1b212b, GRID_MINOR = 0x354152, GRID_MAJOR = 0x4a5a70;
+const BACKDROP = 0x222935, GRID_MINOR = 0x354152, GRID_MAJOR = 0x4a5a70;
 export class Dock3D {
   readonly view = new SpaceView();
   private readonly renderer: THREE.WebGLRenderer;
