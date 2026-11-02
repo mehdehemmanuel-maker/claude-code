@@ -3,7 +3,7 @@
 Task in hand: 01.I17, built (a bearing's seats, a dowel hole, a key's keyways, a pipe port and a panel cut-out, each a
 row of data read by one general path); waiting on its verdict
 Spec in hand: spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: c933d42 (2026-11-02)
+Last commit the gate passed: 2be7424 (2026-11-02)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -16,8 +16,8 @@ Last commit the gate passed: c933d42 (2026-11-02)
 - Verdicts in: 00.S1, S2, S3, S10, 10.T3, 01.I1, 01.I3 to I14, and 04.P10 pass (S10 on its thirteenth judging).
 - 01.I15 failed its first judging: its check asks the set before I5's code, and the history shows most cases committed with
   their code. All twelve cases are there, checked against their sources, and run in the gate.
-- 01.I17 built and gated (`npm run gate`), not yet judged. Faults found building it, open in plan/DEFECTS.md: the worst,
-  D24, the checker blind to a bar run through a round shaft (under 10.T24; it should come before I16).
+- 01.I17 built and gated (`npm run gate`), its verdict being run. The worst fault found building it, D24 (the clash
+  checker blind to a bar run into a round shaft), mended under 10.T24; the engine faults it then showed mended too.
 - Fault D16 open: the board's view of what it makes, as a blind reader saw it (a dark part on the dark view, the ground grid not on every board).
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).

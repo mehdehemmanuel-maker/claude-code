@@ -2399,3 +2399,17 @@ a bore is re-applied from across the bore (from far out the ray met the hub's ou
 outline (its reach set against the ray along each direction) refused a whole slot on a round shaft and was replaced by a
 ray toward each point of the outline. Six faults found and left open: D19 to D24 in `plan/DEFECTS.md`, the worst the
 interference checker not seeing a bar run through a round shaft (D24, under 10.T24). Checked with `npm run gate`.
+
+## 2026-11-02: the clash rule sees a bar run into a round shaft (fault D24; spec 10, T24)
+
+Writing I17's key test found the interference rule blind to a key in a shaft with no keyway. Two causes, both found by
+probes. The triangle test's measure of how deep one piece runs into another, which tells passing into it from resting on
+it, came out NaN wherever the drawn cylinder has a triangle with no area (48 of its 528), so a bar 3 mm into a shaft read as
+resting; the least distance now passes over those. And a piece whose box lies wholly within another's (a key inside a hub
+ring's box) was never tried at all; it is now tried for surfaces crossing. Seen at last, the gate's one-cylinder engine
+turned over showed six clashes that had been there all along, each mended in the engine builder: its rings drawn through a
+piston with no grooves (grooves turned now, with typical side and back clearances), its flywheel's bolts screwed into a
+crank flange with no holes and not turning with it, and its pan's gasket strip and a bolt across the crank where it passes
+the pan's end. The last was in all four machines' engines too: each loses the pan bolts that ran through its crank (the
+test "the fastener for a stack: case 8 chooses its bolt; the machines' fasteners unchanged" holds the new count). A piece
+sunk wholly inside another, crossing no surface, is still not seen (fault D15). Checked with `npm run gate`.

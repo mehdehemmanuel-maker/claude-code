@@ -10,7 +10,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | What | Count |
 | --- | --- |
 | Tasks in the specs | 130: 24 passing (by the evaluator), 7 claimed by the builder and not yet judged, the rest failing |
-| Faults found in the code | 24 (13 fixed) |
+| Faults found in the code | 24 (14 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
@@ -67,7 +67,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | D21 | The 6205's seat fillet is held at SKF's ra at most 1.0 mm and drawn sharp; the ring's own chamfer (SKF's r1,2 at least) is not read, so whether a sharp corner clears it is not checked | `src/nexus/interfaces.ts` (SEAT) | open | 01.I17 |
 | D22 | The 22 mm push button's family says its cut-out is 22.5 mm; IEC 60947-5-1 and three makers give 22.3 (+0.4): the row reads 22.3, the family's text is not mended | `src/nexus/kinds/more.ts` (pushbutton22's std) | open | 01.I17 |
 | D23 | A section cut's mass takes its outline's prism whole, so on a round host it counts the air in it: a 40 × 8 keyway on a 30 mm shaft by about 53 mm³, the hub's by about 117 mm³ (both measured against the exact solid in the test `the rest of R18 by rows: imprinted, cut, and found by their own interfaces`) | `src/nexus/mass.ts` | open | 01.I17 |
-| D24 | The interference checker does not see a bar crossing a round shaft's drawn surface (a cylinder's or a turned part's: `meshClashes` says no crossing where the same bar crossing a box is one), and never tries a bar inside a hub ring's box (an oriented box within another's is skipped unless seated); found 2026-11-02 writing I17's key test | `src/nexus/make/critic.ts` (meshClashes), `src/nexus/make/space.ts` (contacts) | open | 10.T24 |
+| D24 | The interference checker did not see a bar crossing a round shaft's drawn surface (a cylinder's or a turned part's), and never tried a bar inside a hub ring's box; found 2026-11-02 writing I17's key test | `src/nexus/make/critic.ts` (meshClashes), `src/nexus/make/rules.ts` (candidates) | fixed 2026-11-02: the depth that tells through from resting was NaN on a drawn cylinder's area-less triangles (48 of 528), so a bar 3 mm into a shaft read as resting; and a piece whose box lies within another's is now tried for crossing surfaces. It found six hidden clashes in the gate's one-cylinder engine, mended: rings drawn through a piston with no grooves, flywheel bolts into a crank flange with no holes (and not turning with it), the pan's gasket and a bolt across the crank at its ends (the same in all four machines). A piece sunk wholly inside another, crossing no surface, is still not seen (D15) | 10.T24 |
 
 ## Findings by theme (numbers are rows of `research/00-synthesis.md`)
 
@@ -244,7 +244,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | T21 | GRADE-shaped certainty per use, with indirectness computed from metadata (another alloy, population, temperature); acceptance criteria frozen … | T3, T5 | failing |
 | T22 | Base rates on every alarm: prior, sensitivity, specificity, shown as natural frequencies | T15 | failing |
 | T23 | The kernel (`src/kernel/`, research 31): exact rationals and outward-rounded intervals; refuses when it cannot decide; imports nothing outside … | T18 | claimed, in part, 2026-11-01: the envelope and the kinds dims, witness and judged, exact and closed, with a second checker in Python (decision 0013); the other ten kinds not built |
-| T24 | Interference as a gate: no exemption by name; a fastener excused only where its interface says it sits (its hole, its thread engagement); the 0.5 … | T23, 01 | claimed, in part, 2026-11-01: no piece excused by its name, no depth skipped; the gate's own builds clean (the engine's rod bolts given holes); the Cascadia and the Rancher show the clashes it hid (fault D14) |
+| T24 | Interference as a gate: no exemption by name; a fastener excused only where its interface says it sits (its hole, its thread engagement); the 0.5 … | T23, 01 | claimed, in part, 2026-11-02: no piece excused by its name, no depth skipped; a bar into a round shaft and a piece in another's box seen (fault D24 mended); the gate's own builds clean; the Cascadia and the Rancher show the clashes it hid (fault D14) |
 
 ### 11-living-world (14)
 

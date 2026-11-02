@@ -43,7 +43,8 @@
   "src/data/stock.json",
   "src/nexus/built.ts",
   "src/nexus/fittings.ts",
-  "src/nexus/mate.ts"
+  "src/nexus/mate.ts",
+  "src/nexus/make/critic.ts"
  ],
  "01.I5": [
   "src/nexus/interfaces.ts",

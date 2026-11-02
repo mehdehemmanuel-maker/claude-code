@@ -403,7 +403,9 @@ function segTri(p: CV3, q: CV3, T: Tris, t: number): CV3 | null {
   const tt = f * (e2[0]! * qq[0]! + e2[1]! * qq[1]! + e2[2]! * qq[2]!); if (tt <= 1e-6 || tt >= 1 - 1e-6) return null;
   return [p[0] + d[0]! * tt, p[1] + d[1]! * tt, p[2] + d[2]! * tt];
 }
-/** The least distance from a point to triangle t of T (Ericson, Real-Time Collision Detection 5.1.5). */
+/** The least distance from a point to triangle t of T (Ericson, Real-Time Collision Detection 5.1.5); NaN for a triangle with
+ *  no area (a drawn cylinder has 48 such in 528), which a least distance passes over: Math.min with it is NaN, and how deep
+ *  a bar ran into a round shaft read as nothing, so it was taken as resting on it (fault D24). */
 function pointTri(p: CV3, T: Tris, t: number): number {
   const v = T.v, o = t * 9, a: CV3 = [v[o]!, v[o + 1]!, v[o + 2]!], b: CV3 = [v[o + 3]!, v[o + 4]!, v[o + 5]!], c: CV3 = [v[o + 6]!, v[o + 7]!, v[o + 8]!];
   const sub3 = (x: CV3, y: CV3): CV3 => [x[0] - y[0], x[1] - y[1], x[2] - y[2]], dot3 = (x: CV3, y: CV3) => x[0] * y[0] + x[1] * y[1] + x[2] * y[2], dist = (x: CV3) => Math.hypot(p[0] - x[0], p[1] - x[1], p[2] - x[2]);
@@ -505,7 +507,7 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; /** the band
         // (inside by parity, a ray from the corner crossing the solid's surface an odd number of times, so the way its
         // triangles are wound cannot mislead it; then how far in, to its nearest face)
         const inside = (p: CV3, Q: Tris) => { const far: CV3 = [p[0] + 37.1, p[1] + 41.3, p[2] + 29.7]; let k = 0; for (let q = 0; q < Q.n; q++) if (segTri(p, far, Q, q)) k++; return k % 2 === 1; };
-        const probe = (P: Tris, ts: Set<number>, Q: Tris) => { const seenV = new Set<string>(); for (const t of ts) for (let k = 0; k < 3; k++) { const p: CV3 = [P.v[t * 9 + k * 3]!, P.v[t * 9 + k * 3 + 1]!, P.v[t * 9 + k * 3 + 2]!], key = p.join(','); if (seenV.has(key)) continue; seenV.add(key); if (Q.n > 40000 || !inside(p, Q)) continue; let best = Infinity; for (const q of Q.n <= 6000 ? Array.from({ length: Q.n }, (_, i2) => i2) : qs(Q)) best = Math.min(best, pointTri(p, Q, q)); if (best < 0.5 && best > depth!) depth = best; } };
+        const probe = (P: Tris, ts: Set<number>, Q: Tris) => { const seenV = new Set<string>(); for (const t of ts) for (let k = 0; k < 3; k++) { const p: CV3 = [P.v[t * 9 + k * 3]!, P.v[t * 9 + k * 3 + 1]!, P.v[t * 9 + k * 3 + 2]!], key = p.join(','); if (seenV.has(key)) continue; seenV.add(key); if (Q.n > 40000 || !inside(p, Q)) continue; let best = Infinity; for (const q of Q.n <= 6000 ? Array.from({ length: Q.n }, (_, i2) => i2) : qs(Q)) { const dq = pointTri(p, Q, q); if (dq < best) best = dq; }; if (best < 0.5 && best > depth!) depth = best; } };
         // (the other's triangles met in this meeting, and those near them: enough to find the nearest face to each corner)
         const qs = (Q: Tris) => (Q === A ? [...new Set(hs.map((x) => x.ta))] : [...new Set(hs.map((x) => x.tb))]);
         if (B.closed) probe(A, new Set(hs.map((x) => x.ta)), B); if (A.closed) probe(B, new Set(hs.map((x) => x.tb)), A);
@@ -515,7 +517,7 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; /** the band
         let tried = 0;
         if (o.edge === 'scaled' && kind === 'through' && depth! < 0.002) for (const hh of hs) { if (hh.k !== 0 || !hh.e) continue; if (++tried > 12) break; const Q = hh.e[2] === 0 ? B : A; if (!Q.closed || Q.n > 40000) continue;
           for (const end of [hh.e[0], hh.e[1]]) { const dx = end[0] - hh.p[0], dy = end[1] - hh.p[1], dz = end[2] - hh.p[2], L = Math.hypot(dx, dy, dz); if (L < 1e-9) continue;
-            for (const st of [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016]) { if (st >= L) break; const p: CV3 = [hh.p[0] + (dx / L) * st, hh.p[1] + (dy / L) * st, hh.p[2] + (dz / L) * st]; if (!inside(p, Q)) continue; let best = Infinity; for (const q of Q.n <= 6000 ? Array.from({ length: Q.n }, (_, i2) => i2) : qs(Q)) best = Math.min(best, pointTri(p, Q, q)); if (best < 0.5 && best > depth!) depth = best; } }
+            for (const st of [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016]) { if (st >= L) break; const p: CV3 = [hh.p[0] + (dx / L) * st, hh.p[1] + (dy / L) * st, hh.p[2] + (dz / L) * st]; if (!inside(p, Q)) continue; let best = Infinity; for (const q of Q.n <= 6000 ? Array.from({ length: Q.n }, (_, i2) => i2) : qs(Q)) { const dq = pointTri(p, Q, q); if (dq < best) best = dq; }; if (best < 0.5 && best > depth!) depth = best; } }
           if (depth! >= 0.002) break; }
       }
       const nl = Math.hypot(...ns) || 1, kin = kinOf(meshes[i]!, meshes[j]!), kind2 = kind === 'through' && depth !== undefined && depth < 0.002 ? 'touch' : kind;

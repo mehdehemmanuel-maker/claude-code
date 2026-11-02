@@ -830,7 +830,8 @@ describe('every domain, in one pass', () => {
   });
   // (the fastener for a stack (spec 01, I10): evaluation case 8 chooses its bolt; a tapped and an insert stack each the
   // catalogue's screw, said why; mate() lays its fasteners through it; a bolt's bore is ISO 273's; and the four machines'
-  // fasteners as they were before (tests/nexus/fasteners.before.json, taken at a8ecae3, before the change))
+  // fasteners as they were before (tests/nexus/fasteners.before.json, taken at a8ecae3, before the change; less, from
+  // 2026-11-02, the oil pan bolts that were drawn through the crank where it passes the pan's ends: fault D24))
   it('the fastener for a stack: case 8 chooses its bolt; the machines\' fasteners unchanged', () => {
     const c8 = (JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; fastener?: { thread: string; plies: number[]; how: 'through'; expect: Record<string, unknown> } }[] }).cases.find((c) => c.case === 8)!.fastener!;
     const f = fastenerFor({ thread: c8.thread, plies: c8.plies.map((x) => x / 1000), how: c8.how }) as Fastener;
@@ -1189,12 +1190,12 @@ describe('every domain, in one pass', () => {
     for (const [host, cut, lo, hi] of [[shaft, KS.part, 46.0, 57.5], [hub, KH.part, 0, 1.1 * 116]] as [Part, Part, number, number][]) {
       const rho = 7850, byMass = ((massOf(host) - massOf(cut)) / rho) * 1e9, bySolid = ((await vol(host.parts![0]!)) - (await vol(cut.parts![0]!))) * 1e9;
       expect(byMass - bySolid, `${host.name}: the mass takes ${byMass.toFixed(1)} mm³, the solid ${bySolid.toFixed(1)}`).toBeGreaterThanOrEqual(lo); expect(byMass - bySolid).toBeLessThanOrEqual(hi); }
-    // (a key in both keyways is not a clash; with neither cut it is one, but the checker does not see a bar crossing a round
-    // shaft's drawn surface, nor try one inside a hub's box: while it does not, fault D24 stays open, said)
+    // (a key in both keyways is not a clash; with neither cut it is, both ways (the checker did not see a bar crossing a round
+    // shaft's drawn surface, nor try one inside a hub's box, until fault D24 was mended))
     const key: Part = { name: 'key 8x7x32', item: 'key', shape: { box: [0.007, 0.032, 0.0079] }, at: [0.0145, 0, 0], mat: 'steel-alloy' };
     const clash = (s: Part, h: Part) => rulesOf({ name: 'keyed', parts: [s.parts![0]!, h.parts![0]!, key] }).findings.filter((f) => f.rule === 'interference' && (f.a.includes('key') || f.b.includes('key'))).map((f) => `${f.a} × ${f.b}`);
     expect(clash(KS.part, KH.part), 'the key in its keyways').toEqual([]);
-    if (!clash(shaft, hub).length) expect(readFileSync(join(root, 'plan/DEFECTS.md'), 'utf8'), 'a key in an uncut shaft and hub not seen: fault D24 open').toMatch(/^\| D24 \|.*\| open \|/m);
+    expect(clash(shaft, hub).sort(), 'a key with no keyways runs into the shaft and the hub').toEqual(['hub × key 8x7x32', 'shaft × key 8x7x32']);
     // (the panel's cut-out: its recess (the middle of its end, the farthest of its points) toward +w (n × u); a second refused 25 mm along u (30 asked) and 25 along w (50))
     const pc = P.part.parts![0]!.cuts![0]!, f = cutFrame(pc), ends = [...pc.sect!].sort((a, b) => Math.hypot(...b) - Math.hypot(...a)).slice(0, 2), far = [(ends[0]![0] + ends[1]![0]) / 2, (ends[0]![1] + ends[1]![1]) / 2] as [number, number], toward = f.u.map((x, i) => x * far[0] + f.w[i]! * far[1]), w = [P.im.frame.n[1] * P.im.frame.u[2] - P.im.frame.n[2] * P.im.frame.u[1], P.im.frame.n[2] * P.im.frame.u[0] - P.im.frame.n[0] * P.im.frame.u[2], P.im.frame.n[0] * P.im.frame.u[1] - P.im.frame.n[1] * P.im.frame.u[0]];
     expect(toward.reduce((s, x, i) => s + x * w[i]!, 0) / Math.hypot(...toward), 'the recess toward +w').toBeGreaterThan(0.999);

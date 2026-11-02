@@ -30,6 +30,7 @@ import type { Part, V3 } from './kits';
 import { chainPath, chainRun, coil, housing, mouldedChip, ringClip, toothed, turned, wound } from './makers';
 import { boundsOfAll, frame, partOf } from './assembly';
 import { prismVolume } from './form';
+import { METRIC } from './threads';
 import { use } from './components';
 import { massOf } from './mass';
 import { CHAINS } from './families';
@@ -188,10 +189,15 @@ export function pistonAssembly(s: EngineSpec, d = engineDims(s)): Part {
   // (each boss round its pin from the rod's side out to where it meets the skirt's inside: wholly within the piston)
   const bR = Math.min(pinD * 0.95, pinD / 2 + 0.1 * B), bx0 = d.rodW * 0.45, bx1 = Math.max(bx0 + 0.002, Math.sqrt(Math.max(0, (ri - 0.001) ** 2 - bR * bR)));
   const boss = (sd: number) => ringX('pin boss', pinD / 2, bR, bx1 - bx0, [sd * (bx0 + (bx1 - bx0) / 2), 0, 0], { mat, color: 0xb8bcc0, finish: 'cast', one: true });
+  // (its rings each in a groove turned into its wall, 0.05 mm clear of the ring on each side and 0.3 mm behind it (typical
+  // side and back clearances); drawn through a plain wall, each ring ran into the piston, which the clash rule did not see
+  // on a round part until fault D24 was mended)
+  const RINGS: [number, number, string][] = [[0.06, 0.012, 'top ring'], [0.11, 0.013, 'second ring'], [0.16, 0.025, 'oil ring']], rg = ro - 0.045 * B - 0.0003;
+  const grooves = [...RINGS].sort((a, b) => b[0] - a[0]).flatMap(([y, h]): [number, number][] => { const c = CH - y * B, lo = c - (h * B) / 2 - 0.00005, hi = c + (h * B) / 2 + 0.00005; return [[ro, lo], [rg, lo], [rg, hi], [ro, hi]]; });
   const piston = group('piston', [
-    P('piston crown and skirt', { lathe: [[ri, -skirt], [ro, -skirt], [ro, CH], [0, CH], [0, CH - crown], [ri, CH - crown], [ri, -skirt]] }, [0, 0, 0], { mat, color: 0xb8bcc0, finish: 'cast', one: true, says: `${(B * 1000).toFixed(1)} mm across, ${((CH + skirt) * 1000).toFixed(0)} mm tall, its crown ${(crown * 1000).toFixed(0)} mm thick` }),
+    P('piston crown and skirt', { lathe: [[ri, -skirt], [ro, -skirt], ...grooves, [ro, CH], [0, CH], [0, CH - crown], [ri, CH - crown], [ri, -skirt]] }, [0, 0, 0], { mat, color: 0xb8bcc0, finish: 'cast', one: true, says: `${(B * 1000).toFixed(1)} mm across, ${((CH + skirt) * 1000).toFixed(0)} mm tall, its crown ${(crown * 1000).toFixed(0)} mm thick` }),
     boss(-1), boss(1)], { item: 'piston', mat, says: d.diesel ? 'a forged steel piston, its bowl in its crown (typical of a heavy diesel\'s)' : 'a cast aluminium piston' });
-  const rings = [[0.06, 0.012, 'top ring'], [0.11, 0.013, 'second ring'], [0.16, 0.025, 'oil ring']].map(([y, h, nm]) => P(nm as string, { lathe: [[ro - 0.045 * B, -(h as number) * B / 2], [ro + 0.0001, -(h as number) * B / 2], [ro + 0.0001, (h as number) * B / 2], [ro - 0.045 * B, (h as number) * B / 2], [ro - 0.045 * B, -(h as number) * B / 2]] }, [0, CH - (y as number) * B, 0], { item: 'piston-ring', mat: 'cast-iron', color: 0x4a4c50, finish: 'machined' }));
+  const rings = RINGS.map(([y, h, nm]) => P(nm as string, { lathe: [[ro - 0.045 * B, -(h as number) * B / 2], [ro + 0.0001, -(h as number) * B / 2], [ro + 0.0001, (h as number) * B / 2], [ro - 0.045 * B, (h as number) * B / 2], [ro - 0.045 * B, -(h as number) * B / 2]] }, [0, CH - (y as number) * B, 0], { item: 'piston-ring', mat: 'cast-iron', color: 0x4a4c50, finish: 'machined' }));
   const pinL = 2 * ri - 0.002;
   const pin = turned({ name: 'wrist pin', steps: [[pinD / 2, pinL]], bore: pinD * 0.28, mat: 'steel-alloy', color: 0xc8ccd2, item: 'wrist-pin', at: [-pinL / 2, 0, 0], rot: ALONG_X, finish: 'ground' });
   const clips = [-1, 1].map((sd) => ({ ...ringClip({ name: 'wrist pin clip', ri: pinD / 2 - 0.0005, w: 0.0012 + 0.01 * B, t: 0.001 + 0.004 * B, item: 'wrist-pin-clip' }), at: [sd * (pinL / 2 + 0.001), 0, 0] as V3, rot: [0, PI / 2, 0] as V3 }));
@@ -237,7 +243,10 @@ export function crankshaft(s: EngineSpec, d = engineDims(s)): Part {
   }
   const front = Math.max(...mains) + wm / 2, back = Math.min(...mains) - wm / 2;
   parts.push(P('crank nose', { cyl: [0.2 * B, d.noseL] }, [front + d.noseL / 2, 0, 0], { ...forged, rot: CYL_X }));
-  parts.push(P('crank flange', { cyl: [0.5 * B, 0.12 * B] }, [back - 0.06 * B, 0, 0], { ...forged, rot: CYL_X }));
+  // (its flange tapped for the flywheel's six bolts on a circle 0.3 bore round (typical), each its thread's tapping drill,
+  // d − P (ISO 2306's rule): the bolts were drawn into a flange with no holes, unseen until fault D24 was mended)
+  const fb = threadFor(B), tapR = (Number(fb.slice(1)) - (METRIC[fb]?.p ?? 0.15 * Number(fb.slice(1)))) / 2000;
+  parts.push(P('crank flange', { cyl: [0.5 * B, 0.12 * B] }, [back - 0.06 * B, 0, 0], { ...forged, rot: CYL_X, cuts: Array.from({ length: 6 }, (_, k) => ({ r: tapR, depth: 0.12 * B, at: [0.3 * B * Math.cos((k * PI) / 3), 0.06 * B, 0.3 * B * Math.sin((k * PI) / 3)] as V3, dir: [0, -1, 0] as V3 })) }));
   return group('crankshaft', parts, { item: 'crankshaft', mat: 'steel-alloy', says: `forged in one, ${throws.length} throw${throws.length > 1 ? 's' : ''} of ${(r * 1000).toFixed(1)} mm` });
 }
 
@@ -635,7 +644,8 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   const fw: Part[] = [plate ? ringX('drive plate', 0.12 * B, fwR, fwT, [0, 0, 0], { item: 'drive-plate', mat: 'steel-low', color: 0x6a6c70, finish: 'machined', fill: 0.85, says: 'pressed from 4 mm steel (typical), its torque converter bolted to its rim: an automatic\'s or a CVT\'s, with no clutch' }) : ringX('flywheel', 0.12 * B, fwR, fwT, [0, 0, 0], { item: 'flywheel-disc', mat: 'cast-iron', color: 0x5a5c60, finish: 'machined', fill: 0.85, says: 'its face ground (its pockets and lightening about 0.15 of it, typical)' })];
   if (electric) fw.push({ ...toothed({ name: 'starter ring gear', m: rgM, z: Math.round((2 * (fwR + 0.006)) / rgM), b: 0.012 + 0.04 * B, bore: 2 * fwR, mat: 'steel-alloy', item: 'starter-ring-gear' }), at: [0, 0, 0], rot: [0, PI / 2, 0] });
   out.push(electric ? group(plate ? 'drive plate and ring gear' : 'flywheel and ring gear', fw, { item: plate ? 'flywheel-drive-plate' : 'flywheel', at: [fx, 0, 0] }) : { ...fw[0]!, name: 'flywheel', at: [fx, 0, 0], says: 'its fan cast in its face, its magneto\'s magnets in its rim (not drawn)' });
-  for (let k = 0; k < 6; k++) { const a = (k * PI) / 3; out.push(bolt(threadFor(B), fwT + 0.12 * B, [fx - fwT / 2, 0.3 * B * Math.cos(a), 0.3 * B * Math.sin(a)], [0, 0, PI / 2], plate ? 'drive plate bolt' : 'flywheel bolt')); }
+  // (its bolts turn with the crank they are screwed into)
+  for (let k = 0; k < 6; k++) { const a = (k * PI) / 3 + th; out.push(bolt(threadFor(B), fwT + 0.12 * B, [fx - fwT / 2, 0.3 * B * Math.cos(a), 0.3 * B * Math.sin(a)], [0, 0, PI / 2], plate ? 'drive plate bolt' : 'flywheel bolt')); }
   // (its oiling: the pan under its crankcase, its gasket and bolts; the pump on the crank's nose; its pickup to the sump;
   // its filter on the block's side; the pan's drain plug)
   const panTop = ysk, panBot = -(swing + 0.02 + (d.diesel ? 0.6 : 0.45) * B), panH = panTop - panBot, panFront = tdx + 0.029, panBack = -len / 2 - 0.002, panL = panFront - panBack, panW = Wc * 0.96, panX = (panFront + panBack) / 2;
@@ -643,9 +653,18 @@ export function engineBuilt(s: EngineSpec, given: EngineParts = {}, pose: { cran
   const panT = d.diesel ? 0.005 : 0.0012, endTop = Math.min(panTop - 0.0035, -(d.rm + d.shellT + 0.12 * B) - 0.002, -0.5 * B - 0.002);
   out.push(box('oil pan end', [panT, endTop - (panBot - 0.0035 + panT), panW - 2 * panT], [panBack + panT / 2, (endTop + panBot - 0.0035 + panT) / 2, 0], { item: 'oil-pan', mat: d.diesel ? 'al-a380' : 'steel-low', color: d.diesel ? 0x8c8e90 : 0x2a2a2a, finish: d.diesel ? 'cast' : 'paint' }));
   out.push({ ...housing({ name: 'oil pan', L: panL, H: panH, W: panW, wall: panT, open: ['top', 'back'], item: 'oil-pan', mat: d.diesel ? 'al-a380' : 'steel-low', color: d.diesel ? 0x8c8e90 : 0x2a2a2a, finish: d.diesel ? 'cast' : 'paint', says: d.diesel ? 'cast aluminium, open on top to the crankcase' : 'pressed from 1.2 mm steel (typical), open on top to the crankcase' }), at: [panX, (panTop + panBot) / 2 - 0.0035, 0] });
-  out.push(group('oil pan gasket', [box('gasket', [panL, 0.003, 0.01], [0, 0, panW / 2 - 0.006], { mat: 'nbr', color: 0x1a1a1a }), box('gasket', [panL, 0.003, 0.01], [0, 0, -panW / 2 + 0.006], { mat: 'nbr', color: 0x1a1a1a }), box('gasket', [0.01, 0.003, panW], [panL / 2 - 0.006, 0, 0], { mat: 'nbr', color: 0x1a1a1a }), box('gasket', [0.01, 0.003, panW], [-panL / 2 + 0.006, 0, 0], { mat: 'nbr', color: 0x1a1a1a })], { item: 'pan-gasket', at: [panX, panTop - 0.0015, 0] }));
+  // (where the pan's rail lies within the crank's reach at an end (a small engine's crankcase split near its axis), that end's
+  // gasket strip and the bolts on it stop 2 mm short of the crank where it passes through: they ran into its rear journal
+  // and flange, unseen until fault D24 was mended. The crank's reach there from its own sizes: a journal's, its flange's,
+  // its nose's)
+  const mx = mainsOf(d), cBack = Math.min(...mx) - d.wm / 2, cFront = Math.max(...mx) + d.wm / 2;
+  const reachAt = (x0: number, x1: number) => Math.max(0, ...mx.filter((m) => m + d.wm / 2 > x0 && m - d.wm / 2 < x1).map(() => d.rm), ...(cBack > x0 && cBack - 0.12 * B < x1 ? [0.5 * B] : []), ...(cFront < x1 && cFront + d.noseL > x0 ? [0.2 * B] : []));
+  const gapAt = (xe: number) => { const r = reachAt(panX + xe - 0.005, panX + xe + 0.005); return r > -panTop ? r + 0.002 : 0; };
+  const endStrip = (xe: number): Part[] => { const g = gapAt(xe), gm = { mat: 'nbr', color: 0x1a1a1a }; return g ? [-1, 1].map((sz) => box('gasket', [0.01, 0.003, panW / 2 - g], [xe, 0, sz * (g + (panW / 2 - g) / 2)], gm)) : [box('gasket', [0.01, 0.003, panW], [xe, 0, 0], gm)]; };
+  out.push(group('oil pan gasket', [box('gasket', [panL, 0.003, 0.01], [0, 0, panW / 2 - 0.006], { mat: 'nbr', color: 0x1a1a1a }), box('gasket', [panL, 0.003, 0.01], [0, 0, -panW / 2 + 0.006], { mat: 'nbr', color: 0x1a1a1a }), ...endStrip(panL / 2 - 0.006), ...endStrip(-panL / 2 + 0.006)], { item: 'pan-gasket', at: [panX, panTop - 0.0015, 0] }));
   const npb = Math.max(8, Math.round((2 * (panL + panW)) / 0.09));
   for (let k = 0; k < npb; k++) { const f = k / npb, per = 2 * (panL + panW), sAt = f * per; let x: number, z: number; if (sAt < panL) { x = -panL / 2 + sAt; z = panW / 2 - 0.006; } else if (sAt < panL + panW) { x = panL / 2 - 0.006; z = panW / 2 - (sAt - panL); } else if (sAt < 2 * panL + panW) { x = panL / 2 - (sAt - panL - panW); z = -panW / 2 + 0.006; } else { x = -panL / 2 + 0.006; z = -panW / 2 + (sAt - 2 * panL - panW); }
+    if (Math.abs(Math.abs(x) - (panL / 2 - 0.006)) < 1e-9 && Math.abs(z) < gapAt(x) + 0.006) continue;
     out.push(bolt(d.diesel ? 'M8' : 'M6', 0.02, [panX + x, panTop - 0.012, z], [PI, 0, 0], 'oil pan bolt')); }
   out.push(bolt(d.diesel ? 'M16' : 'M14', 0.016, [-panL * 0.3, panBot - 0.002, 0], [PI, 0, 0], 'oil drain plug'));
   // (a gerotor round the crank's nose: its inner rotor about 0.9 bore across, its outer ring round it, typical)

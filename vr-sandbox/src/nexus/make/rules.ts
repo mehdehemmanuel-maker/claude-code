@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import type { Part } from '../kits';
 import { cutFrame, inSect } from '../form';
-import { contacts, layout, type Node } from './space';
+import { contacts, layout, within as boxWithin, type Node } from './space';
 import { leastDistance, meshClashes, trisOf, type Tris, type TriMesh } from './critic';
 import { leafGeometry } from '../view/kit3d';
 import { graphOf, groupsOf, sliced, temperaturesOf } from '../graph';
@@ -79,6 +79,14 @@ export function candidates(ms: Mesh3[]): [Mesh3, Mesh3][] {
   const byNode = new Map<Node, Mesh3>(); for (const m of ms) byNode.set(m.node, m);
   return contacts(ms.map((m) => m.node)).filter((c) => c.depth > 0).map((c) => [byNode.get(c.a)!, byNode.get(c.b)!] as [Mesh3, Mesh3]).filter(([a, b]) => a && b && !linked(a, b) && !said(a, b));
 }
+/** The pairs the contact graph passes over, one piece's oriented box lying wholly within the other's (taken there as in
+ *  its hollow): a key inside a hub ring's box was never tried (fault D24). Tried here for their surfaces crossing only:
+ *  one wholly inside the other's box and surface stays the contact graph's to judge. */
+export function nested(ms: Mesh3[]): [Mesh3, Mesh3][] {
+  const out: [Mesh3, Mesh3][] = [], solid = ms.filter((m) => m.node.obb && m.node.box);
+  for (const b of solid) for (const a of solid) if (a !== b && b.node.box!.intersectsBox(a.node.box!) && boxWithin(a.node.obb!, b.node.obb!) && !linked(a, b) && !said(a, b)) out.push([b, a]);
+  return out;
+}
 const CAST_ROUND = /mould-compound|potting|encapsula/;
 /** Whether a point is inside a closed surface: a ray from it, slightly skewed off the axes so it misses edges, crosses
  *  the surface an odd number of times (Möller–Trumbore for each crossing). An open surface has no inside. */
@@ -102,13 +110,13 @@ export function interference(ms: Mesh3[], o: { touch?: number; pair?: (a: Mesh3,
   const out: Finding[] = [], seen = new Set<string>(), tol = o.touch ?? 0.0002;
   // (first the pieces' oriented boxes, fast: only pairs whose boxes press into each other by more than half a millimetre,
   // and that the rules do not excuse, are tried on their triangles)
-  const cands = candidates(ms).filter(([a, b]) => !o.pair || o.pair(a, b));
-  for (const [a, b] of cands) {
+  const cands = candidates(ms).filter(([a, b]) => !o.pair || o.pair(a, b)), inBox = nested(ms).filter(([a, b]) => !o.pair || o.pair(a, b)), boxed = new Set(inBox);
+  for (const pair of [...cands, ...inBox]) { const [a, b] = pair;
     const key = [ownerOf(a.node).path, ownerOf(b.node).path].sort().join('|'); if (seen.has(key)) continue;
     const c = meshClashes([a, b], { touch: tol, edge: 'scaled', fused: () => false }).find((x) => x.kind === 'through');
     // (no surface crossing, and yet one inside the other: a triangle test cannot see that, so its points are tried)
     // (save inside what is cast round it: a moulding or a potting compound holds its wires and its die by being poured on them)
-    const inner = c ? null : within(a, b) ? [a, b] : within(b, a) ? [b, a] : null; if (!c && (!inner || CAST_ROUND.test(inner[1]!.p.item ?? ''))) continue;
+    const inner = c || boxed.has(pair) ? null : within(a, b) ? [a, b] : within(b, a) ? [b, a] : null; if (!c && (!inner || CAST_ROUND.test(inner[1]!.p.item ?? ''))) continue;
     seen.add(key);
     out.push({ rule: 'interference', a: ownerOf(a.node).p.name, b: ownerOf(b.node).p.name, pa: ownerOf(a.node).path, pb: ownerOf(b.node).path, says: inner ? `the ${inner[0]!.name} is inside the ${inner[1]!.name}` : `the ${a.name} runs into the ${b.name}`, ...(c?.at ? { at: c.at as [number, number, number] } : {}) });
   }
@@ -117,7 +125,7 @@ export function interference(ms: Mesh3[], o: { touch?: number; pair?: (a: Mesh3,
 /** Every pair the rules try for interference, and what the triangle test says of each: for setting beside another
  *  engine's verdict (brep.ts, exact booleans), each piece by its place in the tree. */
 export function interferencePairs(ms: Mesh3[], touch = 0.0002): { a: string; b: string; pa: string; pb: string; owners: [string, string]; through: boolean }[] {
-  return candidates(ms).map(([a, b]) => ({ a: a.name, b: b.name, pa: a.node.path, pb: b.node.path, owners: [ownerOf(a.node).p.name, ownerOf(b.node).p.name] as [string, string], through: meshClashes([a, b], { touch, edge: 'scaled', fused: () => false }).some((x) => x.kind === 'through') }));
+  return [...candidates(ms), ...nested(ms)].map(([a, b]) => ({ a: a.name, b: b.name, pa: a.node.path, pb: b.node.path, owners: [ownerOf(a.node).p.name, ownerOf(b.node).p.name] as [string, string], through: meshClashes([a, b], { touch, edge: 'scaled', fused: () => false }).some((x) => x.kind === 'through') }));
 }
 /** The gaps kept: a piece that says its clearance (Part.clear) closer than that to anything it does not run on. */
 export function clearances(ms: Mesh3[], pair: (a: Mesh3, b: Mesh3) => boolean = () => true): Finding[] {
