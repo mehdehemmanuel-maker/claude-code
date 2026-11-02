@@ -451,3 +451,10 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
 - 2026-11-02: "No nothing should be checked for overlap it shouldn't be possible" (an overlap of solids is never
   checked or found after the fact: making and placing pieces leaves no way to express one; this governs over "detect
   the conflict" above)
+- 2026-11-02: asked whether, while the engines move onto the placer that cannot write an overlap, the old overlap
+  checker goes at once or is kept for a while only as a list of where hand-typed positions still overlap, answered "Gone
+  now (Recommended)" (nothing checks for overlap; each builder still on hand-typed positions is listed as not yet moved,
+  with its count)
+- 2026-11-02: "I wanna see ss every now and then of what’s actually going on in app" (screenshots of the app itself, as
+  it runs, sent every so often)
+- 2026-11-02: "What is taking so long"

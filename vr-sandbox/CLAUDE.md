@@ -10,7 +10,8 @@ the task list and lose the why. So the why lives here, and every round is checke
   transistor), every piece stored once and reused (the library law), any board folded into one reusable node, so
   complexity compounds: a motor, a drone, a swarm, a car, a house, a city.
 - **Real, not mocked:** real products true to their published figures, built from the inside out, explodable to the
-  bottom; physics, materials (down to the elements), rules for what may touch, heat and clearance; honest about what is
+  bottom; physics, materials (down to the elements), rules for heat, and no overlap possible (never checked for: made
+  impossible, decision 0021); honest about what is
   approximated. A real product's own data is held fixed: a finding on it is checked against the real product first and
   never tuned away to please our checker.
 - **No manual work, no guessing:** parts say what they need and solvers place, route, size, check and fix (constraints,
@@ -49,7 +50,7 @@ the task list and lose the why. So the why lives here, and every round is checke
 - Past about **two minutes** on one run, or **three tries** at one fix: stop. Ask whether this is population (easy, just
   many) or a **missing pipeline** (the same judgement made by hand again and again). If it is a missing pipeline, say so
   and build the pipeline (a board of nodes, AI gates where judgement is needed) instead of doing the next one by hand.
-- Test what changed: `npm run check` on the one thing, `npm run gate:field` on the fields touched; the whole gate once,
+- Test what changed: a probe on the one thing, `npm run gate:field` on the fields touched; the whole gate once,
   before pushing. A test that guards nothing the change touches is not run while working.
 
 ## What can honestly be promised
@@ -86,7 +87,7 @@ known gaps are there too.
 | Things placed, never copied; frames; fit in; take apart | `nexus/assembly.ts` |
 | Layout, contacts, contact patches of a placed tree | `nexus/make/space.ts` |
 | The contact graph of any thing (what touches what, from the geometry; each distinct thing once); what flows through it, how it bends, buckles and grows when warmed (steps C to F) | `nexus/graph.ts` (nodes `graph`, `flow`, `bend`) |
-| Rules: interference, clearance, heat gate | `nexus/make/rules.ts` |
+| Rules: the heat gate; nothing checks for overlap (decision 0021): places still written by hand counted, each count only falls | `nexus/make/rules.ts`; the count `../scripts/by-hand.mjs` |
 | Critic, detail, conditions, the make pipeline | `nexus/make/` (`critic.ts`, `detail.ts`, `conditions.ts`, `pipeline.ts`) |
 | The interface record: what a part offers or asks where it meets another, read from its ports and old interfaces, with a stable id (spec 01; decisions 0004, 0014) | `nexus/interfaces.ts` |
 | Mating by faces, ports, round faces, bores | `nexus/mate.ts` |
@@ -113,7 +114,7 @@ known gaps are there too.
 | Models and services over the web: pictures judged blind as a measurement, drawn from words, wordings tried; every service a node of its own (`api.claude`, `api.gemini.see`, `api.gemini.draw`, `api.fal.draw`, `api.higgsfield`, `api.zenrows`) | `nexus/genai.ts` (keys under Node only: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `FAL_KEY`, `HIGGSFIELD_KEY_ID` and `HIGGSFIELD_KEY_SECRET`, `ZENROWS_API_KEY`) |
 | The AI in the app: Claude working through the node system's own eight tools (find, card, build a board from a short plan, open a starter board, change the board in place, read, fold into a saved block, docs), on the board open and with the blocks you saved, its answer checked by a second model against its steps, told only `docs/FOR-AI.md` (keep that file short: it is sent with every call, cached), never the app's code; its relay (`npm run app`) keeps the key off the page | `nexus/agent.ts` (node Claude builds a board; panel Ask Claude; relay in `vite.view.config.ts`) |
 | The engineering compiler: one design record through stages (requirements, BOM, checks with their engine and input hash), the release gate | `nexus/compiler.ts` (`docs/COMPILER.md`) |
-| Exact solids: every piece made a B-rep solid by OpenCascade (replicad 1.1.0), placed, its holes cut by booleans, checked valid, measured; what is not made counted; export (STEP, STL, 3MF, glTF, BOM); interference by booleans against the rules | `nexus/brep.ts` (nodes Exact solids, Compile: exact solids, Export, Interference two ways) |
+| Exact solids: every piece made a B-rep solid by OpenCascade (replicad 1.1.0), placed, its holes cut by booleans, checked valid, measured; what is not made counted; export (STEP, STL, 3MF, glTF, BOM) | `nexus/brep.ts` (nodes Exact solids, Compile: exact solids, Export) |
 | Stress by an engine apart: CalculiX (Node only, where installed), set against the book and our frame analysis | `nexus/fea.ts` (node Stress three ways) |
 | The gauntlet | `nexus/gauntlet.ts`, `view/gauntlet.ts` |
 | Seeds (window to city) | `nexus/seeds.ts` |
@@ -189,8 +190,8 @@ Say the gate's answer out loud in the round's notes when it changes what gets do
   writes the generated docs and the nodes' dates (twice where nodes' code changed). Nodes built before the update are
   marked as such: the queue to re-check. Build the viewer: `npx vite build --config vite.view.config.ts --logLevel error`.
 - Probe tests go in `tests/nexus/zz_probe_*.test.ts` and are deleted before committing. Run them with `npm run probe --
-  <file>` (stopped at two minutes). A rules check on one thing or one part of it: `CHECK=corolla [ONLY=regex]
-  [WITHIN=/3/0] npm run check`. While working, the gate on the fields touched: `npm run gate:field -- Mechanical` (4 s
+  <file>` (stopped at two minutes). Where places are still written by hand, builder by builder: `node scripts/by-hand.mjs`.
+  While working, the gate on the fields touched: `npm run gate:field -- Mechanical` (4 s
   for one field, against 46 s whole); the docs once with `npm run docs`; the whole gate before pushing.
 - Node's built-in fetch reaches the web here only with `NODE_USE_ENV_PROXY=1` (the container's proxy; set in the
   scripts above).

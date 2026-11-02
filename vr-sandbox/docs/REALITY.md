@@ -2539,3 +2539,19 @@ small grey text on near-black, a faint grid, and the count; the first two are th
 3D view's own faults. I16 stays failing on its blind clause until a run on its shots passes; the readers' words of every
 run are kept beside the shots. Fault D31, found on the way (the pool's workers ran another checkout's engine), is mended
 (decision 0017).
+
+## 2026-11-02: nothing checks for overlap (decision 0021)
+
+The user chose "Gone now": the overlap checker is deleted, not kept as a list. Before it went, the engine board ("An
+engine from its first parts") was timed node by node, one run each in Node (a probe run with `npx vitest run`, its file
+not kept: the board from `starterBoards()` run by the engine, each node's time read from its state): 56.5 s whole, of
+which `check.rules` took 27.6 s, `check.turning` 24.0 s and `sweep.range` 4.1 s. With the checker and its nodes gone, the
+same probe gives 4.5 s for its 29 nodes, `sweep.range` (a stress test over speed, not an overlap check) 3.6 s of it.
+Deleted: the interference and clearance rules and their excuses, the check through a motion, the nodes `clash`,
+`check.turning` and `verify.interference`, the view's `clash` and "hidden inside" rule, the nudge repair, the overlap
+stage of the compiler and the gauntlet, `npm run check` and the tests of the checker itself. Kept: the heat rule
+(`check.rules` is now the heat exposure check, "Nothing too hot?" on the boards). In their place, where a place is still written by hand is counted builder by
+builder (`node scripts/by-hand.mjs`): 1,203 `at` and `rot` properties in 46 files under `src/nexus`, `engines.ts` the
+most at 222, and the one test fails if any count rises (`npm run gate`). The overlaps already drawn into builds (faults
+D14, D25) are now unmeasured; they go as the builders move onto the operations that cannot write one, which are designed
+and not built.

@@ -16,8 +16,6 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
       const p = placeBlock(b, 'place', 0, 0, at, `p${i}`); wire(b, id, out, p, 'thing'); wire(b, p, 'placed', all, 'things');
     });
     wire(b, all, 'assembly', placeBlock(b, 'space.show', 0, 0, {}, 'show'), 'thing'); wire(b, all, 'assembly', placeBlock(b, 'measure', 0, 0, {}, 'measure'), 'thing');
-    // and whether any of them run into one another
-    wire(b, all, 'assembly', placeBlock(b, 'clash', 0, 0, { depth: 1 }, 'clash'), 'thing');
     return b;
   }
   const boards = ([
@@ -136,17 +134,6 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
     placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'eng', 'engine', 'measure', 'thing');
     placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'eng', 'engine', 'audit', 'thing');
-    placeBlock(b, 'check.rules', 0, 0, {}, 'rules'); b.nodes.rules!.label = 'Does nothing run into anything?'; wire(b, 'eng', 'engine', 'rules', 'thing');
-    // (held to it, not only counted: a piece through another fails the board, at rest and as it turns (the user, 2026-11-02:
-    // "if it fails because it's broken then good"); what moves as it turns is the crank, the pistons and the rods: its cams
-    // and valves are held where they are drawn, so a valve against a piston is not yet tried (fault D26))
-    // (and seen: the engine whole beside its exploded view, each place a piece runs into another marked red over it)
-    placeBlock(b, 'combine', 0, 0, { name: 'the engine and where it fails' }, 'failsAt'); wire(b, 'eng', 'engine', 'failsAt', 'things'); wire(b, 'rules', 'where', 'failsAt', 'things');
-    placeBlock(b, 'place', 0, 0, { x: -0.9 }, 'failsBeside'); wire(b, 'failsAt', 'assembly', 'failsBeside', 'thing'); b.nodes.failsBeside!.label = 'Whole, beside it: where it fails, marked red';
-    placeBlock(b, 'space.show', 0, 0, {}, 'showFails'); wire(b, 'failsBeside', 'placed', 'showFails', 'thing');
-    placeBlock(b, 'assert', 0, 0, { what: 'pieces running into others, at rest', how: 'at most', target: 0 }, 'whole'); b.nodes.whole!.label = 'Nothing passes through anything, at rest'; wire(b, 'rules', 'findings', 'whole', 'value');
-    placeBlock(b, 'check.turning', 0, 0, { ...e, steps: 6 }, 'turn'); b.nodes.turn!.label = 'Turned over: does what moves run into anything?'; sized('turn');
-    placeBlock(b, 'assert', 0, 0, { what: 'pieces run into as it turns', how: 'at most', target: 0 }, 'turning'); b.nodes.turning!.label = 'Nothing passes through anything as it turns'; wire(b, 'turn', 'findings', 'turning', 'value');
     // (and under load: at the 6,600 rpm Toyota gives its peak power at, and swept from 1,000 to 7,000 rpm for where it gives)
     placeBlock(b, 'load.engine', 0, 0, { ...e }, 'load'); b.nodes.load!.label = 'Under load at 6,600 rpm'; b.nodes.load!.set = { ...(b.nodes.load!.set ?? {}), rpm: 6600 }; sized('load'); wire(b, 'spr', 'spring', 'load', 'spring');
     placeBlock(b, 'view.table', 0, 0, {}, 'loadRows'); b.nodes.loadRows!.label = 'Each part: its stress, its limit, its margin'; wire(b, 'load', 'rows', 'loadRows', 'rows');
@@ -178,7 +165,6 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'research.parts', 0, 0, { depth: 6 }, 'tree'); b.nodes.tree!.label = 'Its parts, and theirs, and what waits'; wire(b, 'inv', 'item', 'tree', 'item');
     placeBlock(b, 'view.table', 0, 0, {}, 'treeRows'); b.nodes.treeRows!.label = 'Sub-components and theirs'; wire(b, 'tree', 'rows', 'treeRows', 'rows');
     placeBlock(b, 'view.table', 0, 0, {}, 'waits'); b.nodes.waits!.label = 'Waiting to be researched'; wire(b, 'tree', 'waiting', 'waits', 'rows');
-    placeBlock(b, 'check.rules', 0, 0, {}, 'rules'); b.nodes.rules!.label = 'Does nothing run into anything?'; wire(b, 'eng', 'engine', 'rules', 'thing');
     placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'eng', 'engine', 'audit', 'thing');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'eng', 'engine', 'show', 'thing');
     return b;
@@ -514,7 +500,7 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     const b = emptyBoard('Chevrolet Monte Carlo SS (2004)');
     placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo' }, 'car'); b.nodes.car!.label = 'Monte Carlo SS (2004): its published figures';
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); b.nodes.show!.label = 'The car'; wire(b, 'car', 'vehicle', 'show', 'thing');
-    placeBlock(b, 'check.rules', 0, 0, {}, 'rules'); b.nodes.rules!.label = 'Nothing runs into anything, nothing too hot?'; wire(b, 'car', 'vehicle', 'rules', 'thing');
+    placeBlock(b, 'check.rules', 0, 0, {}, 'rules'); b.nodes.rules!.label = 'Nothing too hot?'; wire(b, 'car', 'vehicle', 'rules', 'thing');
     placeBlock(b, 'view.show', 0, 0, {}, 'rulesSay'); wire(b, 'rules', 'says', 'rulesSay', 'value');
     placeBlock(b, 'audit.explode', 0, 0, {}, 'apart'); b.nodes.apart!.label = 'Comes apart to the bottom?'; wire(b, 'car', 'vehicle', 'apart', 'thing');
     placeBlock(b, 'view.show', 0, 0, {}, 'apartSay'); wire(b, 'apart', 'says', 'apartSay', 'value');
@@ -687,7 +673,7 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
   }],
   ['The autopilot on the Corolla: checked, repaired, checked again, what is left named', () => {
     // the Corolla as it was made, checked by the rules; what is wrong grouped into problems and each tried with the
-    // repairs, least costly first (nudge it clear, route a line again, move it by the solver, a heat shield between), a
+    // repairs, least costly first (route a line again, move it by the solver, a heat shield between), a
     // repair kept only if its problem is gone and the parts it changed have less wrong than before; then the whole checked
     // again. Nothing typed by hand. What no repair clears is a named task with why. The 3D view: the engine, the battery
     // where it was moved, and the upper hose routed again, clear of the exhaust's heat
@@ -875,21 +861,18 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'go', 'moved', 'show', 'thing');
     return b;
   }],
-  ['Motion: a door swinging, and what it hits', () => {
+  ['Motion: a door swinging, and the room its swing needs', () => {
     // a door mated into its wall, turned on its hinge edge (0 to 90° and back, at most 90°/s, 180°/s², about how a door is
-    // swung by hand: an estimate); its swing swept, and checked against a bed put too close
-    const b = emptyBoard('A door swinging, and what it hits');
+    // swung by hand: an estimate); its swing swept: the room it needs, shown
+    const b = emptyBoard('A door swinging, and the room its swing needs');
     placeBlock(b, 'wall', 0, 0, { opening: 'door', name: 'wall', mat: 'brick', color: '#eceff1', finish: 'paint', L: 4, h: 2.4 }, 'wall');
     placeBlock(b, 'seed.door', 0, 0, {}, 'door');
     placeBlock(b, 'mate', 0, 0, { frame: 'fit', onto: 'opening', how: 'into' }, 'mate'); wire(b, 'door', 'door', 'mate', 'thing'); wire(b, 'wall', 'wall', 'mate', 'on');
     placeBlock(b, 'time', 0, 0, {}, 'clock');
     placeBlock(b, 'turn', 0, 0, { axis: 'y', keys: '0 s 0°, 2 s 90°, 5 s 90°, 7 s 0°', x: -0.43, y: 0, z: 0, speed: 90, accel: 180 }, 'swing'); b.nodes.swing!.label = 'Turn it on its hinge';
     wire(b, 'mate', 'placed', 'swing', 'thing'); wire(b, 'clock', 't', 'swing', 't');
-    placeBlock(b, 'seed.bed', 0, 0, { size: 'queen' }, 'bed');
-    placeBlock(b, 'place', 0, 0, { x: 0.3, z: -1.2, ry: Math.PI / 2 }, 'bedAt'); b.nodes.bedAt!.label = 'Bed, too close'; wire(b, 'bed', 'bed', 'bedAt', 'thing');
     placeBlock(b, 'sweep', 0, 0, { axis: 'y', x: -0.43, from: 0, to: 90, n: 12 }, 'sweep'); b.nodes.sweep!.label = 'The room its swing needs'; wire(b, 'mate', 'placed', 'sweep', 'thing');
-    placeBlock(b, 'clash', 0, 0, { depth: 1 }, 'clash'); b.nodes.clash!.label = 'Does the swing hit the bed?'; wire(b, 'sweep', 'swept', 'clash', 'thing'); wire(b, 'bedAt', 'placed', 'clash', 'with');
-    placeBlock(b, 'combine', 0, 0, { name: 'room corner' }, 'all'); wire(b, 'wall', 'wall', 'all', 'things'); wire(b, 'swing', 'turned', 'all', 'things'); wire(b, 'bedAt', 'placed', 'all', 'things');
+    placeBlock(b, 'combine', 0, 0, { name: 'room corner' }, 'all'); wire(b, 'wall', 'wall', 'all', 'things'); wire(b, 'swing', 'turned', 'all', 'things'); wire(b, 'sweep', 'swept', 'all', 'things');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
     return b;
   }],
@@ -965,7 +948,7 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'place', 0, 0, { y: 0.011 }, 'armsUp'); wire(b, 'arms', 'ring', 'armsUp', 'thing');
     placeBlock(b, 'combine', 0, 0, { name: 'drone' }, 'drone'); wire(b, 'frame', 'part', 'drone', 'things'); wire(b, 'armsUp', 'placed', 'drone', 'things');
     placeBlock(b, 'array', 0, 0, { pattern: 'grid', nx: 10, nz: 10, sx: 1, sz: 1 }, 'swarm'); b.nodes.swarm!.label = 'Swarm'; wire(b, 'drone', 'assembly', 'swarm', 'thing');
-    // (flown clear of the tallest tower: 30 m, varied by up to 60 %, so 48 m; at 45 m the clash check below found the swarm in a tower)
+    // (flown clear of the tallest tower: 30 m, varied by up to 60 %, so 48 m)
     placeBlock(b, 'place', 0, 0, { y: 55 }, 'swarmUp'); wire(b, 'swarm', 'grid', 'swarmUp', 'thing');
     placeBlock(b, 'shape.box', 0, 0, { name: 'tower', mat: 'concrete', color: '#90a4ae', finish: 'concrete', w: 20, h: 30, d: 20 }, 'tower'); b.nodes.tower!.label = 'Tower';
     placeBlock(b, 'place', 0, 0, { y: 15 }, 'towerUp'); wire(b, 'tower', 'part', 'towerUp', 'thing');
@@ -974,7 +957,6 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'combine', 0, 0, { name: 'city and swarm' }, 'all'); wire(b, 'city', 'grid', 'all', 'things'); wire(b, 'swarmUp', 'placed', 'all', 'things');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
     placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
-    placeBlock(b, 'clash', 0, 0, { depth: 1 }, 'clash'); wire(b, 'all', 'assembly', 'clash', 'thing');
     // the motor and the drone folded into nodes of their own: open them to change them, save them to use anywhere
     let r = collapse(b, ['bell', 'prop', 'propUp', 'motor'], 'Motor', 'gMotor'); tidy(r.board.nodes.gMotor!.inner!);
     r = collapse(r.board, ['gMotor', 'frame', 'arms', 'armsUp', 'drone'], 'Drone', 'gDrone'); tidy(r.board.nodes.gDrone!.inner!);

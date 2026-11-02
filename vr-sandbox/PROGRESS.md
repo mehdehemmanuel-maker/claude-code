@@ -1,8 +1,8 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 01.I16 (failing on its blind clause); the node creator's spec in the plan (13.NC1), nothing of it built; designing: the watchers, a space with no overlap
+Task in hand: 01.I16 (failing on its blind clause); nothing checks for overlap now (decision 0021), places written by hand counted (`node scripts/by-hand.mjs`); spec 13 in the plan, nothing of it built
 Spec in hand: spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 9a8862f (2026-11-02)
+Last commit the gate passed: 8ae22b0 (2026-11-02)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -16,13 +16,13 @@ Last commit the gate passed: 9a8862f (2026-11-02)
 - 01.I15 failed its first judging: its check asks the set before I5's code, and the history shows most cases committed with
   their code. All twelve cases are there, checked against their sources, and run in the gate.
 - 01.I17 passes (`plan/specs/00-structure/verdicts/01.I17.json`); the gaps its evaluator found by planting are closed in
-  its tests. Fault D24 (the clash checker blind to a bar run into a round shaft) mended under 10.T24; what it then showed
-  in the engines at rest is fault D25, mended in the gate's small engine, open in the larger ones (`npm run gate`).
+  its tests. The overlaps drawn into builds (faults D14, D25) are unmeasured since decision 0021 took the checker out;
+  they go as builders move onto the operations that cannot write one (designed, not built).
 - 01.I16 failed its judging (`plan/specs/00-structure/verdicts/01.I16.json`): its mechanics held; its blind check had not run
   to its end. Mended since; five blind runs (decision 0018); it fails still on its blind clause (`docs/REALITY.md`).
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
-- 10.T24 claimed in part: nothing excused by name; fault D14 open (the small caliper mended; the Cascadia's frame not).
+- 10.T24 superseded by decision 0021 (the user: "Gone now"): the checker, its nodes and its gate test deleted.
 - 11.LW12 and 10.T1 are claimed in part; their open parts are in `plan/DEFECTS.md` (D7) and the task rows.
 - The one test (`npm run eval:one`) passes 2 of its 18 lines; the rest wait on specs 01, 03, 04 and 06.
 

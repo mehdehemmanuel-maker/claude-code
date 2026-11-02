@@ -16,16 +16,16 @@
 //                &hide=<regex> (those parts not drawn: the rest of only=), &lamp=x,y,z;… (a lamp hung there, as one in a
 //                cabin to see its inside by), &interior=1 (lamps in its middle, a cabin's dome light)
 //   posed        &pose=steer:<rad>,bump:<m> (each wheel that steers turned so far, each that rises risen so far, with what
-//                is carried with it: its knuckle, its strut's tube and spring), so what clears it can be looked at and
-//                clashed where it moves to
+//                is carried with it: its knuckle, its strut's tube and spring), so what clears it can be looked at where
+//                it moves to
 //   tried        &rules=<JSON> and &lines=<JSON> try body rules and lines (src/nexus/panels.ts) on what is made, so a
 //                critic can show what it would change
 // And on window.look: parts() (each part drawn: name, holders, material, finish, colour, what it says of itself, its
 // bounds), facts() (what the thing says of itself and its measured size), pick(x, y) (the part under a pixel),
-// clash(touch) (every place two parts' surfaces cross or touch: src/nexus/make/critic.ts), gap(a, b) (the least distance
+// gap(a, b) (the least distance
 // between parts so named), section(axis, at) (every part cut by a plane: its outline there, as segments), mass() (its
 // mass part by part, its centre of mass, and what each axle carries), lint() (what no part should be: no thicker than a
-// sheet of paper when it is not a skin, hidden whole inside another, a weld on a casting, a bolt thicker than what it
+// sheet of paper when it is not a skin, a weld on a casting, a bolt thicker than what it
 // holds).
 
 import * as THREE from 'three';
@@ -170,7 +170,6 @@ const look = {
   parts: () => meshes.filter((m) => m.visible).map((m) => { const p = (m.userData.part ?? {}) as { mat?: string; finish?: string; says?: string; shell?: number }, b = new THREE.Box3().setFromObject(m); return { name: m.name, path: pathOf(m), mat: p.mat, finish: p.finish, color: hex(m), says: p.says, shell: p.shell, link: linkOfObj(m) || undefined, joint: (p as Part).joint, min: r3(b.min), max: r3(b.max), tris: (m.geometry.getIndex()?.count ?? m.geometry.getAttribute('position').count) / 3 }; }),
   facts: () => ({ name: part.name, says: (part as { says?: string }).says, size: r3(size), parts: meshes.length, made: (made as { says?: string }).says, moved: made.moved }),
   pick: (x: number, y: number) => { const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1), camera); const hit = ray.intersectObjects(meshes.filter((m) => m.visible), false)[0]; if (!hit) return null; const p = (hit.object.userData.part ?? {}) as { says?: string; mat?: string }; return { name: hit.object.name, path: pathOf(hit.object), at: r3(hit.point), distance: +hit.distance.toFixed(3), mat: p.mat, says: p.says }; },
-  clash: (touch = 0.001) => meshClashes(meshes.filter((m) => m.visible).map(worldTris), { touch }),
   // where points of the thing fall in the picture (CSS pixels), and where a pixel falls on a plane z = const (the side
   // the camera looks at), for laying a photograph over it (the bench's ref:)
   project: (pts: [number, number, number][]) => pts.map((p) => { const v = new THREE.Vector3(...p).project(camera); return [+(((v.x + 1) / 2) * innerWidth).toFixed(2), +(((1 - v.y) / 2) * innerHeight).toFixed(2)]; }),
@@ -182,7 +181,7 @@ const look = {
   // what a frame is built of: its body-in-white by structure alone, where loads come into it, each link's joints (critic.ts)
   frame: () => { const ts = meshes.filter((m) => m.visible).map(worldTris); return frame(ts, meshClashes(ts, { touch: 0.001 })); },
   gap: (a: string, b: string) => {
-    // (the least distance between the parts so named, measured as the clash finder measures, so the two agree; the pairs
+    // (the least distance between the parts so named, a distance a person asks for, never run by the gate; the pairs
     // nearest by their boxes first, and given up on, said, after 20 s)
     const ra = new RegExp(a, 'i'), rb = new RegExp(b, 'i'), A = meshes.filter((m) => m.visible && ra.test(m.name)).map(worldTris), B = meshes.filter((m) => m.visible && rb.test(m.name)).map(worldTris);
     if (!A.length || !B.length) return null;
@@ -191,7 +190,7 @@ const look = {
     const pairs = A.flatMap((x) => B.filter((y) => y !== x).map((y) => [bg(x, y), x, y] as const)).sort((p, q) => p[0] - q[0]);
     let best: { d: number; at: number[]; a: string; b: string } | null = null, partial = false;
     for (const [g, x, y] of pairs) { if (best && g >= best.d) break; if (performance.now() - t0 > 20000) { partial = true; break; } const r = leastDistance(x, y, best?.d ?? Infinity); if (r && (!best || r.d < best.d)) best = { d: r.d, at: r.at.map((v) => +v.toFixed(4)), a: x.name, b: y.name }; if (best?.d === 0) break; }
-    return best ? { ...best, d: +best.d.toFixed(4), ...(best.d === 0 ? { crossing: true } : {}), ...(partial ? { partial: true } : {}), method: LEAST_METHOD, ms: Math.round(performance.now() - t0) } : null;
+    return best ? { ...best, d: +best.d.toFixed(4), ...(partial ? { partial: true } : {}), method: LEAST_METHOD, ms: Math.round(performance.now() - t0) } : null;
   },
 };
 // (each part cut by a plane: where each of its triangles crosses it, a segment, in the plane's two other axes, mm)
@@ -238,15 +237,6 @@ const lint = () => {
     const host = ho?.userData.part as Part | undefined;
     if (p.finish === 'weld' && host?.mat && castLike.test(host.mat)) out.push({ rule: 'weld on a casting', part: m.name, path: pathOf(m), says: `a weld bead on the ${host.name}, which is cast (${host.mat})` });
     const mm = /\bM(\d+)\b/.exec(m.name); if (mm && host && /hex head|bolt|screw/i.test(m.name)) { const hb = host ? [...boxes.entries()].find(([x]) => x.parent?.userData.part === host)?.[1] : undefined; if (hb) { const hs = hb.getSize(new THREE.Vector3()), ht = Math.min(hs.x, hs.y, hs.z); if (Number(mm[1]) / 1000 > Math.max(0.006, ht * 0.5)) out.push({ rule: 'bolt too big', part: m.name, path: pathOf(m), says: `M${mm[1]} on the ${host.name}, whose least size is ${(ht * 1000).toFixed(0)} mm` }); } }
-    // (hidden whole inside another part that is not what holds it nor held by it, nor one it passes through)
-    for (const o of vis) {
-      if (o === m) continue; const ob = boxes.get(o)!; if (!ob.containsBox(bb)) continue; const op = o.userData.part as Part;
-      if (pathOf(m).startsWith(pathOf(o.parent!)) || pathOf(o).startsWith(pathOf(m.parent!)) || op.passes?.includes(m.name) || p.passes?.includes(o.name) || (op.shape && 'surf' in op.shape)) continue;
-      // (inside by six rays, each way along each axis, every one crossing its surface an odd number of times: an open
-      // shape, as a tyre's turned section open at its bead, is not something to be inside)
-      const ray = new THREE.Raycaster(), ctr = bb.getCenter(new THREE.Vector3()), odd = [[1, 0.013, 0.007], [-1, 0.011, 0.005], [0.009, 1, 0.012], [0.007, -1, 0.01], [0.012, 0.008, 1], [0.01, 0.006, -1]].every((d) => { ray.set(ctr, new THREE.Vector3(...(d as [number, number, number])).normalize()); return ray.intersectObject(o, false).length % 2 === 1; });
-      if (odd) { out.push({ rule: 'hidden inside', part: m.name, path: pathOf(m), says: `wholly inside the ${o.name} (${pathOf(o)})` }); break; }
-    }
   }
   return out;
 };

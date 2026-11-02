@@ -3,7 +3,7 @@
 // (unique), does it reach the rest of the library (versatile), is what it says sourced (sourced), do its own tests pass
 // (tests), does it hold when its inputs are pushed far from their defaults (robust), is everything it is made of known
 // all the way down to materials (known), does what it makes come apart to single parts with every recipe met
-// (explodes), and does nothing it makes run into anything (clean). What fails is said gate by gate; what it was found
+// (explodes), and does nothing it makes overheat anything (clean). What fails is said gate by gate; what it was found
 // to want that nothing knows goes to the unknown queue.
 //
 // The unknown queue is sorted by what its members have in common (what kind of thing each is and the word that names
@@ -53,7 +53,7 @@ export const GATE_SAYS: Record<GateId, string> = {
   robust: 'pushed far from its defaults (zero, negative, a thousandth and a thousand times; a tenth and ten times for what draws parts), it answers or refuses in words: it never crashes and never gives NaN without saying',
   known: 'everything it is made of known all the way down to materials: nothing not in the table, nothing listed only as its materials',
   explodes: 'what it makes comes apart to single parts: no assembly drawn as one piece, every recipe met, nothing only said, every piece weighed by its material',
-  clean: 'nothing it makes runs into, rubs or overheats anything (the rules)',
+  clean: 'nothing it makes overheats anything (the heat rule; nothing is checked for overlap, decision 0021)',
 };
 
 // ==== events: what happened, for whatever listens ======================================================================
@@ -242,7 +242,7 @@ async function gate(lib: Lib, g: GateId, c: Candidate): Promise<Omit<GateResult,
       const rs = m.parts.map((p) => rulesOf(p)), f = rs.flatMap((r) => r.findings);
       // (a block that makes many real models: each model's count said, the worst first)
       const per = m.of.some(Boolean) ? rs.map((r, i) => [m.of[i]!, r.findings.length] as const).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).map(([v, n]) => `${v} ${n}`) : [];
-      return f.length ? { pass: false, says: `${f.length} finding${f.length > 1 ? 's' : ''}${per.length ? ` (${per.join(', ')} of ${rs.length})` : ''}: ${f.slice(0, 2).map((x) => x.says).join('; ')}` } : { pass: true, says: `${rs.reduce((a, r) => a + r.pieces, 0)} pieces: nothing runs into, rubs or overheats anything` };
+      return f.length ? { pass: false, says: `${f.length} finding${f.length > 1 ? 's' : ''}${per.length ? ` (${per.join(', ')} of ${rs.length})` : ''}: ${f.slice(0, 2).map((x) => x.says).join('; ')}` } : { pass: true, says: `${rs.reduce((a, r) => a + r.pieces, 0)} pieces: nothing overheats anything` };
     }
   }
 }

@@ -144,7 +144,7 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 | A computer down to the transistor: FinFET, cell, die, package, board… | electrical | 14 | 2 3 5 10 | · |
 | Physics: a steel ball let go into a tower of wooden blocks | mechanical | 10 | 2 3 6 10 | it places things itself and never checks whether they run into each other or keep their room |
 | Physics: a cart on two motor-driven wheels | mechanical | 15 | 2 3 6 10 | it places things itself and never checks whether they run into each other or keep their room |
-| Motion: a door swinging, and what it hits | structural | 11 | 2 3 5 6 10 | · |
+| Motion: a door swinging, and the room its swing needs | structural | 11 | 2 3 5 6 10 | · |
 | Physics: a pendulum on a hinge | mechanical | 6 | 2 3 6 10 | · |
 | Mating: a door set in its wall by their frames | structural | 5 | 2 3 5 10 | it has what plays with time, and no clock |
 | Clear away: a field of grass, cleared where a road goes | structural | 9 | 2 3 5 10 | · |

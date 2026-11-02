@@ -22,7 +22,7 @@ STATE = {
     '04.P10': 'claimed 2026-11-01: every target a hand presses in the headset measured in an emulated Quest 3 (`npm run eval:headset`), blocks only on the board, wires made from the side panel; no real Quest yet (spec 03, W5)',
     '10.T23': 'claimed, in part, 2026-11-01: the envelope and the kinds dims, witness and judged, exact and closed, with a second checker in Python (decision 0013); the other ten kinds not built',
     '10.T18': 'claimed, in part, 2026-11-01: the AI\'s board taken only when the kernel, run again in the page, refuses none of its certificates (law nodes at the point they ran, wires\' units); blocks folded and parts placed carry none yet',
-    '10.T24': 'claimed, in part, 2026-11-02: no piece excused by its name, no depth skipped; a bar into a round shaft and a piece in another\'s box seen (fault D24 mended); the gate\'s own builds clean; the Cascadia and the Rancher show the clashes it hid (fault D14)',
+    '10.T24': 'superseded 2026-11-02 by decision 0021: nothing checks for overlap (the user: "Gone now"); the checker, its nodes and its gate test deleted; places written by hand counted instead, each count may only fall (`node scripts/by-hand.mjs`)',
     '10.T3': 'claimed 2026-11-01: every figure in src/data carries a claim status from the evidence vocabulary; the gate refuses one without',
     '11.LW15': 'claimed 2026-11-01: the gate compares each quick board cached, again and fresh; a planted cache fault fails it',
 }

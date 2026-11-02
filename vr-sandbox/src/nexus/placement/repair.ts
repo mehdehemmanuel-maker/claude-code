@@ -1,7 +1,7 @@
 // The autopilot (docs/PLACEMENT.md, section 4; layer H: auto.loop, repair.library). A thing is checked by the rules; the
 // findings are grouped into problems (a rule, the part at fault and the unit it harms or runs into); each problem is tried
-// with the repairs the library holds for its rule, cheapest first: move the part (the placement solver), nudge it out of
-// what it runs into, put a heat shield between. A repair is kept only if its problem is gone and the parts it changed have
+// with the repairs the library holds for its rule, cheapest first: route a line again, move the part (the placement
+// solver), put a heat shield between. The rule is heat: nothing is checked for overlap (decision 0021). A repair is kept only if its problem is gone and the parts it changed have
 // fewer findings than before (the guard); a problem no repair clears becomes a named task with why each repair failed.
 // Nothing is typed by hand: what moves, where to, and what is made come from the rules, the maps and the needs.
 
@@ -63,12 +63,6 @@ function whyFixed(root: Part, path: string): string | null {
   const face = needsOf(prune(root, [path])).find((n) => n.kind === 'face'); if (face) return `the ${face.part} faces ${face.to}`;
   return null;
 }
-/** The smaller of two places first (by the box round what is there). */
-function smallerFirst(root: Part, ns: Node[], paths: string[]): string[] {
-  const vol = (path: string) => { const n = ns.find((x) => x.path === path); const s = n?.sub?.getSize(new THREE.Vector3()); return s ? s.x * s.y * s.z : Infinity; };
-  void root; return [...new Set(paths)].sort((a, b) => vol(a) - vol(b));
-}
-
 /** Where a shield leaves the harmed part open to the heat: every vertex of what is at `pb` within reach of the hot part at
  *  `pa`, its line to the nearest point of the hot surface tried against the plate; the hottest of those it does not cover
  *  (°C), against its material's limit. The rules try only the nearest pair; a shield must cover all that is too hot. */
@@ -96,21 +90,7 @@ export function uncovered(t: Part, pa: string, pb: string, plate: { c: THREE.Vec
 
 /** The repairs, by the rule they answer, least costly first. */
 export const REPAIRS: Repair[] = [
-  { id: 'nudge', name: 'Nudge it clear', rules: ['interference', 'clearance'], cost: 1, says: 'the smaller of the two moved straight out along x, y or z, 1 mm, then 2, 4, 8, 16, 32, until the two no longer meet (the least move kept)',
-    run: (t, pr) => {
-      const f = pr.worst; if (!f.pa || !f.pb) return { no: 'the finding does not say where its parts are' };
-      const ns = layout(t), steps = [0.001, 0.002, 0.004, 0.008, 0.016, 0.032], dirs = [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
-      for (const path of smallerFirst(t, ns, [f.pa, f.pb])) {
-        const p = partAt(t, path)!, n = ns.find((x) => x.path === path), holder = n?.parent?.m ?? new THREE.Matrix4(), toLocal = new THREE.Matrix3().setFromMatrix4(holder).invert(), at0 = (p.at ?? [0, 0, 0]) as V3;
-        for (const d of steps) for (const dir of dirs) {
-          const v = new THREE.Vector3(...(dir as V3)).multiplyScalar(d).applyMatrix3(toLocal), moved = setAt(t, path, { ...p, at: [at0[0] + v.x, at0[1] + v.y, at0[2] + v.z] });
-          const left = rulesOf(prune(moved, [f.pa, f.pb])).findings.filter((x) => x.rule === pr.rule && new Set([x.a, x.b]).has(f.a) && new Set([x.a, x.b]).has(f.b));
-          if (!left.length) return { tree: moved, touched: [path], did: `the ${p.name} moved ${Math.round(d * 1000)} mm ${['up', 'down', 'forward', 'back', 'to the right', 'to the left'][dirs.indexOf(dir)]}` };
-        }
-      }
-      return { no: 'no straight move of either up to 32 mm parts them' };
-    } },
-  { id: 'reroute', name: 'Route it again', rules: ['heat', 'clearance', 'interference'], cost: 1.5, says: 'a line (a hose, a cable, a pipe: a tube) routed again between its own two ends, each left the way it went, by the shortest way through free, cool space (route, its section read from the tube: its bore, its wall and its material)',
+  { id: 'reroute', name: 'Route it again', rules: ['heat'], cost: 1.5, says: 'a line (a hose, a cable, a pipe: a tube) routed again between its own two ends, each left the way it went, by the shortest way through free, cool space (route, its section read from the tube: its bore, its wall and its material)',
     run: (t, pr, o) => {
       const f = pr.worst, why: string[] = [], ns = layout(t);
       // (for heat, only what is harmed: the hot part is where it is for its own reasons)
@@ -134,10 +114,10 @@ export const REPAIRS: Repair[] = [
       }
       return { no: why.join('; ') || 'no line to route' };
     } },
-  { id: 'move', name: 'Move it (place.solve)', rules: ['heat', 'interference', 'clearance'], cost: 2, says: 'the part harmed (or the smaller that runs in) placed again by the solver: every place it fits tried, held to its material\'s heat and what moves, the cheapest chosen; kept near what it is wired to',
+  { id: 'move', name: 'Move it (place.solve)', rules: ['heat'], cost: 2, says: 'the part harmed (or the smaller that runs in) placed again by the solver: every place it fits tried, held to its material\'s heat and what moves, the cheapest chosen; kept near what it is wired to',
     run: (t, pr, o) => {
       const f = pr.worst; if (!f.pb) return { no: 'the finding does not say where its parts are' };
-      const ns = layout(t), cands = pr.rule === 'heat' ? [unitOf(f.pb)] : smallerFirst(t, ns, [unitOf(f.pa ?? ''), unitOf(f.pb)].filter(Boolean)), why: string[] = [];
+      const cands = [unitOf(f.pb)], why: string[] = [];
       for (const u of cands) {
         const fixed = whyFixed(t, u); if (fixed) { why.push(fixed); continue; }
         const p = partAt(t, u)!, nr = NEAR.find(([re]) => re.test(`${p.name} ${p.item ?? ''}`));
@@ -155,9 +135,7 @@ export const REPAIRS: Repair[] = [
         const open = uncovered(t, f.pa, f.pb, { c: mid, n, u, w, half: s / 2 });
         if (open.open) { why.push(`${Math.round(s * 1000)} mm leaves ${open.open} points of the ${f.b} at up to ${Math.round(open.worst)} °C (over its ${open.limit} °C) in the open`); continue; }
         const shield: Part = { name: `heat shield (${f.a} / ${f.b})`, item: 'heat-shield', shape: { box: [s, 0.0008, s] }, at: [mid.x, mid.y, mid.z], rot: [e.x, e.y, e.z], mat: 'stainless-304', finish: 'brushed', color: 0xb8bcc2, fixed: `clipped to the ${f.a}, ${Math.round((g / 2) * 1000)} mm off it`, says: `pressed stainless between the ${f.a} and the ${f.b}, ${Math.round((g / 2) * 1000)} mm of air each side` };
-        const tree = { ...t, parts: [...(t.parts ?? []), shield] }, hits = rulesOf(tree, { within: [path] }).findings.filter((x) => x.rule === 'interference');
-        if (!hits.length) return { tree, touched: [path, unitOf(f.pb)], did: `a ${Math.round(s * 1000)} mm shield between the ${f.a} and the ${f.b}, ${Math.round((g / 2) * 1000)} mm from each` };
-        why.push(`${Math.round(s * 1000)} mm runs into the ${hits[0]!.a === shield.name ? hits[0]!.b : hits[0]!.a}`);
+        return { tree: { ...t, parts: [...(t.parts ?? []), shield] }, touched: [path, unitOf(f.pb)], did: `a ${Math.round(s * 1000)} mm shield between the ${f.a} and the ${f.b}, ${Math.round((g / 2) * 1000)} mm from each` };
       }
       return { no: `no shield fits: ${why.join(', ')}` };
     } },

@@ -29,6 +29,7 @@ const AGENT_PIN = '827c6d19f645c051';
 /** The most laws the kernel may still leave undecided (erf and integrals: not in it yet). */
 const UNDECIDED_MOST = 3;
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
+import { byHand, LIMITS } from '../../scripts/by-hand.mjs';
 import { dirname, join, relative, resolve } from 'node:path';
 import '../../src/nexus/seeds';
 import { DOMAINS, LIBRARY, SPEC_FROM, defaultsOf, fits as fitsPorts, portsOf, specProblems, testBlock, type BlockDef } from '../../src/nexus/blocks';
@@ -44,7 +45,6 @@ import { CLEAR } from '../../src/nexus/kinds/motion';
 import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
 import { applyImprint, boreGrips, boreThrough, fastenerFor, fit, imprint, portOfInterface, reapplyImprints, standOn, type Fastener, type Imprinted } from '../../src/nexus/mate';
-import { rulesOf } from '../../src/nexus/make/rules';
 import { massOf } from '../../src/nexus/mass';
 import { jointsOfPorts, solveJoints, type Joint, type JointsSolved } from '../../src/nexus/placement/proximity';
 import { NEMA_FACE } from '../../src/nexus/families';
@@ -113,7 +113,7 @@ describe('every domain, in one pass', () => {
     for (const [id, name] of APP) if (!top(name, (f) => f.id === id)) lost.push(`app "${name}"`);
     // (asked as a person asks: [what is typed, what must come in the first three])
     const ASKED: [string, string][] = [['buton', 'control.button'], ['joystick', 'control.stick'], ['intractable', 'control.button'], ['walk', 'app.walk'], ['make a house', 'seed.house'],
-      ['scrape a website', 'api.zenrows'], ['exprt step', 'export.files'], ['wieght', 'law.weight'], ['ask claude', 'agent.build'], ['explode', 'explode'], ['take apart', 'explode'], ['collision', 'check.rules'],
+      ['scrape a website', 'api.zenrows'], ['exprt step', 'export.files'], ['wieght', 'law.weight'], ['ask claude', 'agent.build'], ['explode', 'explode'], ['take apart', 'explode'],
       ['stres test', 'sweep.range'], ['sprng', 'load.spring'], ['city', 'seed.city'], ['person', 'body'], ['fold into a group', 'app.fold'], ['undo', 'app.undo'], ['slider', 'control.slider'], ['fit to a target', 'fit.target']];
     for (const [q, want] of ASKED) if (!top(q, (f) => f.id === want || f.add?.block === want)) lost.push(`asked "${q}" (wants ${want}; got ${search(q, 3).map((f) => f.add?.block ?? f.id).join(', ')})`);
     expect(lost, `not found in the first three: ${lost.join('; ')}`).toEqual([]);
@@ -648,15 +648,10 @@ describe('every domain, in one pass', () => {
     const massTaken = (0.06 * T * 0.06 * 7850 - massOf(plate)) / 7850; expect(Math.abs(massTaken / want - 1), `the mass takes ${(massTaken * 1e9).toFixed(1)} mm³`).toBeLessThan(1e-9);
     const back = await readStep((await filesOf(plate, { formats: ['step'] })).files['counterbored plate.step'] ?? Object.values((await filesOf(plate, { formats: ['step'] })).files)[0]!);
     expect([back.solids, Math.abs(back.volume / row.volume! - 1) < 0.001], 'its STEP read back: one solid, the same volume').toEqual([1, true]);
-    // (the head stands 1 mm proud of the plate: one sunk wholly in it with a face flush is not seen by the checker at all, its
-    // surfaces crossing nothing (a gap of the checker's, recorded in docs/REALITY.md, not this task's))
-    const head = { name: 'cap screw head', item: 'cap screw', shape: { cyl: [0.0065, 0.008] }, at: [0, T / 2 - 0.003, 0], mat: 'steel-alloy' } as Part, shank = { name: 'cap screw shank', item: 'cap screw', shape: { cyl: [0.004, 0.012] }, at: [0, T / 2 - 0.007 - 0.006, 0], mat: 'steel-alloy' } as Part;
-    expect(rulesOf({ name: 'seated', parts: [plate, head, shank] }).findings.filter((f) => f.rule === 'interference').map((f) => `${f.a} × ${f.b}`), 'a head in the counterbore, a shank in the hole').toEqual([]);
     // (the views drill the same profile: the drilled mesh's volume, by its triangles, within 0.5 % (a 24-sided turning))
     const { leafGeometry } = await import('../../src/nexus/view/kit3d'), g = leafGeometry(plate)!, pos = g.attributes.position!, ix = g.index; let mv = 0;
     for (let i = 0; i < (ix ? ix.count : pos.count); i += 3) { const v = [0, 1, 2].map((k) => { const j = ix ? ix.getX(i + k) : i + k; return [pos.getX(j), pos.getY(j), pos.getZ(j)]; }); mv += (v[0]![0]! * (v[1]![1]! * v[2]![2]! - v[1]![2]! * v[2]![1]!) - v[0]![1]! * (v[1]![0]! * v[2]![2]! - v[1]![2]! * v[2]![0]!) + v[0]![2]! * (v[1]![0]! * v[2]![1]! - v[1]![1]! * v[2]![0]!)) / 6; }
     expect(Math.abs(mv / row.volume! - 1), `the views' drilled plate ${(mv * 1e9).toFixed(0)} mm³, the solid's ${(row.volume! * 1e9).toFixed(0)} mm³`).toBeLessThan(0.005);
-    // (a head wider than the hole it stands in is not found, in a plain hole as in this one: fault D15, open)
   }, 120_000);
   // (a cut of any section (spec 01, I17): a slot with round ends 40 × 8 mm milled 4 mm into a block, and a round hole
   // with its anti-rotation notch punched through a 3 mm panel; each takes away its outline's area times its depth, in the
@@ -681,12 +676,6 @@ describe('every domain, in one pass', () => {
       // with its edges broken, which a thin panel's volume shows))
       const lost = meshVol({ ...p, cuts: undefined }) - meshVol(p); expect(Math.abs(lost / want - 1), `${name}: the views drill ${(lost * 1e9).toFixed(1)} mm³, its outline ${(want * 1e9).toFixed(1)} mm³`).toBeLessThan(0.005);
     }
-    // (an 8 × 7 key 32 mm long standing in the slot, 3 mm proud: not a clash; a block 20 mm wide in its place is (one 12 mm
-    // wide, standing in the slot and wider than it, is not seen: fault D15, open, the checker's, not the cut's))
-    const block: Part = { name: 'keyed block', item: 'keyed block', shape: { box: [0.06, 0.03, 0.06] }, at: [0, 0, 0], mat: 'steel-low', cuts: [{ r: 0.02, depth: 0.004, at: [0, 0.015, 0], dir: [0, -1, 0], u: [1, 0, 0], sect: slot }] };
-    const stand = (w: number): Part => ({ name: w > 0.008 ? 'wide block' : 'key 8x7x32', item: 'key', shape: { box: [0.032, 0.007, w - 0.0001] }, at: [0, 0.015 - 0.004 + 0.0035, 0], mat: 'steel-alloy' });
-    const clash = (g: Part) => rulesOf({ name: 'keyed', parts: [block, g] }).findings.filter((f) => f.rule === 'interference').map((f) => `${f.a} × ${f.b}`);
-    expect(clash(stand(0.008)), 'a key in its keyway').toEqual([]); expect(clash(stand(0.02)).length, 'a block wider than the keyway').toBeGreaterThan(0);
   }, 120_000);
   // (the negative an interface asks (spec 01, I5): the evaluation set's cases 1, 2, 3 and 7 (evals/interfaces/cases.json,
   // their numbers worked by hand from the sources before the code ran) give their expected numbers: a clearance hole and
@@ -1136,7 +1125,7 @@ describe('every domain, in one pass', () => {
     // (a top-level declaration's text, to the next line at the left margin, its comments taken out)
     const bodyOf = (file: string, name: string) => { const text = readFileSync(join(root, 'src/nexus', file), 'utf8'), m = new RegExp(`^(export )?(async )?(function|const) ${name}\\b`, 'm').exec(text);
       if (!m) throw new Error(`${file}: no ${name}`); const rest = text.slice(m.index), end = rest.slice(1).search(/\n(?=[^\s}\])])/); return (end < 0 ? rest : rest.slice(0, end + 1)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1'); };
-    const general: [string, string][] = [['brep.ts', 'solidsOf'], ['view/kit3d.ts', 'drill'], ['make/rules.ts', 'inCut'], ['mass.ts', 'massOf']];
+    const general: [string, string][] = [['brep.ts', 'solidsOf'], ['view/kit3d.ts', 'drill'], ['mass.ts', 'massOf']];
     for (const [f, nm] of general) { const b = bodyOf(f, nm); expect(b.length, `${f} ${nm}: read whole`).toBeGreaterThan(40); expect(b.match(KIND)?.[0], `${f} ${nm} names a kind of seat or tests a row by name`).toBeUndefined(); }
     // (and every declaration of the three files that make, measure and cut a negative, outside the rows block: a row tested
     // by a pattern in a function not named on a list passed (the evaluator, 2026-11-02). Not the sources' titles (data
@@ -1316,12 +1305,6 @@ describe('every domain, in one pass', () => {
     for (const [host, cut, lo, hi] of [[shaft, KS.part, 46.0, 57.5], [hub, KH.part, 0, 1.1 * 116]] as [Part, Part, number, number][]) {
       const rho = 7850, byMass = ((massOf(host) - massOf(cut)) / rho) * 1e9, bySolid = ((await vol(host.parts![0]!)) - (await vol(cut.parts![0]!))) * 1e9;
       expect(byMass - bySolid, `${host.name}: the mass takes ${byMass.toFixed(1)} mm³, the solid ${bySolid.toFixed(1)}`).toBeGreaterThanOrEqual(lo); expect(byMass - bySolid).toBeLessThanOrEqual(hi); }
-    // (a key in both keyways is not a clash; with neither cut it is, both ways (the checker did not see a bar crossing a round
-    // shaft's drawn surface, nor try one inside a hub's box, until fault D24 was mended))
-    const key: Part = { name: 'key 8x7x32', item: 'key', shape: { box: [0.007, 0.032, 0.0079] }, at: [0.0145, 0, 0], mat: 'steel-alloy' };
-    const clash = (s: Part, h: Part) => rulesOf({ name: 'keyed', parts: [s.parts![0]!, h.parts![0]!, key] }).findings.filter((f) => f.rule === 'interference' && (f.a.includes('key') || f.b.includes('key'))).map((f) => `${f.a} × ${f.b}`);
-    expect(clash(KS.part, KH.part), 'the key in its keyways').toEqual([]);
-    expect(clash(shaft, hub).sort(), 'a key with no keyways runs into the shaft and the hub').toEqual(['hub × key 8x7x32', 'shaft × key 8x7x32']);
     // (the panel's cut-out: its recess (the middle of its end, the farthest of its points) toward +w (n × u); a second refused 25 mm along u (30 asked) and 25 along w (50))
     const pc = P.part.parts![0]!.cuts![0]!, f = cutFrame(pc), ends = [...pc.sect!].sort((a, b) => Math.hypot(...b) - Math.hypot(...a)).slice(0, 2), far = [(ends[0]![0] + ends[1]![0]) / 2, (ends[0]![1] + ends[1]![1]) / 2] as [number, number], toward = f.u.map((x, i) => x * far[0] + f.w[i]! * far[1]), w = [P.im.frame.n[1] * P.im.frame.u[2] - P.im.frame.n[2] * P.im.frame.u[1], P.im.frame.n[2] * P.im.frame.u[0] - P.im.frame.n[0] * P.im.frame.u[2], P.im.frame.n[0] * P.im.frame.u[1] - P.im.frame.n[1] * P.im.frame.u[0]];
     expect(toward.reduce((s, x, i) => s + x * w[i]!, 0) / Math.hypot(...toward), 'the recess toward +w').toBeGreaterThan(0.999);
@@ -1360,31 +1343,27 @@ describe('every domain, in one pass', () => {
     const k12 = e(12); expect([span(k12.shaft_um), span(k12.hub_um), it(8, 9)], 'N9 and JS9 span IT9 at 8 mm, as the app gives it').toEqual([k12.IT9_6_10, k12.IT9_6_10, k12.IT9_6_10]);
     expect([k12.d_minus_t1, k12.d_plus_t2], 'under the shaft\'s keyway and over the hub\'s, at 30 mm').toEqual([30 - (k12.t1 as number), 30 + (k12.t2 as number)]); expect((k12.hub_um as number[])[0], 'JS9 about zero').toBe(-(k12.hub_um as number[])[1]!);
   });
-  // (interference as a gate (spec 10, T24; fault D8): no piece excused by its name; a bolt is excused against a part only
-  // where a hole is cut in it on the bolt's axis: a bolt through a plate with no hole is caught, the same bolt in the
-  // plate's hole is not)
-  it('a bolt crossing a wall it does not pass through is caught', () => {
-    const plate = (cuts?: Part['cuts']): Part => ({ name: 'wall plate', item: 'flat bar 60x6', shape: { box: [0.06, 0.006, 0.06] }, at: [0, -0.003, 0], mat: 'steel-low', ...(cuts ? { cuts } : {}) });
-    const bolt = { ...boltedJoint('M8', 0.006), name: 'the bolt' };
-    const without = rulesOf({ name: 'joint', parts: [plate(), bolt] }).findings.filter((f) => f.rule === 'interference');
-    expect(without.map((f) => `${f.a} × ${f.b}`), 'a bolt through a wall with no hole').not.toEqual([]);
-    const withHole = rulesOf({ name: 'joint', parts: [plate([{ r: 0.0045, depth: 0.006, at: [0, 0.003, 0], dir: [0, -1, 0] }]), bolt] }).findings.filter((f) => f.rule === 'interference' && /wall plate/.test(`${f.a} ${f.b}`));
-    expect(withHole.map((f) => `${f.a} × ${f.b}: ${f.says}`), 'the same bolt in the hole cut for it').toEqual([]);
-    expect(readFileSync(join(root, 'src/nexus/make/rules.ts'), 'utf8'), 'nothing excused by a name').not.toMatch(/fastenerRe|\bfastens\(/);
-    // (a bolted joint bores the plies in its grip, and only those seated in it (fault D14): two 6 mm plates between an M8's
-    // washers are each holed (ISO 273 medium, 9 mm) and nothing clashes; a plate drawn 1 mm into the head's washer is left
-    // unbored, and its clash is found; every machine is made so (`boreGrips` at the end of machines.ts's made))
+  // (a bolted joint bores the plies in its grip, and only those seated in it (fault D14))
+  it('a bolted joint bores the plies in its grip', () => {
+    // (two 6 mm plates between an M8's washers are each holed (ISO 273 medium, 9 mm); a plate drawn 1 mm into the head's
+    // washer is left unbored; every machine is made so (`boreGrips` at the end of machines.ts's made))
     const ply = (name: string, y: number): Part => ({ name, item: 'flat bar 60x6', shape: { box: [0.06, 0.006, 0.06] }, at: [0, y, 0], mat: 'steel-low' });
     const j12 = { ...boltedJoint('M8', 12), name: 'the M8 joint' }, h = 0.0016;
     const good = boreGrips({ name: 'two plates', parts: [ply('plate one', -h - 0.003), ply('plate two', -h - 0.009), j12] });
     expect([good.joints, good.holes], 'one joint, a hole in each plate').toEqual([1, 2]);
     expect(good.part.parts!.slice(0, 2).map((p) => (p.cuts ?? []).map((c) => +(2 * c.r * 1000).toFixed(2))), 'each 9 mm across').toEqual([[9], [9]]);
-    expect(rulesOf(good.part).findings.filter((f) => f.rule === 'interference').map((f) => `${f.a} × ${f.b}`), 'nothing clashes').toEqual([]);
     const off = boreGrips({ name: 'a plate in the washer', parts: [ply('plate one', -h - 0.002), ply('plate two', -h - 0.009), j12] });
     expect(off.part.parts![0]!.cuts, 'the plate drawn into the washer: not bored').toBeUndefined();
-    expect(rulesOf(off.part).findings.filter((f) => f.rule === 'interference').some((f) => /plate one/.test(`${f.a} ${f.b}`)), 'and its clash is found').toBe(true);
     expect(readFileSync(join(root, 'src/nexus/machines.ts'), 'utf8'), 'every machine made so').toMatch(/return boreGrips\(P\(m\.name/);
   }, 60_000);
+  // (nothing checks for overlap (decision 0021, the user, 2026-11-02): where a place is still written by hand is counted
+  // instead, builder by builder, and no count may rise; a builder moved onto the operations that cannot write an overlap
+  // counts 0. `node scripts/by-hand.mjs` lists them; `--write` keeps the counts once they fall)
+  it('places written by hand only fall', () => {
+    const now = byHand(), was = JSON.parse(readFileSync(LIMITS, 'utf8')) as Record<string, number>;
+    expect(Object.entries(now).filter(([f, n]) => n > (was[f] ?? 0)).map(([f, n]) => `${f}: ${was[f] ?? 0} → ${n}`), 'a place written by hand where there were fewer').toEqual([]);
+    expect(readFileSync(join(root, 'src/nexus/make/rules.ts'), 'utf8'), 'nothing checks for overlap').not.toMatch(/\b(interference|clearances|rulesThrough|meshClashes)\(/);
+  });
   // (probes are deleted before the gate: one left behind was run by it, and once committed (2026-11-01)); looked for
   // wherever the gate's own include reaches (vite.config.ts), every folder down, not only the top of tests/nexus (the
   // evaluator planted one in tests/unit, tests/golden and a folder under tests/nexus, 2026-11-01)

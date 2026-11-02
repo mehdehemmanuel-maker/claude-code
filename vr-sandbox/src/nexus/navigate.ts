@@ -171,7 +171,7 @@ const ALSO: Record<string, string[]> = { joystick: ['stick'], gamepad: ['stick',
   join: ['mate', 'combine'], attach: ['mate'], connect: ['mate', 'wire'], fasten: ['bolt', 'fastener'], screw: ['bolt', 'thread'], nut: ['nut'], hole: ['bore', 'cut', 'hole'],
   save: ['save', 'export'], file: ['export'], download: ['export'], step: ['export', 'step'], stl: ['export'],
   chat: ['claude', 'ask'], gpt: ['claude', 'ai'], llm: ['claude', 'ai'], agent: ['agent'], home: ['house'], building: ['house', 'building'], town: ['city'],
- collision: ['interference', 'runs into', 'clash'], collide: ['interference', 'runs into'], clash: ['interference', 'runs into'], cad: ['solid', 'b-rep', 'step'], fea: ['calculix', 'three ways'], 'finite': ['calculix'], optimise: ['fit to a target', 'pareto'], optimize: ['fit to a target', 'pareto'], sensitivity: ['what matters'], ai: ['vision model', 'image model', 'intelligence'] };
+ cad: ['solid', 'b-rep', 'step'], fea: ['calculix', 'three ways'], 'finite': ['calculix'], optimise: ['fit to a target', 'pareto'], optimize: ['fit to a target', 'pareto'], sensitivity: ['what matters'], ai: ['vision model', 'image model', 'intelligence'] };
 const lowKept = new Map<string, [Entry, { n: string; i: string; all: string }][]>();
 /** A library's entries with their name, id and all they say in lower case, worked out once. */
 const lowered = (l: Library) => { let x = lowKept.get(l.id); if (!x) { x = entriesOf(l).map((e) => { const n = e.name.toLowerCase(), i = e.id.toLowerCase(); return [e, { n, i, all: `${n} ${i} ${e.says.toLowerCase()}` }]; }); lowKept.set(l.id, x); } return x; };
@@ -298,7 +298,7 @@ export function nextFor(id: string, most = 8): { after: Neighbour[]; before: Nei
   };
 }
 export interface Need { stage: string; why: string; nodes: string[]; /** the node on the board it is about: one of `nodes` goes after it (takes what it gives) or before it */ at?: { after?: string; before?: string } }
-/** What a board may be missing, by the work it does: a thing made and never checked, never shown; a time it plays with
+/** What a board may be missing, by the work it does: a thing made and never shown; a time it plays with
  *  no clock; zones and mates put on and never kept; numbers worked out and never shown. Read from its nodes' stages and
  *  what their ports carry, never from what the board is about. */
 export function needsOf(b: Board): Need[] {
@@ -309,13 +309,10 @@ export function needsOf(b: Board): Need[] {
   const makesThing = blocks.some((x) => portsOf(x.d, defaultsOf(x.d)).outputs.some((p) => thing(p.type)));
   // (things the board itself puts where they go, so they may run into one another: two or more placed by hand into one
   //  assembly, or a pattern of them; things a seed or a maker lays out are laid out by its own rules)
-  const placedInto = (to: string) => edges.filter((e) => e.to === to && b.nodes[e.from]?.block === 'place').length;
-  const together = blocks.some((x) => placedInto(x.n.id) >= 2 || /^(array|mirror|scatter)$/.test(x.d.id));
   // (the thing the board ends with: what it shows, else a thing made that nothing takes further)
   const givesThing = (x: (typeof blocks)[number]) => portsOf(x.d, { ...defaultsOf(x.d), ...(x.n.set ?? {}) }).outputs.some((p) => thing(p.type));
   const shownFrom = edges.find((e) => /^(space\.show|view\.3d)$/.test(b.nodes[e.to]?.block ?? ''))?.from;
   const last = shownFrom ?? blocks.filter((x) => givesThing(x) && !edges.some((e) => e.from === x.n.id && blocks.some((y) => y.n.id === e.to && givesThing(y)))).at(-1)?.n.id;
-  if (together && !stages.has('check')) out.push({ stage: 'check', why: 'it places things itself and never checks whether they run into each other or keep their room', nodes: ['clash', 'check.rules', 'proximity'].filter((x) => LIBRARY.has(x)), ...(last ? { at: { after: last } } : {}) });
   if (makesThing && !ids.has('space.show') && !ids.has('view.3d')) out.push({ stage: 'show', why: 'it makes things and never shows them', nodes: ['space.show', 'view.3d'], ...(last ? { at: { after: last } } : {}) });
   if ([...ids].some((x) => x === 'zone' || x === 'relate') && !ids.has('proximity')) out.push({ stage: 'mate', why: 'zones or mates are put on, and nothing keeps them', nodes: ['proximity', 'mates'], ...(last ? { at: { after: last } } : {}) });
   const unclocked = blocks.find((x) => portsOf(x.d, defaultsOf(x.d)).inputs.some((p) => p.name === 't') && !fed(x.n.id, 't'));

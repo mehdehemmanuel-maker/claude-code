@@ -1,22 +1,17 @@
-// What may not run into, touch or come near what: the rules a made thing is held to, piece by piece, on the surfaces as
-// drawn (triangle against triangle: the critic's meshClashes and leastDistance), not on boxes round them.
+// What may not come near what: the rule a made thing is held to, piece by piece, on its surfaces as drawn.
 //
-//   interference   no two pieces cross, unless they are one piece (a casting's walls, a pressing's patches), one is
-//                  said to pass through the other (an axle through its hub), or one sits in a hole or bore cut for it
-//                  (a bolt in its hole, a piston in its cylinder); never excused by its name (a fastener was: fault D8)
-//   clearance      a piece that moves or must breathe (a belt, a fan's blades, a chain) keeps the gap it says
-//                  (Part.clear) from everything but what it runs on
 //   heat           a hot piece (Part.hot, its surface's temperature) heats what is near it, the heat falling off with
 //                  distance; no piece is where it is hotter than its material stands (MAX_SERVICE): rubber, nylon,
 //                  polypropylene, foam, wiring kept back from an exhaust, a turbo, a catalytic converter
 //
-// Each finding names the two pieces, how deep or how close, and what would put it right.
+// Nothing here checks for overlap (decision 0021, the user, 2026-11-02: "No nothing should be checked for overlap it
+// shouldn't be possible"): the interference and clearance rules, the check through a motion and their excuses are gone.
+// Each finding names the two pieces, how close, and what would put it right.
 
 import * as THREE from 'three';
 import type { Part } from '../kits';
-import { cutFrame, inSect } from '../form';
-import { contacts, layout, within as boxWithin, type Node } from './space';
-import { leastDistance, meshClashes, trisOf, type Tris, type TriMesh } from './critic';
+import { layout, type Node } from './space';
+import { leastDistance, trisOf, type Tris, type TriMesh } from './critic';
 import { leafGeometry } from '../view/kit3d';
 import { graphOf, groupsOf, sliced, temperaturesOf } from '../graph';
 import { matterOf } from '../matter';
@@ -24,7 +19,7 @@ import { matterOf } from '../matter';
 export { MAX_SERVICE, HEAT_FALLOFF, AMBIENT } from './heat-limits';
 import { MAX_SERVICE, HEAT_FALLOFF, AMBIENT } from './heat-limits';
 
-export interface Finding { rule: 'interference' | 'clearance' | 'heat'; a: string; b: string; /** where each is in the tree checked ("/12/3": child 12, then its child 3), so a repair can find it */ pa?: string; pb?: string; says: string; depth?: number; gap?: number; need?: number; at?: [number, number, number]; /** the nearest point on a, where b's nearest is `at` (heat) */ from?: [number, number, number] }
+export interface Finding { rule: 'heat'; a: string; b: string; /** where each is in the tree checked ("/12/3": child 12, then its child 3), so a repair can find it */ pa?: string; pb?: string; says: string; depth?: number; gap?: number; need?: number; at?: [number, number, number]; /** the nearest point on a, where b's nearest is `at` (heat) */ from?: [number, number, number] }
 interface Mesh3 extends TriMesh { p: Part; node: Node; tris?: Tris }
 const T = (m: Mesh3): Tris => (m.tris ??= trisOf(m));
 
@@ -46,99 +41,9 @@ const ownerOf = (n: Node): Node => { let x = n; while (x.parent && (x.p.one || !
 // own pieces are its maker's to fit, not the build's)
 const unitOf = (n: Node): Node | null => { let u: Node | null = null; for (let x: Node | null = n; x && x.parent; x = x.parent) if (x.p.sealed) u = x; return u; };
 const linked = (a: Mesh3, b: Mesh3) => { const A = ownerOf(a.node), B = ownerOf(b.node), ua = unitOf(a.node); if (ua && ua === unitOf(b.node)) return true; return A === B || a.node.path.startsWith(B.path + '/') || b.node.path.startsWith(A.path + '/'); };
-// (a guest in a hole cut in its host, on the hole's axis and no wider than it: a valve in its seat's bore, a piston in its
-// cylinder, a bolt in its hole; it cannot run into the host, and is not tried)
-const inCut = (host: Mesh3, guest: Mesh3): boolean => {
-  if (!host.p.cuts?.length || !guest.node.obb) return false;
-  const inv = host.node.m.clone().invert(), c = guest.node.obb.c.clone().applyMatrix4(inv);
-  return host.p.cuts.some((k) => {
-    // (a cut of any section: the guest's middle within its depth and its outline, as far from its edges as the guest is wide
-    // across it (a key in its keyway, a connector in its cut-out: spec 01, I17))
-    if (k.sect) { const f = cutFrame(k), rel = c.clone().sub(new THREE.Vector3(...k.at)), along = rel.dot(new THREE.Vector3(...f.d)), sp = inSect(k.sect, rel.dot(new THREE.Vector3(...f.u)), rel.dot(new THREE.Vector3(...f.w)));
-      const half = guest.node.obb!.h, u = guest.node.obb!.u, wdir = new THREE.Vector3(...f.d).transformDirection(host.node.m), widths = [0, 1, 2].filter((i) => Math.abs(u[i]!.dot(wdir)) < 0.7).map((i) => half[i]!);
-      return along >= -0.0005 && along <= k.depth + 0.0005 && sp.inside && (widths.length ? Math.min(...widths) : 0) <= sp.edge * 1.08 + 0.0005; }
-    const ax = new THREE.Vector3(...k.dir).normalize(), rel = c.clone().sub(new THREE.Vector3(...k.at)), along = rel.dot(ax), off = rel.clone().sub(ax.clone().multiplyScalar(along)).length();
-    const half = guest.node.obb!.h, u = guest.node.obb!.u, wdir = ax.clone().transformDirection(host.node.m), widths = [0, 1, 2].filter((i) => Math.abs(u[i]!.dot(wdir)) < 0.7).map((i) => half[i]!);
-    // (a turned cut is as wide, where the guest's middle is along it, as its profile there: a head in its counterbore, a
-    // shank in its hole)
-    const rk = k.prof ? Math.max(k.r, ...k.prof.flatMap((q, i) => { const nx = k.prof![i + 1]; if (!nx) return Math.abs(along - q[1]) < 1e-9 ? [q[0]] : []; return along >= Math.min(q[1], nx[1]) - 1e-9 && along <= Math.max(q[1], nx[1]) + 1e-9 ? [Math.max(q[0], nx[0])] : []; })) : k.r;
-    const rg = widths.length ? Math.max(...widths) : Math.min(...half); return off + rg <= rk * 1.08 + 0.0005; });
-};
-// (what a piece or anything it is in says passes through it or is joined to it, against the names of the other piece and
-// of what it is in: a sprocket says the chain's links pass it, whichever of its pieces meets whichever of theirs)
+// (a piece and everything it is in, by name: what `only` is matched against)
 const upFrom = (n: Node): Part[] => { const o: Part[] = []; for (let x: Node | null = n; x; x = x.parent) o.push(x.p); return o; };
 const names = (n: Node): Set<string> => new Set(upFrom(n).map((p) => p.name));
-const tells = (a: Node, b: Node): boolean => { const nb = names(b); return upFrom(a).some((p) => p.passes?.some((x) => nb.has(x)) || p.joins?.some((x) => nb.has(x))); };
-const said = (a: Mesh3, b: Mesh3) => inCut(a, b) || inCut(b, a) || tells(a.node, b.node) || tells(b.node, a.node);
-
-/** What runs into what: pieces whose surfaces cross, that are not one piece, not fitted one through the other (a bolt in
- *  the hole cut for it, a part said to pass another). No piece is excused by its name: a fastener was, against everything
- *  (fault D8; spec 10, T24), and a bolt drawn through a wall with no hole passed. */
-/** The pairs whose oriented boxes press into each other and that the rules do not excuse: what is tried exactly. */
-export function candidates(ms: Mesh3[]): [Mesh3, Mesh3][] {
-  const byNode = new Map<Node, Mesh3>(); for (const m of ms) byNode.set(m.node, m);
-  return contacts(ms.map((m) => m.node)).filter((c) => c.depth > 0).map((c) => [byNode.get(c.a)!, byNode.get(c.b)!] as [Mesh3, Mesh3]).filter(([a, b]) => a && b && !linked(a, b) && !said(a, b));
-}
-/** The pairs the contact graph passes over, one piece's oriented box lying wholly within the other's (taken there as in
- *  its hollow): a key inside a hub ring's box was never tried (fault D24). Tried here for their surfaces crossing only:
- *  one wholly inside the other's box and surface stays the contact graph's to judge. */
-export function nested(ms: Mesh3[]): [Mesh3, Mesh3][] {
-  const out: [Mesh3, Mesh3][] = [], solid = ms.filter((m) => m.node.obb && m.node.box);
-  for (const b of solid) for (const a of solid) if (a !== b && b.node.box!.intersectsBox(a.node.box!) && boxWithin(a.node.obb!, b.node.obb!) && !linked(a, b) && !said(a, b)) out.push([b, a]);
-  return out;
-}
-const CAST_ROUND = /mould-compound|potting|encapsula/;
-/** Whether a point is inside a closed surface: a ray from it, slightly skewed off the axes so it misses edges, crosses
- *  the surface an odd number of times (Möller–Trumbore for each crossing). An open surface has no inside. */
-function inside(p: [number, number, number], t: Tris): boolean {
-  if (!t.closed || p[0] < t.lo[0] || p[1] < t.lo[1] || p[2] < t.lo[2] || p[0] > t.hi[0] || p[1] > t.hi[1] || p[2] > t.hi[2]) return false;
-  const d = [0.99984, 0.01313, 0.01211], v = t.v; let n = 0;
-  for (let k = 0; k < t.n; k++) { const o = k * 9, e1 = [v[o + 3]! - v[o]!, v[o + 4]! - v[o + 1]!, v[o + 5]! - v[o + 2]!], e2 = [v[o + 6]! - v[o]!, v[o + 7]! - v[o + 1]!, v[o + 8]! - v[o + 2]!];
-    const h = [d[1]! * e2[2]! - d[2]! * e2[1]!, d[2]! * e2[0]! - d[0]! * e2[2]!, d[0]! * e2[1]! - d[1]! * e2[0]!], det = e1[0]! * h[0]! + e1[1]! * h[1]! + e1[2]! * h[2]!; if (Math.abs(det) < 1e-18) continue;
-    const s0 = [p[0] - v[o]!, p[1] - v[o + 1]!, p[2] - v[o + 2]!], u = (s0[0]! * h[0]! + s0[1]! * h[1]! + s0[2]! * h[2]!) / det; if (u < 0 || u > 1) continue;
-    const q = [s0[1]! * e1[2]! - s0[2]! * e1[1]!, s0[2]! * e1[0]! - s0[0]! * e1[2]!, s0[0]! * e1[1]! - s0[1]! * e1[0]!], w = (d[0]! * q[0]! + d[1]! * q[1]! + d[2]! * q[2]!) / det; if (w < 0 || u + w > 1) continue;
-    if ((e2[0]! * q[0]! + e2[1]! * q[1]! + e2[2]! * q[2]!) / det > 0) n++; }
-  return n % 2 === 1;
-}
-/** Whether a lies within b: three of its points, spread through its triangles, each inside b's closed surface. */
-function within(a: Mesh3, b: Mesh3): boolean {
-  // (inside a hollow part, a shell, is in its hollow: only crossing its wall is a fault, and the triangles see that)
-  const ta = T(a), tb = T(b); if (!tb.closed || !ta.n || b.p.shell) return false;
-  return [0, Math.floor(ta.n / 3), Math.floor((2 * ta.n) / 3)].every((k) => { const o = k * 9, v = ta.v; return inside([(v[o]! + v[o + 3]! + v[o + 6]!) / 3, (v[o + 1]! + v[o + 4]! + v[o + 7]!) / 3, (v[o + 2]! + v[o + 5]! + v[o + 8]!) / 3], tb); });
-}
-export function interference(ms: Mesh3[], o: { touch?: number; pair?: (a: Mesh3, b: Mesh3) => boolean } = {}): Finding[] {
-  const out: Finding[] = [], seen = new Set<string>(), tol = o.touch ?? 0.0002;
-  // (first the pieces' oriented boxes, fast: only pairs whose boxes press into each other by more than half a millimetre,
-  // and that the rules do not excuse, are tried on their triangles)
-  const cands = candidates(ms).filter(([a, b]) => !o.pair || o.pair(a, b)), inBox = nested(ms).filter(([a, b]) => !o.pair || o.pair(a, b)), boxed = new Set(inBox);
-  for (const pair of [...cands, ...inBox]) { const [a, b] = pair;
-    const key = [ownerOf(a.node).path, ownerOf(b.node).path].sort().join('|'); if (seen.has(key)) continue;
-    const c = meshClashes([a, b], { touch: tol, edge: 'scaled', fused: () => false }).find((x) => x.kind === 'through');
-    // (no surface crossing, and yet one inside the other: a triangle test cannot see that, so its points are tried)
-    // (save inside what is cast round it: a moulding or a potting compound holds its wires and its die by being poured on them)
-    const inner = c || boxed.has(pair) ? null : within(a, b) ? [a, b] : within(b, a) ? [b, a] : null; if (!c && (!inner || CAST_ROUND.test(inner[1]!.p.item ?? ''))) continue;
-    seen.add(key);
-    out.push({ rule: 'interference', a: ownerOf(a.node).p.name, b: ownerOf(b.node).p.name, pa: ownerOf(a.node).path, pb: ownerOf(b.node).path, says: inner ? `the ${inner[0]!.name} is inside the ${inner[1]!.name}` : `the ${a.name} runs into the ${b.name}`, ...(c?.at ? { at: c.at as [number, number, number] } : {}) });
-  }
-  return out;
-}
-/** Every pair the rules try for interference, and what the triangle test says of each: for setting beside another
- *  engine's verdict (brep.ts, exact booleans), each piece by its place in the tree. */
-export function interferencePairs(ms: Mesh3[], touch = 0.0002): { a: string; b: string; pa: string; pb: string; owners: [string, string]; through: boolean }[] {
-  return [...candidates(ms), ...nested(ms)].map(([a, b]) => ({ a: a.name, b: b.name, pa: a.node.path, pb: b.node.path, owners: [ownerOf(a.node).p.name, ownerOf(b.node).p.name] as [string, string], through: meshClashes([a, b], { touch, edge: 'scaled', fused: () => false }).some((x) => x.kind === 'through') }));
-}
-/** The gaps kept: a piece that says its clearance (Part.clear) closer than that to anything it does not run on. */
-export function clearances(ms: Mesh3[], pair: (a: Mesh3, b: Mesh3) => boolean = () => true): Finding[] {
-  const out: Finding[] = [];
-  for (const a of ms) {
-    const need = a.p.clear ?? (a.node.parent?.p.clear); if (!need) continue;
-    for (const b of ms) {
-      if (b === a || !pair(a, b) || linked(a, b) || said(a, b) || (a.p.runsOn ?? a.node.parent?.p.runsOn ?? []).some((r) => b.name.includes(r) || ownerOf(b.node).p.name.includes(r))) continue;
-      const d = leastDistance(T(a), T(b), need); if (d && d.d < need) out.push({ rule: 'clearance', a: ownerOf(a.node).p.name, b: ownerOf(b.node).p.name, pa: ownerOf(a.node).path, pb: ownerOf(b.node).path, gap: d.d, need, says: `the ${a.name} is ${(d.d * 1000).toFixed(1)} mm from the ${b.name}: it needs ${(need * 1000).toFixed(0)} mm` });
-    }
-  }
-  return out;
-}
 /** What is too near something hot for its material: at the least distance between them, the hot piece's heat (its
  *  excess over the air falling off by HEAT_FALLOFF) against what the other's material stands. Says how far back it
  *  needs to be. */
@@ -202,20 +107,11 @@ export function conducted(root: Part, already: Finding[] = []): Finding[] {
   });
   return out;
 }
-/** All three, on a thing's surfaces as drawn. */
-/** …or only between what is named like `only` (a piece of it, or anything it is in) and everything: what moves, at one
- *  place in its motion. */
-export function rulesOf(root: Part, o: { touch?: number; only?: RegExp; /** or only what is under these places in the tree ("/12/3") */ within?: string[]; /** only what moves is tried (a pose in a motion): heat and clearance as at rest */ motion?: boolean } = {}): { findings: Finding[]; pieces: number } {
-  const all = trianglesOf(root), w = o.within, on = o.only ? (m: Mesh3) => [...names(m.node)].some((n) => o.only!.test(n)) : w ? (m: Mesh3) => w.some((x) => m.node.path === x || m.node.path.startsWith(x + '/')) : null, ms = all;
-  if (on) { const pair = (a: Mesh3, b: Mesh3) => on(a) || on(b), res = [...interference(ms, { ...o, pair }), ...(o.motion ? [] : [...clearances(ms, pair), ...heat(ms, pair)])]; return { findings: res, pieces: all.filter(on).length }; }
-  const near = heat(ms);
-  return { findings: [...interference(ms, o), ...clearances(ms), ...near, ...conducted(root, near)], pieces: ms.length };
-}
-
-/** The rules through a motion: the thing made at each of `steps` places through it (a crank turned through a revolution,
- *  a door through its swing), only what moves tried against everything at each; each finding with where it happened. */
-export function rulesThrough(make: (t: number) => Part, steps: number, only: RegExp, o: { touch?: number } = {}): { findings: (Finding & { t: number })[]; tried: number } {
-  const out: (Finding & { t: number })[] = [], seen = new Set<string>();
-  for (let k = 0; k < steps; k++) { const t = k / steps; for (const f of rulesOf(make(t), { ...o, only, motion: true }).findings) { const key = `${f.a}|${f.b}|${f.says}`; if (seen.has(key)) continue; seen.add(key); out.push({ ...f, t }); } }
-  return { findings: out, tried: steps };
+/** The heat rule on a thing's surfaces as drawn, across the air and conducted… or only between what is named like `only`
+ *  (a piece of it, or anything it is in), or what is under these places in the tree ("/12/3"), and everything. */
+export function rulesOf(root: Part, o: { only?: RegExp; within?: string[] } = {}): { findings: Finding[]; pieces: number } {
+  const all = trianglesOf(root), w = o.within, on = o.only ? (m: Mesh3) => [...names(m.node)].some((n) => o.only!.test(n)) : w ? (m: Mesh3) => w.some((x) => m.node.path === x || m.node.path.startsWith(x + '/')) : null;
+  if (on) return { findings: heat(all, (a, b) => on(a) || on(b)), pieces: all.filter(on).length };
+  const near = heat(all);
+  return { findings: [...near, ...conducted(root, near)], pieces: all.length };
 }
