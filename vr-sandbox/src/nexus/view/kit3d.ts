@@ -5,10 +5,10 @@
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { FINISH_MAKE, edgeRadius, surfaceOf } from '../finish';
 import { resolveLook, type Graphic, type Look } from '../appearance';
-import type { Cut, Part, Shape } from '../kits';
+import type { Cut, Part, Shape, V3 } from '../kits';
 import { detail, divisions } from '../lod';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
 import { massOf } from '../mass';
@@ -268,6 +268,40 @@ export function cutSolid(c: Cut, through = false, drawn = true, segments?: numbe
   const at = new THREE.Vector3(...c.at); if (!turned) at.addScaledVector(dir, c.depth / 2 - 1e-4);
   g.applyMatrix4(new THREE.Matrix4().compose(at, new THREE.Quaternion().setFromUnitVectors(UP, dir), new THREE.Vector3(1, 1, 1))); return g;
 }
+/** A box drilled straight through by round holes along one of its axes, drawn as its outline with those holes in it,
+ *  extruded: exact, and cheap (no booleans). Its edges and the holes' mouths broken as the box's are (`edgeRadius`). The
+ *  cuts it cannot take (blind, turned, of a section, n-sided, running out past its edge, meeting another) are left for
+ *  `drill`. (By booleans alone, the engine's deck flange, a plate with 4 bores and 10 bolt holes, took 51.5 s and came
+ *  out as 121,908 triangles, measured 2026-11-02.) */
+export function throughPlate(box: [number, number, number], cuts: Cut[], f: number, drawn: boolean): { g: THREE.BufferGeometry; rest: Cut[] } | null {
+  const half = box.map((x) => x / 2), bevel = (t: number) => (f > 1e-4 && t > 2 * f + 1e-5 ? f : 0);
+  // (for each axis it may be drilled along: the plane of its outline, as [u, v] in the box's frame, and how that plane
+  // is turned onto the axis: z as it is; y by a turn of −90° about x ((u, v) → (x, −z)); x by +90° about y ((u, v) → (−z, y)))
+  const axes = [
+    { a: 2, at: (p: V3) => [p[0], p[1]], hu: half[0]!, hv: half[1]!, turn: new THREE.Matrix4() },
+    { a: 1, at: (p: V3) => [p[0], -p[2]], hu: half[0]!, hv: half[2]!, turn: new THREE.Matrix4().makeRotationX(-Math.PI / 2) },
+    { a: 0, at: (p: V3) => [-p[2], p[1]], hu: half[2]!, hv: half[1]!, turn: new THREE.Matrix4().makeRotationY(Math.PI / 2) },
+  ];
+  let best: { ax: (typeof axes)[number]; take: Cut[]; rest: Cut[] } | null = null;
+  for (const ax of axes) {
+    const t = box[ax.a]!, b = bevel(t), take: Cut[] = [], rest: Cut[] = [];
+    for (const c of cuts) {
+      const len = Math.hypot(...c.dir), along = c.dir[ax.a]! / (len || 1), [u, v] = ax.at(c.at), s0 = c.at[ax.a]!, s1 = s0 + along * c.depth;
+      const fits = !c.prof && !c.sect && c.n === undefined && Math.abs(Math.abs(along) - 1) < 1e-9 && Math.min(s0, s1) <= -half[ax.a]! + 1e-7 && Math.max(s0, s1) >= half[ax.a]! - 1e-7
+        && Math.abs(u!) + c.r <= ax.hu - 2 * b - 1e-4 && Math.abs(v!) + c.r <= ax.hv - 2 * b - 1e-4
+        && take.every((o) => { const [ou, ov] = ax.at(o.at); return Math.hypot(u! - ou!, v! - ov!) > c.r + o.r + 2 * b + 1e-4; });
+      (fits ? take : rest).push(c);
+    }
+    if (take.length && (!best || take.length > best.take.length)) best = { ax, take, rest };
+  }
+  if (!best) return null;
+  const { ax, take, rest } = best, t = box[ax.a]!, b = bevel(t), sh = new THREE.Shape([[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => new THREE.Vector2(i! * (ax.hu - b), j! * (ax.hv - b))));
+  for (const c of take) { const [u, v] = ax.at(c.at), n = drawn ? roundSegments(c.r) : 24, r = c.r + b; sh.holes.push(new THREE.Path(Array.from({ length: n }, (_, k) => new THREE.Vector2(u! + r * Math.cos((2 * Math.PI * k) / n), v! + r * Math.sin((2 * Math.PI * k) / n))))); }
+  const raw = new THREE.ExtrudeGeometry(sh, { depth: t - 2 * b, bevelEnabled: b > 0, bevelThickness: b, bevelSize: b, bevelSegments: 2, curveSegments: 1, steps: 1 });
+  raw.translate(0, 0, b - t / 2); raw.applyMatrix4(ax.turn); raw.deleteAttribute('uv');
+  // (the walls of each hole and the broken edges shaded smooth; the faces and the walls kept sharp where they meet)
+  const g = toCreasedNormals(raw, Math.PI / 6); raw.dispose(); return { g, rest };
+}
 function drill(g: THREE.BufferGeometry, cuts: Cut[], key: string, drawn = false): THREE.BufferGeometry {
   const had = drilled.get(key); if (had) return had;
   let a = new Brush(clean(g)); a.updateMatrixWorld();
@@ -327,7 +361,11 @@ function leafGeometryMade(p: Part, drawn: boolean): THREE.BufferGeometry | null 
   const key = JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts, detail(), drawn]); if (leafGeos.has(key)) return leafGeos.get(key)!;
   let g = geometry(p.shape, p.mat, p.make, p.facets, drawn);
   if (g && p.base) { const s = p.shape, h = 'cyl' in s ? s.cyl[1] : 'cone' in s ? s.cone[1] : 'capsule' in s ? s.capsule[1] : 'box' in s ? s.box[1] : 0; g = g.clone(); g.translate(0, h / 2, 0); }
-  if (g && p.cuts?.length) g = drill(g, p.cuts, key, drawn);
+  if (g && p.cuts?.length) {
+    // (a plate drilled straight through, drawn from its outline; what is left of its cuts, and every other part's, by booleans)
+    const plate = 'box' in p.shape && !p.base ? throughPlate(p.shape.box, p.cuts, edgeRadius(p.mat, thinnest(p.shape), p.make), drawn) : null;
+    if (plate) g = plate.g; const rest = plate ? plate.rest : p.cuts; if (rest.length) g = drill(g, rest, key, drawn);
+  }
   leafGeos.set(key, g); return g;
 }
 /** What wear reads from a surface's own shape, on each vertex, made once per geometry: its mean curvature (from each edge

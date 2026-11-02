@@ -10,7 +10,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | What | Count |
 | --- | --- |
 | Tasks in the specs | 145: 25 passing (by the evaluator), 6 claimed by the builder and not yet judged, the rest failing |
-| Faults found in the code | 35 (16 fixed) |
+| Faults found in the code | 36 (16 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
@@ -79,6 +79,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | D33 | "Open a copy to change" drops a made node's values: `openCopy` puts the block's board in the node's place with no `set`, so every value typed on the node (kept in its `set` by the inspector, read by the engine for an unwired input) is lost, and the copy runs on its inside's defaults. Probed by running the statement on a board: a block `a*3` placed with 5 typed gives 15; its copy gives 3; with its `set` kept, 15. Every node type would meet it | `src/nexus/view/nodes.ts:482` (openCopy), `:756-760` (typed values kept in `set`), `src/nexus/dataflow.ts:334` (an unwired input read from `set`) | open | 13.NC10 |
 | D34 | A saved block whose board holds another saved block fails on the pool's workers: `carryOf` carries the one block's board, and the worker registers only that block, so a node of the inner block finds no block of its id there. Probed 2026-11-02: 2,000 jobs of such a block sent with wide: true, only the outer block carried, ran on 4 workers and 1,999 failed with 'no block … in the library' (the first, run here, passed). A made node holding made nodes would meet it, and so would a fit, sweep or variants run over it on the workers. Planted in 13.NC8's check: with only the outer block carried, a fit.target over it run on the workers fails | `src/nexus/trial-worker.ts:14` (one `register`, of the block carried), `src/nexus/dataflow.ts:705` (carryOf), `src/nexus/pool.ts:13` (Carry) | open | 13.NC8 |
 | D35 | `wide: true` does not put a batch on the workers, though `ManyOptions` says "On the workers whatever the first trial took": the test at `:72` reads `wide` (or workers already started) as a lower bar, a batch going wide only when its rest would take over 50 ms, so a quick batch stays here. Probed 2026-11-02: 5 jobs with wide: true on 4 cores ran here (wide false, 1 worker). A check that means to run on the workers (13.NC8's planted pool case) can pass without reaching them | `src/nexus/pool.ts:62` (the comment), `:72` (the test) | open | 13.NC8 |
+| D36 | The views' booleans leave small triangular gaps in a thin head gasket where its slanted pushrod holes cross it, beside its bolt holes: seen 2026-11-02 on the look page's car (`look.html?kit=car&only=head gasket`), the same before and after the plates drilled straight through were drawn from their outline (the slanted holes still go through the booleans) | `src/nexus/view/kit3d.ts` (drill; three-bvh-csg) | open | 01.I4 |
 
 ## Findings by theme (numbers are rows of `research/00-synthesis.md`)
 

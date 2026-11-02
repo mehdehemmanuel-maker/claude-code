@@ -2555,3 +2555,17 @@ builder (`node scripts/by-hand.mjs`): 1,203 `at` and `rot` properties in 46 file
 most at 222, and the one test fails if any count rises (`npm run gate`). The overlaps already drawn into builds (faults
 D14, D25) are now unmeasured; they go as the builders move onto the operations that cannot write one, which are designed
 and not built.
+
+## 2026-11-02: the engine board's freeze was the view drilling holes by booleans
+
+With the overlap checks gone the engine board ran in 2.5 s in the app, yet the page did not answer for 96.6 s. A CPU
+profile of the page as it opened the board (Chrome's profiler through Playwright, an unminified build: `npx vite build
+--config vite.view.config.ts --minify false`) put 93.9 s of a 99.0 s freeze in `drill` (`src/nexus/view/kit3d.ts`),
+the views' holes cut by mesh booleans (three-bvh-csg), all in one frame. Timed part by part in Node (a probe run with
+`npx vitest run`, not kept), the engine's 72 distinct parts with cuts took 65.2 s, the deck flange alone 51.5 s, coming
+out as 121,908 triangles: a 400 × 8 × 110 mm plate with 4 bores and 10 bolt holes, each subtracted in turn. A box
+drilled straight through by round holes is now drawn from its outline with the holes in it, extruded (`throughPlate`;
+the rest of its cuts, and every other part's, still by booleans): the 72 parts take 5.4 s, the deck flange 56 ms and
+8,788 triangles, and the longest freeze opening the board in the app is 7.8 s (one run each, the same shot script). The
+plate's holes and volume are held by the test "a plate drilled straight through" (`npm run gate`). Fault D36, small
+gaps the booleans leave in a thin gasket's slanted holes, was there before and is filed.

@@ -635,7 +635,7 @@ describe('every domain, in one pass', () => {
   // (a turned cut made as it is cut (spec 01, I4): an M8 counterbore to DIN 974-1 (15 mm across, 8.4 mm deep: the head's
   // 8 mm and 0.4 mm, typical) over its 9 mm hole (ISO 273 medium) through 20 mm of plate, made an exact solid: what it
   // takes away is its profile's volume of revolution within 0.1 %, the solid is valid, and its STEP reads back the same;
-  // the views drill the same profile; the bolt's head in the counterbore and its shank in the hole are not clashes)
+  // the views drill the same profile)
   it('a counterbore cut as a solid, its volume its profile\'s, its STEP the same', async () => {
     const { solidsOf, filesOf, readStep } = await import('../../src/nexus/brep');
     const cb = COUNTERBORE.M8!, t = 0.0084, T = 0.02, prof: [number, number][] = [[cb.d1 / 2000, 0], [cb.d1 / 2000, t], [cb.d2 / 2000, t], [cb.d2 / 2000, T]];
@@ -653,6 +653,24 @@ describe('every domain, in one pass', () => {
     for (let i = 0; i < (ix ? ix.count : pos.count); i += 3) { const v = [0, 1, 2].map((k) => { const j = ix ? ix.getX(i + k) : i + k; return [pos.getX(j), pos.getY(j), pos.getZ(j)]; }); mv += (v[0]![0]! * (v[1]![1]! * v[2]![2]! - v[1]![2]! * v[2]![1]!) - v[0]![1]! * (v[1]![0]! * v[2]![2]! - v[1]![2]! * v[2]![0]!) + v[0]![2]! * (v[1]![0]! * v[2]![1]! - v[1]![1]! * v[2]![0]!)) / 6; }
     expect(Math.abs(mv / row.volume! - 1), `the views' drilled plate ${(mv * 1e9).toFixed(0)} mm³, the solid's ${(row.volume! * 1e9).toFixed(0)} mm³`).toBeLessThan(0.005);
   }, 120_000);
+  // (a plate drilled straight through is drawn from its outline with its holes, no booleans (kit3d.ts throughPlate): along
+  // each of its three axes, each hole's wall where its cut is, the volume the box's less the holes' polygons' exactly, and a
+  // hole that stops inside it left for the booleans; by booleans alone the engine's deck flange took 51.5 s, 2026-11-02)
+  it('a plate drilled straight through: its holes where its cuts are, its volume exact', async () => {
+    const { throughPlate, roundSegments } = await import('../../src/nexus/view/kit3d');
+    for (const a of [0, 1, 2]) {
+      const box: [number, number, number] = [0.1, 0.08, 0.06]; box[a] = 0.012; const u = (a + 1) % 3, v = (a + 2) % 3;
+      const at = (p: number, q: number, s: number): V3 => { const x: V3 = [0, 0, 0]; x[a] = s; x[u] = p; x[v] = q; return x; }, dir = (s: number): V3 => { const x: V3 = [0, 0, 0]; x[a] = s; return x; };
+      const cuts = [{ r: 0.008, depth: 0.012, at: at(0.02, 0.01, 0.006), dir: dir(-1) }, { r: 0.004, depth: 0.012, at: at(-0.015, -0.012, -0.006), dir: dir(1) }, { r: 0.003, depth: 0.004, at: at(0, 0, 0.006), dir: dir(-1) }];
+      const out = throughPlate(box, cuts, 0, true)!; expect(out.rest, `along ${'xyz'[a]}: the blind hole left for the booleans`).toEqual([cuts[2]]);
+      const P = out.g.attributes.position!; let vol = 0;
+      for (let i = 0; i < P.count; i += 3) { const [p, q, r] = [i, i + 1, i + 2].map((k) => [P.getX(k), P.getY(k), P.getZ(k)]); vol += (p![0]! * (q![1]! * r![2]! - q![2]! * r![1]!) - p![1]! * (q![0]! * r![2]! - q![2]! * r![0]!) + p![2]! * (q![0]! * r![1]! - q![1]! * r![0]!)) / 6; }
+      const want = box[0] * box[1] * box[2] - cuts.slice(0, 2).reduce((t, c) => { const n = roundSegments(c.r); return t + (n / 2) * c.r ** 2 * Math.sin((2 * Math.PI) / n) * box[a]!; }, 0);
+      expect(Math.abs(vol / want - 1), `along ${'xyz'[a]}: ${(vol * 1e9).toFixed(1)} mm³, the box less its holes ${(want * 1e9).toFixed(1)} mm³`).toBeLessThan(1e-6);
+      for (const c of cuts.slice(0, 2)) { let on = 0; for (let k = 0; k < P.count; k++) { const w = [P.getX(k), P.getY(k), P.getZ(k)]; if (Math.abs(Math.hypot(w[u]! - c.at[u]!, w[v]! - c.at[v]!) - c.r) < 1e-7) on++; }
+        expect(on, `along ${'xyz'[a]}: the wall of the ${c.r * 2000} mm hole round its cut's middle`).toBeGreaterThanOrEqual(2 * roundSegments(c.r)); }
+    }
+  });
   // (a cut of any section (spec 01, I17): a slot with round ends 40 × 8 mm milled 4 mm into a block, and a round hole
   // with its anti-rotation notch punched through a 3 mm panel; each takes away its outline's area times its depth, in the
   // mass, in the exact solid and in the views alike; a key standing in the slot is not a clash, a block wider than it is)
