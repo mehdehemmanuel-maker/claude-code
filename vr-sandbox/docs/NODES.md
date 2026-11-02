@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 626 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 627 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -35,16 +35,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 340 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 341 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 13 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
 | hypothetical | 86 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 556 tested here (their own tests: that they do what they say, not that the world does); 60 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 557 tested here (their own tests: that they do what they say, not that the world does); 60 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 199 of 626 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 199 of 627 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (15)
 
@@ -165,7 +165,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Bore where it passes** (`bore`): A part bored wherever another runs through it: a hole along the other's line, cut in each piece it passes and in no other; for a bolt, a screw or a stud its standard's clearance hole (ISO 273 medium for its thread), … *derived, tested here*
 - **Clear away** (`clear`): What a thing places, less whatever comes within a distance of another thing (grass under a road, trees where a house stands) or, with "keep", only those: deleting by where things are *derived, tested here, before the update*
 - **Combine** (`combine`): Several things as one assembly, each where it is: a frame and its motors, a city and the swarm over it *derived, tested here, before the update*
-- **Cut by a standard** (`negative`): Any kind of seat, hole or cut-out written as a row of data (a bearing's housing or shaft, a dowel's hole, a key's keyway in a shaft or a hub, a pipe port, a panel cut-out) asked of a part at a point: stood on the … *derived, tested here*
+- **Cut by a standard** (`cut.standard`): Any kind of seat, hole or cut-out written as a row of data (a bearing's housing or shaft, a dowel's hole, a key's keyway in a shaft or a hub, a pipe port, a panel cut-out) asked of a part at a point: stood on the … *derived, tested here*
 - **Fit in** (`fit`): Every piece of a thing whose name a pattern finds taken out, and the thing wired in put in its place (where it was, turned as it was): a tyre made in depth on every wheel, a real battery pack for the box that stood … *derived, tested here, before the update*
 - **Fit to a target** (`fit.target`): Any block in the library, a law, a maker, a check, or a whole pipeline folded into one (Picture to model, a seed), run again and again with some of its inputs or settings moved within ranges, until its outputs meet … *derived, tested here*
 - **Frame** (`frame`): A named place on a thing, facing a way: where something is set on it, or where it is set on something (a door's middle, a house's drive). *derived, tested here, before the update*
@@ -315,7 +315,7 @@ Every physical law as a calculator, by its field, and formulas you write.
 - **Thermal & fluids** (29): Aerodynamic drag, Aerodynamic lift, Arc welding heat input, Archimedes' principle, Arrhenius rate, Bernoulli's equation, Boltzmann distribution, Carnot efficiency, Clausius-Clapeyron relation, Continuity equation, First law of thermodynamics, Fourier's law, Free convection in still air, Heat capacity, Hydrostatic pressure, Ideal gas law, Ideal static thrust of a rotor (momentum theory), Least work to take out a trace, Lumped thermal time constant, Newton's law of cooling, Pressure drop in a pipe (Darcy-Weisbach), Reynolds number, Sound insulation of a wall (mass law), Stefan-Boltzmann radiation, Sunlight a surface absorbs, Temperature rise through thermal resistances, Thermal resistance of a wall, Time to diffuse a distance, Work in a compressed gas (isothermal)
 - **Vehicles** (1): Photogrammetric dimensions (back-projection onto its middle plane)
 
-## 9 · Data, money and projects (41)
+## 9 · Data, money and projects (42)
 
 Tables and rows, research, the gauntlet, money, operations.
 
@@ -337,6 +337,7 @@ Tables and rows, research, the gauntlet, money, operations.
 - **Loan amortisation payment (annuity)** (`fin.loan`): The payment each period that pays a loan off, with interest, in so many periods (an annuity) *derived, tested here*
 - **Make a table** (`list.zip`): Lists side by side as the columns of a table *derived, tested here, before the update*
 - **Move rows** (`rows.shift`): Every row moved by dx, dz (and turned by dry): the car in front of each house, the lamp beside each door *derived, tested here, before the update*
+- **Negative of an interface** (`negative`): The negative a fastener asks of the part it goes in, read from its standards: through, a clearance hole (ISO 273) and its counterbore (DIN 974-1) for a cap screw; tapped, the tap drill (ISO 2306) as deep as the … *derived, tested here*
 - **Net present value (NPV)** (`fin.npv`): What a series of cash flows is worth today at a discount rate; the first flow is now *derived, tested here*
 - **Onto the ground** (`rows.ground`): Each row (a house's lot, a tree, a car) set on the ground where it stands: its y the ground's height at its x and z, so what is spawned from them stands on the hills, not in them *derived, tested here, before the update*
 - **Overall equipment effectiveness (OEE)** (`ops.oee`): How much of a machine's time makes good parts: availability × performance × quality *derived, tested here*

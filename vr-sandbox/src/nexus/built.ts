@@ -59,6 +59,7 @@ export const BUILT: Record<string, string> = {
   "control.slider":"2026-10-31T09:29:21.000Z",
   "control.stick":"2026-10-31T09:29:21.000Z",
   "ctrl.pid":"2026-10-28T06:44:13.000Z",
+  "cut.standard":"2026-11-02T03:02:45.000Z",
   "cycle":"2026-10-26T14:10:44.000Z",
   "delete":"2026-10-27T08:19:24.000Z",
   "diff":"2026-10-30T13:27:03.000Z",
@@ -644,7 +645,7 @@ export const BOARDS_BUILT: Record<string, string> = {
   "Traffic on the clock: cars round a block, stopping at red":"2026-10-28T02:22:33.000Z",
   "A world without end: neighbourhoods for ever, each its own":"2026-10-28T02:22:33.000Z",
   "A battery built from its parts, node by node: grid, paste, separator, plates, cell, case":"2026-10-28T02:22:33.000Z",
-  "An engine from its first parts: piston, rod, crank, block, head, then the whole":"2026-10-28T02:22:33.000Z",
+  "An engine from its first parts: piston, rod, crank, block, head, then the whole":"2026-11-02T03:02:52.000Z",
   "Research to what is missing: Toyota's engine held against its sources":"2026-10-28T02:22:33.000Z",
   "The gauntlet as nodes: makers through gate after gate, the unknown sorted and researched to the bottom":"2026-10-28T02:22:33.000Z",
   "The 6502 from its transistors: a real program run switch by switch, checked against its fast model":"2026-10-28T02:22:33.000Z",
@@ -704,6 +705,6 @@ export const BOARDS_BUILT: Record<string, string> = {
   "Business: cash flow, loan and what it is worth":"2026-10-28T02:22:33.000Z",
   "Electrical: a resistor heating, swept over current":"2026-10-28T02:22:33.000Z",
   "Paste a bolt onto anything: one cap screw stood on a plate, a round boss and a steel angle, its hole cut by its standards":"2026-11-01T17:57:00.000Z",
-  "Cut by the standards: a bearing's housing and its shaft, a dowel's hole, a key's keyways, a pipe port and a panel's cut-out":"2026-11-02T02:26:25.000Z",
+  "Cut by the standards: a bearing's housing and its shaft, a dowel's hole, a key's keyways, a pipe port and a panel's cut-out":"2026-11-02T02:29:07.000Z",
   "The cover follows the bore: widen the bore and the bolt circle, both parts' holes, the bolts and the cover's place follow":"2026-11-01T17:57:00.000Z"
 };

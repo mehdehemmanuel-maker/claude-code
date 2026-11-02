@@ -2451,3 +2451,16 @@ section to its depth exactly, so a cut through ended on the far face; one that r
 tenth of a millimetre past it, and one that stops inside keeps its depth (the views still take 793.5 mm³ from the panel,
 its outline times its thickness, the test "the rest of R18 by rows: imprinted, cut, and found by their own interfaces").
 Checked with `npm run gate`.
+
+## 2026-11-02: the engine board fails where the engine is broken (the user: "if it fails because it's broken then good")
+
+The engine board ("An engine from its first parts", Toyota's 2.0 L four) counted its clashes but did not fail on them, so
+it looked as if it worked. Measured by one probe on its exact engine: at rest 22 pieces running into others and one
+heat finding (the cams through the ignition coils and their plug tower, the starter's insides, the knock sensor, a hose,
+the converter in its tail pipe, the crank's flange in its crankcase), and turned over in 12 steps 3 more; and in that
+turning only the crank, pistons and rods move, the cams and valves held still (fault D26). The board now holds both to
+none with asserts, which fail; the clash check marks each finding red on the engine shown whole beside its exploded
+view (photographed in the built app). Its results panel still reads "all working" while they fail, and the board takes
+37 s to run in the page (fault D27). Building this, the I16 judge found the new "Cut by a standard" node had taken the
+id of "Negative of an interface" and silently replaced it; it has its own id now, and two nodes under one id stop the
+library from loading. Checked with `npm run gate`.

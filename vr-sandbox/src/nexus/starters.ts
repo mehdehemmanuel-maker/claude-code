@@ -137,6 +137,16 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'eng', 'engine', 'measure', 'thing');
     placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'eng', 'engine', 'audit', 'thing');
     placeBlock(b, 'check.rules', 0, 0, {}, 'rules'); b.nodes.rules!.label = 'Does nothing run into anything?'; wire(b, 'eng', 'engine', 'rules', 'thing');
+    // (held to it, not only counted: a piece through another fails the board, at rest and as it turns (the user, 2026-11-02:
+    // "if it fails because it's broken then good"); what moves as it turns is the crank, the pistons and the rods: its cams
+    // and valves are held where they are drawn, so a valve against a piston is not yet tried (fault D26))
+    // (and seen: the engine whole beside its exploded view, each place a piece runs into another marked red over it)
+    placeBlock(b, 'combine', 0, 0, { name: 'the engine and where it fails' }, 'failsAt'); wire(b, 'eng', 'engine', 'failsAt', 'things'); wire(b, 'rules', 'where', 'failsAt', 'things');
+    placeBlock(b, 'place', 0, 0, { x: -0.9 }, 'failsBeside'); wire(b, 'failsAt', 'assembly', 'failsBeside', 'thing'); b.nodes.failsBeside!.label = 'Whole, beside it: where it fails, marked red';
+    placeBlock(b, 'space.show', 0, 0, {}, 'showFails'); wire(b, 'failsBeside', 'placed', 'showFails', 'thing');
+    placeBlock(b, 'assert', 0, 0, { what: 'pieces running into others, at rest', how: 'at most', target: 0 }, 'whole'); b.nodes.whole!.label = 'Nothing passes through anything, at rest'; wire(b, 'rules', 'findings', 'whole', 'value');
+    placeBlock(b, 'check.turning', 0, 0, { ...e, steps: 6 }, 'turn'); b.nodes.turn!.label = 'Turned over: does what moves run into anything?'; sized('turn');
+    placeBlock(b, 'assert', 0, 0, { what: 'pieces run into as it turns', how: 'at most', target: 0 }, 'turning'); b.nodes.turning!.label = 'Nothing passes through anything as it turns'; wire(b, 'turn', 'findings', 'turning', 'value');
     // (and under load: at the 6,600 rpm Toyota gives its peak power at, and swept from 1,000 to 7,000 rpm for where it gives)
     placeBlock(b, 'load.engine', 0, 0, { ...e }, 'load'); b.nodes.load!.label = 'Under load at 6,600 rpm'; b.nodes.load!.set = { ...(b.nodes.load!.set ?? {}), rpm: 6600 }; sized('load'); wire(b, 'spr', 'spring', 'load', 'spring');
     placeBlock(b, 'view.table', 0, 0, {}, 'loadRows'); b.nodes.loadRows!.label = 'Each part: its stress, its limit, its margin'; wire(b, 'load', 'rows', 'loadRows', 'rows');
@@ -1110,7 +1120,7 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     ];
     cuts.forEach(([id, kind, set, label, ask, cutLabel], k) => {
       placeBlock(b, kind, 0, k * 170, set, id); b.nodes[id]!.label = label;
-      const { x, y, z, ...cs } = ask; placeBlock(b, 'negative', 300, k * 170, { ...cs, x, y, z }, `${id} cut`); b.nodes[`${id} cut`]!.label = cutLabel; wire(b, id, 'part', `${id} cut`, 'part');
+      const { x, y, z, ...cs } = ask; placeBlock(b, 'cut.standard', 300, k * 170, { ...cs, x, y, z }, `${id} cut`); b.nodes[`${id} cut`]!.label = cutLabel; wire(b, id, 'part', `${id} cut`, 'part');
       // (each laid so its cut faces up: the keyed shaft on its side, its keyway on top; the stepped shaft on its side, its
       // journal toward the front)
       const lay: Record<string, Record<string, number>> = { journal: { rz: -Math.PI / 2, y: 0.016 }, 'keyed shaft': { rz: Math.PI / 2, y: 0.015 } };
