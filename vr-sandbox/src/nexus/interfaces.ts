@@ -231,7 +231,7 @@ export function itTolerance(size: number, grade: number): { um: number; step: [n
  *  and JS, js are ISO 286-1's own definitions (EI 0, es 0, ±IT/2) and need no row. Read 2026-11-01 for the evaluation set's
  *  cases 6, 11 and 12 by two readers apart from ISO 286-2's tables (the Technical University of Košice's, Roymech's, IS
  *  919-2:1993); only the cells those cases read are held, and any other is refused, never derived. */
-export interface DeviationRow { cls: string; over: number; upTo: number; grades: [number, number]; lower?: number; upper?: number }
+export interface DeviationRow { cls: string; over: number; upTo: number; grades: [number, number]; lower?: number; upper?: number; /** what it was read from (a TABLE_SOURCES key) */ src?: string }
 export const DEVIATION: DeviationRow[] = [
   { cls: 'k', over: 18, upTo: 30, grades: [5, 5], lower: 2 }, { cls: 'm', over: 3, upTo: 6, grades: [6, 6], lower: 4 },
   { cls: 'G', over: 3, upTo: 6, grades: [7, 7], lower: 4 }, { cls: 'N', over: 6, upTo: 10, grades: [9, 9], upper: 0 },
@@ -248,7 +248,7 @@ export function limitsOf(cls: string, basicMm: number, table: DeviationRow[] = D
   if (letter === 'JS' || letter === 'js') { if (w % 2) return refuse('ISO 286-1\'s rounding of JS', 0, 0, '', 'ISO 286-1', `${cls} at ${basicMm} mm: IT${grade} is ${w} µm, odd, and how ISO 286-1 rounds its half is not read here`); return said(-w / 2, w / 2, 'JS: ±IT/2', 'ISO 286-1'); }
   const d = table.find((x) => x.cls === letter && basicMm > x.over && basicMm <= x.upTo && grade >= x.grades[0] && grade <= x.grades[1]);
   if (!d) return refuse('a fundamental deviation held', 0, 0, '', 'ISO 286-2', `no ISO 286-2 row for ${letter} over ${over} to ${upTo} mm at IT${grade} here`);
-  return d.lower !== undefined ? said(d.lower, d.lower + w, `${letter}: its lower deviation ${d.lower}`, 'ISO 286-2') : said(d.upper! - w, d.upper!, `${letter}: its upper deviation ${d.upper}`, 'ISO 286-2');
+  const src = d.src ?? 'ISO 286-2'; return d.lower !== undefined ? said(d.lower, d.lower + w, `${letter}: its lower deviation ${d.lower}, ${src}`, src) : said(d.upper! - w, d.upper!, `${letter}: its upper deviation ${d.upper}, ${src}`, src);
 }
 /** A hole on a shaft of one size, by their deviations (µm): the most clearance, the most interference, and so the kind. */
 export interface FitJudged { kind: 'clearance' | 'transition' | 'interference'; mostClearUm: number; mostTightUm: number; why: string }
@@ -376,7 +376,7 @@ function bolted(d0: number): PlannedCheck[] {
 export interface TableDef { rows: Record<string, unknown> | unknown[]; /** a tuple's columns */ cols?: string[]; unit: Record<string, 'mm' | 'um' | '1' | 'text'>; /** a TABLE_SOURCES key, where a row has none */ src: string }
 export interface Lookup { table: string; /** a key, its names in braces: '{b}x{h}' */ key?: Ex; /** a size whose band (over, up to) the row is */ band?: Ex; where?: Record<string, string>; /** a column's name in the scope */ as?: Record<string, string> }
 export interface LetRow { name: string; ex: Ex; unit: 'mm' | '1'; says: string }
-export interface ZoneRow { on: string; basic: Ex; /** an ISO 286 class, its names in braces */ cls?: string; lo?: Ex; hi?: Ex; src?: string }
+export interface ZoneRow { on: string; basic: Ex; /** an ISO 286 class, its names in braces */ cls?: string; lo?: Ex; hi?: Ex; src?: string; /** held only where this is true (the surface is made) */ when?: Ex }
 export interface ToolRow { role: 'remove' | 'keep' | 'contact'; when?: Ex; turned?: [Ex, Ex][];
   outline?: { rect: [Ex, Ex]; r?: Ex } | { circle: Ex; notch?: { w: Ex; to: Ex } } | { pts: [Ex, Ex][] }; depth?: Ex;
   at?: [Ex, Ex, Ex]; r?: Ex; r0?: Ex; length?: Ex; along?: '+n' | '-n'; why: string }
@@ -386,7 +386,8 @@ export interface SideRow { frame: 'surface' | 'axis'; /** the material families 
   mirror: { kind: MirrorKind; sex: Port['sex']; takes: string; size: Record<string, Ex>; std: string; fit?: string; t?: Ex; joint: Joint };
   adds?: { words: string; at: [Ex, Ex, Ex]; why: string }[] }
 export interface NegativeRow { of: { kind: string; says: string }; /** the sizes it is asked for */ asks: string[]; lookups: Lookup[]; let?: LetRow[];
-  /** the asker's own surface and its class, so a fit is judged against it */ partner?: { on: string; cls: string }; sides: Record<string, SideRow>; side: string; sources: string[] }
+  /** the asker's own surface and its class, so a fit is judged against it */ partner?: { on: string; cls: string }; /** why no fit is judged, where the asker's own limits are not held */ unjudged?: string;
+  sides: Record<string, SideRow>; side: string; sources: string[] }
 const UNIT = { mm: MM, um: 1e-6, '1': 1 } as const;
 // ---- rows (data): the tables rows read and the rows; no code above or below names a row ---------------------------------
 /** The tables rows read, by name: each the standard's own table, held once (joined here, never copied). */
@@ -451,7 +452,7 @@ function negativeOfRow(a: RowAsking, host: HostMeasure, rows: Record<string, Neg
       ...(x.outline ? { sect: outlineOf(x.outline, ev), depth: ev(x.depth!) } : {}),
       ...(x.at ? { at: x.at.map(ev) as V3 } : {}), ...(x.r !== undefined ? { r: ev(x.r) } : {}), ...(x.r0 !== undefined ? { r0: ev(x.r0) } : {}), ...(x.length !== undefined ? { length: ev(x.length) } : {}), ...(x.along ? { along: x.along } : {}) }));
     const limits: Limit[] = [];
-    for (const z of side.zones ?? []) { const basic = ev(z.basic);
+    for (const z of side.zones ?? []) { if (z.when && !truth(z.when, scopeOf(nums))) continue; const basic = ev(z.basic);
       if (z.cls) { const L = limitsOf(fill(z.cls), +(basic / MM).toFixed(6)); if ('refused' in L) return L; limits.push({ on: z.on, basic, loUm: L.loUm, hiUm: L.hiUm, cls: fill(z.cls), src: L.src, says: `${z.on}: ${L.says}` }); }
       else { const lo = z.lo !== undefined ? +(ev(z.lo) / 1e-6).toFixed(3) : undefined, hi = z.hi !== undefined ? +(ev(z.hi) / 1e-6).toFixed(3) : undefined;
         limits.push({ on: z.on, basic, ...(lo !== undefined ? { loUm: lo } : {}), ...(hi !== undefined ? { hiUm: hi } : {}), src: z.src ?? row.sources[0] ?? '', says: `${z.on} ${fmt(basic)}${lo !== undefined && hi !== undefined ? `, ${lo >= 0 ? '+' : ''}${lo} to ${hi >= 0 ? '+' : ''}${hi} µm` : lo !== undefined ? ', at least' : hi !== undefined ? ', at most' : ''} (${z.src ?? row.sources[0] ?? ''})` }); } }
@@ -462,7 +463,7 @@ function negativeOfRow(a: RowAsking, host: HostMeasure, rows: Record<string, Neg
     return { row: a.row, side: sideName, frame: side.frame, tools, parts: [], checks, limits, scope: nums, ...(fit ? { fit } : {}),
       mirror: { kind: m.kind, sex: m.sex, takes: fill(m.takes), size: Object.fromEntries(Object.entries(m.size).map(([k, v]) => [k, ev(v)])), std: fill(m.std), ...(m.fit ? { fit: fill(m.fit) } : {}), ...(m.t !== undefined ? { t: ev(m.t) } : {}), joint: m.joint },
       adds: (side.adds ?? []).map((p) => ({ words: fill(p.words), at: p.at.map(ev) as V3, why: fill(p.why) })),
-      why: [...why, ...tools.map((x) => x.why), ...limits.map((l) => l.says), fit?.why ?? (row.partner ? 'the fit not judged: a limit not held' : '')].filter(Boolean) };
+      why: [...why, ...tools.map((x) => x.why), ...limits.map((l) => l.says), fit?.why ?? (row.partner ? 'the fit not judged: a limit not held' : row.unjudged ? `the fit not judged: ${row.unjudged}` : '')].filter(Boolean) };
   } catch (e) { return refuse('a row that evaluates', 0, 0, '', 'NEGATIVE_ROWS', `${a.row}: ${(e as Error).message}`); }
 }
 

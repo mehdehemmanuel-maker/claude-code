@@ -129,8 +129,6 @@ export function notchedCircle(d: number, notch?: { w: number; to: number }, n = 
   for (let i = 0; i <= steps; i++) { const a = a0 + ((a1 - a0) * i) / steps, rad = i === 0 || i === steps ? r : Rs; pts.push([rad * Math.cos(a), rad * Math.sin(a)]); }
   pts.push([hw, notch.to], [-hw, notch.to]); return pts;
 }
-/** How far an outline reaches in a direction th (its support): the most of x cos th + y sin th over its points. */
-export const reach = (pts: [number, number][], th: number): number => Math.max(...pts.map(([x, y]) => x * Math.cos(th) + y * Math.sin(th)));
 /** A section's area, m² (the shoelace sum). */
 export const sectArea = (pts: [number, number][]): number => profileArea(pts);
 /** Whether (x, y) lies inside a section (its crossings counted), and how far it is from the section's nearest edge. */

@@ -1026,7 +1026,7 @@ describe('every domain, in one pass', () => {
     const bodyOf = (file: string, name: string) => { const text = readFileSync(join(root, 'src/nexus', file), 'utf8'), m = new RegExp(`^(export )?(async )?(function|const) ${name}\\b`, 'm').exec(text);
       if (!m) throw new Error(`${file}: no ${name}`); const rest = text.slice(m.index), end = rest.slice(1).search(/\n(?=[^\s}\])])/); return (end < 0 ? rest : rest.slice(0, end + 1)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1'); };
     const general: [string, string][] = [['interfaces.ts', 'negativeOfRow'], ['interfaces.ts', 'keyedRow'], ['interfaces.ts', 'bandedRow'], ['interfaces.ts', 'named'], ['interfaces.ts', 'outlineOf'], ['interfaces.ts', 'frameOfAsking'], ['interfaces.ts', 'limitsOf'], ['interfaces.ts', 'fitOf'],
-      ['form.ts', 'roundedRect'], ['form.ts', 'notchedCircle'], ['form.ts', 'reach'], ['mate.ts', 'imprint'], ['mate.ts', 'MEASURE'], ['mate.ts', 'applyImprint'], ['mate.ts', 'standOn'], ['mate.ts', 'portOfInterface'], ['mate.ts', 'PORT_OF'],
+      ['form.ts', 'roundedRect'], ['form.ts', 'notchedCircle'], ['mate.ts', 'imprint'], ['mate.ts', 'MEASURE'], ['mate.ts', 'applyImprint'], ['mate.ts', 'standOn'], ['mate.ts', 'portOfInterface'], ['mate.ts', 'PORT_OF'],
       ['brep.ts', 'solidsOf'], ['view/kit3d.ts', 'drill'], ['make/rules.ts', 'inCut'], ['mass.ts', 'massOf']];
     for (const [f, nm] of general) { const b = bodyOf(f, nm); expect(b.length, `${f} ${nm}: read whole`).toBeGreaterThan(40); expect(b.match(KIND)?.[0], `${f} ${nm} names a kind of seat or tests a row by name`).toBeUndefined(); }
     expect(`function pick(a) {\n  if (a.row === 'bearing seat') return 1;\n}`.match(KIND), 'a row tested by its name, planted').not.toBeNull();
@@ -1051,6 +1051,27 @@ describe('every domain, in one pass', () => {
     expect([why({ row: 'none', size: {} }), why({ row: 'clear', side: 'hub', size: { thread: 'M8' } }), why({ row: 'clear', size: { thread: 'M7' } }),
       why({ row: 'clear', size: { thread: 'M8' } }, { clear: { ...row, sides: { plate: { ...row.sides.plate!, tools: [{ role: 'remove', turned: [['nothing / 2', '0']], why: '' }] } } } })])
       .toEqual([expect.stringMatching(/no row "none"/), expect.stringMatching(/no side "hub" \(it has plate\)/), expect.stringMatching(/no CLEARANCE row for M7/), expect.stringMatching(/^clear: /)]);
+    // (a section cut by a row, imprinted: whole within the piece where every point of its outline is (a slot along a round
+    // shaft passes, though a ray across its middle leaves the shaft's side first; one run off a plate's end is refused),
+    // a zone held only where its surface is made, and a fit not judged said so)
+    const slotRow: NegativeRow = { of: { kind: 'slot', says: 'a slot milled a depth (a test row)' }, asks: ['L', 'b'], lookups: [], unjudged: 'the asker\'s own limits are not held (a test row)',
+      sides: { face: { frame: 'surface', tools: [{ role: 'remove', outline: { rect: ['L', 'b'], r: 'b/2' }, depth: '4 mm', why: 'a slot {L} × {b} mm, 4 mm deep (derived)' }],
+        zones: [{ on: 'b', basic: 'b', lo: '0', hi: '0.1 mm', src: 'derived' }, { on: 'floor', basic: '4 mm', hi: '0', when: 't > 50 mm', src: 'derived' }],
+        checks: [{ check: 'edge distance', measure: 'across', at: '2 mm', need: '0', from: 'outline', rule: 'the slot within the piece', source: 'derived' }, { check: 'spacing', measure: 'spacing', need: ['30 mm', '50 mm'], rule: '30 mm along, or 50 across', source: 'derived' }],
+        mirror: { kind: 'keyway', sex: 'holes', takes: 'slot {b}', size: { b: 'b' }, std: 'derived', t: '4 mm', joint: 'slider' } } }, side: 'face', sources: ['derived'] };
+    const slotted = (host: Part, from: V3, dir: V3) => imprint(host, { row: 'slot', size: { L: 0.04, b: 0.008 } }, from, dir, { rows: { slot: slotRow } });
+    const shaft: Part = { name: 'shaft', parts: [{ name: 'bar', shape: { cyl: [0.015, 0.08] }, at: [0, 0, 0], mat: 'steel-low' }] }, plate: Part = { name: 'plate', parts: [{ name: 'plate', shape: { box: [0.1, 0.01, 0.03] }, at: [0, 0, 0], mat: 'steel-low' }] };
+    const onShaft = slotted(shaft, [0.05, 0, 0], [-1, 0, 0]) as Imprinted, edge = onShaft.checks.find((c) => c.check === 'edge distance')!;
+    expect([onShaft.frame.u.map((x) => +x.toFixed(9)), edge.ok, edge.have > 0], 'along the shaft\'s axis, whole within it').toEqual([[0, 1, 0], true, true]);
+    // (the old measure, reach against the ray along each direction: the ray at 30° from the axis leaves the side 15 mm out,
+    // and the slot reaches 17.9 mm that way, so it refused a slot that is whole)
+    expect(+(Math.sqrt(0.015 ** 2 - 0.013 ** 2) / Math.sin(Math.PI / 6) * 1000).toFixed(1) < +((0.016 * Math.cos(Math.PI / 6) + 0.004) * 1000).toFixed(1), 'the old measure refused it').toBe(true);
+    const offEnd = slotted(plate, [0.035, 0.05, 0], [0, -1, 0]) as Refusal; expect([offEnd.rule, offEnd.need, offEnd.have], 'run off the plate\'s end by 5 mm').toEqual(['edge distance', 0, -5]);
+    const onPlate = slotted(plate, [0, 0.05, 0], [0, -1, 0]) as Imprinted;
+    expect([onPlate.negative.limits!.map((l) => l.on), onPlate.negative.why.at(-1)], 'the floor\'s zone not held in a 10 mm plate; the fit not judged, said').toEqual([['b'], 'the fit not judged: the asker\'s own limits are not held (a test row)']);
+    const cutPlate = applyImprint(plate, onPlate, 'slot').part, again = slotted(cutPlate, [0.025, 0.05, 0], [0, -1, 0]) as Refusal, across = slotted(cutPlate, [0, 0.05, 0.01], [0, -1, 0]) as Refusal;
+    expect([[again.rule, again.need, again.have], [across.rule, across.need, across.have]], 'a second slot 25 mm along, 10 mm across: neither the 30 along nor the 50 across').toEqual([['spacing', 30, 25], ['spacing', 50, 10]]);
+    expect(limitsOf('k5', 25, DEVIATION.map((d) => ({ ...d, src: 'planted' }))), 'a deviation read from its own source').toMatchObject({ loUm: 2, hiUm: 11, src: 'planted' });
     // (every expression of every row, and the test row's, comes to a number over its scope; a number followed by a word is
     // a length or an angle (the lexer reads '2 h' as two hours))
     const exsOf = (r: NegativeRow): string[] => { const out: string[] = [], add = (x: unknown) => { if (typeof x === 'string') out.push(x); else if (Array.isArray(x)) x.forEach(add); else if (x && typeof x === 'object') Object.values(x).forEach(add); };
