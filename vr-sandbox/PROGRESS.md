@@ -1,8 +1,8 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 01.I16 (failing on its blind clause); the node creator's spec being designed; then the engine
+Task in hand: 01.I16 (failing on its blind clause); designing, nothing built: the node creator, the watchers, a space with no overlap
 Spec in hand: spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 8a6580c (2026-11-02)
+Last commit the gate passed: 74155a9 (2026-11-02)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -35,4 +35,4 @@ Last commit the gate passed: 8a6580c (2026-11-02)
 - Hosting is proposed (decision 0011), to confirm at phase 3.
 
 ## Pipeline notes (the loop breaker reads these: a line "pipeline: <task>: <answer>" resets its count)
-pipeline: 04.P10: yes, a pipeline was missing: each review found another class of headset target unmeasured (the bar, then the strip and side panel, then the board's own dots and wires); the fix is one list of every target a hand presses, measured whole, not another class by hand
+pipeline: 01.I16: yes, a small one: three runs failed on PROGRESS.md itself (its last gated commit four behind after commits that only recorded the user's words, then a line too many), a line kept by hand that falls behind; the efficiency agent being designed is to flag a gate failing twice on the same bookkeeping

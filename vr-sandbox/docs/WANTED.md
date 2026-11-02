@@ -448,3 +448,6 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   questions asked of every operation, their answers conditional on the surroundings; feedback from geometry, materials,
   physics and energy; one validated thing placed many times, adapting only what differs; a new machine discovered, not
   only assembled, in under a minute where the problem permits)
+- 2026-11-02: "No nothing should be checked for overlap it shouldn't be possible" (an overlap of solids is never
+  checked or found after the fact: making and placing pieces leaves no way to express one; this governs over "detect
+  the conflict" above)
