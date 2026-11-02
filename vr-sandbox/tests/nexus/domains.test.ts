@@ -741,10 +741,11 @@ describe('every domain, in one pass', () => {
     for (const c of cases) { const f = standOn(c.host, c.from, c.dir, { geometry: (sh) => geometry(sh, undefined) })!; expect(f, `${c.what}: met`).toBeTruthy();
       expect(deg(f.n, c.n), `${c.what}: n within 0.5° of the surface's normal`).toBeLessThan(0.5); expect(gap(f.at, c.at), `${c.what}: where pointed within 0.1 mm`).toBeLessThan(0.0001);
       expect(Math.abs(f.u[0]! * f.n[0]! + f.u[1]! * f.n[1]! + f.u[2]! * f.n[2]!), `${c.what}: u in the surface`).toBeLessThan(1e-9); }
-    // (a turned solid drawn top-down, met on its near wall through the views' mesh (it was met on its far wall: the
-    // evaluator, 2026-11-01); and of two pieces stacked, the one the ray meets first)
+    // (a turned solid drawn top-down, met on its near wall (it was met on its far wall through the views' mesh: the
+    // evaluator, 2026-11-01), and now exactly, its profile turned, not its mesh (a keyway's lead needs it: spec 01, I17);
+    // and of two pieces stacked, the one the ray meets first)
     const lathe = standOn({ name: 'h', parts: [{ name: 'turned', shape: { lathe: [[0, 0.08], [0.02, 0.08], [0.02, 0], [0, 0]] }, at: [0, 0, 0] }] }, [0.5, 0.04, 0], [-1, 0, 0], { geometry: (sh) => geometry(sh, undefined) })!;
-    expect([lathe.at[0]! > 0.019, deg(lathe.n, [1, 0, 0]) < 0.5, lathe.exact], 'a lathe drawn top-down: its near wall, square to it, said not exact').toEqual([true, true, false]);
+    expect([lathe.at[0]! > 0.019, deg(lathe.n, [1, 0, 0]) < 0.5, lathe.exact], 'a lathe drawn top-down: its near wall, square to it, met exactly').toEqual([true, true, true]);
     const stack = standOn({ name: 'h', parts: [{ name: 'low', shape: { box: [0.1, 0.02, 0.1] }, at: [0, 0, 0] }, { name: 'high', shape: { box: [0.1, 0.02, 0.1] }, at: [0, 0.05, 0] }] }, [0, 1, 0], [0, -1, 0])!;
     expect([stack.piece, +stack.at[1]!.toFixed(6)], 'the piece met first').toEqual(['high', 0.06]);
     const turned = standOn(cases[0]!.host, cases[0]!.from, cases[0]!.dir, { turn: Math.PI / 2 })!, plain = standOn(cases[0]!.host, cases[0]!.from, cases[0]!.dir)!;
@@ -1030,12 +1031,15 @@ describe('every domain, in one pass', () => {
       ['brep.ts', 'solidsOf'], ['view/kit3d.ts', 'drill'], ['make/rules.ts', 'inCut'], ['mass.ts', 'massOf']];
     for (const [f, nm] of general) { const b = bodyOf(f, nm); expect(b.length, `${f} ${nm}: read whole`).toBeGreaterThan(40); expect(b.match(KIND)?.[0], `${f} ${nm} names a kind of seat or tests a row by name`).toBeUndefined(); }
     expect(`function pick(a) {\n  if (a.row === 'bearing seat') return 1;\n}`.match(KIND), 'a row tested by its name, planted').not.toBeNull();
-    // (no source file names a row's key, outside the rows block)
+    // (no source file asks for a row by its key outside the rows block: as a row asked, an index, a test or a case (a
+    // family's display name that reads the same is not a reference to the row))
     const src = (d: string): string[] => readdirSync(join(root, d), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? src(join(d, e.name)) : /\.ts$/.test(e.name) ? [join(d, e.name)] : []));
     const texts = src('src').map((f) => { let t = readFileSync(join(root, f), 'utf8'); if (f.endsWith('nexus/interfaces.ts')) { const a = t.indexOf('// ---- rows (data)'), b = t.indexOf('// ---- end of rows'); expect(a > 0 && b > a, 'the rows block marked').toBe(true); t = t.slice(0, a) + t.slice(b); } return [f, t] as const; });
-    const named = (keys: string[]) => texts.flatMap(([f, t]) => keys.filter((k) => t.includes(`'${k}'`) || t.includes(`"${k}"`)).map((k) => `${f}: ${k}`));
+    const asks = (k: string) => new RegExp(`(\\brow\\s*:\\s*|\\[\\s*|[!=]==?\\s*|\\bcase\\s+)['"\`]${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"\`]`);
+    const named = (keys: string[]) => texts.flatMap(([f, t]) => keys.filter((k) => asks(k).test(t)).map((k) => `${f}: ${k}`));
+    expect(['if (a.row === \'parallel key\') x();', "imprint(h, { row: 'pipe port', size }, a, b)", "NEGATIVE_ROWS['bearing seat']", "name: 'parallel key', path: []"].map((t) => ['parallel key', 'pipe port', 'bearing seat'].some((k) => asks(k).test(t))), 'asked by name, planted three ways; a display name is not').toEqual([true, true, true, false]);
     expect(named(Object.keys(NEGATIVE_ROWS)), 'a row named outside the rows').toEqual([]);
-    expect(named(['hole.clearance']).length, 'a name the code does use is found (the scan sees)').toBeGreaterThan(0);
+    expect(named(['thread.external']).length, 'a name the code does test is found (the scan sees)').toBeGreaterThan(0);
     // (a row given at run time, over the CLEARANCE table rows read: exactly I5's M8 medium hole, 9 mm through 10 mm)
     const row: NegativeRow = { of: { kind: 'hole.clearance', says: 'a clearance hole, written as a row (a test row)' }, asks: ['thread'], lookups: [{ table: 'CLEARANCE', key: '{thread}' }],
       sides: { plate: { frame: 'surface', tools: [{ role: 'remove', turned: [['medium / 2', '0'], ['medium / 2', 't']], why: 'ISO 273 medium clearance for {thread}: {medium} mm' }],
@@ -1072,6 +1076,19 @@ describe('every domain, in one pass', () => {
     const cutPlate = applyImprint(plate, onPlate, 'slot').part, again = slotted(cutPlate, [0.025, 0.05, 0], [0, -1, 0]) as Refusal, across = slotted(cutPlate, [0, 0.05, 0.01], [0, -1, 0]) as Refusal;
     expect([[again.rule, again.need, again.have], [across.rule, across.need, across.have]], 'a second slot 25 mm along, 10 mm across: neither the 30 along nor the 50 across').toEqual([['spacing', 30, 25], ['spacing', 50, 10]]);
     expect(limitsOf('k5', 25, DEVIATION.map((d) => ({ ...d, src: 'planted' }))), 'a deviation read from its own source').toMatchObject({ loUm: 2, hiUm: 11, src: 'planted' });
+    // (a square slot along a hub's bore, given at run time: the bore met exactly (a turned part, not its mesh), the slot
+    // started where the bore falls away under its sides, 15 − √209 mm in front for 8 mm across a 30 mm bore, sampled along
+    // its edges (its corners lie past the hub's ends, over nothing); the hub made 10 mm longer, the slot re-applied through
+    // it, met again from across the bore (from far out the ray met the hub's outside first))
+    const boreRow: NegativeRow = { of: { kind: 'slot', says: 'a square slot along a bore (a test row)' }, asks: [], lookups: [],
+      sides: { bore: { frame: 'surface', tools: [{ role: 'remove', outline: { rect: ['span + 0.02 mm', '8 mm'] }, depth: '3.3 mm', at: ['mid', '0', '0'], why: 'a slot along the bore (derived)' }], checks: [{ check: 'bore', measure: 'value', have: 'free', need: '29.5 mm', most: '30.5 mm', rule: 'the bore 30 mm', source: 'derived' }],
+        mirror: { kind: 'keyway', sex: 'holes', takes: 'slot', size: {}, std: 'derived', joint: 'slider' } } }, side: 'bore', sources: ['derived'] };
+    const ring = (y1: number): Part => ({ name: 'hub', parts: [{ name: 'hub', shape: { lathe: [[0.015, -0.02], [0.025, -0.02], [0.025, y1], [0.015, y1], [0.015, -0.02]] }, at: [0, 0, 0], mat: 'steel-low' }] });
+    const inBore = imprint(ring(0.02), { row: 'slot', size: {} }, [0, 0.0005, 0], [1, 0, 0], { rows: { slot: boreRow } }) as Imprinted;
+    expect([inBore.measured.span, inBore.measured.free, inBore.frame.u, inBore.lead[0]].map((x) => (Array.isArray(x) ? x.map((y) => +y.toFixed(9)) : +x!.toFixed(7))), 'the bore 30 across and 40 long, u along it, the lead').toEqual([0.04, 0.03, [0, 1, 0], +(0.015 - Math.sqrt(0.015 ** 2 - 0.004 ** 2)).toFixed(7)]);
+    const slottedHub = applyImprint(ring(0.02), inBore, 'slot').part, floor = slottedHub.parts![0]!.cuts![0]!; expect(+((floor.at[0] + floor.depth) * 1000).toFixed(6), 'its floor 18.3 mm from the axis').toBe(18.3);
+    const re = reapplyImprints({ ...slottedHub, parts: [{ ...slottedHub.parts![0]!, shape: ring(0.03).parts![0]!.shape }] }, { rows: { slot: boreRow } }), c2 = re.part.parts![0]!.cuts![0]!;
+    expect([re.kept, +((Math.max(...c2.sect!.map((p) => p[0])) - Math.min(...c2.sect!.map((p) => p[0]))) * 1000).toFixed(6), +(c2.at[1] * 1000).toFixed(6)], 'kept through the longer hub, its middle moved').toEqual([['slot'], 50.02, 5]);
     // (every expression of every row, and the test row's, comes to a number over its scope; a number followed by a word is
     // a length or an angle (the lexer reads '2 h' as two hours))
     const exsOf = (r: NegativeRow): string[] => { const out: string[] = [], add = (x: unknown) => { if (typeof x === 'string') out.push(x); else if (Array.isArray(x)) x.forEach(add); else if (x && typeof x === 'object') Object.values(x).forEach(add); };
