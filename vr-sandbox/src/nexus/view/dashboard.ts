@@ -104,7 +104,9 @@ function metrics(): void {
   // (the things in view: the reader counts what is in sight, so one framed off to the side is not counted (the second blind
   // check: "3 things" beside two seen); the pieces are those drawn now, the view's own count)
   const boxes = things.flatMap((x) => (isAssembly(x.thing) && !x.thing.tiled ? x.thing.items.map((it) => boundsOfAll(it.of).clone().applyMatrix4(matrixOf(it))) : [boundsOfAll(x.thing)])), inView = boxes.filter((b) => !b.isEmpty() && dock.inView(b)).length;
-  $('stat3d').textContent = st.instances ? `${inView.toLocaleString()} thing${inView === 1 ? '' : 's'} in view, drawn from ${st.instances.toLocaleString()} pieces, some inside others (Cut shows them)${st.boxes ? `; ${st.boxes.toLocaleString()} far away, shown as plain boxes` : ''}` : '';
+  // (the pieces themselves are not counted here: three readers in three blind runs could not square "8 pieces" with two
+  // things seen; the Drawn gauge counts them)
+  $('stat3d').textContent = st.instances ? `${inView.toLocaleString()} thing${inView === 1 ? '' : 's'} in view (Cut shows the pieces inside them)${st.boxes ? `; ${st.boxes.toLocaleString()} far away, shown as plain boxes` : ''}` : '';
 }
 
 // ---- variations: one node, each of an input's choices -----------------------------------------------------------------

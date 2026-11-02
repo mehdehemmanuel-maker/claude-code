@@ -180,7 +180,7 @@ async function partD16(browser, port) {
       ok(c.ratio >= 3, `${name}: what is shown against the backdrop beside it ${c.ratio.toFixed(2)}:1 (${c.piece} samples on it, ${c.bg} beside)`);
       ok(g.grid.visible && Math.abs(g.grid.y - g.floor) < 0.01 * Math.max(0.01, g.grid.cell * 10), `${name}: the grid at the floor (${g.grid.y.toFixed(4)} m; floor ${g.floor.toFixed(4)} m)`);
       ok(g.label, `${name}: the label above the canvas: "${g.text}"`);
-      ok(new RegExp(`^${name === 'd16-paste' ? 3 : 2} things in view, drawn from \\d+ pieces`).test(g.text), `${name}: the whole board in view, its things counted as a reader counts them`);
+      ok(new RegExp(`^${name === 'd16-paste' ? 3 : 2} things in view \\(Cut shows the pieces inside them\\)`).test(g.text), `${name}: the whole board in view, its things counted as a reader counts them`);
       ok(!errs.length, `${name}: no page errors${errs.length ? `: ${errs.join(' | ')}` : ''}`);
     } finally { await ctx.close(); }
   }
