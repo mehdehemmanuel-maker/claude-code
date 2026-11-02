@@ -10,7 +10,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | What | Count |
 | --- | --- |
 | Tasks in the specs | 130: 25 passing (by the evaluator), 7 claimed by the builder and not yet judged, the rest failing |
-| Faults found in the code | 30 (16 fixed) |
+| Faults found in the code | 31 (17 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
@@ -74,6 +74,7 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | D28 | A keep zone's box was swollen by its radius along its own axis too, so it ran a radius past each end: an M8 socket head's hex-key room, 24 mm out, kept 39 mm (found by I16's test, 2026-11-02, reading the bodies a paste draws) | `src/nexus/mate.ts` (applyImprint, now bodiesOf) | fixed 2026-11-02: the box covers its cylinder, its length along the axis and its radius across (`npm run gate`) | 01.I16 |
 | D29 | The clash rules and the fields read each round with 24 facets whatever its size: an 80 mm round's chord lies 0.684 mm inside its true surface, so a fit closer than that is read by the facets, not the part. Drawn finer (I16, within 0.05 mm), the engine board's checks took 263 s where they took 49.7 s (one run each, 2026-11-02), so the checks keep 24 until they are made exact | `src/nexus/make/rules.ts`, `src/nexus/make/critic.ts` (meshClashes over `leafGeometry`) | open | 10.T24 |
 | D30 | The paste board ("Paste a bolt onto anything") centres each thing on y = 0, so the 10 mm plate stands 15 mm above the 40 mm boss's floor and, with the grid laid at the floor of what is shown, reads as floating (the I16 blind check's readers said so) | `src/nexus/starters.ts` | open | 01.I13 |
+| D31 | The built-parts check failed whenever its walk ran in the pool's workers and passed in one thread: the workers' bundle (`node_modules/.cache/nexus-trial-worker.mjs`) was one file for every checkout sharing `node_modules`, so a copy's edited engine builder (the engine workflow's agents, 2026-11-02) ran in this checkout's workers; 235 pieces of the engine head, the whole engine and the Corolla read as unstored, on the commit before I16 too | `src/nexus/pool.ts` (nodeHands) | fixed 2026-11-02: the bundle named for its checkout (decision 0017); the walk spread over the workers finds 0 unstored, 0 outdated, 0 misplaced (`npm run gate`) | 11.LW15 |
 
 ## Findings by theme (numbers are rows of `research/00-synthesis.md`)
 

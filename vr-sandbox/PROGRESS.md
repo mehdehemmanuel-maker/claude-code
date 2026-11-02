@@ -2,7 +2,7 @@
 
 Task in hand: 01.I16 (drag to imprint in the view), built and waiting on its verdict; then the engine (faults D25, D26)
 Spec in hand: spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 1b08432 (2026-11-02)
+Last commit the gate passed: 71ca0b6 (2026-11-02)
 
 ## Next three (from the start queue in `plan/README.md`)
 

@@ -35,7 +35,11 @@ export async function cores(): Promise<number> {
 async function nodeHands(n: number): Promise<Hand[]> {
   const { Worker } = await import(/* @vite-ignore */ 'node:' + 'worker_threads') as typeof import('node:worker_threads');
   const path = await import(/* @vite-ignore */ 'node:' + 'path') as typeof import('node:path'), url = await import(/* @vite-ignore */ 'node:' + 'url') as typeof import('node:url'), fs = await import(/* @vite-ignore */ 'node:' + 'fs') as typeof import('node:fs');
-  const here = path.dirname(url.fileURLToPath(import.meta.url)), root = path.resolve(here, '../..'), out = path.join(root, 'node_modules/.cache/nexus-trial-worker.mjs'), src = path.join(here, 'trial-worker.ts');
+  // (the bundle named for the checkout whose sources it is made from: two checkouts sharing one node_modules (a worktree,
+  // a copy beside it with node_modules linked) each run their own code in their workers, never the other's (fault D31:
+  // a copy's edited engine ran in this checkout's workers, so its stored pieces seemed outdated half the time))
+  const here = path.dirname(url.fileURLToPath(import.meta.url)), root = path.resolve(here, '../..'), tag = [...root].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7).toString(36);
+  const out = path.join(root, `node_modules/.cache/nexus-trial-worker-${tag}.mjs`), src = path.join(here, 'trial-worker.ts');
   // (bundled again when the source of anything it runs is newer than the bundle)
   const newest = (d: string): number => fs.readdirSync(d, { withFileTypes: true }).reduce((m, e) => Math.max(m, e.isDirectory() ? newest(path.join(d, e.name)) : fs.statSync(path.join(d, e.name)).mtimeMs), 0);
   if (!fs.existsSync(out) || fs.statSync(out).mtimeMs < Math.max(newest(path.join(root, 'src')))) {
