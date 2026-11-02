@@ -1027,10 +1027,19 @@ describe('every domain, in one pass', () => {
     // (a top-level declaration's text, to the next line at the left margin, its comments taken out)
     const bodyOf = (file: string, name: string) => { const text = readFileSync(join(root, 'src/nexus', file), 'utf8'), m = new RegExp(`^(export )?(async )?(function|const) ${name}\\b`, 'm').exec(text);
       if (!m) throw new Error(`${file}: no ${name}`); const rest = text.slice(m.index), end = rest.slice(1).search(/\n(?=[^\s}\])])/); return (end < 0 ? rest : rest.slice(0, end + 1)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1'); };
-    const general: [string, string][] = [['interfaces.ts', 'negativeOfRow'], ['interfaces.ts', 'keyedRow'], ['interfaces.ts', 'bandedRow'], ['interfaces.ts', 'named'], ['interfaces.ts', 'outlineOf'], ['interfaces.ts', 'frameOfAsking'], ['interfaces.ts', 'limitsOf'], ['interfaces.ts', 'fitOf'],
-      ['form.ts', 'roundedRect'], ['form.ts', 'notchedCircle'], ['mate.ts', 'imprint'], ['mate.ts', 'MEASURE'], ['mate.ts', 'applyImprint'], ['mate.ts', 'standOn'], ['mate.ts', 'portOfInterface'], ['mate.ts', 'PORT_OF'],
-      ['brep.ts', 'solidsOf'], ['view/kit3d.ts', 'drill'], ['make/rules.ts', 'inCut'], ['mass.ts', 'massOf']];
+    const general: [string, string][] = [['brep.ts', 'solidsOf'], ['view/kit3d.ts', 'drill'], ['make/rules.ts', 'inCut'], ['mass.ts', 'massOf']];
     for (const [f, nm] of general) { const b = bodyOf(f, nm); expect(b.length, `${f} ${nm}: read whole`).toBeGreaterThan(40); expect(b.match(KIND)?.[0], `${f} ${nm} names a kind of seat or tests a row by name`).toBeUndefined(); }
+    // (and every declaration of the three files that make, measure and cut a negative, outside the rows block: a row tested
+    // by a pattern in a function not named on a list passed (the evaluator, 2026-11-02). Not the sources' titles (data
+    // about where tables were read) nor the type that lists the mirror kinds (a type, no path))
+    const decls = (f: string) => { let t = readFileSync(join(root, 'src/nexus', f), 'utf8'); const a = t.indexOf('// ---- rows (data)'), b = t.indexOf('// ---- end of rows'); if (a > 0) t = t.slice(0, a) + t.slice(b);
+      t = t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1'); const ms = [...t.matchAll(/^(export )?(async )?(function|const|type|interface) (\w+)/gm)];
+      return ms.map((m, i) => ({ f, name: m[4]!, kind: m[3]!, body: t.slice(m.index!, i + 1 < ms.length ? ms[i + 1]!.index : t.length) })); };
+    const all = ['interfaces.ts', 'mate.ts', 'form.ts'].flatMap(decls), code = all.filter((d) => d.kind === 'function' || d.kind === 'const').filter((d) => d.name !== 'TABLE_SOURCES');
+    expect(['negativeOfRow', 'keyedRow', 'bandedRow', 'limitsOf', 'fitOf', 'imprint', 'MEASURE', 'applyImprint', 'reapplyImprints', 'standOn', 'portOfInterface', 'roundedRect', 'notchedCircle'].filter((n) => !code.some((d) => d.name === n)), 'the general code all read').toEqual([]);
+    for (const d of code) expect(d.body.match(KIND)?.[0], `${d.f} ${d.name} names a kind of seat or tests a row by name`).toBeUndefined();
+    const planted = decls('mate.ts').find((d) => d.name === 'reapplyImprints')!.body.replace('const kept: string[] = []', 'const kept: string[] = [], hot = host.imprints?.some((r) => /bearing/.test(r.of))');
+    expect(planted.match(KIND)?.[0], 'a row tested by a pattern in reapplyImprints, planted').toBe('bearing');
     expect(`function pick(a) {\n  if (a.row === 'bearing seat') return 1;\n}`.match(KIND), 'a row tested by its name, planted').not.toBeNull();
     // (no source file asks for a row by its key outside the rows block: as a row asked, an index, a test or a case (a
     // family's display name that reads the same is not a reference to the row))
@@ -1122,6 +1131,7 @@ describe('every domain, in one pass', () => {
     const e6 = C(6).expect, [house, journal] = C(6).asks!, h20 = ok(house!), h15 = ok(house!, { thickness: 15 }), sh = ok(journal!);
     expect(mmOf(h20.tools[0]!.prof), 'the housing\'s bore and shoulder in 20 mm').toEqual([[26, 0], [26, 15], [23.2, 15], [23.2, 20]]);
     expect([lim(h20, 'D'), lim(h20, 'Da'), lim(h20, 'ra')], 'D H7; Da and ra at most').toEqual([[52, ...(e6.housing_um as number[])], [e6.Da_max, null, 0], [e6.ra_max, null, 0]]);
+    expect([h20.mirror.takes, +(h20.mirror.t! / mm).toFixed(3), h20.mirror.joint], 'the housing\'s bore takes the ring 52 across, as deep as it is wide, fixed').toEqual(['Ø52', 15, 'fixed']);
     const contact = h20.tools.find((x) => x.role === 'contact')!; expect([contact.r0, contact.r, contact.at![1]].map((v) => +(v! / mm).toFixed(3)), 'the ring bears from 23.2 to 26, 15 in').toEqual([23.2, 26, -15]);
     expect([mmOf(h15.tools[0]!.prof), h15.limits!.map((l) => l.on), no(house!, { thickness: 14 })], 'in 15 mm the plain bore; 14 refused').toEqual([[[26, 0], [26, 15]], ['D'], ['depth', 15, 14]]);
     expect([lim(sh, 'd'), lim(sh, 'da'), sh.fit, sh.why.at(-1), sh.frame], 'the journal k5, its shoulder at least; not judged, said').toEqual([[25, ...(e6.shaft_um as number[])], [e6.da_min, 0, null], undefined, 'the fit not judged: the ring\'s own tolerance (ISO 492) is not held here', 'axis']);
@@ -1129,6 +1139,7 @@ describe('every domain, in one pass', () => {
     const e11 = C(11).expect, [loc, rem] = C(11).asks!.map((a) => ok(a));
     expect([mmOf(loc!.tools[0]!.prof), lim(loc!, 'd'), lim(rem!, 'd')], 'holes 6 through 10 mm, H7 and G7').toEqual([[[3, 0], [3, 10]], [6, ...(e11.hole_um as number[])], [6, ...(e11.sliding_um as number[])]]);
     expect([loc!.fit, rem!.fit].map((f) => [f!.kind, f!.mostClearUm, f!.mostTightUm]), 'with the pin m6: transitions (8, 12) and (12, 8)').toEqual([['transition', 8, 12], ['transition', 12, 8]]);
+    expect([loc!.mirror.joint, rem!.mirror.joint], 'a joint that locates').toEqual([e11.joint, e11.joint]);
     // (case 12: an 8 × 7 key in a 30 mm shaft: a 40 × 8 slot 4.0 deep, round-ended, N9, the key 0.5 mm below the surface at
     // its middle; the hub's 3.3 deep through its length and a hair past, JS9; a 35 mm shaft refused, no keyway read for it)
     const e12 = C(12).expect, [ks, kh] = C(12).asks!.map((a) => ok(a)), { sectArea } = await import('../../src/nexus/form');
@@ -1139,6 +1150,7 @@ describe('every domain, in one pass', () => {
     // (case 13: a G 1/2 port in 30 mm of 6061: the 19 mm drill under a chamfer to 21, its point beyond; 18 mm refused by its
     // depth, 22 by its drill's point (derived), a polymer block for want of a row)
     const e13 = C(13).expect, [portAsk] = C(13).asks!, gp = ok(portAsk!);
+    expect(+((gp.mirror.size.d as number) / mm).toFixed(3), 'its major, ISO 228-1').toBe(e13.major);
     expect([mmOf(gp.tools[0]!.prof), +(gp.scope!.P! / mm).toFixed(3), +((gp.mirror.size.minor as number) / mm).toFixed(3), gp.mirror.takes, +(gp.mirror.t! / mm).toFixed(3)], 'the port\'s drill, its pitch and minor, its thread').toEqual([[[e13.chamfer, 0].map((v, i) => (i ? v : (v as number) / 2)), [9.5, 1], [9.5, e13.drill_depth_min], [0, e13.drill_point_min]], e13.pitch, e13.minor, 'G1/2', e13.thread_depth_min]);
     expect(['chamfer', 'drill depth', 'thread depth', 'spot face', 'spot face depth'].map((on) => lim(gp, on)), 'its limits').toEqual([[e13.chamfer, 0, (e13.chamfer_tol as number[])[1]! * 1000], [e13.drill_depth_min, 0, null], [e13.thread_depth_min, 0, null], [e13.spot_face_min, 0, null], [e13.spot_face_depth_max, null, 0]]);
     expect([no(portAsk!, { thickness: 18 }), no(portAsk!, { thickness: 22 }), (neg(portAsk!, { material: 'pla' }) as Refusal).why], 'refused: too thin, the point through, a polymer').toEqual([['depth', e13.refused_below, 18], ['drill point', e13.drill_point_min, 22], 'no pipe port (port) row for a polymer']);
@@ -1176,6 +1188,10 @@ describe('every domain, in one pass', () => {
     const own = (w: string, kind: string) => portOfInterface(interfacesOf(use(w)).list.find((x) => x.kind === kind)!)!, made = (kind: string, size: Record<string, number | string>) => portOfInterface({ kind, size, frame: { at: [0, 0, 0], n: [0, -1, 0], u: [1, 0, 0] } })!;
     expect([fit(J.port, own('bearing 6205', 'bore')), fit(H.port, made('shaft', { d: 0.052 })), fit(D.port, own('dowel 6x20', 'shaft')), fit(G.port, made('thread.external', { d: 0.020955, thread: 'G1/2' }))].map((f) => typeof f), 'each found').toEqual(['object', 'object', 'object', 'object']);
     expect([fit(H.port, made('shaft', { d: 0.047 })), fit(G.port, made('thread.external', { d: 0.016662, thread: 'G3/8' }))], 'the wrong sizes not').toEqual(['Ø52 is not Ø47', 'G1/2 is not G3/8']);
+    // (the keyway's own checks refuse where they should: a slot longer than its shaft runs off its end; a hub whose wall is
+    // thinner than its keyway is deep)
+    const tooLong = imprint(shaft, { row: 'parallel key', side: 'shaft', size: { ...K, L: 0.1 } }, [0.5, 0, 0], [-1, 0, 0]) as Refusal, thin = imprint(one('hub', { lathe: [[0.015, -0.02], [0.018, -0.02], [0.018, 0.02], [0.015, 0.02], [0.015, -0.02]] }), { row: 'parallel key', side: 'hub', size: K }, [0, 0.0005, 0], [1, 0, 0]) as Refusal;
+    expect([[tooLong.rule, tooLong.need], [thin.rule, thin.need, thin.have]], 'a 100 mm slot on an 80 mm shaft; a 3 mm hub wall under a 3.3 mm keyway').toEqual([['length', 0], ['wall', 3.3, 3]]);
     // (the solids valid; on a flat host what the solid loses is the tool's own volume, within 0.1 %)
     const vol = async (p: Part) => { const r = (await solidsOf(p)).rows[0]!; expect(r.ok && r.valid, `${p.name}: made and valid: ${r.why ?? ''}`).toBe(true); return r.volume!; };
     const turned = (prof: [number, number][]) => prof.slice(1).reduce((s, q, i) => { const p = prof[i]!; return s + (Math.PI * Math.abs(q[1] - p[1]) * (p[0] ** 2 + p[0] * q[0] + q[0] ** 2)) / 3; }, 0);

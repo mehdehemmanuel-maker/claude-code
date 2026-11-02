@@ -238,7 +238,7 @@
    ],
    "owner": "interfaces.ts (data only: no code for one kind of thing)",
    "check": "evaluation cases 6, 11, 12 and a pipe thread and a cut-out pass; the diff adds data rows, not code paths per kind",
-   "status": "failing",
+   "status": "passing",
    "after": [
     "I10",
     "I12"

@@ -2413,3 +2413,15 @@ crank flange with no holes and not turning with it, and its pan's gasket strip a
 the pan's end. The last was in all four machines' engines too: each loses the pan bolts that ran through its crank (the
 test "the fastener for a stack: case 8 chooses its bolt; the machines' fasteners unchanged" holds the new count). A piece
 sunk wholly inside another, crossing no surface, is still not seen (fault D15). Checked with `npm run gate`.
+
+## 2026-11-02: I17 judged: it passes; the faults it planted that went through, closed (spec 01, I17)
+
+The evaluator, in its own checkout of 2be7424, ran the tests and the gate, worked every case's numbers again by a probe,
+read three of the sources itself, and found the rows commit's code diff data only. It planted faults one at a time: most
+were caught; those that went through were a row named by a pattern in a function the kind scan did not read, three values
+the cases expect that no test read (the G 1/2 thread's major, the dowel's joint, the housing bore's depth taken), and two
+of the rows' own checks no case refused on (a keyway longer than its shaft, a hub wall thinner than its keyway). The scan
+now reads every function of the three files that make, measure and cut a negative, and the tests hold the rest (the tests
+"the negative is rows: the engine names no kind; a row given at run time is answered" and "the rest of R18 by rows:
+imprinted, cut, and found by their own interfaces"). It also found the gate red at 2be7424 itself: PROGRESS.md named a
+commit four behind, past the rule's three. Checked with `npm run gate`.
