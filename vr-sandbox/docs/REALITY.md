@@ -2499,3 +2499,43 @@ reset after grading four of its eight shots: the readers named every fact of the
 first; and two or more named a fault of D16's on each (facets; on the held shot also darkness and the grid). Their words
 were lost with that run (it now keeps them as it goes), so which part they read as faceted is not known; the seams one
 reader described as dotted lines across the plate are fixed. It is being run again on the new shots.
+
+## 2026-11-02: I16 judged and failed; what the evaluator and three blind runs found, mended (spec 01, I16; fault D16)
+
+The evaluator (a fresh agent on another model, `plan/specs/00-structure/verdicts/01.I16.json`) failed I16 at e49de65.
+Every mechanism held under its own runs (the node test, the gate, the browser test's checks all passing, and each
+screenshot read by eye), and it planted 26 faults: 18 were caught. It failed the task because no blind check had run to
+its end on those shots (the Gemini run stopped on a spent quota), and because the legend's see-through screw was never
+seen: it was drawn inside the uncut plate, behind it. Now: the screw as it will sit is drawn through the part, counted,
+and seen in the browser test (its shank lighter through the plate); the node test catches what went through (the hole
+a paste made copied by that paste, not by the place node that reads it; a refused card's crossed check and the rest not
+measured; the guard on a node standing off the drop; a record looked for above or below its hole; a part's leaf where it
+is not drawn), each planted again and caught (`npx vitest run tests/nexus/domains.test.ts -t "drag to imprint"`).
+
+With Gemini's quota spent, the blind check was run as its spec allows: three fresh agents a shot, told nothing (the
+shots renamed to plain letters, the agents given no project files), and a grader who sees only their words and the
+facts hidden from them. The first run failed every single shot: nearly every reader read "8 pieces drawn" beside three
+things as a miscount; screws drawn as black mirrors read as black blobs; the steel read as white plastic; whole boards
+seemed to float with no ground; and no reader saw that a refused paste cannot be cut. Mended: the label counts the things
+in sight, then the pieces they are drawn from; a near-black finish on a metal (black oxide) is drawn as a dark gloss;
+softer shadows and a little less light; a grid a decade finer; the disabled button says "Cannot cut: it does not fit".
+In the second run the held, pinned and refused shots passed (every reader named every fact, none a fault of D16's) and
+both before-and-after pairs passed; the label then counted a thing framed off to the side, mended in turn (the browser
+test holds 3 and 2 things on the two boards; `node tests/evals/imprint-drag.cjs <dir>`). What readers still named that
+is the part as it is, not the view: a black-oxide screw head is dark; a hex bolt's head is six-sided; the plate floats
+because the board stands each thing on y = 0 (fault D30). The node board's faded blocks (those that feed nothing) let
+wires show through them; that is the board's cue, left as it is.
+
+Three more runs, each on the build of its day (`node tests/evals/imprint-drag.cjs <dir>`, then three fresh readers a shot):
+over all five runs the held and pinned shots passed in three, the refused shot in two, the before-and-after pairs in
+nine of ten; where they failed it was on a fault named, but for the first run's refusal, whose readers all missed that
+it could not be cut (mended: its button says so). What readers
+named next was mended in turn: rounds drawn within 0.02 mm and a preview's cut with 96 facets, a lighter backdrop and a
+brighter grid, and a label that counts nothing (a reader counts a pasted screw as a thing of its own; no count was read
+as meant in five runs). Decision 0018 settles what the evaluator asked be decided: a named fault counts against the view
+when it is the view's or unsure, and is filed against the part or the board when it is the part as it is (a black-oxide
+screw is near black) or the board's layout. In the fifth run, so graded, what readers still named was the dashboard's
+small grey text on near-black, a faint grid, and the count; the first two are the app's general legibility, beyond the
+3D view's own faults. I16 stays failing on its blind clause until a run on its shots passes; the readers' words of every
+run are kept beside the shots. Fault D31, found on the way (the pool's workers ran another checkout's engine), is mended
+(decision 0017).

@@ -106,7 +106,9 @@ function metrics(): void {
   const boxes = things.flatMap((x) => (isAssembly(x.thing) && !x.thing.tiled ? x.thing.items.map((it) => boundsOfAll(it.of).clone().applyMatrix4(matrixOf(it))) : [boundsOfAll(x.thing)])), inView = boxes.filter((b) => !b.isEmpty() && dock.inView(b)).length;
   // (the pieces themselves are not counted here: three readers in three blind runs could not square "8 pieces" with two
   // things seen; the Drawn gauge counts them)
-  $('stat3d').textContent = st.instances ? `${inView.toLocaleString()} thing${inView === 1 ? '' : 's'} in view (Cut shows the pieces inside them)${st.boxes ? `; ${st.boxes.toLocaleString()} far away, shown as plain boxes` : ''}` : '';
+  // (no count at all: a reader counts a pasted screw as a thing of its own, the view as part of what it went into, and in five
+  // blind runs no count was read as meant; the Drawn gauge counts pieces. What the label says is what can be done)
+  void inView; $('stat3d').textContent = st.instances ? `Cut opens what is shown, to see the pieces inside${st.boxes ? `; ${st.boxes.toLocaleString()} far away, shown as plain boxes` : ''}` : '';
 }
 
 // ---- variations: one node, each of an input's choices -----------------------------------------------------------------

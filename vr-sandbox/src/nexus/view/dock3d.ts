@@ -303,7 +303,7 @@ export class PasteSession implements PasteHooks {
 }
 
 /** The view's backdrop and its grid's lines: drawing choices (fault D16), the grid's just lighter than the backdrop. */
-const BACKDROP = 0x222935, GRID_MINOR = 0x354152, GRID_MAJOR = 0x4a5a70;
+const BACKDROP = 0x222935, GRID_MINOR = 0x3f4b5e, GRID_MAJOR = 0x5d6e88;
 export class Dock3D {
   readonly view = new SpaceView();
   private readonly renderer: THREE.WebGLRenderer;
