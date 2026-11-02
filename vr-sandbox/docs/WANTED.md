@@ -360,3 +360,91 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   (the space itself refuses what may not pass through or touch, from energy and laws, not from names; a new machine in
   under a minute; something always asking whether each thing is necessary; one network for roads, circuits, rails, fibre,
   gas, rivers and vessels, made efficient under its conditions by feedback from its surroundings)
+- 2026-11-02, the same ask written out in full, word for word:
+
+  > Universal Network Intelligence & Conditional Efficiency
+  >
+  > For the motor and contact disk, zoom out and question the underlying principles: Why was this interaction possible,
+  > what physical laws allowed it, and how could the system discover more advanced solutions beyond conventional
+  > human-defined components?
+  >
+  > Stop thinking exclusively in terms of engines, disks, pipes, wires, and other predefined objects. Think in terms of
+  > matter, energy, forces, fields, constraints, interactions, and environmental conditions.
+  >
+  > Reality itself enforces physical compatibility. Objects cannot simply occupy the same physical space, materials
+  > cannot behave outside their physical properties, and energy must obey conservation laws. The environment
+  > continuously determines which interactions are possible, impossible, stable, or unstable. Nexus should operate with
+  > this same intelligence.
+  >
+  > If I ask Nexus to invent a completely new machine, it should be capable of generating a physically coherent design
+  > in under a minute whenever the problem permits. It should discover possible configurations rather than limit itself
+  > to familiar human inventions.
+  >
+  > 1. Universal Network Recognition
+  >
+  > Recognize that seemingly unrelated systems often share the same underlying mathematical structures:
+  >
+  > * Roads = electrical circuits = railway networks.
+  > * Fiber-optic networks = nervous systems = communication networks.
+  > * Gas pipelines = blood vessels = water distribution.
+  > * River systems = mycelium = tree roots.
+  >
+  > These are different physical systems implementing similar principles of connectivity, distribution, routing,
+  > capacity, resistance, and flow.
+  >
+  > Develop generalized network architectures instead of repeatedly rebuilding equivalent systems from scratch.
+  >
+  > 2. Conditional Efficiency
+  >
+  > Every operation should continuously ask:
+  >
+  > * Is this component actually necessary?
+  > * Can multiple components be represented by one generalized node?
+  > * Does an existing solution already perform this function?
+  > * Can the same architecture be reused at another scale?
+  > * Is there a more efficient physical interaction?
+  > * Does the environment permit this configuration?
+  > * What happens when conditions change?
+  >
+  > Efficiency must be conditional, not absolute. The optimal solution depends on environmental conditions, available
+  > materials, scale, energy, forces, constraints, and intended function.
+  >
+  > 3. Environmental Feedback & Physical Intelligence
+  >
+  > The environment must actively participate in design and simulation.
+  >
+  > If a component intersects an incompatible physical object, detect the conflict. If a material cannot withstand a
+  > force, identify the failure. If an alternative arrangement reduces energy consumption or improves performance,
+  > evaluate it.
+  >
+  > Use continuous feedback between geometry, materials, physics, energy, and environmental conditions.
+  >
+  > 4. Generalization Instead of Repetition
+  >
+  > Imagine constructing a city with 100 identical houses. You should not independently reinvent every house, manually
+  > recreate every pipe, and individually design every electrical and ventilation connection.
+  >
+  > Create one validated house architecture, generalize its connections, and instantiate it 100 times while adapting
+  > only what differs.
+  >
+  > Apply this principle everywhere. Collapse unnecessarily complex node boards into reusable higher-level nodes. Reuse
+  > validated systems, interfaces, equations, and network structures.
+  >
+  > 5. The Core Principle
+  >
+  > Everything should be evaluated through conditional efficiency, environmental feedback, physical compatibility, and
+  > optimization.
+  >
+  > Nexus should not merely assemble objects. It should understand the underlying interactions that make objects
+  > possible, discover alternative configurations, reuse universal structures, and continuously search for simpler and
+  > more efficient solutions.
+  >
+  > The objective is not to simulate human engineering more complicatedly. It is to discover how much of engineering can
+  > be generalized, automated, and ultimately reduced to a small number of powerful universal principles.
+  >
+  > Think beyond the object. Understand the interactions that produce it.
+
+  (the space and its laws decide what may meet, not the names of things; one network architecture for every flow; seven
+  questions asked of every operation, their answers conditional on the surroundings; feedback from geometry, materials,
+  physics and energy; one validated thing placed many times, adapting only what differs; a new machine discovered, not
+  only assembled, in under a minute where the problem permits)
