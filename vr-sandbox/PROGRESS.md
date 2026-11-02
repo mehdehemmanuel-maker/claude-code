@@ -1,14 +1,15 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 01.I15
+Task in hand: 01.I17 (the engine first, with no rows; then a bearing's seats, a dowel hole, a key's keyways, a pipe port
+and a panel cut-out, each a row of data)
 Spec in hand: spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 86f346a (2026-11-01)
+Last commit the gate passed: c933d42 (2026-11-02)
 
 ## Next three (from the start queue in `plan/README.md`)
 
 1. 01.I16: drag to imprint in the view, the negative shown before cutting
-2. 01.I17: the rest of R18 by the same model: bearing, dowel, key and keyway (the three cases waiting; fault D17)
-3. 01.I18: interface versions: a published interface never changed in place
+2. 01.I18: interface versions: a published interface never changed in place
+3. 01.I15 again, once the user has answered on its check (below)
 
 ## Open, and why
 

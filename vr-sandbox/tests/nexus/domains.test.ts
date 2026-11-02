@@ -38,7 +38,8 @@ import { lawDims, lawWitness, wireDims } from '../../src/nexus/certify';
 import { setting } from '../../src/nexus/lawgraph';
 import { apply } from '../../src/nexus/law';
 import { BOOK } from '../../src/nexus/book';
-import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, INSERT, IT_TABLE, TABLE_SOURCES, TAP_DRILL, interfacesOf, itFormula, itTolerance, negativeOf, piecesIn, type Asking, type Negative, type Refusal } from '../../src/nexus/interfaces';
+import { BOLT_SPACING, CLEARANCE, COUNTERBORE, COUNTERSINK, ENGAGEMENT, INSERT, IT_TABLE, TABLE_SOURCES, TAP_DRILL, DEVIATION, NEGATIVE_ROWS, TABLES, fitOf, frameOfAsking, interfacesOf, itFormula, itTolerance, limitsOf, negativeOf, piecesIn, type Asking, type Negative, type NegativeRow, type Refusal } from '../../src/nexus/interfaces';
+import { num, scopeOf } from '../../src/nexus/generate';
 import { CLEAR } from '../../src/nexus/kinds/motion';
 import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
@@ -998,6 +999,74 @@ describe('every domain, in one pass', () => {
     expect((await t.doTool('build', { nodes: [{ b: 'in.number' }] })).split('\n').filter((l) => l.startsWith('!')), 'as a list: one refusal').toEqual(['! nodes: write them as an object, {"name": {"b": "block id", "s": {…}}}']);
     const guide = readFileSync(join(root, 'docs/FOR-AI.md'), 'utf8'); expect(guide, 'FOR-AI\'s rule: parts put together by joint and imprint, never by typed positions').toMatch(/Never place parts by typed positions[^]*`joint`[^]*`imprint`[^]*`assert`/);
   }, 120_000);
+  // (ISO 286 classes as limits (spec 01, I17): H, h and JS from the IT grade alone, other letters from ISO 286-2's
+  // fundamental deviations; each of the evaluation set's waiting cases' limits as the app now works them out, offset and
+  // width (a width alone let a wrong offset through: I15's evaluator); and the fit two make)
+  it('ISO 286 limits from the tables held, and fits judged from both: the evaluation set\'s bearing, dowel and key', () => {
+    const set = JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; expect: Record<string, unknown> }[] }, e = (n: number) => set.cases.find((c) => c.case === n)!.expect;
+    const lim = (size: number, cls: string, table = DEVIATION) => { const l = limitsOf(cls, size, table); if ('refused' in l) throw new Error(l.why); return [l.loUm, l.hiUm]; };
+    expect([lim(25, 'k5'), lim(52, 'H7')], 'case 6: the shaft k5, the housing H7').toEqual([e(6).shaft_um, e(6).housing_um]);
+    expect([lim(6, 'm6'), lim(6, 'H7'), lim(6, 'G7')], 'case 11: the pin m6 (over 3 to 6, not 6 to 10\'s +6 to +15), its hole H7, the sliding side G7').toEqual([e(11).pin_um, e(11).hole_um, e(11).sliding_um]);
+    expect([lim(8, 'N9'), lim(8, 'JS9')], 'case 12: the keyways, N9 in the shaft, JS9 in the hub').toEqual([e(12).shaft_um, e(12).hub_um]);
+    const f = (a: [string, number], b: [string, number]) => fitOf(limitsOf(...a) as { loUm: number; hiUm: number }, limitsOf(...b) as { loUm: number; hiUm: number });
+    expect([f(['H7', 6], ['m6', 6]), f(['G7', 6], ['m6', 6])].map((x) => [x.kind, x.mostClearUm, x.mostTightUm]), 'a 6 m6 pin in H7, in G7: transitions, so far clear, so far tight').toEqual([['transition', 8, 12], ['transition', 12, 8]]);
+    expect(f(['H7', 52], ['k5', 25]).kind === undefined, 'two sizes: not compared here').toBe(false);
+    for (const [cls, size, why] of [['k5', 40, /IT5 over 30 to 50 mm: its Table 1 row is not held/], ['k6', 25, /no ISO 286-2 row for k over 18 to 30 mm at IT6/], ['m6', 8, /no ISO 286-2 row for m over 6 to 10/], ['H9', 12, /IT9 over 10 to 18 mm: its Table 1 row is not held/], ['JS5', 25, /IT5 is 9 µm, odd/]] as [string, number, RegExp][])
+      expect((limitsOf(cls, size) as Refusal).why, `${cls} at ${size} mm: refused, never guessed`).toMatch(why);
+    // (a deviation table with k's lower deviation 3 breaks case 6's shaft: the offset is held, not only the width)
+    expect(lim(25, 'k5', DEVIATION.map((d) => (d.cls === 'k' ? { ...d, lower: 3 } : d))), 'a k row planted wrong').not.toEqual(e(6).shaft_um);
+  });
+  // (the negative as rows (spec 01, I17): one general path reads every kind of seat from data. The code that makes,
+  // measures and cuts a negative names no kind of seat and tests no row by name; a row given at run time is answered by it;
+  // every expression of a row comes to a number, its units ones the lexer reads as lengths or angles; what rows read is
+  // sourced)
+  it('the negative is rows: the engine names no kind; a row given at run time is answered', () => {
+    const KIND = /bearing|keyway|dowel|pipe|cut-?out|push ?button|6205|8x7|D22|SKF|DIN 6885|ISO 1179|ISO 228|IEC 60947|\.row\s*===/i;
+    // (a top-level declaration's text, to the next line at the left margin, its comments taken out)
+    const bodyOf = (file: string, name: string) => { const text = readFileSync(join(root, 'src/nexus', file), 'utf8'), m = new RegExp(`^(export )?(async )?(function|const) ${name}\\b`, 'm').exec(text);
+      if (!m) throw new Error(`${file}: no ${name}`); const rest = text.slice(m.index), end = rest.slice(1).search(/\n(?=[^\s}\])])/); return (end < 0 ? rest : rest.slice(0, end + 1)).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1'); };
+    const general: [string, string][] = [['interfaces.ts', 'negativeOfRow'], ['interfaces.ts', 'keyedRow'], ['interfaces.ts', 'bandedRow'], ['interfaces.ts', 'named'], ['interfaces.ts', 'outlineOf'], ['interfaces.ts', 'frameOfAsking'], ['interfaces.ts', 'limitsOf'], ['interfaces.ts', 'fitOf'],
+      ['form.ts', 'roundedRect'], ['form.ts', 'notchedCircle'], ['form.ts', 'reach'], ['mate.ts', 'imprint'], ['mate.ts', 'MEASURE'], ['mate.ts', 'applyImprint'], ['mate.ts', 'standOn'], ['mate.ts', 'portOfInterface'], ['mate.ts', 'PORT_OF'],
+      ['brep.ts', 'solidsOf'], ['view/kit3d.ts', 'drill'], ['make/rules.ts', 'inCut'], ['mass.ts', 'massOf']];
+    for (const [f, nm] of general) { const b = bodyOf(f, nm); expect(b.length, `${f} ${nm}: read whole`).toBeGreaterThan(40); expect(b.match(KIND)?.[0], `${f} ${nm} names a kind of seat or tests a row by name`).toBeUndefined(); }
+    expect(`function pick(a) {\n  if (a.row === 'bearing seat') return 1;\n}`.match(KIND), 'a row tested by its name, planted').not.toBeNull();
+    // (no source file names a row's key, outside the rows block)
+    const src = (d: string): string[] => readdirSync(join(root, d), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? src(join(d, e.name)) : /\.ts$/.test(e.name) ? [join(d, e.name)] : []));
+    const texts = src('src').map((f) => { let t = readFileSync(join(root, f), 'utf8'); if (f.endsWith('nexus/interfaces.ts')) { const a = t.indexOf('// ---- rows (data)'), b = t.indexOf('// ---- end of rows'); expect(a > 0 && b > a, 'the rows block marked').toBe(true); t = t.slice(0, a) + t.slice(b); } return [f, t] as const; });
+    const named = (keys: string[]) => texts.flatMap(([f, t]) => keys.filter((k) => t.includes(`'${k}'`) || t.includes(`"${k}"`)).map((k) => `${f}: ${k}`));
+    expect(named(Object.keys(NEGATIVE_ROWS)), 'a row named outside the rows').toEqual([]);
+    expect(named(['hole.clearance']).length, 'a name the code does use is found (the scan sees)').toBeGreaterThan(0);
+    // (a row given at run time, over the CLEARANCE table rows read: exactly I5's M8 medium hole, 9 mm through 10 mm)
+    const row: NegativeRow = { of: { kind: 'hole.clearance', says: 'a clearance hole, written as a row (a test row)' }, asks: ['thread'], lookups: [{ table: 'CLEARANCE', key: '{thread}' }],
+      sides: { plate: { frame: 'surface', tools: [{ role: 'remove', turned: [['medium / 2', '0'], ['medium / 2', 't']], why: 'ISO 273 medium clearance for {thread}: {medium} mm' }],
+        checks: [{ check: 'edge distance', measure: 'across', need: '1.2 * medium', from: 'axis', rule: 'e₂ ≥ 1.2 d₀', source: 'EN 1993-1-8' }, { check: 'breaking in', measure: 'breaking in', rule: 'the hole clear of the piece\'s other holes', source: 'its own cuts' },
+          { check: 'spacing', measure: 'spacing', need: '2.2 * medium', rule: 'p₁ ≥ 2.2 d₀', source: 'EN 1993-1-8' }],
+        mirror: { kind: 'hole.clearance', sex: 'holes', takes: '{thread}', size: { d: 'medium' }, std: 'ISO 273', fit: 'ISO 273 medium', joint: 'fixed' } } }, side: 'plate', sources: ['ISO 273'] };
+    const host = { material: 'steel-low', thickness: 0.01 }, i5 = negativeOf({ kind: 'thread.external', thread: 'M8', through: true }, host, { fit: 'medium' }) as Negative, byRow = negativeOf({ row: 'clear', size: { thread: 'M8' } }, host, { rows: { clear: row } }) as Negative;
+    expect(byRow.tools.map((x) => [x.role, x.prof, x.why]), 'the row\'s hole is I5\'s').toEqual(i5.tools.map((x) => [x.role, x.prof, x.why]));
+    expect([byRow.mirror.takes, byRow.mirror.size.d, byRow.checks.map((c) => [c.check, c.need === undefined ? c.need : +Number(c.need).toFixed(9)])], 'its mirror and checks').toEqual(['M8', i5.mirror.size.d, i5.checks.filter((c) => c.check !== 'room').map((c) => [c.check, c.need === undefined ? c.need : +Number(c.need).toFixed(9)])]);
+    expect([frameOfAsking({ row: 'clear', size: {} }, { clear: row }), frameOfAsking({ kind: 'face', nema: '23' })]).toEqual(['surface', 'surface']);
+    // (what it cannot read, refused: no such row, no such side, no table row for the size, an expression that does not come out)
+    const why = (a: Asking, rows = { clear: row }) => (negativeOf(a, host, { rows }) as Refusal).why;
+    expect([why({ row: 'none', size: {} }), why({ row: 'clear', side: 'hub', size: { thread: 'M8' } }), why({ row: 'clear', size: { thread: 'M7' } }),
+      why({ row: 'clear', size: { thread: 'M8' } }, { clear: { ...row, sides: { plate: { ...row.sides.plate!, tools: [{ role: 'remove', turned: [['nothing / 2', '0']], why: '' }] } } } })])
+      .toEqual([expect.stringMatching(/no row "none"/), expect.stringMatching(/no side "hub" \(it has plate\)/), expect.stringMatching(/no CLEARANCE row for M7/), expect.stringMatching(/^clear: /)]);
+    // (every expression of every row, and the test row's, comes to a number over its scope; a number followed by a word is
+    // a length or an angle (the lexer reads '2 h' as two hours))
+    const exsOf = (r: NegativeRow): string[] => { const out: string[] = [], add = (x: unknown) => { if (typeof x === 'string') out.push(x); else if (Array.isArray(x)) x.forEach(add); else if (x && typeof x === 'object') Object.values(x).forEach(add); };
+      for (const l of r.let ?? []) add(l.ex); for (const sd of Object.values(r.sides)) { for (const l of sd.let ?? []) add(l.ex); for (const t of sd.tools) { add([t.turned, t.depth, t.at, t.r, t.r0, t.length]); if (t.outline) add(t.outline); }
+        for (const z of sd.zones ?? []) add([z.basic, z.lo, z.hi]); for (const c of sd.checks) add([c.have, c.need, c.most, c.at]); add(Object.values(sd.mirror.size)); add(sd.mirror.t); for (const p of sd.adds ?? []) add(p.at); } return out; };
+    const units = (r: NegativeRow) => exsOf(r).flatMap((e) => [...e.matchAll(/\d\s+([A-Za-zµ°]+)/g)].map((m) => m[1]!)).filter((u) => !['mm', 'm', 'deg'].includes(u));
+    expect(units(row), 'units read as lengths').toEqual([]); expect(units({ ...row, let: [{ name: 'x', ex: '2 h', unit: 'mm', says: '' }] }), 'a unit not a length, planted').toEqual(['h']);
+    for (const [k, r] of [...Object.entries(NEGATIVE_ROWS), ['clear', row] as const]) for (const e of exsOf(r)) if (!/[<>=!]|\band\b|\bor\b/.test(e)) {
+      const neg = negativeOf({ row: k, size: k === 'clear' ? { thread: 'M8' } : {} }, host, { rows: { [k]: r } }); if ('refused' in neg) continue; // (the rows' own cases give their sizes in their test)
+      expect(Number.isFinite(num(e, scopeOf(neg.scope!))), `${k}: ${e}`).toBe(true); }
+    // (what rows read is sourced, and written with no placeholder: a table planted without its source is caught)
+    expect(unsourced({ TABLES }, 'src/nexus/interfaces.ts'), 'the tables rows read, each with its source').toEqual([]);
+    expect(unsourced({ TABLES: { ...TABLES, PLANTED: { rows: { a: { d: 3 } }, unit: { d: 'mm' } } } }, 'planted'), 'a table with no source').toHaveLength(1);
+    for (const T of Object.values(TABLES)) expect(TABLE_SOURCES[T.src], `${T.src}: a source held`).toBeTruthy();
+    expect(placeholders(readFileSync(join(root, 'src/nexus/interfaces.ts'), 'utf8'), 'src/nexus/interfaces.ts')).toEqual([]);
+  });
   // (the interfaces evaluation set (spec 01, I15; design §4): its twelve cases, the design's rows in order, each with its
   // numbers worked out by hand from its sources; each named by the tests that run it, or waiting on the task that will
   // build it, its numbers then held to themselves and to the ISO 286 tolerances the app holds)

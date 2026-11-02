@@ -74,6 +74,9 @@ export interface Keep { name: string; kind: 'box' | 'sector'; at: V3; size?: V3;
  *  higher the other is) held within min and max; only while a state holds, if it says one; why, with its figures. Bolts
  *  meeting their holes are mates of another kind (src/nexus/mate.ts); a zone (Keep) is a mate that nothing be in it. */
 export interface Mate { name: string; to: string; measure: 'distance' | 'gap' | 'facing' | 'sees' | 'height'; min?: number; max?: number; /** its front, in its own frame (facing, sees) */ face?: '+z' | '-z' | '+x' | '-x'; /** the eye's height over the floor (sees) */ eye?: number; when?: string; why: string }
+/** A surface's limits, recorded where it is drawn at its basic size (spec 01, I17): basic (m), deviations (µm); a side left
+ *  out where the limit is one-sided (at least, at most); its ISO 286 class where it has one; what it was read from. */
+export interface Limit { on: string; basic: number; loUm?: number; hiUm?: number; cls?: string; src: string; says: string }
 export interface Part {
   name: string; shape?: Shape; at?: V3; rot?: V3; color?: number; mat?: string;
   /** holes drilled into it (its own frame) */ cuts?: Cut[];
@@ -127,7 +130,7 @@ export interface Part {
   /** what was imprinted on it (spec 01, I8): the interface, where it stood (its own frame), how it was turned, the mirror it
    *  gained, and why each size (src/nexus/mate.ts, applyImprint); what asked it and the query that finds its face again when
    *  the part is changed (its normal, the farthest along it, near where it stood), what it cut and kept, so it is re-applied
-   *  there; lost, and said so, where no face answers (I9) */ imprints?: { of: string; at: V3; n: V3; u: V3; turn: number; mirror: string; port: string; why: string[]; asking?: unknown; face?: { normal: V3; extreme?: 'max'; near: V3 }; made?: { cuts: Cut[]; keep: Keep[] }; lost?: string }[];
+   *  there; lost, and said so, where no face answers (I9) */ imprints?: { of: string; at: V3; n: V3; u: V3; turn: number; mirror: string; port: string; why: string[]; asking?: unknown; face?: { normal: V3; extreme?: 'max'; near: V3 }; made?: { cuts: Cut[]; keep: Keep[] }; lost?: string; /** the limits its surfaces are held to (I17) */ limits?: Limit[] }[];
   /** how a skin meets its neighbours along an edge of it, and why (src/nexus/panels.ts says these; the critic checks
    *  them with numbers): in one tangent plane across a shut line (G1: a highlight runs on across it), a deliberate crease
    *  (G0 only), or square to its own mirror at the middle */ meets?: { part: string; edge: 'a0' | 'a1' | 'b0' | 'b1'; kind: 'G1' | 'crease' | 'mirror'; why: string }[];

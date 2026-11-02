@@ -7,7 +7,9 @@
 // counterbore) and the standards' tables they read come next (I3 onward); mating by interfaces is mate.ts's.
 
 import * as THREE from 'three';
-import type { Iface, Part, Port, Shape, V3 } from './kits';
+import type { Iface, Limit, Part, Port, Shape, V3 } from './kits';
+import { num, scopeOf, truth } from './generate';
+import { notchedCircle, roundedRect } from './form';
 import { isAssembly, matrixOf, type Assembly } from './assembly';
 import { matterOf } from './matter';
 import { METRIC } from './threads';
@@ -214,8 +216,8 @@ export const IT_STEPS = [0, 3, 6, 10, 18, 30, 50, 80, 120, 180, 250, 315, 400, 5
 export const IT_MULTIPLE: Record<number, number> = { 5: 7, 6: 10, 7: 16, 8: 25, 9: 40, 10: 64, 11: 100, 12: 160, 13: 250, 14: 400, 15: 640, 16: 1000 };
 /** Table 1's own values, µm, by size step (over the first, up to and including the second): what rules where held. The
  *  rows from ISO 286-2:2010's Table 1 agree with the reproduction of ISO 286-1 on every grade both give. */
-export const IT_TABLE: Record<string, { IT5?: number; IT6?: number; IT7?: number; IT8?: number; IT9?: number; src: 'ISO 286-1' | 'ISO 286-2' }> = {
-  '3-6': { IT5: 5, IT6: 8, IT7: 12, IT8: 18, IT9: 30, src: 'ISO 286-2' }, '6-10': { IT6: 9, IT7: 15, IT8: 22, src: 'ISO 286-1' },
+export const IT_TABLE: Record<string, { IT5?: number; IT6?: number; IT7?: number; IT8?: number; IT9?: number; src: 'ISO 286-1' | 'ISO 286-2'; /** a cell from elsewhere, said */ also?: string }> = {
+  '3-6': { IT5: 5, IT6: 8, IT7: 12, IT8: 18, IT9: 30, src: 'ISO 286-2' }, '6-10': { IT6: 9, IT7: 15, IT8: 22, IT9: 36, src: 'ISO 286-1', also: 'IT9 from ISO 286-2:2010 Table 1, read there by I15\'s evaluator (2026-11-01), and the width of IS 919-2\'s N9 row' },
   '18-30': { IT5: 9, IT6: 13, IT7: 21, IT8: 33, src: 'ISO 286-2' }, '50-80': { IT5: 13, IT6: 19, IT7: 30, IT8: 46, src: 'ISO 286-2' },
 };
 /** A standard tolerance, µm: Table 1's own value where its row is held here, else the formula's (itFormula), said so. The
@@ -223,6 +225,36 @@ export const IT_TABLE: Record<string, { IT5?: number; IT6?: number; IT7?: number
 export function itTolerance(size: number, grade: number): { um: number; step: [number, number]; derived: string } {
   const f = itFormula(size, grade), row = IT_TABLE[`${f.step[0]}-${f.step[1]}`], v = row?.[`IT${grade}` as 'IT5'];
   return v !== undefined ? { um: v, step: f.step, derived: `${row!.src}, Table 1: IT${grade} over ${f.step[0]} to ${f.step[1]} mm` } : f;
+}
+/** ISO 286-2's fundamental deviations, µm: for a class letter, over a size step (over, up to and including) and its grades,
+ *  the one limit it sets beside its IT grade (a hole's EI as lower or ES as upper; a shaft's ei as lower or es as upper). H, h
+ *  and JS, js are ISO 286-1's own definitions (EI 0, es 0, ±IT/2) and need no row. Read 2026-11-01 for the evaluation set's
+ *  cases 6, 11 and 12 by two readers apart from ISO 286-2's tables (the Technical University of Košice's, Roymech's, IS
+ *  919-2:1993); only the cells those cases read are held, and any other is refused, never derived. */
+export interface DeviationRow { cls: string; over: number; upTo: number; grades: [number, number]; lower?: number; upper?: number }
+export const DEVIATION: DeviationRow[] = [
+  { cls: 'k', over: 18, upTo: 30, grades: [5, 5], lower: 2 }, { cls: 'm', over: 3, upTo: 6, grades: [6, 6], lower: 4 },
+  { cls: 'G', over: 3, upTo: 6, grades: [7, 7], lower: 4 }, { cls: 'N', over: 6, upTo: 10, grades: [9, 9], upper: 0 },
+];
+/** A tolerance class at a basic size: its lower and upper deviations, µm, and what they were read from; or why not. Its IT
+ *  grade only where Table 1's row for that size is held (the formula is not the table: fault D17), never derived. */
+export function limitsOf(cls: string, basicMm: number, table: DeviationRow[] = DEVIATION): { loUm: number; hiUm: number; src: string; says: string } | Refusal {
+  const m = /^(JS|js|[A-Za-z])(\d{1,2})$/.exec(cls); if (!m) return refuse('an ISO 286 class', 0, 0, '', 'ISO 286-1', `no tolerance class ${cls}`);
+  const letter = m[1]!, grade = Number(m[2]), k = IT_STEPS.findIndex((x, i) => i > 0 && basicMm <= x); if (basicMm <= 0 || k < 1) return refuse('a size ISO 286 covers', 500, basicMm, 'mm', 'ISO 286-1', `${basicMm} mm: ISO 286 is read here to 500 mm`);
+  const over = IT_STEPS[k - 1]!, upTo = IT_STEPS[k]!, row = IT_TABLE[`${over}-${upTo}`], w = row?.[`IT${grade}` as 'IT5'];
+  if (w === undefined) return refuse('a tolerance grade held', 0, 0, '', 'ISO 286-1', `IT${grade} over ${over} to ${upTo} mm: its Table 1 row is not held here, and the formula is not the table (D17)`);
+  const said = (lo: number, hi: number, how: string, src: string) => ({ loUm: lo, hiUm: hi, src, says: `${basicMm} ${cls}: ${lo >= 0 ? '+' : ''}${lo} to ${hi >= 0 ? '+' : ''}${hi} µm (${how}; IT${grade} ${w} µm, ${row!.src} Table 1)` });
+  if (letter === 'H') return said(0, w, 'H: EI 0', 'ISO 286-1'); if (letter === 'h') return said(-w, 0, 'h: es 0', 'ISO 286-1');
+  if (letter === 'JS' || letter === 'js') { if (w % 2) return refuse('ISO 286-1\'s rounding of JS', 0, 0, '', 'ISO 286-1', `${cls} at ${basicMm} mm: IT${grade} is ${w} µm, odd, and how ISO 286-1 rounds its half is not read here`); return said(-w / 2, w / 2, 'JS: ±IT/2', 'ISO 286-1'); }
+  const d = table.find((x) => x.cls === letter && basicMm > x.over && basicMm <= x.upTo && grade >= x.grades[0] && grade <= x.grades[1]);
+  if (!d) return refuse('a fundamental deviation held', 0, 0, '', 'ISO 286-2', `no ISO 286-2 row for ${letter} over ${over} to ${upTo} mm at IT${grade} here`);
+  return d.lower !== undefined ? said(d.lower, d.lower + w, `${letter}: its lower deviation ${d.lower}`, 'ISO 286-2') : said(d.upper! - w, d.upper!, `${letter}: its upper deviation ${d.upper}`, 'ISO 286-2');
+}
+/** A hole on a shaft of one size, by their deviations (µm): the most clearance, the most interference, and so the kind. */
+export interface FitJudged { kind: 'clearance' | 'transition' | 'interference'; mostClearUm: number; mostTightUm: number; why: string }
+export function fitOf(hole: { loUm: number; hiUm: number }, shaft: { loUm: number; hiUm: number }): FitJudged {
+  const mostClearUm = +(hole.hiUm - shaft.loUm).toFixed(3), mostTightUm = +(shaft.hiUm - hole.loUm).toFixed(3), kind = hole.loUm >= shaft.hiUm ? 'clearance' : hole.hiUm <= shaft.loUm ? 'interference' : 'transition';
+  return { kind, mostClearUm, mostTightUm, why: `a ${kind} fit: at most ${Math.max(0, mostClearUm)} µm clear, at most ${Math.max(0, mostTightUm)} µm tight (ISO 286-1)` };
 }
 /** ISO 286-1's formula, unrounded (where Table 1 holds no row here). */
 export function itFormula(size: number, grade: number): { um: number; step: [number, number]; derived: string } {
@@ -239,11 +271,31 @@ export function itFormula(size: number, grade: number): { um: number; step: [num
 // its numbers and its source, and nothing is cut.
 
 /** A body of the negative, in the interface's frame (its face at the origin, the hole running along −y, into the host). */
-export interface ToolBody { role: 'remove' | 'keep' | 'add' | 'contact'; /** a turned body: [radius, depth] from the face, m */ prof?: [number, number][]; at?: V3; /** a keep's or a contact's size */ r?: number; r0?: number; length?: number; why: string }
-export interface Negative { mirror: { kind: 'hole.clearance' | 'hole.tapped' | 'hole.insert' | 'bore' | 'holes'; size: Record<string, number | string>; std?: string; fit?: string }; tools: ToolBody[]; parts: Part[]; why: string[] }
+export type Ex = string; // an expression over a row's names, read by generate.ts num()/truth() (SI; lengths with their unit: '0.5 mm', '59 deg')
+export type MirrorKind = 'hole.clearance' | 'hole.tapped' | 'hole.insert' | 'bore' | 'holes' | 'shaft' | 'keyway' | 'thread.internal' | 'cutout';
+export type Joint = 'fixed' | 'slider' | 'revolute' | 'cylindrical';
+export type Measure = 'value' | 'across' | 'spacing' | 'breaking in' | 'room';
+export interface ToolBody { role: 'remove' | 'keep' | 'add' | 'contact'; /** a turned body: [radius, depth] from the face, m */ prof?: [number, number][];
+  /** a section in the face (m): x along u, z along w = n × u, cut `depth` along −n (spec 01, I17) */ sect?: [number, number][]; depth?: number;
+  at?: V3; /** a keep's or a contact's size */ r?: number; r0?: number; length?: number; /** a keep behind the face rather than before it */ along?: '+n' | '-n'; why: string }
+/** A check a negative asks before anything is cut (spec 01, I17): what it measures on the host, the least and most it
+ *  allows, where along its line (m), from its axis or from its outline, and only when a condition over its sizes holds. */
+export interface PlannedCheck { check: string; measure: Measure; need?: number | [number, number]; most?: number; at?: number; from?: 'axis' | 'outline'; when?: Ex;
+  rule: string; source: string; /** a 'value' check, settled where the negative was made */ done?: { have: number } }
+export interface Negative {
+  mirror: { kind: MirrorKind; size: Record<string, number | string>; std?: string; fit?: string; /** given by a row; else applyImprint infers them */ sex?: Port['sex']; takes?: string; t?: number; joint?: Joint };
+  tools: ToolBody[]; parts: Part[]; why: string[]; checks: PlannedCheck[];
+  limits?: Limit[]; fit?: FitJudged; /** parts it adds, as catalogue words, never drawn here */ adds?: { words: string; at: V3; why: string }[];
+  row?: string; side?: string; frame?: 'surface' | 'axis'; scope?: Record<string, number>;
+}
 export interface Refusal { refused: true; rule: string; need: number; have: number; unit: string; source: string; why: string }
-/** What asks for a negative: a screw's thread (its head's kind, its class), or a motor's face by its NEMA frame. */
-export type Asking = { kind: 'thread.external'; thread: string; head?: 'socket' | 'hex' | 'pan'; class?: '8.8' | '10.9' | '12.9'; through?: boolean } | { kind: 'face'; nema: string };
+/** A negative asked of a row (spec 01, I17): its row, the sizes asked (numbers SI, or words such as a bearing's number), its side. */
+export type RowAsking = { row: string; size: Record<string, number | string>; side?: string };
+/** What an interface asks of the part it meets (I5's two kinds), or a row's negative. */
+export type Asking = { kind: 'thread.external'; thread: string; head?: 'socket' | 'hex' | 'pan'; class?: '8.8' | '10.9' | '12.9'; through?: boolean } | { kind: 'face'; nema: string } | RowAsking;
+/** The host as imprint measures it where an interface stands: its material, its depth along the line, how far it runs either
+ *  way along u from the point (span; mid, the middle's offset), and how far is clear before the face along n (free). */
+export interface HostMeasure { material: string; thickness: number; span?: number; mid?: number; free?: number }
 const MM = 1e-3, POINT = (59 * Math.PI) / 180; // (a twist drill's point, 118°: half of it from the axis)
 
 /** How far a screw of this class must go into this material (Bossard's rows, by the host's family and its Rm; the
@@ -257,7 +309,9 @@ export function engagementOf(material: string, cls: '8.8' | '10.9' | '12.9' = '8
 }
 
 /** The negative an interface asks of a host of this material and thickness (m), or a refusal. */
-export function negativeOf(it: Asking, host: { material: string; thickness: number }, o: { fit?: 'fine' | 'medium' | 'coarse' } = {}): Negative | Refusal {
+export function negativeOf(it: Asking, host: HostMeasure, o: { fit?: 'fine' | 'medium' | 'coarse'; rows?: Record<string, NegativeRow> } = {}): Negative | Refusal {
+  // (a row's negative: one general path for every kind written as data (spec 01, I17))
+  if ('row' in it) return negativeOfRow(it, host, o.rows ?? NEGATIVE_ROWS);
   const t = host.thickness, fit = o.fit ?? 'medium', fam = matterOf(host.material).family;
   if (it.kind === 'face') {
     const f = NEMA_FACE_OF(it.nema); if (!f) return refuse('a NEMA face we hold', 0, 0, '', 'NEMA ICS 16 (kinds/motion.ts)', `no NEMA ${it.nema} face here`);
@@ -265,7 +319,7 @@ export function negativeOf(it: Asking, host: { material: string; thickness: numb
     const h = (f.holes / 2) * MM, r = (c[fit] / 2) * MM, it7 = itTolerance(f.pilot, 7), dev = it7.um, pil = !/^derived/.test(it7.derived);
     const tools: ToolBody[] = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => ({ role: 'remove' as const, prof: [[r, 0], [r, t]] as [number, number][], at: [a! * h, 0, b! * h] as V3, why: `ISO 273 ${fit} clearance for the face's ${f.thread} screws: ${c[fit]} mm, on its ${f.holes} mm square` }));
     tools.push({ role: 'remove', prof: [[(f.pilot / 2) * MM, 0], [(f.pilot / 2) * MM, t]], at: [0, 0, 0], why: `the pilot's bore, ${f.pilot} H7 (ISO 286-1: 0 to +${dev} µm${pil ? ', its Table 1' : ', derived'}), through: the shaft passes it` });
-    return { mirror: { kind: 'holes', size: { holes: f.holes, thread: f.thread, pilot: f.pilot }, std: 'NEMA ICS 16', fit: `ISO 273 ${fit}; pilot H7` }, tools, parts: [], why: tools.map((x) => x.why) };
+    return { mirror: { kind: 'holes', size: { holes: f.holes, thread: f.thread, pilot: f.pilot }, std: 'NEMA ICS 16', fit: `ISO 273 ${fit}; pilot H7` }, tools, parts: [], why: tools.map((x) => x.why), checks: bolted(c[fit] * MM) };
   }
   const th = it.thread, T = METRIC_OF(th), d = Number(th.slice(1)); if (!T) return refuse('ISO 261', 0, 0, '', 'ISO 261', `no thread ${th}`);
   if (it.through ?? true) {
@@ -281,7 +335,7 @@ export function negativeOf(it: Asking, host: { material: string; thickness: numb
       tools.push({ role: 'keep', r: R, length: 3 * d * MM, at: [0, 0, 0], why: `room along the axis for the hex key: the counterbore's ${cb.d1} mm, ${3 * d} mm out (typical)` });
       why.push(tools[0]!.why);
     } else tools.push({ role: 'remove', prof: [[r, 0], [r, t]], why: why[0]! });
-    return { mirror: { kind: 'hole.clearance', size: { thread: th, d: c[fit] * MM }, std: 'ISO 273', fit: `ISO 273 ${fit}` }, tools, parts: [], why };
+    return { mirror: { kind: 'hole.clearance', size: { thread: th, d: c[fit] * MM }, std: 'ISO 273', fit: `ISO 273 ${fit}` }, tools, parts: [], why, checks: bolted(c[fit] * MM) };
   }
   // (into the host: a metal is tapped, as deep as the thread must reach (Bossard), drilled for tapping (ISO 2306) with two
   // pitches more for the tap's run-out (typical) and the drill's 118° point; a polymer takes a heat-set insert)
@@ -290,7 +344,7 @@ export function negativeOf(it: Asking, host: { material: string; thickness: numb
     const r = (ins.hole / 2) * MM, depth = ins.depth * MM; if (depth > t) return refuse('the insert\'s hole within the part', ins.depth, t / MM, 'mm', ins.src, `the ${ins.series}'s hole is ${ins.depth} mm deep, the part ${(t / MM).toFixed(1)} mm`);
     const insert: Part = { name: `heat-set insert ${th}`, item: `insert-${th.toLowerCase()}`, shape: { tube: { r: (ins.od / 2) * MM, wall: ((ins.od - d) / 2) * MM, pts: [[0, 0, 0], [0, -ins.L * MM, 0]] } }, at: [0, 0, 0], mat: 'brass', says: `${ins.series}: ${ins.L} mm long, ${ins.od} mm across, pressed in hot (${TABLE_SOURCES[ins.src]?.publisher ?? ins.src})` };
     const why = [`a ${fam}: a thread is not cut in it; a heat-set insert (${ins.series}) in a ${ins.hole} mm hole ${ins.depth} mm deep (${ins.src})`];
-    return { mirror: { kind: 'hole.insert', size: { thread: th, d: ins.hole * MM, depth }, std: ins.src, fit: 'insert' }, tools: [{ role: 'remove', prof: [[r, 0], [r, depth], [0, depth + r / Math.tan(POINT)]], why: why[0]! }], parts: [insert], why };
+    return { mirror: { kind: 'hole.insert', size: { thread: th, d: ins.hole * MM, depth }, std: ins.src, fit: 'insert' }, tools: [{ role: 'remove', prof: [[r, 0], [r, depth], [0, depth + r / Math.tan(POINT)]], why: why[0]! }], parts: [insert], why, checks: bolted(ins.hole * MM) };
   }
   const e = engagementOf(host.material, it.class ?? '8.8'); if (!e) return refuse('a thread\'s engagement in this material', 0, 0, '', 'Bossard engagement', `no engagement row for ${fam}: ${host.material}`);
   const need = e.k * d; if (need * MM > t) return refuse('engagement', need, t / MM, 'mm', 'Bossard engagement', `an ${th} needs ${need.toFixed(1)} mm of thread (${e.why}); the part is ${(t / MM).toFixed(1)} mm`);
@@ -298,7 +352,117 @@ export function negativeOf(it: Asking, host: { material: string; thickness: numb
   const rd = (dr.drill / 2) * MM, depth = Math.min(t, (need + 2 * dr.P) * MM), blind = depth < t;
   const prof: [number, number][] = blind ? [[rd, 0], [rd, depth], [0, depth + rd / Math.tan(POINT)]] : [[rd, 0], [rd, t]];
   const why = [`tapped ${th}: drilled ${dr.drill} mm (ISO 2306), ${need.toFixed(1)} mm of thread (${e.why})${blind ? `, the drill ${(depth / MM).toFixed(1)} mm deep (two pitches for the tap's run-out, typical) and its 118° point` : ', through'}`];
-  return { mirror: { kind: 'hole.tapped', size: { thread: th, drill: dr.drill * MM, thread_depth: need * MM }, std: 'ISO 2306', fit: '6H' }, tools: [{ role: 'remove', prof, why: why[0]! }], parts: [], why };
+  return { mirror: { kind: 'hole.tapped', size: { thread: th, drill: dr.drill * MM, thread_depth: need * MM }, std: 'ISO 2306', fit: '6H' }, tools: [{ role: 'remove', prof, why: why[0]! }], parts: [], why, checks: bolted(dr.drill * MM) };
 }
 const METRIC_OF = (th: string) => METRIC[th], NEMA_FACE_OF = (n: string) => NEMA_FACE[n];
 const refuse = (rule: string, need: number, have: number, unit: string, source: string, why: string): Refusal => ({ refused: true, rule, need: +need.toFixed(3), have: +have.toFixed(3), unit, source, why });
+
+/** The checks a bolt's or a screw's hole asks before it is cut (EN 1993-1-8 Table 3.3, from its hole d0, m): its edge
+ *  distance from the hole's axis, that it breaks into no other hole, its spacing from them, the room its keep needs. */
+function bolted(d0: number): PlannedCheck[] {
+  const mmv = d0 / MM;
+  return [{ check: 'edge distance', measure: 'across', need: BOLT_SPACING.e2.least(mmv) * MM, from: 'axis', rule: `e₂ ≥ 1.2 d₀ = 1.2 × ${mmv.toFixed(1)} mm`, source: 'EN 1993-1-8' },
+    { check: 'breaking in', measure: 'breaking in', rule: 'the hole clear of the piece\'s other holes', source: 'its own cuts' },
+    { check: 'spacing', measure: 'spacing', need: BOLT_SPACING.p1.least(mmv) * MM, rule: `p₁ ≥ 2.2 d₀ = 2.2 × ${mmv.toFixed(1)} mm`, source: 'EN 1993-1-8' },
+    { check: 'room', measure: 'room', rule: 'room along the axis', source: 'its keep' }];
+}
+
+// ---- negatives as rows (spec 01, I17): one general path; every kind of seat a row of data ------------------------------
+// A row says what a negative is in terms any kind shares: tables it looks up by a key or by the size band a size falls in,
+// names worked out from them (expressions in generate.ts's language, SI with units written), the tools (turned, or any
+// outline cut a depth), the limits its surfaces are held to (an ISO 286 class, or a table's own), the checks before cutting
+// (each a measure the imprint makes on the host), the interface the host gains, and parts it adds (catalogue words). A row
+// may have sides (a bearing's housing and its shaft; a key's shaft and hub). Nothing below names a kind: a new one is a row.
+export interface TableDef { rows: Record<string, unknown> | unknown[]; /** a tuple's columns */ cols?: string[]; unit: Record<string, 'mm' | 'um' | '1' | 'text'>; /** a TABLE_SOURCES key, where a row has none */ src: string }
+export interface Lookup { table: string; /** a key, its names in braces: '{b}x{h}' */ key?: Ex; /** a size whose band (over, up to) the row is */ band?: Ex; where?: Record<string, string>; /** a column's name in the scope */ as?: Record<string, string> }
+export interface LetRow { name: string; ex: Ex; unit: 'mm' | '1'; says: string }
+export interface ZoneRow { on: string; basic: Ex; /** an ISO 286 class, its names in braces */ cls?: string; lo?: Ex; hi?: Ex; src?: string }
+export interface ToolRow { role: 'remove' | 'keep' | 'contact'; when?: Ex; turned?: [Ex, Ex][];
+  outline?: { rect: [Ex, Ex]; r?: Ex } | { circle: Ex; notch?: { w: Ex; to: Ex } } | { pts: [Ex, Ex][] }; depth?: Ex;
+  at?: [Ex, Ex, Ex]; r?: Ex; r0?: Ex; length?: Ex; along?: '+n' | '-n'; why: string }
+export interface CheckRow { check: string; measure: Measure; have?: Ex; need?: Ex | [Ex, Ex]; most?: Ex; at?: Ex; from?: 'axis' | 'outline'; when?: Ex; rule: string; source: string }
+export interface SideRow { frame: 'surface' | 'axis'; /** the material families it is made in (matter.ts) */ family?: string[]; lookups?: Lookup[]; let?: LetRow[];
+  tools: ToolRow[]; zones?: ZoneRow[]; checks: CheckRow[];
+  mirror: { kind: MirrorKind; sex: Port['sex']; takes: string; size: Record<string, Ex>; std: string; fit?: string; t?: Ex; joint: Joint };
+  adds?: { words: string; at: [Ex, Ex, Ex]; why: string }[] }
+export interface NegativeRow { of: { kind: string; says: string }; /** the sizes it is asked for */ asks: string[]; lookups: Lookup[]; let?: LetRow[];
+  /** the asker's own surface and its class, so a fit is judged against it */ partner?: { on: string; cls: string }; sides: Record<string, SideRow>; side: string; sources: string[] }
+const UNIT = { mm: MM, um: 1e-6, '1': 1 } as const;
+// ---- rows (data): the tables rows read and the rows; no code above or below names a row ---------------------------------
+/** The tables rows read, by name: each the standard's own table, held once (joined here, never copied). */
+export const TABLES: Record<string, TableDef> = {
+  CLEARANCE: { rows: CLEARANCE, unit: { fine: 'mm', medium: 'mm', coarse: 'mm' }, src: 'ISO 273' },
+};
+/** The rows, by name: each kind of seat, hole or cut-out a row of data, read by negativeOfRow. */
+export const NEGATIVE_ROWS: Record<string, NegativeRow> = {};
+// ---- end of rows
+const named = (T: TableDef, r: unknown): Record<string, unknown> | null => (r === undefined || r === null ? null : Array.isArray(r) ? Object.fromEntries((T.cols ?? []).map((c, i) => [c, r[i]])) : (r as Record<string, unknown>));
+function keyedRow(T: TableDef, key: string): Record<string, unknown> | null { return Array.isArray(T.rows) ? null : named(T, (T.rows as Record<string, unknown>)[key]); }
+function bandedRow(T: TableDef, x: number, where: Record<string, string>): Record<string, unknown> | null {
+  const all = (Array.isArray(T.rows) ? T.rows : Object.values(T.rows)).map((r) => named(T, r)!);
+  return all.find((r) => x > Number(r.over) && x <= Number(r.upTo) && Object.entries(where).every(([k, v]) => String(r[k]) === v)) ?? null;
+}
+const fmt = (v: number, unit: 'mm' | '1' = 'mm') => (unit === '1' ? `${+v.toPrecision(6)}` : `${+(v / MM).toFixed(3)} mm`);
+/** An outline from a row (m): a rectangle or slot, a circle with its key recess, or points. */
+function outlineOf(o: NonNullable<ToolRow['outline']>, ev: (e: Ex) => number): [number, number][] {
+  if ('rect' in o) return roundedRect(ev(o.rect[0]), ev(o.rect[1]), o.r ? ev(o.r) : 0);
+  if ('circle' in o) return notchedCircle(ev(o.circle), o.notch ? { w: ev(o.notch.w), to: ev(o.notch.to) } : undefined);
+  return o.pts.map(([x, y]) => [ev(x), ev(y)]);
+}
+/** Whether a negative stands on a surface where it is met, or on the axis of the round piece it is put on (a shaft's seat). */
+export function frameOfAsking(a: Asking, rows: Record<string, NegativeRow> = NEGATIVE_ROWS): 'surface' | 'axis' {
+  if (!('row' in a)) return 'surface'; const row = rows[a.row]; return row?.sides[a.side ?? row.side]?.frame ?? 'surface';
+}
+/** A row's negative for the host as measured: its tables read, its names worked out, its 'value' checks settled (the first
+ *  that fails refuses), its tools, limits and fit made, its mirror and the parts it adds said; what cannot be read refused. */
+function negativeOfRow(a: RowAsking, host: HostMeasure, rows: Record<string, NegativeRow>): Negative | Refusal {
+  try {
+    const row = rows[a.row]; if (!row) return refuse('a negative row', 0, 0, '', 'NEGATIVE_ROWS', `no row "${a.row}"`);
+    const sideName = a.side ?? row.side, side = row.sides[sideName]; if (!side) return refuse('a side of the row', 0, 0, '', row.sources[0] ?? '', `the ${a.row} row has no side "${sideName}" (it has ${Object.keys(row.sides).join(', ')})`);
+    const fam = matterOf(host.material).family;
+    if (side.family && !side.family.includes(fam)) return refuse('a negative for this material', 0, 0, '', row.sources[0] ?? '', `no ${a.row} (${sideName}) row for a ${fam}`);
+    const nums: Record<string, number> = { t: host.thickness }, texts: Record<string, string> = {}, units: Record<string, 'mm' | '1'> = { t: 'mm' }, why: string[] = [];
+    for (const k of ['span', 'mid', 'free'] as const) if (host[k] !== undefined && Number.isFinite(host[k])) { nums[k] = host[k]!; units[k] = 'mm'; }
+    for (const [k, v] of Object.entries(a.size)) if (typeof v === 'number') { nums[k] = v; units[k] = 'mm'; } else texts[k] = v;
+    const ev = (e: Ex) => num(e, scopeOf(nums)), fill = (x: string) => x.replace(/\{(\w+)\}/g, (_, k: string) => texts[k] ?? (k in nums ? fmt(nums[k]!, units[k]).replace(/ mm$/, '') : `{${k}}`));
+    for (const L of [...row.lookups, ...(side.lookups ?? [])]) {
+      const T = TABLES[L.table]; if (!T) return refuse(`a ${L.table} table`, 0, 0, '', 'TABLES', `no table ${L.table}`);
+      const key = L.key !== undefined ? fill(L.key) : undefined, x = L.band !== undefined ? Math.round(ev(L.band) / MM * 1000) / 1000 : undefined; // (to a µm: a measured 30.0000001 is 30)
+      const r = key !== undefined ? keyedRow(T, key) : bandedRow(T, x!, Object.fromEntries(Object.entries(L.where ?? {}).map(([k, v]) => [k, fill(v)])));
+      if (!r) return refuse(`a ${L.table} row`, 0, 0, '', T.src, `no ${L.table} row for ${key ?? `${x} mm`} (${TABLE_SOURCES[T.src]?.title ?? T.src}): not read for it`);
+      for (const [c, v] of Object.entries(r)) { if (['src', 'over', 'upTo'].includes(c) || (L.where && c in L.where)) continue; const nm = L.as?.[c] ?? c, u = T.unit[c];
+        if (u === undefined) continue; if (u === 'text') texts[nm] = String(v); else { nums[nm] = Number(v) * UNIT[u]; units[nm] = u === '1' ? '1' : 'mm'; } }
+      why.push(`${L.table} ${key ?? `over ${String(r.over)} to ${String(r.upTo)} mm`} (${String(r.src ?? T.src)})`);
+    }
+    for (const l of [...(row.let ?? []), ...(side.let ?? [])]) { nums[l.name] = ev(l.ex); units[l.name] = l.unit; why.push(`${l.name} ${fmt(nums[l.name]!, l.unit)}: ${l.says}`); }
+    const checks: PlannedCheck[] = [];
+    for (const c of side.checks) {
+      const base: PlannedCheck = { check: c.check, measure: c.measure, rule: fill(c.rule), source: c.source, ...(c.when ? { when: c.when } : {}), ...(c.from ? { from: c.from } : {}),
+        ...(c.need !== undefined ? { need: Array.isArray(c.need) ? (c.need.map(ev) as [number, number]) : ev(c.need) } : {}), ...(c.most !== undefined ? { most: ev(c.most) } : {}), ...(c.at !== undefined ? { at: ev(c.at) } : {}) };
+      if (c.measure !== 'value') { checks.push(base); continue; }
+      const have = ev(c.have!); if (c.when && !truth(c.when, scopeOf({ ...nums, have }))) { checks.push({ ...base, done: { have } }); continue; }
+      const need = base.need as number | undefined;
+      if (need !== undefined && have < need - 1e-9) return refuse(c.check, need / MM, have / MM, 'mm', c.source, `${c.check} ${fmt(have)}: ${base.rule}`);
+      if (base.most !== undefined && have > base.most + 1e-9) return refuse(c.check, base.most / MM, have / MM, 'mm', c.source, `${c.check} ${fmt(have)}: ${base.rule}`);
+      checks.push({ ...base, done: { have } });
+    }
+    const tools = side.tools.filter((x) => !x.when || truth(x.when, scopeOf(nums))).map((x): ToolBody => ({ role: x.role, why: fill(x.why),
+      ...(x.turned ? { prof: x.turned.map(([r, d]) => [ev(r), ev(d)] as [number, number]) } : {}),
+      ...(x.outline ? { sect: outlineOf(x.outline, ev), depth: ev(x.depth!) } : {}),
+      ...(x.at ? { at: x.at.map(ev) as V3 } : {}), ...(x.r !== undefined ? { r: ev(x.r) } : {}), ...(x.r0 !== undefined ? { r0: ev(x.r0) } : {}), ...(x.length !== undefined ? { length: ev(x.length) } : {}), ...(x.along ? { along: x.along } : {}) }));
+    const limits: Limit[] = [];
+    for (const z of side.zones ?? []) { const basic = ev(z.basic);
+      if (z.cls) { const L = limitsOf(fill(z.cls), +(basic / MM).toFixed(6)); if ('refused' in L) return L; limits.push({ on: z.on, basic, loUm: L.loUm, hiUm: L.hiUm, cls: fill(z.cls), src: L.src, says: `${z.on}: ${L.says}` }); }
+      else { const lo = z.lo !== undefined ? +(ev(z.lo) / 1e-6).toFixed(3) : undefined, hi = z.hi !== undefined ? +(ev(z.hi) / 1e-6).toFixed(3) : undefined;
+        limits.push({ on: z.on, basic, ...(lo !== undefined ? { loUm: lo } : {}), ...(hi !== undefined ? { hiUm: hi } : {}), src: z.src ?? row.sources[0] ?? '', says: `${z.on} ${fmt(basic)}${lo !== undefined && hi !== undefined ? `, ${lo >= 0 ? '+' : ''}${lo} to ${hi >= 0 ? '+' : ''}${hi} µm` : lo !== undefined ? ', at least' : hi !== undefined ? ', at most' : ''} (${z.src ?? row.sources[0] ?? ''})` }); } }
+    let fit: FitJudged | undefined;
+    if (row.partner) { const mine = limits.find((l) => l.on === row.partner!.on); const P = mine ? limitsOf(fill(row.partner.cls), +(mine.basic / MM).toFixed(6)) : null;
+      if (P && 'refused' in P) return P; if (mine && P && mine.loUm !== undefined && mine.hiUm !== undefined) fit = side.mirror.sex === 'holes' ? fitOf({ loUm: mine.loUm, hiUm: mine.hiUm }, P) : fitOf(P, { loUm: mine.loUm, hiUm: mine.hiUm }); }
+    const m = side.mirror;
+    return { row: a.row, side: sideName, frame: side.frame, tools, parts: [], checks, limits, scope: nums, ...(fit ? { fit } : {}),
+      mirror: { kind: m.kind, sex: m.sex, takes: fill(m.takes), size: Object.fromEntries(Object.entries(m.size).map(([k, v]) => [k, ev(v)])), std: fill(m.std), ...(m.fit ? { fit: fill(m.fit) } : {}), ...(m.t !== undefined ? { t: ev(m.t) } : {}), joint: m.joint },
+      adds: (side.adds ?? []).map((p) => ({ words: fill(p.words), at: p.at.map(ev) as V3, why: fill(p.why) })),
+      why: [...why, ...tools.map((x) => x.why), ...limits.map((l) => l.says), fit?.why ?? (row.partner ? 'the fit not judged: a limit not held' : '')].filter(Boolean) };
+  } catch (e) { return refuse('a row that evaluates', 0, 0, '', 'NEGATIVE_ROWS', `${a.row}: ${(e as Error).message}`); }
+}
+

@@ -109,6 +109,28 @@ export function cutFrame(c: { dir: V3; u?: V3 }): { d: V3; u: V3; w: V3 } {
   let u: V3 = c.u ? c.u : Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]; const k = u[0] * d[0] + u[1] * d[1] + u[2] * d[2]; u = n([u[0] - k * d[0], u[1] - k * d[1], u[2] - k * d[2]]);
   return { d, u, w: [d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]] };
 }
+/** Segments a full turn of a drawn section takes (spec 01, I17). */
+export const ROUND = 64;
+/** A rectangle L along x by b along y about its middle, its corners rounded r (r = b/2: a slot with round ends, as an end
+ *  mill leaves; 0: square, as a broach or a shaper leaves); each quarter turn ROUND/4 points on the radius. */
+export function roundedRect(L: number, b: number, r = 0, n = ROUND): [number, number][] {
+  const hl = L / 2, hb = b / 2, rr = Math.min(Math.max(0, r), hl, hb); if (rr <= 1e-12) return [[-hl, -hb], [hl, -hb], [hl, hb], [-hl, hb]];
+  const k = Math.max(2, Math.round(n / 4)), pts: [number, number][] = [];
+  for (const [cx, cy, a0] of [[hl - rr, -hb + rr, -Math.PI / 2], [hl - rr, hb - rr, 0], [-hl + rr, hb - rr, Math.PI / 2], [-hl + rr, -hb + rr, Math.PI]] as const)
+    for (let i = 0; i <= k; i++) { const a = a0 + (Math.PI / 2) * (i / k); pts.push([cx + rr * Math.cos(a), cy + rr * Math.sin(a)]); }
+  return pts.filter((p, i) => { const q = pts[(i + 1) % pts.length]!; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-12; });
+}
+/** A round hole d across, drawn with its flats touching the circle so it is never under its size, and with a key recess w
+ *  wide toward +y whose end lies `to` from the middle (a panel cut-out's anti-rotation notch). */
+export function notchedCircle(d: number, notch?: { w: number; to: number }, n = ROUND): [number, number][] {
+  const r = d / 2, R = r / Math.cos(Math.PI / n);
+  if (!notch) return Array.from({ length: n }, (_, i) => { const a = (2 * Math.PI * i) / n; return [R * Math.cos(a), R * Math.sin(a)] as [number, number]; });
+  const hw = notch.w / 2, a0 = Math.PI / 2 + Math.asin(Math.min(1, hw / r)), a1 = Math.PI / 2 - Math.asin(Math.min(1, hw / r)) + 2 * Math.PI, steps = Math.max(8, Math.round((n * (a1 - a0)) / (2 * Math.PI))), Rs = r / Math.cos((a1 - a0) / steps / 2), pts: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) { const a = a0 + ((a1 - a0) * i) / steps, rad = i === 0 || i === steps ? r : Rs; pts.push([rad * Math.cos(a), rad * Math.sin(a)]); }
+  pts.push([hw, notch.to], [-hw, notch.to]); return pts;
+}
+/** How far an outline reaches in a direction th (its support): the most of x cos th + y sin th over its points. */
+export const reach = (pts: [number, number][], th: number): number => Math.max(...pts.map(([x, y]) => x * Math.cos(th) + y * Math.sin(th)));
 /** A section's area, m² (the shoelace sum). */
 export const sectArea = (pts: [number, number][]): number => profileArea(pts);
 /** Whether (x, y) lies inside a section (its crossings counted), and how far it is from the section's nearest edge. */
