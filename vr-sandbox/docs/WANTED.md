@@ -335,3 +335,10 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   the bloat and whatever out of the app or your context or things you would read and bloat or outdated stuff and then
   start building" (cost and carbon later; docs/NODE-ENGINE.md and docs/ROADMAP.md removed as outdated; unused packages
   removed; the start queue begun)
+- 2026-11-02: "Yes continue but that motor is extremely unrealistic and looks horrible looks blocky not real wires thing
+  going through each other I hope that something that doesn't allow that is in the plan I mean what happens where you
+  render it in motion will it work =fake,if it fails because it's broken then good" (the engine fails visibly where it
+  is broken; faults D25, D26)
+- 2026-11-02: "Create a node creator agent that can see what everyone is doing manually and learns how to make nodes,node
+  types, node boards collapsed into one node to make everything more efficient" (the node creator: what is done by hand,
+  recorded and mined, made into nodes and node types, proved equal before it is offered; its spec written from it)
