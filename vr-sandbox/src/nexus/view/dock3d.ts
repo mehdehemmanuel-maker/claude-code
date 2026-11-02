@@ -428,6 +428,8 @@ export class Dock3D {
   screenOf(p: THREE.Vector3): [number, number] { const r = this.renderer.domElement.getBoundingClientRect(), v = p.clone().project(this.camera); return [r.left + ((v.x + 1) / 2) * r.width, r.top + ((1 - v.y) / 2) * r.height]; }
   /** The matrix of what is shown, in the world (the frame a paste's host is walked from). */
   viewMatrix(): THREE.Matrix4 { this.view.group.updateMatrixWorld(); return this.view.group.matrixWorld.clone(); }
+  /** Whether a box (in the world) is in sight of the camera, in part or whole. */
+  inView(b: THREE.Box3): boolean { this.camera.updateMatrixWorld(); return new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse)).intersectsBox(b.clone().applyMatrix4(this.viewMatrix())); }
   /** Where the ground's grid is laid, its cell, and whether it is drawn. */
   gridAt(): { y: number; cell: number; visible: boolean } { return { y: this.grid.position.y, cell: this.gridCell, visible: this.grid.visible }; }
   /** How long the last frames took to draw, ms (a moving mean). */

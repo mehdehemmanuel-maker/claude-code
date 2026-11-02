@@ -14,7 +14,7 @@ import { Pad, PasteCard, Walker } from './pad';
 import type { Shown } from './space3d';
 import { runBlock } from '../dataflow';
 import { show, type PortDef } from '../blocks';
-import { boundsOfAll, isAssembly, isPart, leavesOf, massOfAll, placedCount, type Assembly } from '../assembly';
+import { boundsOfAll, isAssembly, isPart, leavesOf, massOfAll, matrixOf, placedCount, type Assembly } from '../assembly';
 import type { Part } from '../kits';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -89,7 +89,7 @@ function metrics(): void {
   const fails = Object.keys(nodes).filter((id) => wall.outputsOf(id)?.holds === false).length;
   const shared = placed ? 1 - distinct / placed : 0;
   $('gauges').innerHTML = [
-    ring(null, '#ff6e40', mass ? show(mass, 'kg') : '—', 'Mass', things.length ? `of ${things.length} shown` : 'nothing shown'),
+    ring(null, '#ff6e40', mass ? show(mass, 'kg') : '—', 'Mass', things.length ? 'of all that is shown' : 'nothing shown'),
     ring(shared, '#ffd740', placed ? `${shared > 0.99 ? (Math.floor(shared * 1000) / 10).toFixed(1) : (shared * 100).toFixed(0)}%` : '—', 'Shared', `${placed.toLocaleString()} pieces, ${distinct.toLocaleString()} made`),
     ring(Math.min(1, r.ms / 16.7), r.ms > 16.7 ? '#ff5252' : '#69f0ae', `${r.ms.toFixed(r.ms < 10 ? 1 : 0)} ms`, 'Last run', 'a frame is 16.7 ms'),
     ring(total ? (total - failed - waiting) / total : null, failed || fails ? '#ff5252' : '#40c4ff', total ? `${total - failed - waiting}/${total}` : '—', 'Nodes', [failed ? `${failed} failed` : '', fails ? `${fails} check${fails > 1 ? 's' : ''} fail` : '', !failed && !fails && waiting ? `${waiting} waiting` : ''].filter(Boolean).join(', ') || 'all working'),
@@ -101,8 +101,10 @@ function metrics(): void {
   // (what is drawn, said as it is: pieces inside or under others are drawn and counted, though not seen until cut open)
   // (the things shown first, as a reader counts them; then the pieces they are drawn from, said as hidden where they are:
   // "9 pieces drawn" beside three things seen read as a miscount to every blind reader)
-  const shownThings = things.reduce((k, x) => k + (isAssembly(x.thing) && !x.thing.tiled ? x.thing.items.length : 1), 0);
-  $('stat3d').textContent = st.instances ? `${shownThings.toLocaleString()} thing${shownThings === 1 ? '' : 's'} shown, drawn from ${st.instances.toLocaleString()} pieces, some inside others (Cut shows them)${st.boxes ? `; ${st.boxes.toLocaleString()} far away, shown as plain boxes` : ''}` : '';
+  // (the things in view: the reader counts what is in sight, so one framed off to the side is not counted (the second blind
+  // check: "3 things" beside two seen); the pieces are those drawn now, the view's own count)
+  const boxes = things.flatMap((x) => (isAssembly(x.thing) && !x.thing.tiled ? x.thing.items.map((it) => boundsOfAll(it.of).clone().applyMatrix4(matrixOf(it))) : [boundsOfAll(x.thing)])), inView = boxes.filter((b) => !b.isEmpty() && dock.inView(b)).length;
+  $('stat3d').textContent = st.instances ? `${inView.toLocaleString()} thing${inView === 1 ? '' : 's'} in view, drawn from ${st.instances.toLocaleString()} pieces, some inside others (Cut shows them)${st.boxes ? `; ${st.boxes.toLocaleString()} far away, shown as plain boxes` : ''}` : '';
 }
 
 // ---- variations: one node, each of an input's choices -----------------------------------------------------------------
