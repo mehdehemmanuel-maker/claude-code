@@ -14,6 +14,8 @@ import { isAssembly, matrixOf, type Assembly } from './assembly';
 import { matterOf } from './matter';
 import { METRIC } from './threads';
 import { NEMA_FACE } from './kinds/motion';
+import { BEARINGS, KEYS } from './families';
+import { BSP } from './kinds/fluid';
 
 export type InterfaceKind = 'holes' | 'threads' | 'pins' | 'frame' | 'shaft' | 'bore' | 'thread.external' | 'thread.internal' | 'drive' | 'chain' | 'face';
 export interface Interface {
@@ -153,6 +155,18 @@ export const TABLE_SOURCES: Record<string, TableSource> = {
   'CNC Kitchen inserts': { title: 'CNC Kitchen heat-set insert dimensions and design guidelines (standard inserts, metric)', url: 'https://www.cnckitchen.com/s/CNCKitchen_Heat-Set-Insert-Dimensions-and-Design-Guidelines.pdf', publisher: 'CNC Kitchen (TwoChefs GmbH), the insert maker', standard: false, second: 'ruthex RX inserts, its table on its product pages: https://www.ruthex.de/en/products/ruthex-gewindeeinsatz-m4-50-stuck-rx-m4x8-1-messing-gewindebuchsen (its holes 0.1 mm smaller from M4 up)' },
   'ISO 286-1': { title: 'ISO 286-1:1988 limits and fits: the tolerance factor, the grades as multiples of it, the size steps, Table 1, as reproduced in BHEL corporate standard AA0230201', url: 'https://www.bhel.com/sites/default/files/specificationaa0230201-1440410133.pdf', publisher: 'Bharat Heavy Electricals Ltd, a reproduction', standard: false, second: 'IS 919 (Part 1):1993, identical to ISO 286-1 (Bureau of Indian Standards)' },
   'ISO 286-2': { title: 'ISO 286-2:2010 limits and fits, Table 1: the standard tolerance grades by size (taken from ISO 286-1:2010), its sample pages', url: 'https://cdn.standards.iteh.ai/samples/54915/7d6147c29fed4e31af36b60561e88752/ISO-286-2-2010.pdf', publisher: 'ISO, sample pages hosted by iTeh Standards', standard: true, second: 'read 2026-11-01 by two readers apart (spec 01, I15), every row agreeing with Roymech\'s and the Technical University of Košice\'s ISO 286-2 tables' },
+  'ISO 286-2 deviations': { title: 'ISO 286-2 fundamental deviations of holes and shafts (k, m, G, N at the sizes held), as tabulated by Roymech and by the Technical University of Košice, and in IS 919 (Part 2):1993, identical to ISO 286-2:1988', url: 'https://www.roymech.co.uk/Useful_Tables/ISO_Tolerances/ISO_286_2s.html', publisher: 'Roymech; the Technical University of Košice; the Bureau of Indian Standards', standard: false, second: 'https://silvia.malakova.website.tuke.sk/konst-ANG/ISO%20Tolerances%20for%20Shafts%20and%20Holes.pdf; https://law.resource.org/pub/in/bis/S01/is.919.2.1993.pdf (read 2026-11-01 by two readers apart, spec 01, I15)' },
+  'ISO 15': { title: 'ISO 15 radial bearings, boundary dimensions, as SKF gives them for each bearing (the 6205 checked on its product page: d 25, D 52, B 15 mm)', url: 'https://www.skf.com/us/products/rolling-bearings/ball-bearings/deep-groove-ball-bearings/productid-6205', publisher: 'SKF (product pages; the standard itself not read here)', standard: false },
+  'SKF 6205': { title: 'SKF 6205 deep groove ball bearing: its dimensions and abutment dimensions (da min, Da max, ra max), read in inches and converted', url: 'https://www.skf.com/us/products/rolling-bearings/ball-bearings/deep-groove-ball-bearings/productid-6205', publisher: 'SKF (a bearing maker)', standard: false },
+  'SKF 17000/1': { title: 'SKF Rolling bearings catalogue 17000/1 EN (2018): shaft and housing tolerance classes for radial ball bearings, by load and which ring turns', url: 'https://www.skf.com/binaries/pub12/Images/0901d196802809de-Rolling-bearings---17000_1-EN_tcm_12-121486.pdf', publisher: 'SKF (a bearing maker)', standard: false },
+  'ISO 8734': { title: 'ISO 8734:1997 parallel pins of hardened steel and martensitic stainless steel (dowel pins): the diameter m6', url: 'https://standards.iteh.ai/catalog/standards/iso/63b23e14-2faf-4202-b387-3db6074db25a/iso-8734-1997', publisher: 'ISO (sample pages hosted by iTeh Standards)', standard: true, second: 'ISO 2338:1997, unhardened pins, m6 or h8: https://cdn.standards.iteh.ai/samples/20001/5b26cece48c448b782c0de1eccb5b16c/ISO-2338-1997.pdf' },
+  'MISUMI fits': { title: 'MISUMI, basis of selection for fits (an m6 pin in an H7 hole: a transition fit), and its excerpt of JIS B 0401 (H7, G7, m6 over 3 to 6 mm)', url: 'https://us.misumi-ec.com/pdf/press/us_12e_pr1261.pdf', publisher: 'MISUMI (a parts maker)', standard: false, second: 'https://us.misumi-ec.com/pdf/tech/mech/US2010_fa_p3539_3540.pdf' },
+  'EKINSUN dowels': { title: 'EKINSUN dowel pin size chart: H7 for the side pressed, G7 for the side that comes off (a maker\'s advice, not a standard)', url: 'https://www.ekinsun.com/custom-fasteners/dowel-pin-size-chart/', publisher: 'EKINSUN (a pin maker)', standard: false },
+  'DIN 6885-1': { title: 'DIN 6885-1 parallel keys and keyways, high form: the key for each shaft, the keyways\' depths t1 and t2 with their deviations, the normal fit N9 and JS9', url: 'https://live-katalog.ganternorm.com/pdf/ganter/en/6885-1.pdf?dispositiontype=attachment', publisher: 'Ganter Norm (an extract of the standard)', standard: false, second: 'Wilhelm Wernecke\'s data sheet; fasten.it (reproduced by permission of DIN); SIST ISO/R 773 via iTeh: https://cdn.standards.iteh.ai/samples/5056/1948771c55e14209b6e286c4c8fa1401/SIST-ISO-R-773-1996.pdf' },
+  'ISO 228-1': { title: 'ISO 228-1:2000 pipe threads where pressure-tight joints are not made on the threads, Table 1 (G 1/2: 14 threads an inch, major 20.955 mm, minor 18.631 mm)', url: 'https://cdn.standards.iteh.ai/samples/33777/842b7c5409454ceba69c7dad9c308be1/ISO-228-1-2000.pdf', publisher: 'ISO (sample pages hosted by iTeh Standards)', standard: true },
+  'ISO 1179-1': { title: 'ISO 1179-1:2013 connections for general use and fluid power, ports with ISO 228-1 threads and elastomeric or metal sealing, Table 1', url: 'https://cdn.standards.iteh.ai/samples/60250/561ffb56c93146bc84ccdccb047bf4bd/ISO-1179-1-2013.pdf', publisher: 'ISO (sample pages hosted by iTeh Standards)', standard: true, second: 'Parker Hannifin, Catalog 4300, its ISO 1179-1 port table: https://www.parker.com/content/dam/Parker-com/Literature/Tube-Fittings-Division/4300_Catalog_Cover.pdf' },
+  'BSP taps': { title: 'Newman Tools, BSP taps and the drills for them (G 1/2: 19.0 mm)', url: 'https://www.newmantools.com/taps/bsp.htm', publisher: 'Newman Tools (a tool seller)', standard: false, second: 'Emuge and Trask give the same drill (spec 01, I15\'s readers)' },
+  'IEC 60947-5-1': { title: 'IEC 60947-5-1 control circuit devices: the 22 mm device\'s mounting hole, its key recess, the panel\'s thickness and the devices\' spacing (IS/IEC 60947-5-1:2003, identical)', url: 'https://law.resource.org/pub/in/bis/S05/is.iec.60947.5.1.2003.pdf', publisher: 'Bureau of Indian Standards (an identical adoption)', standard: true, second: 'Siemens SIRIUS ACT 3SU1, Schneider Harmony XB4 and Eaton M22 give the same hole' },
 };
 
 /** ISO 273 clearance holes, fine, medium and coarse series (tolerance fields H12, H13, H14, for information there). */
@@ -233,8 +247,8 @@ export function itTolerance(size: number, grade: number): { um: number; step: [n
  *  919-2:1993); only the cells those cases read are held, and any other is refused, never derived. */
 export interface DeviationRow { cls: string; over: number; upTo: number; grades: [number, number]; lower?: number; upper?: number; /** what it was read from (a TABLE_SOURCES key) */ src?: string }
 export const DEVIATION: DeviationRow[] = [
-  { cls: 'k', over: 18, upTo: 30, grades: [5, 5], lower: 2 }, { cls: 'm', over: 3, upTo: 6, grades: [6, 6], lower: 4 },
-  { cls: 'G', over: 3, upTo: 6, grades: [7, 7], lower: 4 }, { cls: 'N', over: 6, upTo: 10, grades: [9, 9], upper: 0 },
+  { cls: 'k', over: 18, upTo: 30, grades: [5, 5], lower: 2, src: 'ISO 286-2 deviations' }, { cls: 'm', over: 3, upTo: 6, grades: [6, 6], lower: 4, src: 'ISO 286-2 deviations' },
+  { cls: 'G', over: 3, upTo: 6, grades: [7, 7], lower: 4, src: 'ISO 286-2 deviations' }, { cls: 'N', over: 6, upTo: 10, grades: [9, 9], upper: 0, src: 'ISO 286-2 deviations' },
 ];
 /** A tolerance class at a basic size: its lower and upper deviations, µm, and what they were read from; or why not. Its IT
  *  grade only where Table 1's row for that size is held (the formula is not the table: fault D17), never derived. */
@@ -390,12 +404,134 @@ export interface NegativeRow { of: { kind: string; says: string }; /** the sizes
   sides: Record<string, SideRow>; side: string; sources: string[] }
 const UNIT = { mm: MM, um: 1e-6, '1': 1 } as const;
 // ---- rows (data): the tables rows read and the rows; no code above or below names a row ---------------------------------
+// (each cell read by two readers apart from its source (spec 01, I15, its cases 6 and 11 to 14); only the cells those cases
+// read are held, so any other size or kind is refused, never guessed: reading more is the readers' work, row by row)
+/** SKF's abutments for a bearing (its product page, read in inches and converted): the shaft's shoulder at least da_min, the
+ *  housing's at most Da_max, their fillets at most ra_max, mm. */
+export const SEAT: Record<string, { da_min: number; Da_max: number; ra_max: number; src: string }> = { '6205': { da_min: 30.6, Da_max: 46.4, ra_max: 1.0, src: 'SKF 6205' } };
+/** SKF's classes for a radial ball bearing's shaft and housing, by its duty and ring, read at 25 and 52 mm only: the bands
+ *  as SKF prints them are still to be read, so a size between is refused. */
+export const BEARING_FIT: { duty: string; ring: 'inner' | 'outer'; over: number; upTo: number; cls: string; src: string }[] = [
+  { duty: 'rotating inner ring, normal load', ring: 'inner', over: 24.999, upTo: 25, cls: 'k5', src: 'SKF 17000/1' },
+  { duty: 'rotating inner ring, normal load', ring: 'outer', over: 51.999, upTo: 52, cls: 'H7', src: 'SKF 17000/1' },
+];
+/** DIN 6885-1 keyways for a key b × h: the shaft's depth t1 and the hub's t2, each with its upper deviation, mm. */
+export const KEYWAY: Record<string, { t1: number; t1_hi: number; t2: number; t2_hi: number; src: string }> = { '8x7': { t1: 4.0, t1_hi: 0.2, t2: 3.3, t2_hi: 0.2, src: 'DIN 6885-1' } };
+/** DIN 6885-1's fits for a keyway's width, by the fit asked: the shaft's class and the hub's. */
+export const KEY_FIT: Record<string, { shaft: string; hub: string; src: string }> = { normal: { shaft: 'N9', hub: 'JS9', src: 'DIN 6885-1' } };
+/** A dowel's own class, by its standard (ISO 8734, hardened: m6 only). */
+export const PIN_FIT: Record<string, { cls: string; src: string }> = { 'ISO 8734': { cls: 'm6', src: 'ISO 8734' } };
+/** A dowel's hole, by how the part is held: located for good (H7, its makers' transition fit with m6), or to come off (G7,
+ *  the makers' advice, not a standard). */
+export const HOLE_FIT: Record<string, { cls: string; src: string }> = { located: { cls: 'H7', src: 'MISUMI fits' }, removable: { cls: 'G7', src: 'EKINSUN dowels' } };
+/** ISO 228-1 Table 1: a G thread's minor diameter, mm (the table rules: the formula gives 18.6315 for G 1/2). */
+export const G_THREAD: Record<string, { minor: number; src: string }> = { 'G1/2': { minor: 18.631, src: 'ISO 228-1' } };
+/** A G thread's tapping drill for a cutting tap, mm. */
+export const G_TAP_DRILL: Record<string, { drill: number; src: string }> = { 'G1/2': { drill: 19.0, src: 'BSP taps' } };
+/** ISO 1179-1 Table 1, a port for a G thread: the drill at least drillDepth deep (a bottoming tap), full thread at least
+ *  threadDepth, a 90° chamfer to chamfer (+chamferHi), a spot face at least spot across (type N) no more than spotDepthMax
+ *  below the surface, mm. */
+export const G_PORT: Record<string, { drillDepth: number; threadDepth: number; spot: number; spotDepthMax: number; chamfer: number; chamferHi: number; src: string }> = {
+  'G1/2': { drillDepth: 19, threadDepth: 15, spot: 28, spotDepthMax: 2.5, chamfer: 21, chamferHi: 0.2, src: 'ISO 1179-1' },
+};
+/** IEC 60947-5-1, a 22 mm control device's cut-out: the hole d (+dHi), its key recess notchW wide (+notchWHi), the hole and
+ *  recess across both (+acrossHi), its corners at most cornerMax round; the panel panelMin to panelMax thick; centres at
+ *  least pitchRow apart in a row and pitchRows between rows (the standard's preferred), mm. */
+export const CUTOUT: Record<string, { d: number; dHi: number; notchW: number; notchWHi: number; across: number; acrossHi: number; cornerMax: number; panelMin: number; panelMax: number; pitchRow: number; pitchRows: number; src: string }> = {
+  D22: { d: 22.3, dHi: 0.4, notchW: 3.2, notchWHi: 0.2, across: 24.1, acrossHi: 0.4, cornerMax: 0.8, panelMin: 1, panelMax: 6, pitchRow: 30, pitchRows: 50, src: 'IEC 60947-5-1' },
+};
 /** The tables rows read, by name: each the standard's own table, held once (joined here, never copied). */
 export const TABLES: Record<string, TableDef> = {
   CLEARANCE: { rows: CLEARANCE, unit: { fine: 'mm', medium: 'mm', coarse: 'mm' }, src: 'ISO 273' },
+  BEARINGS: { rows: BEARINGS, cols: ['d', 'D', 'B'], unit: { d: 'mm', D: 'mm', B: 'mm' }, src: 'ISO 15' },
+  KEYS: { rows: KEYS, cols: ['over', 'upTo', 'b', 'h'], unit: { b: 'mm', h: 'mm' }, src: 'DIN 6885-1' },
+  BSP: { rows: BSP, cols: ['d', 'tpi'], unit: { d: 'mm', tpi: '1' }, src: 'ISO 228-1' },
+  SEAT: { rows: SEAT, unit: { da_min: 'mm', Da_max: 'mm', ra_max: 'mm' }, src: 'SKF 6205' },
+  BEARING_FIT: { rows: BEARING_FIT, unit: { cls: 'text' }, src: 'SKF 17000/1' },
+  KEYWAY: { rows: KEYWAY, unit: { t1: 'mm', t1_hi: 'mm', t2: 'mm', t2_hi: 'mm' }, src: 'DIN 6885-1' },
+  KEY_FIT: { rows: KEY_FIT, unit: { shaft: 'text', hub: 'text' }, src: 'DIN 6885-1' },
+  PIN_FIT: { rows: PIN_FIT, unit: { cls: 'text' }, src: 'ISO 8734' },
+  HOLE_FIT: { rows: HOLE_FIT, unit: { cls: 'text' }, src: 'MISUMI fits' },
+  G_THREAD: { rows: G_THREAD, unit: { minor: 'mm' }, src: 'ISO 228-1' },
+  G_TAP_DRILL: { rows: G_TAP_DRILL, unit: { drill: 'mm' }, src: 'BSP taps' },
+  G_PORT: { rows: G_PORT, unit: { drillDepth: 'mm', threadDepth: 'mm', spot: 'mm', spotDepthMax: 'mm', chamfer: 'mm', chamferHi: 'mm' }, src: 'ISO 1179-1' },
+  CUTOUT: { rows: CUTOUT, unit: { d: 'mm', dHi: 'mm', notchW: 'mm', notchWHi: 'mm', across: 'mm', acrossHi: 'mm', cornerMax: 'mm', panelMin: 'mm', panelMax: 'mm', pitchRow: 'mm', pitchRows: 'mm' }, src: 'IEC 60947-5-1' },
 };
+const CLEAR_OF_HOLES: CheckRow = { check: 'breaking in', measure: 'breaking in', rule: 'clear of the piece\'s other holes', source: 'its own cuts' };
 /** The rows, by name: each kind of seat, hole or cut-out a row of data, read by negativeOfRow. */
-export const NEGATIVE_ROWS: Record<string, NegativeRow> = {};
+export const NEGATIVE_ROWS: Record<string, NegativeRow> = {
+  // (a 6205's seats: the housing's bore and shoulder, the shaft's journal and shoulder, each ring's class from SKF's tables
+  // and its limits from ISO 286; the fit with the ring is not judged, its own tolerance (ISO 492) not held)
+  'bearing seat': { of: { kind: 'bearing seat', says: 'a rolling bearing\'s seat: the housing\'s bore and shoulder, or the shaft\'s journal and shoulder' }, asks: ['number', 'duty'],
+    lookups: [{ table: 'BEARINGS', key: '{number}' }, { table: 'SEAT', key: '{number}' }], unjudged: 'the ring\'s own tolerance (ISO 492) is not held here',
+    sides: {
+      housing: { frame: 'surface', lookups: [{ table: 'BEARING_FIT', band: 'D', where: { ring: 'outer', duty: '{duty}' }, as: { cls: 'fit' } }],
+        tools: [{ role: 'remove', when: 't > B + 0.5 mm', turned: [['D/2', '0'], ['D/2', 'B'], ['Da_max/2', 'B'], ['Da_max/2', 't']], why: 'the outer ring\'s bore Ø{D} mm, {B} mm deep (ISO 15), then its shoulder Ø{Da_max} mm through (SKF 6205: at most)' },
+          { role: 'remove', when: 't <= B + 0.5 mm', turned: [['D/2', '0'], ['D/2', 't']], why: 'the outer ring\'s bore Ø{D} mm through (ISO 15): no shoulder, the ring held otherwise' },
+          { role: 'contact', when: 't > B + 0.5 mm', r0: 'Da_max/2', r: 'D/2', at: ['0', '-B', '0'], why: 'the outer ring bears on the shoulder from Ø{Da_max} to Ø{D} mm, {B} mm in (SKF 6205)' }],
+        zones: [{ on: 'D', basic: 'D', cls: '{fit}' }, { on: 'Da', basic: 'Da_max', hi: '0', src: 'SKF 6205', when: 't > B + 0.5 mm' }, { on: 'ra', basic: 'ra_max', hi: '0', src: 'SKF 6205', when: 't > B + 0.5 mm' }],
+        checks: [{ check: 'depth', measure: 'value', have: 't', need: 'B', rule: 'the ring\'s width within the housing: t ≥ B = {B} mm (ISO 15)', source: 'ISO 15' },
+          { check: 'edge distance', measure: 'across', need: '0', from: 'outline', rule: 'the seat within the housing (no least housing wall is sourced: only that it is whole)', source: 'derived' }, CLEAR_OF_HOLES],
+        mirror: { kind: 'bore', sex: 'holes', takes: 'Ø{D}', size: { d: 'D', B: 'B' }, std: 'ISO 15', fit: '{fit}', t: 'B', joint: 'fixed' } },
+      shaft: { frame: 'axis', lookups: [{ table: 'BEARING_FIT', band: 'd', where: { ring: 'inner', duty: '{duty}' }, as: { cls: 'fit' } }],
+        tools: [{ role: 'contact', r0: 'd/2', r: 'da_min/2', at: ['0', '-B', '0'], why: 'the inner ring bears on the shaft\'s shoulder from Ø{d} to Ø{da_min} mm, {B} mm along (SKF 6205)' }],
+        zones: [{ on: 'd', basic: 'd', cls: '{fit}' }, { on: 'da', basic: 'da_min', lo: '0', src: 'SKF 6205' }, { on: 'ra', basic: 'ra_max', hi: '0', src: 'SKF 6205' }],
+        checks: [{ check: 'depth', measure: 'value', have: 't', need: 'B', rule: 'the ring\'s width on the shaft: t ≥ B = {B} mm (ISO 15)', source: 'ISO 15' },
+          { check: 'seat', measure: 'across', at: 'B/2', need: 'd/2 - 0.25 mm', most: 'd/2 + 0.25 mm', rule: 'the journal Ø{d} mm within 0.5 mm as it stands: a seat to turn down is not made here (derived)', source: 'derived' },
+          { check: 'shoulder', measure: 'across', at: 'B + 0.5 mm', need: 'da_min/2', when: 'have > d/2 + 0.25 mm', rule: 'the shoulder at least Ø{da_min} mm (SKF 6205); where the shaft runs on no wider than its journal, none: the ring located otherwise', source: 'SKF 6205' }],
+        mirror: { kind: 'shaft', sex: 'pins', takes: 'Ø{d}', size: { d: 'd', B: 'B' }, std: 'ISO 15', fit: '{fit}', joint: 'fixed' } } },
+    side: 'housing', sources: ['ISO 15', 'SKF 6205', 'SKF 17000/1', 'ISO 286-2 deviations'] },
+  // (a dowel's hole in each plate it locates: its class by how the part is held, judged against the pin's own m6)
+  'dowel hole': { of: { kind: 'dowel hole', says: 'a dowel\'s hole: the pin locating two parts, its hole held to a class' }, asks: ['d', 'std', 'hold'],
+    lookups: [{ table: 'PIN_FIT', key: '{std}', as: { cls: 'pin' } }, { table: 'HOLE_FIT', key: '{hold}', as: { cls: 'hole' } }], partner: { on: 'd', cls: '{pin}' },
+    sides: { plate: { frame: 'surface', tools: [{ role: 'remove', turned: [['d/2', '0'], ['d/2', 't']], why: 'the hole for an {std} dowel, Ø{d} mm through, {hole} ({hold})' }],
+      zones: [{ on: 'd', basic: 'd', cls: '{hole}' }],
+      checks: [{ check: 'edge distance', measure: 'across', need: '0', from: 'outline', rule: 'the hole within the plate (no edge distance for a dowel is sourced: only that it is whole)', source: 'derived' }, CLEAR_OF_HOLES],
+      mirror: { kind: 'bore', sex: 'holes', takes: 'Ø{d}', size: { d: 'd' }, std: '{std}', fit: '{hole}/{pin}', joint: 'fixed' } } },
+    side: 'plate', sources: ['ISO 8734', 'MISUMI fits', 'EKINSUN dowels', 'ISO 286-2 deviations'] },
+  // (a parallel key's keyways: the shaft's milled with round ends and the key standing out of it; the hub's broached
+  // through its length, square, started where the bore falls away under its corners)
+  'parallel key': { of: { kind: 'parallel key', says: 'a parallel key\'s keyways: the shaft\'s, milled with round ends, and the hub\'s, broached through' }, asks: ['d', 'L', 'fit'],
+    lookups: [{ table: 'KEYS', band: 'd' }, { table: 'KEYWAY', key: '{b}x{h}' }, { table: 'KEY_FIT', key: '{fit}', as: { shaft: 'shaftFit', hub: 'hubFit' } }],
+    sides: {
+      shaft: { frame: 'surface', tools: [{ role: 'remove', outline: { rect: ['L', 'b'], r: 'b/2' }, depth: 't1', why: 'the shaft\'s keyway {b} mm wide and {L} mm long, its ends round (an end mill\'s), {t1} mm deep (DIN 6885-1)' }],
+        zones: [{ on: 'b', basic: 'b', cls: '{shaftFit}' }, { on: 't1', basic: 't1', lo: '0', hi: 't1_hi', src: 'DIN 6885-1' }],
+        checks: [{ check: 'shaft', measure: 'value', have: 't', need: 'd - 0.5 mm', most: 'd + 0.5 mm', rule: 'the shaft met as asked, Ø{d} mm within 0.5 mm (derived)', source: 'derived' },
+          { check: 'length', measure: 'across', at: 't1/2', need: '0', from: 'outline', rule: 'the keyway within the shaft (derived)', source: 'derived' }, CLEAR_OF_HOLES],
+        mirror: { kind: 'keyway', sex: 'holes', takes: 'key {b}x{h}', size: { b: 'b', h: 'h', L: 'L', t1: 't1' }, std: 'DIN 6885-1', fit: '{shaftFit}', t: 't1', joint: 'slider' },
+        adds: [{ words: 'key {b}x{h}x{L}', at: ['0', 'h/2 - t1', '0'], why: 'the key in its keyway, standing out of it (DIN 6885-1); the hub held along it by a circlip or a set screw, not made here' }] },
+      hub: { frame: 'surface', tools: [{ role: 'remove', outline: { rect: ['span + 0.02 mm', 'b'] }, depth: 't2', at: ['mid', '0', '0'], why: 'the hub\'s keyway {b} mm wide through its length, {t2} mm deep, its corners square (broached; DIN 6885-1)' }],
+        zones: [{ on: 'b', basic: 'b', cls: '{hubFit}' }, { on: 't2', basic: 't2', lo: '0', hi: 't2_hi', src: 'DIN 6885-1' }],
+        checks: [{ check: 'bore', measure: 'value', have: 'free', need: 'd - 0.5 mm', most: 'd + 0.5 mm', rule: 'the hub\'s bore met as asked, Ø{d} mm within 0.5 mm (derived)', source: 'derived' },
+          { check: 'wall', measure: 'value', have: 't', need: 't2', rule: 'the hub\'s wall deeper than its keyway (no least wall is sourced; derived)', source: 'derived' }],
+        mirror: { kind: 'keyway', sex: 'holes', takes: 'key {b}x{h}', size: { b: 'b', h: 'h', t2: 't2' }, std: 'DIN 6885-1', fit: '{hubFit}', t: 't2', joint: 'slider' } } },
+    side: 'shaft', sources: ['DIN 6885-1', 'ISO 286-2 deviations'] },
+  // (a port for a parallel pipe thread: drilled, chamfered and tapped, its seal on the face; in metal only)
+  'pipe port': { of: { kind: 'pipe port', says: 'a port for a parallel pipe thread, sealed on its face (ISO 1179-1)' }, asks: ['thread'],
+    lookups: [{ table: 'BSP', key: '{thread}' }, { table: 'G_THREAD', key: '{thread}' }, { table: 'G_PORT', key: '{thread}' }, { table: 'G_TAP_DRILL', key: '{thread}' }],
+    let: [{ name: 'P', ex: '25.4 mm / tpi', unit: 'mm', says: 'its pitch, 25.4 mm over the threads in it (derived)' }],
+    sides: { port: { frame: 'surface', family: ['steel', 'stainless steel', 'cast iron', 'aluminium', 'copper alloy'],
+      tools: [{ role: 'remove', turned: [['chamfer/2', '0'], ['drill/2', '(chamfer - drill)/2'], ['drill/2', 'drillDepth'], ['0', 'drillDepth + drill/2 / tan(59 deg)']], why: 'the tap drill Ø{drill} mm (BSP taps), {drillDepth} mm deep and its 118° point beyond, under a 90° chamfer to Ø{chamfer} mm (ISO 1179-1)' },
+        { role: 'contact', r0: 'chamfer/2', r: 'spot/2', at: ['0', '0', '0'], why: 'the seal on the face from Ø{chamfer} to Ø{spot} mm (ISO 1179-1): a G thread does not seal on its flanks (ISO 228-1)' }],
+      zones: [{ on: 'chamfer', basic: 'chamfer', lo: '0', hi: 'chamferHi', src: 'ISO 1179-1' }, { on: 'drill depth', basic: 'drillDepth', lo: '0', src: 'ISO 1179-1' }, { on: 'thread depth', basic: 'threadDepth', lo: '0', src: 'ISO 1179-1' },
+        { on: 'spot face', basic: 'spot', lo: '0', src: 'ISO 1179-1' }, { on: 'spot face depth', basic: 'spotDepthMax', hi: '0', src: 'ISO 1179-1' }],
+      checks: [{ check: 'depth', measure: 'value', have: 't', need: 'drillDepth', rule: 'the tap drill at least {drillDepth} mm deep within the block (ISO 1179-1)', source: 'ISO 1179-1' },
+        { check: 'drill point', measure: 'value', have: 't', need: 'drillDepth + drill/2 / tan(59 deg)', rule: 'the drill\'s 118° point within the block too (derived)', source: 'derived' },
+        { check: 'face', measure: 'across', at: '0.5 mm', need: 'spot/2', rule: 'a face at least Ø{spot} mm round the port, taken as machined flat (ISO 1179-1)', source: 'ISO 1179-1' }, CLEAR_OF_HOLES],
+      mirror: { kind: 'thread.internal', sex: 'threads', takes: '{thread}', size: { d: 'd', minor: 'minor', P: 'P' }, std: 'ISO 1179-1', fit: 'ISO 228-1', t: 'threadDepth', joint: 'fixed' } } },
+    side: 'port', sources: ['ISO 228-1', 'ISO 1179-1', 'BSP taps'] },
+  // (a panel's cut-out for a 22 mm control device, its key recess cut with it, its corners sharp within the limit)
+  'panel cut-out': { of: { kind: 'panel cut-out', says: 'a panel\'s cut-out for a 22 mm control device, its key recess with it' }, asks: ['device'],
+    lookups: [{ table: 'CUTOUT', key: '{device}' }],
+    sides: { panel: { frame: 'surface', tools: [{ role: 'remove', outline: { circle: 'd', notch: { w: 'notchW', to: 'across - d/2' } }, depth: 't', why: 'the cut-out Ø{d} mm and its key recess {notchW} mm wide, {across} mm across both (IEC 60947-5-1)' }],
+      zones: [{ on: 'd', basic: 'd', lo: '0', hi: 'dHi', src: 'IEC 60947-5-1' }, { on: 'recess width', basic: 'notchW', lo: '0', hi: 'notchWHi', src: 'IEC 60947-5-1' }, { on: 'across the recess', basic: 'across', lo: '0', hi: 'acrossHi', src: 'IEC 60947-5-1' },
+        { on: 'corner radius', basic: 'cornerMax', hi: '0', src: 'IEC 60947-5-1' }],
+      checks: [{ check: 'panel', measure: 'value', have: 't', need: 'panelMin', most: 'panelMax', rule: 'a panel {panelMin} to {panelMax} mm thick (IEC 60947-5-1)', source: 'IEC 60947-5-1' },
+        { check: 'spacing', measure: 'spacing', need: ['pitchRow', 'pitchRows'], rule: 'centres at least {pitchRow} mm apart in a row, {pitchRows} mm between rows (IEC 60947-5-1)', source: 'IEC 60947-5-1' },
+        { check: 'edge distance', measure: 'across', need: '0', from: 'outline', rule: 'the cut-out within the panel (derived)', source: 'derived' }, CLEAR_OF_HOLES],
+      mirror: { kind: 'cutout', sex: 'holes', takes: '{device}', size: { d: 'd', across: 'across', notchW: 'notchW' }, std: 'IEC 60947-5-1', joint: 'fixed' } } },
+    side: 'panel', sources: ['IEC 60947-5-1'] },
+};
 // ---- end of rows
 const named = (T: TableDef, r: unknown): Record<string, unknown> | null => (r === undefined || r === null ? null : Array.isArray(r) ? Object.fromEntries((T.cols ?? []).map((c, i) => [c, r[i]])) : (r as Record<string, unknown>));
 function keyedRow(T: TableDef, key: string): Record<string, unknown> | null { return Array.isArray(T.rows) ? null : named(T, (T.rows as Record<string, unknown>)[key]); }

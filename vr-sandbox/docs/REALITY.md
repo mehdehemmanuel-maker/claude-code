@@ -2375,3 +2375,27 @@ across, corners at most 0.8 mm round; a panel 1 to 6 mm; centres 30 apart in a r
 readers apart from the standards' own sample pages and makers' sheets (Parker, Newman; Siemens, Schneider, Eaton), every
 value agreeing but the wide spot face (ISO 29.6 mm, Parker 34: the standard rules). Both wait on 01.I17. Checked with
 `npm run gate` (the test "the interfaces evaluation set…", now the design's fourteen rows).
+
+## 2026-11-02: the rest of R18 as rows of data, read by one general path (spec 01, I17)
+
+A bearing's seats, a dowel's hole, a key's keyways, a pipe port and a panel cut-out are now rows of data, not code: each
+row reads the standards' tables it needs (by key, or by the size band a size falls in), works out its names, makes its
+tools (turned, or any outline cut a depth), the limits its surfaces are held to (an ISO 286 class, or the table's own), the
+checks before cutting, the interface the host gains and the parts it adds. One function reads every row; the scan in the
+test "the negative is rows: the engine names no kind; a row given at run time is answered" finds no kind of seat named in
+the code that makes, measures and cuts a negative, and a row given at run time over ISO 273's table gives exactly I5's M8
+hole. The five rows give the numbers the evaluation set worked by hand (the test "the rest of R18 by rows: a bearing's
+seats, a dowel, a key's keyways, a pipe port, a panel cut-out give their numbers"): the 6205's housing bore and shoulder
+and its H7, the journal's k5 (+2 to +11 µm), the dowel's two transition fits, the keyways' depths and N9 and JS9, the G 1/2
+port's drill and chamfer, the D22 cut-out and its recess. Imprinted on real pieces, cut, made exact solids and found by the
+asker's own interface (the test "the rest of R18 by rows: imprinted, cut, and found by their own interfaces"): the 6205's
+own bore takes the journal; the solids lose their tools' volume within 0.1 %; the hub's keyway starts 15 − √209 mm in
+front of the bore and its floor lies 18.3 mm from the axis; a hub made 10 mm longer keeps its keyway through its length.
+
+Probing the rows found three gaps in the general code, fixed before the rows went in and tested with rows given at run
+time: a turned part is now met exactly, not through its drawn mesh (the mesh's facets put the hub keyway's lead 0.039 mm
+off); a section's lead is sampled along its edges (a square slot's corners lie past the hub's ends); and an imprint inside
+a bore is re-applied from across the bore (from far out the ray met the hub's outside). The spec's edge measure for an
+outline (its reach set against the ray along each direction) refused a whole slot on a round shaft and was replaced by a
+ray toward each point of the outline. Six faults found and left open: D19 to D24 in `plan/DEFECTS.md`, the worst the
+interference checker not seeing a bar run through a round shaft (D24, under 10.T24). Checked with `npm run gate`.

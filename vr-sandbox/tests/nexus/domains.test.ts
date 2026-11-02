@@ -1105,6 +1105,105 @@ describe('every domain, in one pass', () => {
     for (const T of Object.values(TABLES)) expect(TABLE_SOURCES[T.src], `${T.src}: a source held`).toBeTruthy();
     expect(placeholders(readFileSync(join(root, 'src/nexus/interfaces.ts'), 'utf8'), 'src/nexus/interfaces.ts')).toEqual([]);
   });
+  // (the rest of R18 as rows (spec 01, I17): the evaluation set's cases 6 and 11 to 14, each asked of its row as the case
+  // says (its asks, sizes in mm), give the numbers worked by hand from their sources; each refusal named; every line of why
+  // names what it was read from, or says it is derived, or says what is not judged)
+  it('the rest of R18 by rows: a bearing\'s seats, a dowel, a key\'s keyways, a pipe port, a panel cut-out give their numbers', async () => {
+    type Ask = { row: string; side?: string; size: Record<string, number | string>; host: Record<string, number | string> };
+    const set = JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; asks?: Ask[]; expect: Record<string, unknown> }[] }, C = (n: number) => set.cases.find((c) => c.case === n)!;
+    const mm = 1e-3, SI = (o: Record<string, number | string>) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'number' ? v * mm : v]));
+    const all: Negative[] = [], neg = (a: Ask, host: Record<string, number | string> = {}) => negativeOf({ row: a.row, ...(a.side ? { side: a.side } : {}), size: SI(a.size) } as Asking, SI({ ...a.host, ...host }) as { material: string; thickness: number });
+    const ok = (a: Ask, host: Record<string, number | string> = {}) => { const r = neg(a, host); expect((r as Refusal).refused && (r as Refusal).why, `${a.row} (${a.side}) made`).toBeFalsy(); all.push(r as Negative); return r as Negative; };
+    const no = (a: Ask, host: Record<string, number | string>) => { const r = neg(a, host) as Refusal; expect(r.refused, `${a.row} refused for ${JSON.stringify(host)}`).toBe(true); return [r.rule, r.need, r.have]; };
+    const mmOf = (p?: [number, number][]) => p?.map((q) => q.map((v) => +(v / mm).toFixed(3))), lim = (n: Negative, on: string) => { const l = n.limits!.find((x) => x.on === on)!; return [+(l.basic / mm).toFixed(3), l.loUm ?? null, l.hiUm ?? null]; };
+    // (case 6: a 6205's housing in a 20 mm plate, its bore and shoulder; in 15 mm the plain bore, no shoulder's limits;
+    // 14 mm refused; the shaft's journal k5, its shoulder at least 30.6; the fit with the ring not judged)
+    const e6 = C(6).expect, [house, journal] = C(6).asks!, h20 = ok(house!), h15 = ok(house!, { thickness: 15 }), sh = ok(journal!);
+    expect(mmOf(h20.tools[0]!.prof), 'the housing\'s bore and shoulder in 20 mm').toEqual([[26, 0], [26, 15], [23.2, 15], [23.2, 20]]);
+    expect([lim(h20, 'D'), lim(h20, 'Da'), lim(h20, 'ra')], 'D H7; Da and ra at most').toEqual([[52, ...(e6.housing_um as number[])], [e6.Da_max, null, 0], [e6.ra_max, null, 0]]);
+    const contact = h20.tools.find((x) => x.role === 'contact')!; expect([contact.r0, contact.r, contact.at![1]].map((v) => +(v! / mm).toFixed(3)), 'the ring bears from 23.2 to 26, 15 in').toEqual([23.2, 26, -15]);
+    expect([mmOf(h15.tools[0]!.prof), h15.limits!.map((l) => l.on), no(house!, { thickness: 14 })], 'in 15 mm the plain bore; 14 refused').toEqual([[[26, 0], [26, 15]], ['D'], ['depth', 15, 14]]);
+    expect([lim(sh, 'd'), lim(sh, 'da'), sh.fit, sh.why.at(-1), sh.frame], 'the journal k5, its shoulder at least; not judged, said').toEqual([[25, ...(e6.shaft_um as number[])], [e6.da_min, 0, null], undefined, 'the fit not judged: the ring\'s own tolerance (ISO 492) is not held here', 'axis']);
+    // (case 11: a 6 mm ISO 8734 dowel's hole: H7 where it locates, G7 where the part comes off; both transitions with m6)
+    const e11 = C(11).expect, [loc, rem] = C(11).asks!.map((a) => ok(a));
+    expect([mmOf(loc!.tools[0]!.prof), lim(loc!, 'd'), lim(rem!, 'd')], 'holes 6 through 10 mm, H7 and G7').toEqual([[[3, 0], [3, 10]], [6, ...(e11.hole_um as number[])], [6, ...(e11.sliding_um as number[])]]);
+    expect([loc!.fit, rem!.fit].map((f) => [f!.kind, f!.mostClearUm, f!.mostTightUm]), 'with the pin m6: transitions (8, 12) and (12, 8)').toEqual([['transition', 8, 12], ['transition', 12, 8]]);
+    // (case 12: an 8 × 7 key in a 30 mm shaft: a 40 × 8 slot 4.0 deep, round-ended, N9, the key 0.5 mm below the surface at
+    // its middle; the hub's 3.3 deep through its length and a hair past, JS9; a 35 mm shaft refused, no keyway read for it)
+    const e12 = C(12).expect, [ks, kh] = C(12).asks!.map((a) => ok(a)), { sectArea } = await import('../../src/nexus/form');
+    const area = sectArea(ks!.tools[0]!.sect!) / mm / mm, exact = (40 - 8) * 8 + Math.PI * 16; expect(Math.abs(area / exact - 1), `the slot's outline ${area.toFixed(2)} mm², its stadium ${exact.toFixed(2)}`).toBeLessThan(0.001);
+    expect([+(ks!.tools[0]!.depth! / mm).toFixed(3), lim(ks!, 'b'), lim(ks!, 't1'), ks!.adds!.map((a) => [a.words, +(a.at[1] / mm).toFixed(6)])], 'the shaft\'s keyway, its limits, the key it takes').toEqual([e12.t1, [e12.b, ...(e12.shaft_um as number[])], [e12.t1, 0, (e12.t1_tol as number[])[1]! * 1000], [['key 8x7x40', -0.5]]]);
+    const hx = kh!.tools[0]!.sect!.map((p) => p[0]); expect([+((Math.max(...hx) - Math.min(...hx)) / mm).toFixed(3), +(kh!.tools[0]!.depth! / mm).toFixed(3), lim(kh!, 'b'), lim(kh!, 't2')], 'the hub\'s keyway').toEqual([40.02, e12.t2, [e12.b, ...(e12.hub_um as number[])], [e12.t2, 0, (e12.t2_tol as number[])[1]! * 1000]]);
+    expect((neg({ ...C(12).asks![0]!, size: { d: 35, L: 40, fit: 'normal' } }) as Refusal).why, 'a 35 mm shaft').toMatch(/no KEYWAY row for 10x8/);
+    // (case 13: a G 1/2 port in 30 mm of 6061: the 19 mm drill under a chamfer to 21, its point beyond; 18 mm refused by its
+    // depth, 22 by its drill's point (derived), a polymer block for want of a row)
+    const e13 = C(13).expect, [portAsk] = C(13).asks!, gp = ok(portAsk!);
+    expect([mmOf(gp.tools[0]!.prof), +(gp.scope!.P! / mm).toFixed(3), +((gp.mirror.size.minor as number) / mm).toFixed(3), gp.mirror.takes, +(gp.mirror.t! / mm).toFixed(3)], 'the port\'s drill, its pitch and minor, its thread').toEqual([[[e13.chamfer, 0].map((v, i) => (i ? v : (v as number) / 2)), [9.5, 1], [9.5, e13.drill_depth_min], [0, e13.drill_point_min]], e13.pitch, e13.minor, 'G1/2', e13.thread_depth_min]);
+    expect(['chamfer', 'drill depth', 'thread depth', 'spot face', 'spot face depth'].map((on) => lim(gp, on)), 'its limits').toEqual([[e13.chamfer, 0, (e13.chamfer_tol as number[])[1]! * 1000], [e13.drill_depth_min, 0, null], [e13.thread_depth_min, 0, null], [e13.spot_face_min, 0, null], [e13.spot_face_depth_max, null, 0]]);
+    expect([no(portAsk!, { thickness: 18 }), no(portAsk!, { thickness: 22 }), (neg(portAsk!, { material: 'pla' }) as Refusal).why], 'refused: too thin, the point through, a polymer').toEqual([['depth', e13.refused_below, 18], ['drill point', e13.drill_point_min, 22], 'no pipe port (port) row for a polymer']);
+    // (case 14: a D22 cut-out in a 2 mm panel: its recess end 12.95 from the middle, its area within +0.1 % of the worked
+    // 396.45 mm² (the 64-gon drawn over the circle, never under it); a 7 mm panel refused)
+    const e14 = C(14).expect, [cutAsk] = C(14).asks!, co = ok(cutAsk!), pts = co.tools[0]!.sect!, a14 = sectArea(pts) / mm / mm;
+    expect([+(Math.max(...pts.map((p) => p[1])) / mm).toFixed(3), a14 >= 396.45 && a14 <= 396.45 * 1.001], `the recess end, the area ${a14.toFixed(2)} mm²`).toEqual([+((e14.across_notch as number) - (e14.hole as number) / 2).toFixed(3), true]);
+    expect([lim(co, 'd'), lim(co, 'recess width'), lim(co, 'across the recess'), lim(co, 'corner radius'), co.checks.find((c) => c.check === 'spacing')!.need], 'its limits and its spacing').toEqual([[e14.hole, 0, (e14.hole_tol as number[])[1]! * 1000], [e14.notch_width, 0, (e14.notch_width_tol as number[])[1]! * 1000], [e14.across_notch, 0, (e14.across_notch_tol as number[])[1]! * 1000], [e14.corner_r_max, null, 0], (e14.spacing_min as number[]).map((v) => v * mm)]);
+    expect(no(cutAsk!, { thickness: 7 }), 'a 7 mm panel').toEqual(['panel', (e14.panel as number[])[1], e14.refused_panel]);
+    for (const n of all) for (const w of n.why) expect(Object.keys(TABLE_SOURCES).some((k) => w.includes(k)) || /derived|not judged/.test(w), `${n.row} (${n.side}): "${w}" names its source`).toBe(true);
+  });
+  // (the rest of R18 imprinted on real pieces: each case's row stood on its host, cut by I8's applyImprint, the solids made
+  // and measured, the new interface found by the asker's own (a 6205's bore, a dowel's shank, a G 1/2 fitting); a key in
+  // both keyways not a clash; the panel's spacing refused both ways; the hub made longer keeps its keyway; cases 1 to 5 and
+  // 7 to 10 keep their numbers in their own tests above)
+  it('the rest of R18 by rows: imprinted, cut, and found by their own interfaces', async () => {
+    const { solidsOf } = await import('../../src/nexus/brep'), { sectArea, cutFrame } = await import('../../src/nexus/form'), mm = 1e-3, B6 = { number: '6205', duty: 'rotating inner ring, normal load' };
+    const one = (name: string, shape: Part['shape'], mat = 'steel-low'): Part => ({ name, item: name, parts: [{ name, item: name, shape, at: [0, 0, 0], mat }] });
+    const lathe = (pts: [number, number][]) => one('shaft', { lathe: pts.map(([r, y]) => [r * mm, y * mm]) as [number, number][] });
+    const put = (host: Part, asking: Asking, from: V3, dir: V3) => { const im = imprint(host, asking, from, dir); expect((im as Refusal).why, `${(asking as { row: string }).row}: stood`).toBeUndefined(); return { im: im as Imprinted, ...applyImprint(host, im as Imprinted, (asking as { row: string }).row) }; };
+    const housing = one('housing', { box: [0.12, 0.02, 0.12] }), dowelPlate = one('plate', { box: [0.04, 0.01, 0.04] }), shaft = one('shaft', { cyl: [0.015, 0.08] }), block = one('block', { box: [0.04, 0.03, 0.04] }, 'al-6061'), panel = one('panel', { box: [0.1, 0.002, 0.06] });
+    const ring = (y1: number) => one('hub', { lathe: [[0.015, -0.02], [0.025, -0.02], [0.025, y1], [0.015, y1], [0.015, -0.02]] }), hub = ring(0.02), journal = lathe([[0, 0], [12.5, 0], [12.5, 15], [16, 15], [16, 40], [0, 40]]);
+    const H = put(housing, { row: 'bearing seat', side: 'housing', size: B6 }, [0, 0.5, 0], [0, -1, 0]), J = put(journal, { row: 'bearing seat', side: 'shaft', size: B6 }, [0.001, -0.5, 0.0007], [0, 1, 0]);
+    const D = put(dowelPlate, { row: 'dowel hole', size: { d: 0.006, std: 'ISO 8734', hold: 'located' } }, [0, 0.5, 0], [0, -1, 0]), K = { d: 0.03, L: 0.04, fit: 'normal' };
+    const KS = put(shaft, { row: 'parallel key', side: 'shaft', size: K }, [0.5, 0, 0], [-1, 0, 0]), KH = put(hub, { row: 'parallel key', side: 'hub', size: K }, [0, 0.0005, 0], [1, 0, 0]);
+    const G = put(block, { row: 'pipe port', size: { thread: 'G1/2' } }, [0, 0.5, 0], [0, -1, 0]), P = put(panel, { row: 'panel cut-out', size: { device: 'D22' } }, [0, 0.5, 0], [0, -1, 0]);
+    // (the shaft's seat met on its axis at its end face; its journal 12.5 and its shoulder 16 measured exactly; a step to 28
+    // refused by the shoulder; a plain 25 bar's shoulder recorded as not applying; a 30 bar refused at the seat)
+    expect([J.im.frame.at.map((x) => +x.toFixed(9) + 0), J.im.checks.map((c) => [c.check, c.have, c.applies ?? true])], 'the journal and its shoulder').toEqual([[0, 0, 0], [['depth', 40, true], ['seat', 12.5, true], ['shoulder', 16, true], ['depth', 40, true]]]);
+    const seatOn = (pts: [number, number][]) => imprint(lathe(pts), { row: 'bearing seat', side: 'shaft', size: B6 }, [0.001, -0.5, 0.0007], [0, 1, 0]);
+    const step = seatOn([[0, 0], [12.5, 0], [12.5, 15], [14, 15], [14, 40], [0, 40]]) as Refusal, plain = seatOn([[0, 0], [12.5, 0], [12.5, 40], [0, 40]]) as Imprinted, fat = seatOn([[0, 0], [15, 0], [15, 40], [0, 40]]) as Refusal;
+    expect([[step.rule, step.need, step.have], plain.checks.find((c) => c.check === 'shoulder')!.applies, [fat.rule, fat.need, fat.have]], 'a 28 step, a plain 25, a 30 bar').toEqual([['shoulder', 15.3, 14], false, ['seat', 12.75, 15]]);
+    // (the new interfaces found by the asker's own: the 6205's bore takes the journal, a 52 mm shaft (the ring's outside)
+    // the housing, the dowel's shank its hole, a G 1/2 fitting the port; a 47 mm shaft and a G 3/8 do not)
+    const own = (w: string, kind: string) => portOfInterface(interfacesOf(use(w)).list.find((x) => x.kind === kind)!)!, made = (kind: string, size: Record<string, number | string>) => portOfInterface({ kind, size, frame: { at: [0, 0, 0], n: [0, -1, 0], u: [1, 0, 0] } })!;
+    expect([fit(J.port, own('bearing 6205', 'bore')), fit(H.port, made('shaft', { d: 0.052 })), fit(D.port, own('dowel 6x20', 'shaft')), fit(G.port, made('thread.external', { d: 0.020955, thread: 'G1/2' }))].map((f) => typeof f), 'each found').toEqual(['object', 'object', 'object', 'object']);
+    expect([fit(H.port, made('shaft', { d: 0.047 })), fit(G.port, made('thread.external', { d: 0.016662, thread: 'G3/8' }))], 'the wrong sizes not').toEqual(['Ø52 is not Ø47', 'G1/2 is not G3/8']);
+    // (the solids valid; on a flat host what the solid loses is the tool's own volume, within 0.1 %)
+    const vol = async (p: Part) => { const r = (await solidsOf(p)).rows[0]!; expect(r.ok && r.valid, `${p.name}: made and valid: ${r.why ?? ''}`).toBe(true); return r.volume!; };
+    const turned = (prof: [number, number][]) => prof.slice(1).reduce((s, q, i) => { const p = prof[i]!; return s + (Math.PI * Math.abs(q[1] - p[1]) * (p[0] ** 2 + p[0] * q[0] + q[0] ** 2)) / 3; }, 0);
+    for (const [host, cut, tool] of [[housing, H.part, turned(H.im.negative.tools[0]!.prof!)], [dowelPlate, D.part, turned(D.im.negative.tools[0]!.prof!)], [block, G.part, turned(G.im.negative.tools[0]!.prof!)], [panel, P.part, sectArea(P.im.negative.tools[0]!.sect!) * 0.002]] as [Part, Part, number][]) {
+      const lost = (await vol(host.parts![0]!)) - (await vol(cut.parts![0]!)); expect(Math.abs(lost / tool - 1), `${host.name}: the solid loses ${(lost * 1e9).toFixed(1)} mm³, its tool ${(tool * 1e9).toFixed(1)}`).toBeLessThan(0.001); }
+    // (the keyways: the shaft's floor 26.0 from the far side, the hub's 33.3 (exact: the bore met as turned, not drawn), the
+    // hub's started 15 − √209 in front where the bore falls away; the mass takes the outline's prism, so on a round host it
+    // counts the air in it too (fault D23): over the solid's by between 46.0 and 57.5 mm³ on the shaft (the straight part's
+    // air alone, then with its round ends'), by 0 to 1.1 × 116 on the hub)
+    const cs = KS.part.parts![0]!.cuts![0]!, ch = KH.part.parts![0]!.cuts![0]!;
+    expect([+((cs.at[0] - cs.depth + 0.015) / mm).toFixed(6), +((ch.at[0] + ch.depth + 0.015) / mm).toFixed(6), +(KH.im.lead[0]! / mm).toFixed(4), KH.im.frame.u.map((x) => +x.toFixed(9) + 0)], '26.0, 33.3, the lead, u along the hub\'s axis').toEqual([26, 33.3, +((15 - Math.sqrt(209))).toFixed(4), [0, 1, 0]]);
+    for (const [host, cut, lo, hi] of [[shaft, KS.part, 46.0, 57.5], [hub, KH.part, 0, 1.1 * 116]] as [Part, Part, number, number][]) {
+      const rho = 7850, byMass = ((massOf(host) - massOf(cut)) / rho) * 1e9, bySolid = ((await vol(host.parts![0]!)) - (await vol(cut.parts![0]!))) * 1e9;
+      expect(byMass - bySolid, `${host.name}: the mass takes ${byMass.toFixed(1)} mm³, the solid ${bySolid.toFixed(1)}`).toBeGreaterThanOrEqual(lo); expect(byMass - bySolid).toBeLessThanOrEqual(hi); }
+    // (a key in both keyways is not a clash; with neither cut it is one, but the checker does not see a bar crossing a round
+    // shaft's drawn surface, nor try one inside a hub's box: while it does not, fault D24 stays open, said)
+    const key: Part = { name: 'key 8x7x32', item: 'key', shape: { box: [0.007, 0.032, 0.0079] }, at: [0.0145, 0, 0], mat: 'steel-alloy' };
+    const clash = (s: Part, h: Part) => rulesOf({ name: 'keyed', parts: [s.parts![0]!, h.parts![0]!, key] }).findings.filter((f) => f.rule === 'interference' && (f.a.includes('key') || f.b.includes('key'))).map((f) => `${f.a} × ${f.b}`);
+    expect(clash(KS.part, KH.part), 'the key in its keyways').toEqual([]);
+    if (!clash(shaft, hub).length) expect(readFileSync(join(root, 'plan/DEFECTS.md'), 'utf8'), 'a key in an uncut shaft and hub not seen: fault D24 open').toMatch(/^\| D24 \|.*\| open \|/m);
+    // (the panel's cut-out: its recess (the middle of its end, the farthest of its points) toward +w (n × u); a second refused 25 mm along u (30 asked) and 25 along w (50))
+    const pc = P.part.parts![0]!.cuts![0]!, f = cutFrame(pc), ends = [...pc.sect!].sort((a, b) => Math.hypot(...b) - Math.hypot(...a)).slice(0, 2), far = [(ends[0]![0] + ends[1]![0]) / 2, (ends[0]![1] + ends[1]![1]) / 2] as [number, number], toward = f.u.map((x, i) => x * far[0] + f.w[i]! * far[1]), w = [P.im.frame.n[1] * P.im.frame.u[2] - P.im.frame.n[2] * P.im.frame.u[1], P.im.frame.n[2] * P.im.frame.u[0] - P.im.frame.n[0] * P.im.frame.u[2], P.im.frame.n[0] * P.im.frame.u[1] - P.im.frame.n[1] * P.im.frame.u[0]];
+    expect(toward.reduce((s, x, i) => s + x * w[i]!, 0) / Math.hypot(...toward), 'the recess toward +w').toBeGreaterThan(0.999);
+    const again = (x: number, z: number) => { const r = imprint(P.part, { row: 'panel cut-out', size: { device: 'D22' } }, [x, 0.5, z], [0, -1, 0]) as Refusal; return [r.rule, r.need, r.have]; };
+    expect([again(0.025, 0), again(0, 0.025)], 'too near along a row, and between rows').toEqual([['spacing', 30, 25], ['spacing', 50, 25]]);
+    // (the hub made 10 mm longer: its keyway made again through its whole length, its middle moved with it (R10))
+    const re = reapplyImprints({ ...KH.part, parts: [{ ...KH.part.parts![0]!, shape: ring(0.03).parts![0]!.shape }] }), c2 = re.part.parts![0]!.cuts![0]!, xs = c2.sect!.map((p) => p[0]);
+    expect([re.kept, +((Math.max(...xs) - Math.min(...xs)) / mm).toFixed(3), +(c2.at[1] / mm).toFixed(6), H.part.parts![0]!.imprints![0]!.limits!.map((l) => l.on)], 'kept through 50.02 mm; the limits on the record').toEqual([['parallel key'], 50.02, 5, ['D', 'Da', 'ra']]);
+  }, 180_000);
   // (the interfaces evaluation set (spec 01, I15; design §4): its twelve cases, the design's rows in order, each with its
   // numbers worked out by hand from its sources; each named by the tests that run it, or waiting on the task that will
   // build it, its numbers then held to themselves and to the ISO 286 tolerances the app holds)
