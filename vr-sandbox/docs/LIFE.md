@@ -1,5 +1,8 @@
 # Life: things that run, move and sense, at scale
 
+> The house, room and car seeds this file uses as examples were deleted on 2026-11-02 (decision 0021); the agents and
+> senses themselves remain, to be shown again on things made with the operations of `room.ts`.
+
 Status: steps 1 and 2 built (`signature`, `afford`, `gas`, `sense`; `src/nexus/aware/`); the rest planned.
 
 ## Contents

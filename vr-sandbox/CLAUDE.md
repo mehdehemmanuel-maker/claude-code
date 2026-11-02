@@ -26,6 +26,20 @@ the task list and lose the why. So the why lives here, and every round is checke
   again it hurt my feelings": never state a time, a count or a result that was not measured or checked; say "I don't
   know" or "a guess" where it is one.
 
+## Build only with the operations (decision 0021; the user, 2026-11-02)
+
+- Everything made is made with the operations of `nexus/room.ts` (the nodes Make a solid, Stack, Around, Into a room,
+  Onto a face, Ring of copies, Through a line): no x, y or z is ever an input, so no piece can be put where another is.
+  Never write an `at` or a `rot` by hand; the count of those (`node scripts/by-hand.mjs`) may only fall.
+- The old builds were deleted at the user's word ("get rid of the old builds", 2026-11-02): the cars, trucks and karts,
+  the engines, gearboxes, body panels and fittings, the computer, the creatures, the house, room, road and city seeds,
+  and picture to model. Do not restore them or copy from them out of git history; a thing they made is made again with
+  the operations, from its published figures.
+- Old and not to be built on, still in the library until the operations cover what they do: the nodes that set a place
+  by number (`place`, `array`, `mirror`, `mate`, `onto` (onto a shaft), `turn`, `move`) and the coordinate solvers
+  (`place.solve`, `auto.loop`, the placement fields and routes in `nexus/placement/`). Entries in `docs/REALITY.md`
+  before 2026-11-02 describe builds that are gone.
+
 ## Where to read for what (targeted context: read only what the work needs)
 
 | If the work is about | Read |
@@ -38,12 +52,9 @@ the task list and lose the why. So the why lives here, and every round is checke
 | What depends on what in the code; the disciplines tree nodes are classed by | `docs/DEPENDENCIES.md`, `docs/DISCIPLINES.md` (both generated) |
 | What was done and measured, round by round | `docs/REALITY.md` (a log: search it, do not read it whole) |
 | The engineering compiler's 30 stages | `docs/COMPILER.md` |
-| Placement, routing, sizing, repair | `docs/PLACEMENT.md` |
 | Agents, awareness, bodies, gases | `docs/LIFE.md` |
-| Picture to model, reconstruction | `docs/RECONSTRUCT.md` |
-| Detail against reference products | `docs/GAP-MAP.md` |
 | Every node, generated | `docs/NODES.md`; the library's map `docs/ATLAS.md` |
-| A large module (`engines.ts`, `machines.ts`, `blocks.ts`, `dataflow.ts`) | its route map at its top: read the section named there, not the file |
+| A large module (`blocks.ts`, `dataflow.ts`) | its route map at its top: read the section named there, not the file |
 
 ## When work is slow: step back
 
@@ -97,7 +108,6 @@ known gaps are there too.
 | Loads on made parts; stress sweeps | `nexus/loads.ts` |
 | Rigid-body physics (Jolt) | `nexus/sim.ts`; its realization of bodies `realize.ts` |
 | Servo motion | `nexus/motion.ts` |
-| Power: engines run from their numbers, powertrains | `nexus/power/` |
 | Parts: kits, shapes, cuts, mass | `nexus/kits.ts`, `mass.ts`, `form.ts`, `surface.ts`, `finish.ts` (and the surface a process leaves), the share of its box a shape fills `boxfill.ts` |
 | The level of detail every maker and the renderer read; a spatial index over points | `nexus/lod.ts`; `PointGrid` in `nexus/make/space.ts` |
 | How a part looks: colour from optics, films, the look stack | `nexus/colour.ts`, `appearance.ts`, `data/optics.ts` |
@@ -106,20 +116,17 @@ known gaps are there too.
 | Units and dimensions; the typed knowledge the laws are checked against | `ganglia/units.ts`, `ganglia/types.ts` |
 | Engineering by its own equations: springs (Shigley), DC motors, heat, fusion of materials, joining | `engineering/` (`springs.ts`, `dcmotor.ts`, `thermal.ts`, `fusion.ts`, `joining.ts`) |
 | Makers by process (fastener, winding, sensor, …) | `nexus/makers.ts` |
-| Engines, gearboxes, fittings, closures | `nexus/engines.ts`, `drivetrain.ts`, `fittings.ts` |
-| Vehicles, tyres, machines | `nexus/machines.ts`, `panels.ts` |
-| Computers from transistors; chips from netlists | `nexus/computer.ts`, `nexus/logic/` |
+| Chips from netlists (the 6502 from its transistors) | `nexus/logic/` |
 | Inventory, pieces, looks, breakdown queue | `nexus/inventory.ts`, `pieces.ts`, `looks.ts`, `breakdown.ts` (run as a program by `breakdown-main.ts`) |
 | Research and the gap map | `nexus/research.ts`, `data/references.ts` |
-| Picture to model: reconstruction from photographs, step by step, and what is marked on them (`docs/RECONSTRUCT.md`) | `nexus/reconstruct.ts`, `photo-marks.ts` |
 | Models and services over the web: pictures judged blind as a measurement, drawn from words, wordings tried; every service a node of its own (`api.claude`, `api.gemini.see`, `api.gemini.draw`, `api.fal.draw`, `api.higgsfield`, `api.zenrows`) | `nexus/genai.ts` (keys under Node only: `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `FAL_KEY`, `HIGGSFIELD_KEY_ID` and `HIGGSFIELD_KEY_SECRET`, `ZENROWS_API_KEY`) |
 | The AI in the app: Claude working through the node system's own eight tools (find, card, build a board from a short plan, open a starter board, change the board in place, read, fold into a saved block, docs), on the board open and with the blocks you saved, its answer checked by a second model against its steps, told only `docs/FOR-AI.md` (keep that file short: it is sent with every call, cached), never the app's code; its relay (`npm run app`) keeps the key off the page | `nexus/agent.ts` (node Claude builds a board; panel Ask Claude; relay in `vite.view.config.ts`) |
 | The engineering compiler: one design record through stages (requirements, BOM, checks with their engine and input hash), the release gate | `nexus/compiler.ts` (`docs/COMPILER.md`) |
 | Exact solids: every piece made a B-rep solid by OpenCascade (replicad 1.1.0), placed, its holes cut by booleans, checked valid, measured; what is not made counted; export (STEP, STL, 3MF, glTF, BOM) | `nexus/brep.ts` (nodes Exact solids, Compile: exact solids, Export) |
 | Stress by an engine apart: CalculiX (Node only, where installed), set against the book and our frame analysis | `nexus/fea.ts` (node Stress three ways) |
 | The gauntlet | `nexus/gauntlet.ts`, `view/gauntlet.ts` |
-| Seeds (window to city) | `nexus/seeds.ts` |
-| Bodies, agents, awareness, gases | `nexus/act/`, `nexus/aware/`, `nexus/life/segments.ts`; a human body laid out `anatomy.ts`; creatures as kits `creatures.ts` |
+| The library's loading; seeds that place nothing (a coil spring made and loaded) | `nexus/seeds.ts` |
+| Bodies, agents, awareness, gases | `nexus/act/`, `nexus/aware/`, `nexus/life/segments.ts`; a human body laid out `anatomy.ts` |
 | Expressions in words and units (the formula language nodes take); embodied machines | `nexus/generate.ts`, `nexus/embody/` |
 | Controls worked by hand while it runs (Button, Stick, Slider; a button put on a thing); being in it (walking, keys, phone controls, gamepad) | `nexus/controls.ts`, `nexus/view/pad.ts` |
 | The app: dashboard, board, 3D dock, space, renderer, look | `nexus/view/` (`dashboard.ts`, `nodes.ts`, `dock3d.ts`, `space.ts`, `space3d.ts`, `kit3d.ts`, `look.ts`) |

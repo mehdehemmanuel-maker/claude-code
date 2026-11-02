@@ -1,4 +1,4 @@
-// Fields: a map of one quantity over the space a thing's parts are in, on a grid of cells (docs/PLACEMENT.md, layer C).
+// Fields: a map of one quantity over the space a thing's parts are in, on a grid of cells (layer C).
 // A cell inside a solid piece is marked solid; the field is read where things could go.
 //
 //   heat     °C in each cell: the rules' own model (make/rules.ts): each hot surface's excess over the bay's air falling

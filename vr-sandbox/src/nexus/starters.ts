@@ -2,83 +2,13 @@
 // is needed to read them, so navigation (src/nexus/navigate.ts), the tests and the docs see every flow the page offers. The
 // page lays each out (its own tidy) as it opens it.
 
-import { collapse, emptyBoard, placeBlock, wire } from './dataflow';
+import { emptyBoard, placeBlock, wire } from './dataflow';
 import type { Board } from './boards';
 
 export type Make = () => Board;
 /** Every starter board, laid out by the tidy given (none: as placed). */
 export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Make][] {
-  /** A board of seeds, each placed where it is to be seen, all shown and measured: choose one and click through its choices. */
-  function seedBoard(title: string, items: [string, string, Record<string, unknown>, Record<string, number>, string][]): Board {
-    const b = emptyBoard(title), all = placeBlock(b, 'combine', 0, 0, { name: title }, 'all');
-    items.forEach(([blockId, label, set, at, out], i) => {
-      const id = placeBlock(b, blockId, 0, 0, set, `s${i}`); b.nodes[id]!.label = label;
-      const p = placeBlock(b, 'place', 0, 0, at, `p${i}`); wire(b, id, out, p, 'thing'); wire(b, p, 'placed', all, 'things');
-    });
-    wire(b, all, 'assembly', placeBlock(b, 'space.show', 0, 0, {}, 'show'), 'thing'); wire(b, all, 'assembly', placeBlock(b, 'measure', 0, 0, {}, 'measure'), 'thing');
-    return b;
-  }
   const boards = ([
-  ['A house from seeds: pick its plan, its rooms change', () => seedBoard('A house from seeds', [
-    ['seed.house', 'House (choose it: its plan, its roof on or off, its colours)', { plan: '2 bed', show: 'roof off' }, {}, 'house'],
-    ['seed.car', 'Car in the drive', { paint: '#1565c0' }, { x: 9.5, z: 2, ry: Math.PI / 2 }, 'car'],
-    ['seed.room', 'One room on its own (choose it: its type)', { type: 'bathroom' }, { x: -10 }, 'room'],
-  ])],
-  ['Power as nodes: an engine run from its numbers, the powertrain it drives, a car round a block as fast as that lets it', () => {
-    // nothing told how fast it goes: Run an engine works each cylinder crank degree by crank degree from its bore, stroke,
-    // compression and the valves its head is built with (here the Corolla's published 2.0); its full-load curve feeds
-    // Drive (its CVT, final drive, tyres, mass and drag), which gives the most it can speed up at each speed; Follow a
-    // path drives cars round a block no faster than that lets them, stopping at red. Friction is Heywood's 1988
-    // correlation, scaled here to 0.6 (an estimate for a modern engine: the gap to Toyota's figures is said, not hidden)
-    const b = emptyBoard('Power as nodes');
-    placeBlock(b, 'in.number', 0, 0, { value: 0.6 }, 'fr'); b.nodes.fr!.label = 'Friction over Heywood 1988 (an estimate)';
-    placeBlock(b, 'engine.run', 0, 0, { model: 'corolla' }, 'engine'); b.nodes.engine!.label = 'Run an engine (its published bore, stroke and compression)'; wire(b, 'fr', 'value', 'engine', 'friction');
-    placeBlock(b, 'list.column', 0, 0, { column: 'rpm' }, 'rpm'); wire(b, 'engine', 'curve', 'rpm', 'rows');
-    placeBlock(b, 'list.column', 0, 0, { column: 'torque' }, 'nm'); wire(b, 'engine', 'curve', 'nm', 'rows');
-    placeBlock(b, 'view.chart', 0, 0, {}, 'tq'); b.nodes.tq!.label = 'Its torque by speed, N·m'; wire(b, 'nm', 'values', 'tq', 'y'); wire(b, 'rpm', 'values', 'tq', 'x');
-    placeBlock(b, 'list.column', 0, 0, { column: 'bar' }, 'bar'); wire(b, 'engine', 'cycle', 'bar', 'rows');
-    placeBlock(b, 'view.chart', 0, 0, {}, 'pc'); b.nodes.pc!.label = 'A cylinder\'s pressure through two turns, bar'; wire(b, 'bar', 'values', 'pc', 'y');
-    placeBlock(b, 'drive', 0, 0, { model: 'corolla' }, 'drive'); b.nodes.drive!.label = 'Drive (its CVT, tyres, mass and drag)'; wire(b, 'engine', 'curve', 'drive', 'curve');
-    placeBlock(b, 'list.column', 0, 0, { column: 'accel' }, 'acc'); wire(b, 'drive', 'capability', 'acc', 'rows');
-    placeBlock(b, 'view.chart', 0, 0, {}, 'ac'); b.nodes.ac!.label = 'The most it can speed up, m/s² by m/s'; wire(b, 'acc', 'values', 'ac', 'y');
-    placeBlock(b, 'view.show', 0, 0, {}, 'es'); b.nodes.es!.label = 'The engine, said'; wire(b, 'engine', 'says', 'es', 'value');
-    placeBlock(b, 'view.show', 0, 0, {}, 'ds'); b.nodes.ds!.label = 'The car, said'; wire(b, 'drive', 'says', 'ds', 'value');
-    placeBlock(b, 'seed.roads', 0, 0, { nx: 2, nz: 2, block: 60, lights: 'cycle' }, 'roads'); b.nodes.roads!.label = 'Road system (its lights on the clock)';
-    placeBlock(b, 'time', 0, 0, {}, 'clock');
-    placeBlock(b, 'path.loop', 0, 0, { w: 120, d: 120, inset: 1.8, every: 60, before: 5 }, 'ring'); b.nodes.ring!.label = 'Lane round its edge';
-    placeBlock(b, 'follow', 0, 0, { n: 3, speed: 14, gap: 12, accel: 6, phases: 'green 30, yellow 4, red 34' }, 'go'); b.nodes.go!.label = 'Cars round it at 50 km/h, as their powertrain lets them'; wire(b, 'ring', 'path', 'go', 'path'); wire(b, 'ring', 'stops', 'go', 'stops'); wire(b, 'clock', 't', 'go', 't'); wire(b, 'drive', 'capability', 'go', 'capability');
-    placeBlock(b, 'spawn', 0, 0, { seed: 'seed.car' }, 'cars'); b.nodes.cars!.label = 'A Car at each'; wire(b, 'go', 'rows', 'cars', 'rows');
-    placeBlock(b, 'combine', 0, 0, { name: 'streets and cars' }, 'all'); wire(b, 'roads', 'roads', 'all', 'things'); wire(b, 'cars', 'things', 'all', 'things');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
-    return b;
-  }],
-  ['Traffic on the clock: cars round a block, stopping at red', () => {
-    // two blocks each way of 60 m (typical of a suburb), its lights on a fixed-time cycle; eight cars at 11 m/s (40 km/h)
-    // round its edge, each 8 m behind the one ahead: press ▶ under the 3D view and watch them queue at red
-    const b = emptyBoard('Traffic on the clock');
-    placeBlock(b, 'seed.roads', 0, 0, { nx: 2, nz: 2, block: 60, lights: 'cycle' }, 'roads'); b.nodes.roads!.label = 'Road system (its lights on the clock)';
-    placeBlock(b, 'time', 0, 0, {}, 'clock');
-    placeBlock(b, 'path.loop', 0, 0, { w: 120, d: 120, inset: 1.8, every: 60, before: 5 }, 'ring'); b.nodes.ring!.label = 'Lane round its edge';
-    placeBlock(b, 'follow', 0, 0, { n: 8, speed: 11, gap: 8, phases: 'green 30, yellow 4, red 34' }, 'drive'); b.nodes.drive!.label = 'Cars follow the lane';
-    wire(b, 'ring', 'path', 'drive', 'path'); wire(b, 'ring', 'stops', 'drive', 'stops'); wire(b, 'clock', 't', 'drive', 't');
-    placeBlock(b, 'rows.set', 0, 0, { column: 'paint', turns: true, value: '#1565c0|#eceff1|#c62828|#212121|#f9a825|#2e7d32' }, 'paint'); b.nodes.paint!.label = 'Each its paint'; wire(b, 'drive', 'rows', 'paint', 'rows');
-    placeBlock(b, 'spawn', 0, 0, { seed: 'seed.car' }, 'cars'); b.nodes.cars!.label = 'A Car at each'; wire(b, 'paint', 'rows', 'cars', 'rows');
-    placeBlock(b, 'combine', 0, 0, { name: 'streets and traffic' }, 'all'); wire(b, 'roads', 'roads', 'all', 'things'); wire(b, 'cars', 'things', 'all', 'things');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
-    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
-    return b;
-  }],
-  ['A world without end: neighbourhoods for ever, each its own', () => {
-    // three neighbourhoods, each from its own seed, laid for ever along x and z (130 m a cell: two blocks of 60 m and a
-    // street), each cell one of them by its hash: drawn only out to the haze, so walking or flying never reaches an edge
-    const b = emptyBoard('A world without end');
-    for (const k of [1, 2, 3]) { placeBlock(b, 'seed.neighbourhood', 0, 0, { nx: 2, nz: 2, seed: k, traffic: 4 }, `h${k}`); b.nodes[`h${k}`]!.label = `Neighbourhood, seed ${k}`; }
-    placeBlock(b, 'forever', 0, 0, { sx: 130, sz: 130, seed: 7 }, 'world'); b.nodes.world!.label = 'For ever along x and z';
-    for (const k of [1, 2, 3]) wire(b, `h${k}`, 'neighbourhood', 'world', 'things');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'world', 'world', 'show', 'thing');
-    placeBlock(b, 'measure', 0, 0, {}, 'measure'); b.nodes.measure!.label = 'Measure (one cell)'; wire(b, 'world', 'world', 'measure', 'thing');
-    return b;
-  }],
   ['A battery built from its parts, node by node: grid, paste, separator, plates, cell, case', () => {
     // a BCI group 35 starting battery (230 × 175 × 225 mm, its case the standard's), made the way one is made, every
     // step a node that makes other things too: a grid cast (as a fan guard is), pasted (as anything is coated), the
@@ -110,63 +40,6 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
     placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
     placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'all', 'assembly', 'audit', 'thing');
-    return b;
-  }],
-  ['An engine from its first parts: piston, rod, crank, block, head, then the whole', () => {
-    // Toyota's 2.0 L four (M20A-FKS: 80.5 mm bore, 97.6 mm stroke, Toyota), built the way an engine is built, and every
-    // part on the board is a part of it: one bore and one stroke size every node; the head's pieces (valves, the spring off
-    // the coil maker, retainer, tappet, plug, coil) are wired into the head; the piston, rod, crank, block and head are
-    // wired into the engine. Change any of them (the spring's wire, the bore) and it flows up into the engine, its mass
-    // and its checks: does it come apart to the bottom, and does nothing run into anything
-    const b = emptyBoard('An engine from its first parts');
-    const e = { layout: 'inline', fuel: 'petrol', block: 'al', cooling: 'liquid', cams: 'dohc', valves: '4', turbo: 'no', starter: 'electric', fit: 'm20a-fks' };
-    placeBlock(b, 'in.number', 0, 0, { value: 0.0805, unit: 'm' }, 'bore'); b.nodes.bore!.label = 'Bore (Toyota: 80.5 mm)';
-    placeBlock(b, 'in.number', 0, 0, { value: 0.0976, unit: 'm' }, 'stroke'); b.nodes.stroke!.label = 'Stroke (Toyota: 97.6 mm)';
-    const sized = (id: string) => { wire(b, 'bore', 'value', id, 'bore'); wire(b, 'stroke', 'value', id, 'stroke'); };
-    for (const [k, id, label] of [['pis', 'engine.piston', 'Piston, rings, pin, clips'], ['rod', 'engine.rod', 'Rod, cap, shells, bolts'], ['crk', 'engine.crank', 'Crankshaft, forged in one'], ['blk', 'engine.block', 'Block, liners, caps, shells'], ['hd', 'engine.head', 'Head, from its pieces'], ['eng', 'engine.whole', 'The engine, from its parts']] as [string, string, string][]) { placeBlock(b, id, 0, 0, e, k); b.nodes[k]!.label = label; sized(k); }
-    // (the head's pieces, each a node: made to size, or the spring off the coil maker: the wire, coil and preload the head's
-    // own spring is sized to, to hold its valves on their cams at speed (src/nexus/engines.ts springOf))
-    for (const [k, which, port, label] of [['vin', 'intake valve', 'intakeValve', 'Intake valve'], ['vex', 'exhaust valve', 'exhaustValve', 'Exhaust valve (stainless)'], ['ret', 'valve spring retainer', 'valveSpringRetainer', 'Spring retainer'], ['tap', 'bucket tappet', 'bucketTappet', 'Bucket tappet'], ['plg', 'spark plug', 'sparkPlug', 'Spark plug'], ['ign', 'ignition coil', 'ignitionCoil', 'Ignition coil']] as [string, string, string, string][]) { placeBlock(b, 'engine.piece', 0, 0, { ...e, which }, k); b.nodes[k]!.label = label; sized(k); wire(b, k, 'piece', 'hd', port); }
-    placeBlock(b, 'make.coil', 0, 0, { name: 'valve spring', item: 'valve-spring', d: 0.0029, D: 0.0185, L: 0.037, L0: 0.0452, n: 5 }, 'spr'); b.nodes.spr!.label = 'Coil: the valve spring'; wire(b, 'spr', 'spring', 'hd', 'valveSpring');
-    for (const [from, out, port] of [['pis', 'piston', 'piston'], ['rod', 'rod', 'rod'], ['crk', 'crank', 'crank'], ['blk', 'block', 'block'], ['hd', 'head', 'head']] as [string, string, string][]) wire(b, from, out, 'eng', port);
-    for (const [k, from, out, label, ex] of [['v1', 'pis', 'piston', 'The piston', 1], ['v2', 'rod', 'rod', 'The rod', 1], ['v3', 'crk', 'crank', 'The crank', 0], ['v4', 'hd', 'head', 'The head, apart', 1], ['v5', 'spr', 'spring', 'The valve spring', 0], ['v6', 'vex', 'piece', 'An exhaust valve', 0]] as [string, string, string, string, number][]) { placeBlock(b, 'view.3d', 0, 0, { explode: ex }, k); b.nodes[k]!.label = label; wire(b, from, out, k, 'part'); }
-    placeBlock(b, 'explode', 0, 0, { amount: 0.35, levels: 64 }, 'apart'); b.nodes.apart!.label = 'Take it apart (to the bottom)'; wire(b, 'eng', 'engine', 'apart', 'thing');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
-    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'eng', 'engine', 'measure', 'thing');
-    placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'eng', 'engine', 'audit', 'thing');
-    // (and under load: at the 6,600 rpm Toyota gives its peak power at, and swept from 1,000 to 7,000 rpm for where it gives)
-    placeBlock(b, 'load.engine', 0, 0, { ...e }, 'load'); b.nodes.load!.label = 'Under load at 6,600 rpm'; b.nodes.load!.set = { ...(b.nodes.load!.set ?? {}), rpm: 6600 }; sized('load'); wire(b, 'spr', 'spring', 'load', 'spring');
-    placeBlock(b, 'view.table', 0, 0, {}, 'loadRows'); b.nodes.loadRows!.label = 'Each part: its stress, its limit, its margin'; wire(b, 'load', 'rows', 'loadRows', 'rows');
-    placeBlock(b, 'sweep.range', 0, 0, { block: 'load.engine', vary: 'rpm', from: 1000, to: 7000, steps: 13, watch: 'worst', worstIs: 'lowest', blockSet: JSON.stringify(e) }, 'sweep'); b.nodes.sweep!.label = 'Stress test: 1,000 to 7,000 rpm'; sized('sweep'); wire(b, 'spr', 'spring', 'sweep', 'spring');
-    placeBlock(b, 'view.chart', 0, 0, {}, 'sweepChart'); b.nodes.sweepChart!.label = 'Least margin by speed'; wire(b, 'sweep', 'ys', 'sweepChart', 'y'); wire(b, 'sweep', 'xs', 'sweepChart', 'x');
-    return b;
-  }],
-  ['Research to what is missing: Toyota\'s engine held against its sources', () => {
-    // research as a pipeline: what the M20A-FKS is made of, read off its sources and kept (src/data/references.ts), and
-    // notes of your own compiled with it (every part named with its source, or refused); the engine drawn from its parts
-    // held against the whole of it (what is drawn, short, missing, or drawn the way the sources say it is not); how finely
-    // it is drawn (how much is still plain boxes, and the biggest); the reference entered in the inventory and opened all
-    // the way down, its parts and theirs, and what of them waits to be researched; and every check on the engine at once
-    const b = emptyBoard('Research to what is missing');
-    const e = { layout: 'inline', fuel: 'petrol', block: 'al', cooling: 'liquid', cams: 'dohc', valves: '4', turbo: 'no', starter: 'electric', fit: 'm20a-fks' };
-    placeBlock(b, 'note', 0, 0, { text: 'Research → compile → its parts and theirs → what is missing → what to reshape. Add a line to the notes (a part, its pattern over drawn names, its source) and the gap and the inventory follow it.' }, 'about');
-    placeBlock(b, 'research.notes', 0, 0, { from: 'm20a-fks' }, 'ref'); b.nodes.ref!.label = 'Researched: the M20A-FKS, part by part, each sourced';
-    placeBlock(b, 'research.notes', 0, 0, { id: 'd4s-injector', name: 'a D-4S direct injector, inside', notes: '@TOY | https://global.toyota/en/mobility/tnga/powertrain2018/engine/index.html | Toyota: TNGA powertrain 2018 (a multi-hole direct injector)\ndi-in | a direct injector, inside | | 1 | | | typical | its nozzle and its solenoid\ndi-nozzle | multi-hole nozzle | di-in | 4 | multi-hole nozzle | TOY | confirmed | one on each direct injector' }, 'notes'); b.nodes.notes!.label = 'Notes of your own (sourced, or refused)';
-    placeBlock(b, 'research.merge', 0, 0, { id: 'm20a-compiled', name: 'the M20A-FKS, compiled' }, 'merge'); b.nodes.merge!.label = 'Compile the research'; wire(b, 'ref', 'reference', 'merge', 'references'); wire(b, 'notes', 'reference', 'merge', 'references');
-    placeBlock(b, 'in.number', 0, 0, { value: 0.0805, unit: 'm' }, 'bore'); b.nodes.bore!.label = 'Bore (Toyota: 80.5 mm)';
-    placeBlock(b, 'in.number', 0, 0, { value: 0.0976, unit: 'm' }, 'stroke'); b.nodes.stroke!.label = 'Stroke (Toyota: 97.6 mm)';
-    placeBlock(b, 'engine.whole', 0, 0, { ...e }, 'eng'); b.nodes.eng!.label = 'The engine, from its parts (its maker\'s choices: M20A-FKS)'; wire(b, 'bore', 'value', 'eng', 'bore'); wire(b, 'stroke', 'value', 'eng', 'stroke');
-    placeBlock(b, 'research.gap', 0, 0, {}, 'gap'); b.nodes.gap!.label = 'What is missing?'; wire(b, 'eng', 'engine', 'gap', 'thing'); wire(b, 'merge', 'reference', 'gap', 'reference');
-    placeBlock(b, 'view.table', 0, 0, {}, 'gapRows'); b.nodes.gapRows!.label = 'Each part the sources name: drawn, short, missing, wrong'; wire(b, 'gap', 'rows', 'gapRows', 'rows');
-    placeBlock(b, 'view.gauge', 0, 0, { min: 0, max: 1 }, 'cover'); b.nodes.cover!.label = 'Share drawn as the sources say'; wire(b, 'gap', 'coverage', 'cover', 'value');
-    placeBlock(b, 'check.fidelity', 0, 0, {}, 'fid'); b.nodes.fid!.label = 'How finely is it drawn?'; wire(b, 'eng', 'engine', 'fid', 'thing');
-    placeBlock(b, 'view.table', 0, 0, {}, 'boxes'); b.nodes.boxes!.label = 'Its biggest plain boxes: reshape these first'; wire(b, 'fid', 'biggest', 'boxes', 'rows');
-    placeBlock(b, 'research.toInventory', 0, 0, {}, 'inv'); b.nodes.inv!.label = 'Into the inventory'; wire(b, 'merge', 'reference', 'inv', 'reference');
-    placeBlock(b, 'research.parts', 0, 0, { depth: 6 }, 'tree'); b.nodes.tree!.label = 'Its parts, and theirs, and what waits'; wire(b, 'inv', 'item', 'tree', 'item');
-    placeBlock(b, 'view.table', 0, 0, {}, 'treeRows'); b.nodes.treeRows!.label = 'Sub-components and theirs'; wire(b, 'tree', 'rows', 'treeRows', 'rows');
-    placeBlock(b, 'view.table', 0, 0, {}, 'waits'); b.nodes.waits!.label = 'Waiting to be researched'; wire(b, 'tree', 'waiting', 'waits', 'rows');
-    placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'eng', 'engine', 'audit', 'thing');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'eng', 'engine', 'show', 'thing');
     return b;
   }],
   ['The gauntlet as nodes: makers through gate after gate, the unknown sorted and researched to the bottom', () => {
@@ -211,23 +84,6 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.table', 0, 0, {}, 'diff'); b.nodes.diff!.label = 'Where the fast model differs from the transistors'; wire(b, 'run', 'differences', 'diff', 'rows');
     placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it did, and how fast'; wire(b, 'run', 'says', 'said', 'value');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'run', 'memory', 'show', 'thing');
-    return b;
-  }],
-  ['Proximity and mates: each thing carries the room and the mates it needs, as numbers; nothing told what a door or a sofa is', () => {
-    // no rule for doors: each node puts the room its thing needs on the thing itself, worked out from its own figures (a
-    // door its leaf's sweep from its hinge, the leaf's width its radius; a toilet and a basin the floor a code asks in
-    // front of them; a kitchen run its work aisle), and one proximity node keeps every zone clear: what stands in one is
-    // moved along its wall with what touches it, or to another wall, where it stands in no zone and its own hold nothing.
-    // Here a living room whose door is behind the television, before and after; the zones drawn
-    const b = emptyBoard('Proximity');
-    placeBlock(b, 'seed.room', 0, 0, { type: 'living', front: 'wall', back: 'door' }, 'room'); b.nodes.room!.label = 'A living room, its door in its back wall';
-    placeBlock(b, 'proximity', 0, 0, { move: 'only said' }, 'said'); b.nodes.said!.label = 'What stands in a zone (said)'; wire(b, 'room', 'room', 'said', 'thing');
-    placeBlock(b, 'proximity', 0, 0, { move: 'moved' }, 'moved'); b.nodes.moved!.label = 'Every zone clear, every mate held (moved)'; wire(b, 'room', 'room', 'moved', 'thing');
-    placeBlock(b, 'view.table', 0, 0, {}, 'rows'); b.nodes.rows!.label = 'What broke which zone or mate, and what was done'; wire(b, 'moved', 'found', 'rows', 'rows');
-    placeBlock(b, 'mates', 0, 0, { state: '*' }, 'measured'); b.nodes.measured!.label = 'Its mates, measured after'; wire(b, 'moved', 'thing', 'measured', 'thing');
-    placeBlock(b, 'view.table', 0, 0, {}, 'mrows'); b.nodes.mrows!.label = 'Each mate: its measure, its value, its range'; wire(b, 'measured', 'mates', 'mrows', 'rows');
-    placeBlock(b, 'pick', 0, 0, { options: 'before|after', which: 'after' }, 'pick'); b.nodes.pick!.label = 'Before or after'; wire(b, 'said', 'thing', 'pick', 'before'); wire(b, 'moved', 'thing', 'pick', 'after');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'pick', 'chosen', 'show', 'thing');
     return b;
   }],
   ['A body from its measured segments, its math on every part', () => {
@@ -331,46 +187,11 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'The worn panel: why there'; wire(b, 'l_worn', 'says', 'why', 'value');
     return tidy(b);
   }],
-  ['Picture to model: the Monte Carlo fitted to the AI-made picture of how its owner wants it, by the one folded node (open it for its steps): its outline, then its features one group at a time; then seen from the picture\'s own camera and judged four ways apart, side by side with the picture, and what to ask for next', () => {
-    // (docs/RECONSTRUCT.md: image → features → outline → camera → model → fit → render → compare → ask, folded into one node
-    // by the recipe Pipelines tried found best)
-    const b = emptyBoard('Picture to model');
-    placeBlock(b, 'in.text', 0, 0, { value: 'mc-side' }, 'pic'); b.nodes.pic!.label = 'The picture: how the owner wants their Monte Carlo (AI-made)';
-    placeBlock(b, 'seed.image-to-model', 0, 0, {}, 'i2m'); b.nodes.i2m!.label = 'Picture to model'; wire(b, 'pic', 'value', 'i2m', 'picture');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); b.nodes.show!.label = 'The model, fitted'; wire(b, 'i2m', 'vehicle', 'show', 'thing');
-    for (const [k, l] of [['objectives', 'How right, four ways: silhouette, features, surface, dimensions'], ['orientation', 'Facing the way the picture does?'], ['features', 'Each feature against the model\'s own part'], ['regions', 'Where its edges disagree most'], ['dimensions', 'Its dimensions: the picture\'s, the model\'s, the published'], ['groups', 'Each feature group, before and after'], ['figures', 'Each body figure, and what it rests on'], ['feature figures', 'Each feature figure, and what it rests on'], ['ask', 'What to ask for next']] as const) { placeBlock(b, 'view.show', 0, 0, {}, `v${k}`); b.nodes[`v${k}`]!.label = l; wire(b, 'i2m', k, `v${k}`, 'value'); }
-    return tidy(b);
-  }],
-  ['Fit to a target: one node that sizes anything to what is asked of it: a bar\'s area for a stress, an engine\'s bore for the speed its valves float at; any block, or any pipeline folded into one, its inputs moved within ranges until its outputs meet their goals', () => {
+  ['Fit to a target: one node that sizes anything to what is asked of it: a bar\'s area for a stress; any block, or any pipeline folded into one, its inputs moved within ranges until its outputs meet their goals', () => {
     const b = emptyBoard('Fit to a target');
     placeBlock(b, 'in.number', 0, 0, { value: 5000 }, 'F'); b.nodes.F!.label = 'The load, N';
     placeBlock(b, 'fit.target', 0, 0, { block: 'law.stress.axial', vary: 'A 0.0005..0.01', goals: 'sigma = 2e6', most: 80 }, 'bar'); b.nodes.bar!.label = 'A bar\'s area so it carries the load at 2 MPa'; wire(b, 'F', 'value', 'bar', 'F');
-    placeBlock(b, 'fit.target', 0, 0, { block: 'load.engine', vary: 'bore 0.06..0.1', goals: 'floatRpm = 7000', most: 60 }, 'eng'); b.nodes.eng!.label = 'An engine\'s bore so its valves float at 7,000 rpm';
-    for (const [k, l] of [['bar', 'The bar'], ['eng', 'The engine']] as const) { placeBlock(b, 'view.show', 0, 0, {}, `${k}Says`); b.nodes[`${k}Says`]!.label = l; wire(b, k, 'says', `${k}Says`, 'value'); placeBlock(b, 'view.show', 0, 0, {}, `${k}Fig`); b.nodes[`${k}Fig`]!.label = `${l}: each value, its ±, fixed or not`; wire(b, k, 'figures', `${k}Fig`, 'value'); }
-    return tidy(b);
-  }],
-  ['Onto a surface: any outline laid onto any thing and following its curve: a vent onto the Monte Carlo\'s hood in tiles, a badge onto its door, each saying how close it keeps to the surface', () => {
-    const b = emptyBoard('Onto a surface');
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo custom' }, 'car'); b.nodes.car!.label = 'The car';
-    placeBlock(b, 'onto.surface', 0, 0, { outline: '-0.25,-0.12 0.25,-0.12 0.3,0.12 -0.3,0.12', at: '1.55 2.5 0.3', toward: '0 -1 0', up: '1 0 0', t: 0.006, tile: 0.06, name: 'hood vent', color: '#b3121f', mat: 'abs' }, 'vent'); b.nodes.vent!.label = 'A vent onto its hood, from above, in tiles'; wire(b, 'car', 'vehicle', 'vent', 'thing');
-    placeBlock(b, 'onto.surface', 0, 0, { outline: '-0.12,-0.03 0.12,-0.03 0.12,0.03 -0.12,0.03', at: '0.3 0.75 -2', toward: '0 0 1', up: '0 1 0', t: 0.003, name: 'door badge', color: '#d8dce0', mat: 'al-6061' }, 'badge'); b.nodes.badge!.label = 'A badge onto its left door'; wire(b, 'vent', 'with', 'badge', 'thing');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'badge', 'with', 'show', 'thing');
-    for (const k of ['vent', 'badge']) { placeBlock(b, 'view.show', 0, 0, {}, `${k}Says`); wire(b, k, 'says', `${k}Says`, 'value'); }
-    return tidy(b);
-  }],
-  ['Variants of anything: twelve windows drawn by seed over their width, height and frame, each made, none twice (checked by what each is, not its seed), laid in a row; change the seed for another twelve', () => {
-    const b = emptyBoard('Variants of anything');
-    placeBlock(b, 'variants', 0, 0, { block: 'seed.window', vary: 'w 0.6..1.8\nh 0.8..1.6\nframe #f4f4f2|#2b2b2b|#7a4a2a', count: 12, seed: 1 }, 'win'); b.nodes.win!.label = 'Twelve windows, none twice';
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'win', 'laid', 'show', 'thing');
-    placeBlock(b, 'view.show', 0, 0, {}, 'says'); wire(b, 'win', 'says', 'says', 'value'); placeBlock(b, 'view.show', 0, 0, {}, 'rows'); b.nodes.rows!.label = 'Each, what was drawn'; wire(b, 'win', 'rows', 'rows', 'value');
-    return tidy(b);
-  }],
-  ['What matters: which of a block\'s inputs move which of its outputs, and how much: a window\'s width and height against its mass and size, a bar\'s load and area against its stress; ranked, straight or bent, and what moves nothing (change the block to ask it of anything, an engine, a whole pipeline folded into one)', () => {
-    const b = emptyBoard('What matters');
-    placeBlock(b, 'what.matters', 0, 0, { block: 'seed.window', vary: 'w 0.6..1.8\nh 0.8..1.6', watch: '', paths: 8 }, 'win'); b.nodes.win!.label = 'A window: what moves what';
-    placeBlock(b, 'view.show', 0, 0, {}, 'ws'); wire(b, 'win', 'says', 'ws', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'we'); b.nodes.we!.label = 'Each effect'; wire(b, 'win', 'effects', 'we', 'rows');
-    placeBlock(b, 'what.matters', 0, 0, { block: 'law.stress.axial', vary: 'F 1000..5000\nA 0.001..0.002', watch: 'sigma', paths: 8 }, 'bar'); b.nodes.bar!.label = 'A bar: what moves its stress';
-    placeBlock(b, 'view.show', 0, 0, {}, 'bs'); wire(b, 'bar', 'says', 'bs', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'be'); b.nodes.be!.label = 'Its effects'; wire(b, 'bar', 'effects', 'be', 'rows');
+    for (const [k, l] of [['bar', 'The bar']] as const) { placeBlock(b, 'view.show', 0, 0, {}, `${k}Says`); b.nodes[`${k}Says`]!.label = l; wire(b, k, 'says', `${k}Says`, 'value'); placeBlock(b, 'view.show', 0, 0, {}, `${k}Fig`); b.nodes[`${k}Fig`]!.label = `${l}: each value, its ±, fixed or not`; wire(b, k, 'figures', `${k}Fig`, 'value'); }
     return tidy(b);
   }],
   ['Choosing and fitting: a 40 kN/m coil spring as light as can be, 1.3 times as strong as it must be, from five ASTM wires and three to eight coils, its wire\'s size fitted in each: every way of choosing ranked, what each reached, and which cannot do it', () => {
@@ -379,35 +200,6 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.table', 0, 0, {}, 'ch'); b.nodes.ch!.label = 'Every way of choosing, best first'; wire(b, 'fit', 'choices', 'ch', 'rows');
     placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'fit', 'says', 'sy', 'value');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'fit', 'thing', 'show', 'thing');
-    return tidy(b);
-  }],
-  ['Engineering compiler: an inline four carried through the compiler\'s stages as one record (its requirements, a bill of materials read from its parts, every piece made an exact solid by a CAD kernel, every surface checked against every other, each requirement checked against its load case) to the release gate: rejected, blocked or a release candidate, with every reason, and which of the 30 stages are built here', () => {
-    const b = emptyBoard('Engineering compiler');
-    placeBlock(b, 'engine.whole', 0, 0, {}, 'eng'); b.nodes.eng!.label = 'The engine, from its parts';
-    placeBlock(b, 'load.engine', 0, 0, {}, 'ld'); b.nodes.ld!.label = 'Under load at its redline';
-    placeBlock(b, 'compile.start', 0, 0, { project: 'inline four', requirements: 'R1: worst > 1: every part holds at its redline\nR2: floatRpm > 6500 rpm: valves do not float below redline\nR3: mass < 160 kg: weight budget' }, 'st'); b.nodes.st!.label = '1, 3, 8: requirements';
-    placeBlock(b, 'compile.bom', 0, 0, {}, 'bom'); b.nodes.bom!.label = '6, 7: bill of materials';
-    placeBlock(b, 'compile.solids', 0, 0, {}, 'so'); b.nodes.so!.label = '10, 12: exact solids';
-    placeBlock(b, 'compile.verify', 0, 0, { take: 'worst floatRpm' }, 'vf'); b.nodes.vf!.label = '13, 17: verified';
-    placeBlock(b, 'compile.release', 0, 0, {}, 'rl'); b.nodes.rl!.label = '28 to 30: release gate';
-    for (const n of ['st', 'bom', 'so', 'vf', 'rl']) wire(b, 'eng', 'engine', n, 'thing');
-    wire(b, 'st', 'record', 'bom', 'record'); wire(b, 'bom', 'record', 'so', 'record'); wire(b, 'so', 'record', 'vf', 'record'); wire(b, 'vf', 'record', 'rl', 'record');
-    placeBlock(b, 'view.table', 0, 0, {}, 'sl'); b.nodes.sl!.label = 'Each piece as a solid, the worst first'; wire(b, 'so', 'rows', 'sl', 'rows');
-    wire(b, 'ld', 'worst', 'vf', 'worst'); wire(b, 'ld', 'floatRpm', 'vf', 'floatRpm');
-    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'rl', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'ck'); b.nodes.ck!.label = 'Every check'; wire(b, 'rl', 'checks', 'ck', 'rows');
-    placeBlock(b, 'view.table', 0, 0, {}, 'bt'); b.nodes.bt!.label = 'Bill of materials'; wire(b, 'bom', 'bom', 'bt', 'rows');
-    placeBlock(b, 'view.table', 0, 0, {}, 'sg'); b.nodes.sg!.label = 'The 30 stages here'; wire(b, 'rl', 'stages', 'sg', 'rows');
-    return tidy(b);
-  }],
-  ['Compiler correction (stage 27): an inline four held to two requirements at its redline, its least factor of safety over 1 and its valves holding to 1.2 times its redline; what fails handed to What matters and Fit to a target over its bore, stroke and valve spring wire, re-checked by the engine\'s load case on its own, and the release gate after. What cannot be reached is marked HUMAN_REVIEW_REQUIRED, with what limits it', () => {
-    const b = emptyBoard('Compiler correction');
-    placeBlock(b, 'load.engine', 0, 0, {}, 'ld'); b.nodes.ld!.label = 'Under load at its redline';
-    placeBlock(b, 'compile.start', 0, 0, { project: 'inline four', requirements: 'R1: worst > 1: every part holds at its redline\nR2: floatRpm > 7800 rpm: valves hold to 1.2 times its redline' }, 'st'); b.nodes.st!.label = '1, 3, 8: requirements';
-    placeBlock(b, 'compile.verify', 0, 0, { take: 'worst floatRpm', rules: 'no' }, 'vf'); b.nodes.vf!.label = '17: verified'; wire(b, 'st', 'record', 'vf', 'record'); wire(b, 'ld', 'worst', 'vf', 'worst'); wire(b, 'ld', 'floatRpm', 'vf', 'floatRpm');
-    placeBlock(b, 'compile.correct', 0, 0, { block: 'load.engine', vary: 'bore 0.07..0.09\nstroke 0.08..0.1\nwire music-wire-a228|oil-tempered-a229|hard-drawn-a227|chrome-silicon-a401|stainless-302-a313' }, 'cr'); b.nodes.cr!.label = '27: corrected'; wire(b, 'vf', 'record', 'cr', 'record');
-    placeBlock(b, 'compile.release', 0, 0, {}, 'rl'); b.nodes.rl!.label = '28 to 30: release gate'; wire(b, 'cr', 'record', 'rl', 'record');
-    placeBlock(b, 'view.show', 0, 0, {}, 'cs'); wire(b, 'cr', 'says', 'cs', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'rd'); b.nodes.rd!.label = 'Each round'; wire(b, 'cr', 'rounds', 'rd', 'rows');
-    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'rl', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'ck'); b.nodes.ck!.label = 'Every check'; wire(b, 'rl', 'checks', 'ck', 'rows');
     return tidy(b);
   }],
   ['Controls you work while it runs: a stick drives the cart (the arrow keys, W A S D, a phone\'s drawn stick, a gamepad), the green button on the crate adds a crate to the row each press (E, the drawn button, or press it on the crate in 3D), the slider raises the tower; Walk (V) to stand in it at your own height', () => {
@@ -438,41 +230,10 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'bolt', 'part', 'show', 'thing');
     return tidy(b);
   }],
-  ['Blind judge: the Monte Carlo drawn from three sides and shown to a vision model told nothing but the criteria, three judges apart: what they call it, each criterion scored as a measurement (mean, spread, 95 % interval), what they agree is wrong. Runs where a Gemini key is (under Node, GEMINI_API_KEY); a page holds no key and says so', () => {
-    const b = emptyBoard('Blind judge');
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo custom' }, 'car'); b.nodes.car!.label = 'The car as in the picture';
-    placeBlock(b, 'views.around', 0, 0, { sides: 'side, three-quarter front, front' }, 'vw'); wire(b, 'car', 'vehicle', 'vw', 'thing');
-    placeBlock(b, 'ai.judge', 0, 0, { judges: 3 }, 'jd'); b.nodes.jd!.label = 'Judged blind'; wire(b, 'vw', 'views', 'jd', 'pictures');
-    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'jd', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'sc'); b.nodes.sc!.label = 'Each criterion'; wire(b, 'jd', 'scores', 'sc', 'rows');
-    placeBlock(b, 'view.table', 0, 0, {}, 'fl'); b.nodes.fl!.label = 'What they say is wrong'; wire(b, 'jd', 'faults', 'fl', 'rows');
-    return tidy(b);
-  }],
   ['Prompt trial: four ways of asking an image model for one thing, each drawn three times, every picture judged blind on the same criteria (and whether it invents something that would work): the wordings ranked with their 95 % intervals, which beats which for certain, the best pictures. Needs a Gemini key with image quota', () => {
     const b = emptyBoard('Prompt trial');
     placeBlock(b, 'prompt.trial', 0, 0, {}, 'pt'); b.nodes.pt!.label = 'Words against words';
     placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'pt', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'rk'); b.nodes.rk!.label = 'Each wording, ranked'; wire(b, 'pt', 'ranked', 'rk', 'rows');
-    return tidy(b);
-  }],
-  ['Fit in parallel: the highest speed an engine holds (its valves not floating below 7,000 rpm, every part at least as strong as its load), its bore, stroke and speed moved together, eight tries at once each round (CMA-ES), the eight side by side, one for each core (the run says how many and how long)', () => {
-    const b = emptyBoard('Fit in parallel');
-    placeBlock(b, 'fit.target', 0, 0, { block: 'load.engine', vary: 'bore 0.07..0.09\nstroke 0.07..0.1\nrpm 5000..8000', goals: 'floatRpm > 7000\nworst > 1\nrpm max', most: 160, method: 'in batches (CMA-ES)' }, 'fit'); b.nodes.fit!.label = 'As fast as it holds';
-    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'fit', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'fg'); b.nodes.fg!.label = 'Each value, its ±'; wire(b, 'fit', 'figures', 'fg', 'rows');
-    placeBlock(b, 'view.table', 0, 0, {}, 'gl'); b.nodes.gl!.label = 'Each goal, what it reached'; wire(b, 'fit', 'goals', 'gl', 'rows');
-    return tidy(b);
-  }],
-  ['Run many at once: what moves an engine\'s valve float and its least factor of safety, its 29 trials laid out first and run side by side, one for each core the machine has (the run says how many and how long)', () => {
-    const b = emptyBoard('Run many at once');
-    placeBlock(b, 'what.matters', 0, 0, { block: 'load.engine', vary: 'bore 0.07..0.09\nstroke 0.07..0.1\nrpm 3000..7000', watch: 'floatRpm worst', paths: 10, seed: 2 }, 'eng'); b.nodes.eng!.label = 'An engine: what moves what';
-    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'eng', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'ef'); b.nodes.ef!.label = 'Each effect'; wire(b, 'eng', 'effects', 'ef', 'rows');
-    return tidy(b);
-  }],
-  ['Difference: the Monte Carlo as Chevrolet sold it against the one in the picture, every piece compared: its 21 in. wheels and their tyres for the 16s, its body kit added, its panels reshaped, each by how much and where, and the custom one drawn by what changed (new green, reshaped orange, moved blue, gone red)', () => {
-    const b = emptyBoard('Difference');
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo' }, 'pub'); b.nodes.pub!.label = 'As sold';
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo custom' }, 'cus'); b.nodes.cus!.label = 'As in the picture';
-    placeBlock(b, 'diff', 0, 0, {}, 'df'); b.nodes.df!.label = 'What is different'; wire(b, 'pub', 'vehicle', 'df', 'a'); wire(b, 'cus', 'vehicle', 'df', 'b');
-    placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'df', 'says', 'sy', 'value'); placeBlock(b, 'view.table', 0, 0, {}, 'rw'); b.nodes.rw!.label = 'Each difference, where'; wire(b, 'df', 'rows', 'rw', 'rows');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'df', 'marked', 'show', 'thing');
     return tidy(b);
   }],
   ['Trade-offs: a coil spring as light as can be and as stiff as can be, its factor of safety kept over 1.2: every design tried across its wire, coil and turns, the best kept (none beaten on both), charted, the one giving up least marked, and each made, side by side', () => {
@@ -482,29 +243,6 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.table', 0, 0, {}, 'ft'); b.nodes.ft!.label = 'The front, the knee ◆'; wire(b, 'tr', 'front', 'ft', 'rows');
     placeBlock(b, 'view.show', 0, 0, {}, 'sy'); wire(b, 'tr', 'says', 'sy', 'value');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'tr', 'laid', 'show', 'thing');
-    return tidy(b);
-  }],
-  ['Pipelines tried: every recipe for fitting a model to a picture run on the Monte Carlo\'s, each judged alike (overlap, error both ways, time), the best kept for Picture to model', () => {
-    const b = emptyBoard('Pipelines tried');
-    placeBlock(b, 'photo.load', 0, 0, { id: 'mc-side' }, 'ph'); b.nodes.ph!.label = 'The picture';
-    placeBlock(b, 'photo.features', 0, 0, { r: 5 }, 'ft'); wire(b, 'ph', 'image', 'ft', 'image'); wire(b, 'ph', 'marks', 'ft', 'marks');
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo custom' }, 'car');
-    placeBlock(b, 'camera.solve', 0, 0, {}, 'cam'); wire(b, 'ft', 'features', 'cam', 'features'); wire(b, 'car', 'machine', 'cam', 'machine'); wire(b, 'ph', 'w', 'cam', 'w'); wire(b, 'ph', 'h', 'cam', 'h');
-    placeBlock(b, 'recon.search', 0, 0, {}, 'try'); b.nodes.try!.label = 'Every recipe, judged alike'; wire(b, 'ph', 'image', 'try', 'image'); wire(b, 'ft', 'features', 'try', 'features'); wire(b, 'car', 'machine', 'try', 'machine'); wire(b, 'cam', 'camera', 'try', 'camera');
-    placeBlock(b, 'view.show', 0, 0, {}, 'res'); b.nodes.res!.label = 'Results'; wire(b, 'try', 'results', 'res', 'value');
-    placeBlock(b, 'view.show', 0, 0, {}, 'best'); b.nodes.best!.label = 'Best'; wire(b, 'try', 'best', 'best', 'value');
-    return tidy(b);
-  }],
-  ['Chevrolet Monte Carlo SS (2004), built from its first parts: its 3.8 L V6 and four-speed automatic drawn piece by piece, checked that nothing runs into anything and that it comes apart to the bottom', () => {
-    // a real car by its published figures (machines.ts, each sourced or said to be an estimate), built from its parts
-    const b = emptyBoard('Chevrolet Monte Carlo SS (2004)');
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'monte carlo' }, 'car'); b.nodes.car!.label = 'Monte Carlo SS (2004): its published figures';
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); b.nodes.show!.label = 'The car'; wire(b, 'car', 'vehicle', 'show', 'thing');
-    placeBlock(b, 'check.rules', 0, 0, {}, 'rules'); b.nodes.rules!.label = 'Nothing too hot?'; wire(b, 'car', 'vehicle', 'rules', 'thing');
-    placeBlock(b, 'view.show', 0, 0, {}, 'rulesSay'); wire(b, 'rules', 'says', 'rulesSay', 'value');
-    placeBlock(b, 'audit.explode', 0, 0, {}, 'apart'); b.nodes.apart!.label = 'Comes apart to the bottom?'; wire(b, 'car', 'vehicle', 'apart', 'thing');
-    placeBlock(b, 'view.show', 0, 0, {}, 'apartSay'); wire(b, 'apart', 'says', 'apartSay', 'value');
-    placeBlock(b, 'view.show', 0, 0, {}, 'mass'); b.nodes.mass!.label = 'Mass drawn (kg)'; wire(b, 'car', 'mass', 'mass', 'value');
     return tidy(b);
   }],
   ['Materials from their phases: carbon fibre and epoxy, thermal paste and a metal foam worked out from what goes into them, and a laminate bar beside a steel one', () => {
@@ -561,267 +299,6 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.table', 0, 0, {}, 'contacts'); b.nodes.contacts!.label = 'What touches what, read from the geometry'; wire(b, 'touch', 'edges', 'contacts', 'rows');
     return b;
   }],
-  ['Two agents: one goes to sit, opening the way; one keeps within a lead\'s length of it', () => {
-    // goals on any thing (docs/LIFE.md step 6): the adult is told only "go to what lets you sit, anywhere in the house";
-    // the sofa is behind a shut door, so it opens the doors it sees on its way, nearest first, until it has a way, then
-    // stands within reach of the sofa. The child is wired to follow it and told only to stay 0.5 to 1.5 m from it (a
-    // lead's length): it goes after it no faster than its own pace, and says how much of the time it kept within
-    const b = emptyBoard('Two agents');
-    placeBlock(b, 'seed.house', 0, 0, { show: 'roof off' }, 'house'); b.nodes.house!.label = 'A house, its roof off to see in';
-    placeBlock(b, 'time', 0, 0, {}, 'clock');
-    placeBlock(b, 'goal', 0, 0, { verb: 'go to', open: 'sofa', affords: 'sit', knows: 'all that is here (a place it knows)' }, 'sit'); b.nodes.sit!.label = 'Go to the sofa, anywhere in the house';
-    placeBlock(b, 'agent', 0, 0, { who: 'adult' }, 'adult'); b.nodes.adult!.label = 'An adult';
-    wire(b, 'house', 'house', 'adult', 'thing'); wire(b, 'sit', 'goal', 'adult', 'goal'); wire(b, 'clock', 't', 'adult', 't');
-    placeBlock(b, 'in.number', 0, 0, { value: 1.5 }, 'lead'); b.nodes.lead!.label = 'A lead\'s length, m (typical)';
-    placeBlock(b, 'goal', 0, 0, { verb: 'go to', open: '', least: 0.5 }, 'near'); b.nodes.near!.label = 'Stay within the lead of it';
-    wire(b, 'lead', 'value', 'near', 'most');
-    placeBlock(b, 'agent', 0, 0, { who: 'child' }, 'child'); b.nodes.child!.label = 'A child, following';
-    wire(b, 'house', 'house', 'child', 'thing'); wire(b, 'near', 'goal', 'child', 'goal'); wire(b, 'adult', 'plan', 'child', 'follows'); wire(b, 'clock', 't', 'child', 't');
-    placeBlock(b, 'view.table', 0, 0, {}, 'steps'); b.nodes.steps!.label = 'The adult\'s plan, step by step'; wire(b, 'adult', 'steps', 'steps', 'rows');
-    placeBlock(b, 'view.show', 0, 0, {}, 'kept'); b.nodes.kept!.label = 'How the child kept up'; wire(b, 'child', 'says', 'kept', 'value');
-    placeBlock(b, 'view.show', 0, 0, {}, 'found'); b.nodes.found!.label = 'What they found'; wire(b, 'child', 'findings', 'found', 'value');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'child', 'view', 'show', 'thing');
-    return b;
-  }],
-  ['An agent opens a door: it sees it, walks to it, takes hold, pulls; the door swings in the physics', () => {
-    // nothing placed by hand: the person stands where people pass (the middle of the hall), sees by its rays the doors it
-    // can open, reads each door (its hinge line through its hinges' knuckles, which side it swings to, the handle on its
-    // side), finds where to stand beside the handle (clear of the door's sweep, in reach, where the handle stays in reach
-    // longest), walks there by the router's clear way, reaches (Fitts' law), grasps, pulls the bedroom door toward it, or
-    // pushes the front door out, with the 22.2 N a door may ask (ADA), and lets go; the door swings on its hinges in Jolt and
-    // stops on its stop. The clock plays it
-    const b = emptyBoard('An agent opens a door');
-    placeBlock(b, 'seed.house', 0, 0, { show: 'roof off' }, 'house'); b.nodes.house!.label = 'A house, its roof off to see in';
-    placeBlock(b, 'time', 0, 0, {}, 'clock');
-    placeBlock(b, 'goal', 0, 0, { open: '^door$', which: 'nearest' }, 'near'); b.nodes.near!.label = 'Open the nearest door it sees';
-    placeBlock(b, 'goal', 0, 0, { open: '^door$', which: 'farthest' }, 'far'); b.nodes.far!.label = 'Open the farthest door it sees';
-    placeBlock(b, 'pick', 0, 0, { options: 'the nearest (a bedroom\'s, pulled)|the farthest (the front door, pushed)', which: 'the nearest (a bedroom\'s, pulled)' }, 'pick'); b.nodes.pick!.label = 'Which goal';
-    wire(b, 'near', 'goal', 'pick', 'the nearest (a bedroom\'s, pulled)'); wire(b, 'far', 'goal', 'pick', 'the farthest (the front door, pushed)');
-    placeBlock(b, 'agent', 0, 0, { who: 'adult' }, 'agent'); b.nodes.agent!.label = 'An adult';
-    wire(b, 'house', 'house', 'agent', 'thing'); wire(b, 'pick', 'chosen', 'agent', 'goal'); wire(b, 'clock', 't', 'agent', 't');
-    placeBlock(b, 'view.table', 0, 0, {}, 'steps'); b.nodes.steps!.label = 'Its plan, step by step'; wire(b, 'agent', 'steps', 'steps', 'rows');
-    placeBlock(b, 'view.show', 0, 0, {}, 'doing'); b.nodes.doing!.label = 'What it is doing now'; wire(b, 'agent', 'doing', 'doing', 'value');
-    placeBlock(b, 'view.show', 0, 0, {}, 'angle'); b.nodes.angle!.label = 'The door open by, °'; wire(b, 'agent', 'angle', 'angle', 'value');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'agent', 'view', 'show', 'thing');
-    return b;
-  }],
-  ['Who notices what: a car running, a person behind it, one at its door, a CO alarm; in the open or shut in a garage', () => {
-    // senses as physics, nothing typed: the people stand by what is named (behind the muffler, at the driver's door), facing
-    // it; each sees by rays out from its eyes packed as its acuity is, hears the engine over a quiet street, smells the
-    // exhaust's hydrocarbons; carbon monoxide has no smell, so it harms unnoticed, and the alarm sounds at 70 ppm. Gases as
-    // substances: given off by the engine's breathing at idle (at most what a catalyst car may give), spread in still air,
-    // or shut in a 60 m³ garage changed twice in four hours. Lines show what each attends to: sight white, hearing violet,
-    // warmth orange, smell yellow, harm red
-    const b = emptyBoard('Who notices what');
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
-    placeBlock(b, 'gas', 0, 0, { running: 'running', air: 'still' }, 'gas'); b.nodes.gas!.label = 'What it gives off, running, in still air'; wire(b, 'car', 'vehicle', 'gas', 'thing');
-    placeBlock(b, 'gas', 0, 0, { running: 'running', air: 'shut in a room', volume: 60, changes: 0.5 }, 'garage'); b.nodes.garage!.label = 'The same, shut in a 60 m³ garage'; wire(b, 'car', 'vehicle', 'garage', 'thing');
-    placeBlock(b, 'view.table', 0, 0, {}, 'gasRows'); b.nodes.gasRows!.label = 'Each gas: smelled, harmful, flammable to'; wire(b, 'gas', 'releases', 'gasRows', 'rows');
-    placeBlock(b, 'sense', 0, 0, { air: 'still' }, 'open'); b.nodes.open!.label = 'Who notices what, in the open'; wire(b, 'car', 'vehicle', 'open', 'thing');
-    placeBlock(b, 'sense', 0, 0, { air: 'shut in a room', minutes: 30 }, 'shut'); b.nodes.shut!.label = 'Who notices what, 30 min shut in'; wire(b, 'car', 'vehicle', 'shut', 'thing');
-    placeBlock(b, 'view.table', 0, 0, {}, 'openRows'); b.nodes.openRows!.label = 'Attended, in the open'; wire(b, 'open', 'noticed', 'openRows', 'rows');
-    placeBlock(b, 'view.table', 0, 0, {}, 'shutRows'); b.nodes.shutRows!.label = 'Attended, shut in'; wire(b, 'shut', 'noticed', 'shutRows', 'rows');
-    placeBlock(b, 'pick', 0, 0, { options: 'in the open|shut in the garage', which: 'in the open' }, 'pick'); b.nodes.pick!.label = 'Which to see'; wire(b, 'open', 'view', 'pick', 'in the open'); wire(b, 'shut', 'view', 'pick', 'shut in the garage');
-    placeBlock(b, 'combine', 0, 0, {}, 'scene'); b.nodes.scene!.label = 'The car and who notices what'; wire(b, 'car', 'vehicle', 'scene', 'things'); wire(b, 'pick', 'chosen', 'scene', 'things');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'scene', 'assembly', 'show', 'thing');
-    return b;
-  }],
-  ['What things give off and let you do: a house and a car, tagged from what they are', () => {
-    // nothing tagged by hand: every part's signature (how far it is seen, heard, felt; hot, heavy, fragile, live, what it
-    // smells of) and what it affords a body (grasp, lift, push, open, sit, walk on, drive) read from its size, mass,
-    // joints and material against that body; an adult's or a child's. Each affordance outlined in its colour (open
-    // blue, grasp green, lift teal, sit orange, step yellow, walk grey, drive violet, hot red); what is made for
-    // something it cannot do is said (a cabinet with nothing hinged, a seat with no headroom)
-    const b = emptyBoard('What things give off and let you do');
-    placeBlock(b, 'seed.house', 0, 0, {}, 'house'); b.nodes.house!.label = 'A house (its plan picked)';
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
-    placeBlock(b, 'pick', 0, 0, { options: 'the house|the car', which: 'the house' }, 'pick'); b.nodes.pick!.label = 'Which to tag'; wire(b, 'house', 'house', 'pick', 'the house'); wire(b, 'car', 'vehicle', 'pick', 'the car');
-    placeBlock(b, 'afford', 0, 0, { who: 'adult' }, 'aff'); b.nodes.aff!.label = 'What it lets an adult do'; wire(b, 'pick', 'chosen', 'aff', 'thing');
-    placeBlock(b, 'afford', 0, 0, { who: 'child' }, 'affChild'); b.nodes.affChild!.label = 'What it lets a child of 8 do'; wire(b, 'pick', 'chosen', 'affChild', 'thing');
-    placeBlock(b, 'signature', 0, 0, {}, 'sig'); b.nodes.sig!.label = 'What it gives off'; wire(b, 'pick', 'chosen', 'sig', 'thing');
-    placeBlock(b, 'view.table', 0, 0, {}, 'affRows'); b.nodes.affRows!.label = 'Each part, what it affords, why'; wire(b, 'aff', 'affords', 'affRows', 'rows');
-    placeBlock(b, 'view.table', 0, 0, {}, 'sigRows'); b.nodes.sigRows!.label = 'Seen, heard, felt'; wire(b, 'sig', 'signatures', 'sigRows', 'rows');
-    placeBlock(b, 'view.show', 0, 0, {}, 'found'); b.nodes.found!.label = 'What it is made for but cannot do'; wire(b, 'aff', 'findings', 'found', 'value');
-    placeBlock(b, 'combine', 0, 0, {}, 'scene'); b.nodes.scene!.label = 'The thing and its tags'; wire(b, 'pick', 'chosen', 'scene', 'things'); wire(b, 'aff', 'view', 'scene', 'things');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'scene', 'assembly', 'show', 'thing');
-    return b;
-  }],
-  ['Lines: one section, any material, any route (a battery cable, a road)', () => {
-    // cables, hoses, wires, pipes, traces and roads as one thing: a section (layers from the inside out, its core solid or
-    // hollow, each layer's material changeable) swept along a way that is found, not drawn. Here the Corolla's battery
-    // placed by the solver, then its cable run from the positive post (leaving it sideways, as a terminal does) to the
-    // starter along surfaces (hug), sized for the starter's draw over
-    // the length it came to; and a road laid over hills, never steeper than 8 %, round what it cannot climb. Pick which
-    // the 3D view shows
-    const b = emptyBoard('Lines: one section, any route');
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
-    placeBlock(b, 'place.solve', 0, 0, { check: 'no' }, 'solve'); b.nodes.solve!.label = 'The battery placed first (out of the exhaust\'s heat)'; wire(b, 'car', 'vehicle', 'solve', 'thing');
-    placeBlock(b, 'line', 0, 0, { section: 'cable-2' }, 'cable'); b.nodes.cable!.label = 'Battery cable: copper in XLPE (change its core, its jacket)';
-    placeBlock(b, 'route', 0, 0, { from: '^battery and its tray$', fromPort: 'positive', to: '^starter motor$', toPort: 'battery terminal', logic: 'hug', leave: 'square to it (a terminal on a post)' }, 'run'); b.nodes.run!.label = 'Route it: along surfaces, clear of heat'; wire(b, 'solve', 'thing', 'run', 'thing'); wire(b, 'cable', 'section', 'run', 'section');
-    placeBlock(b, 'in.number', 0, 0, { value: 200, unit: 'A' }, 'amps'); b.nodes.amps!.label = 'The starter\'s draw, A (typical of a 2 L petrol engine)';
-    placeBlock(b, 'size.line', 0, 0, { chassis: 'yes' }, 'size'); b.nodes.size!.label = 'Is it thick enough?'; wire(b, 'amps', 'value', 'size', 'amps'); wire(b, 'run', 'length', 'size', 'length');
-    placeBlock(b, 'piece', 0, 0, { name: '^petrol engine', where: 'where it sits' }, 'eng'); b.nodes.eng!.label = 'The engine'; wire(b, 'solve', 'thing', 'eng', 'thing');
-    placeBlock(b, 'piece', 0, 0, { name: '^battery and its tray$', where: 'where it sits' }, 'bat'); b.nodes.bat!.label = 'The battery'; wire(b, 'solve', 'thing', 'bat', 'thing');
-    placeBlock(b, 'combine', 0, 0, {}, 'bay'); b.nodes.bay!.label = 'Engine, battery, cable'; wire(b, 'eng', 'piece', 'bay', 'things'); wire(b, 'bat', 'piece', 'bay', 'things'); wire(b, 'run', 'line', 'bay', 'things');
-    placeBlock(b, 'terrain', 0, 0, {}, 'land'); b.nodes.land!.label = 'Hills'; for (const [k, v] of [['w', 200], ['d', 200], ['relief', 6]] as [string, number][]) { placeBlock(b, 'in.number', 0, 0, { value: v }, `land${k}`); wire(b, `land${k}`, 'value', 'land', k); }
-    placeBlock(b, 'line', 0, 0, { section: 'road-2' }, 'roadSec'); b.nodes.roadSec!.label = 'A road: asphalt on a base course';
-    placeBlock(b, 'route', 0, 0, { from: '-90 -90', fromPort: '', to: '90 90', toPort: '', logic: 'grade' }, 'road'); b.nodes.road!.label = 'Lay it: never steeper than 8 %'; wire(b, 'land', 'ground', 'road', 'thing'); wire(b, 'roadSec', 'section', 'road', 'section');
-    placeBlock(b, 'pick', 0, 0, { options: 'the battery cable|the road', which: 'the battery cable' }, 'pick'); b.nodes.pick!.label = 'Which to see';
-    wire(b, 'bay', 'assembly', 'pick', 'the battery cable'); wire(b, 'road', 'with', 'pick', 'the road');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'pick', 'chosen', 'show', 'thing');
-    return b;
-  }],
-  ['The autopilot on the Corolla: checked, repaired, checked again, what is left named', () => {
-    // the Corolla as it was made, checked by the rules; what is wrong grouped into problems and each tried with the
-    // repairs, least costly first (route a line again, move it by the solver, a heat shield between), a
-    // repair kept only if its problem is gone and the parts it changed have less wrong than before; then the whole checked
-    // again. Nothing typed by hand. What no repair clears is a named task with why. The 3D view: the engine, the battery
-    // where it was moved, and the upper hose routed again, clear of the exhaust's heat
-    const b = emptyBoard('The autopilot on the Corolla');
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
-    placeBlock(b, 'repair.library', 0, 0, {}, 'lib'); b.nodes.lib!.label = 'The repairs it may make';
-    placeBlock(b, 'view.table', 0, 0, {}, 'libRows'); wire(b, 'lib', 'repairs', 'libRows', 'rows');
-    placeBlock(b, 'auto.loop', 0, 0, {}, 'auto'); b.nodes.auto!.label = 'Autopilot'; wire(b, 'car', 'vehicle', 'auto', 'thing'); wire(b, 'lib', 'library', 'auto', 'library');
-    placeBlock(b, 'view.table', 0, 0, {}, 'tried'); b.nodes.tried!.label = 'Every repair tried'; wire(b, 'auto', 'attempts', 'tried', 'rows');
-    placeBlock(b, 'view.table', 0, 0, {}, 'left'); b.nodes.left!.label = 'What is left, and why'; wire(b, 'auto', 'tasks', 'left', 'rows');
-    placeBlock(b, 'view.show', 0, 0, {}, 'said'); wire(b, 'auto', 'says', 'said', 'value');
-    for (const [k, name, label] of [['eng', '^petrol engine', 'The engine'], ['bat', '^battery and its tray$', 'The battery, moved'], ['hose', '^upper hose$', 'The upper hose']] as [string, string, string][]) {
-      placeBlock(b, 'piece', 0, 0, { name, where: 'where it sits' }, k); b.nodes[k]!.label = label; wire(b, 'auto', 'thing', k, 'thing');
-    }
-    placeBlock(b, 'combine', 0, 0, {}, 'scene'); b.nodes.scene!.label = 'What the autopilot changed'; for (const k of ['eng', 'bat', 'hose']) wire(b, k, 'piece', 'scene', 'things');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'scene', 'assembly', 'show', 'thing');
-    return b;
-  }],
-  ['A battery placed by the solver: where it goes, why, and what it gives up', () => {
-    // the Corolla's battery placed from what it needs, not typed: taken out, the bay mapped without it (heat, motion,
-    // reach), every place it fits standing on something and under the hood tried at each quarter turn; held to what it
-    // must have (no cell over the 80 °C its separators stand, none in what moves), the cheapest of the rest chosen (cool,
-    // a hand reaching its top, near its starter, little moved). Beside it: why, the next best and what each gives up, the
-    // rule findings before and after, and the battery its engine's duty calls for. The 3D view: the engine, the battery
-    // where the solver put it, and the heat round it
-    const b = emptyBoard('A battery placed by the solver');
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
-    placeBlock(b, 'place.solve', 0, 0, {}, 'solve'); b.nodes.solve!.label = 'Place the battery'; wire(b, 'car', 'vehicle', 'solve', 'thing');
-    placeBlock(b, 'explain', 0, 0, {}, 'why'); b.nodes.why!.label = 'Why there'; wire(b, 'solve', 'placed', 'why', 'value');
-    placeBlock(b, 'view.show', 0, 0, {}, 'whyShow'); wire(b, 'why', 'lines', 'whyShow', 'value');
-    placeBlock(b, 'view.table', 0, 0, {}, 'others'); b.nodes.others!.label = 'The next best places'; wire(b, 'solve', 'others', 'others', 'rows');
-    placeBlock(b, 'size.select', 0, 0, {}, 'size'); b.nodes.size!.label = 'The battery its engine calls for'; wire(b, 'car', 'vehicle', 'size', 'thing');
-    placeBlock(b, 'view.table', 0, 0, {}, 'groups'); b.nodes.groups!.label = 'Every group, weighed'; wire(b, 'size', 'options', 'groups', 'rows');
-    placeBlock(b, 'piece', 0, 0, { name: '^petrol engine', where: 'where it sits' }, 'eng'); b.nodes.eng!.label = 'The engine'; wire(b, 'solve', 'thing', 'eng', 'thing');
-    placeBlock(b, 'piece', 0, 0, { name: '^battery and its tray$', where: 'where it sits' }, 'bat'); b.nodes.bat!.label = 'The battery, where it was put'; wire(b, 'solve', 'thing', 'bat', 'thing');
-    placeBlock(b, 'field', 0, 0, { kind: 'heat', grow: 0.25 }, 'heat'); b.nodes.heat!.label = 'Map: heat, the battery moved'; wire(b, 'solve', 'thing', 'heat', 'thing');
-    placeBlock(b, 'field.show', 0, 0, { slice: 'y', at: 0.55 }, 'heatShow'); b.nodes.heatShow!.label = 'Heat: a level slice'; wire(b, 'heat', 'field', 'heatShow', 'field');
-    placeBlock(b, 'combine', 0, 0, {}, 'scene'); b.nodes.scene!.label = 'Engine, battery and heat'; wire(b, 'eng', 'piece', 'scene', 'things'); wire(b, 'bat', 'piece', 'scene', 'things'); wire(b, 'heatShow', 'view', 'scene', 'things');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'scene', 'assembly', 'show', 'thing');
-    return b;
-  }],
-  ['Fields over the engine bay: what each part needs, and maps of heat, motion and reach', () => {
-    // the Corolla's engine bay as maps, not as positions: what every part needs, read from what its parts state (nothing
-    // typed); then the space round the engine cell by cell: how hot (the rules' own fall-off from each hot surface, a
-    // solid between blocking it), how much room from what moves (wheels through their steer and bump, the belt, the engine
-    // rocking on its mounts), and where a hand reaches leaning over the open bay; and the three as one cost. Pick which
-    // the 3D view shows; each cell coloured blue (good) to red (bad)
-    const b = emptyBoard('Fields over the engine bay');
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
-    placeBlock(b, 'need', 0, 0, {}, 'needs'); b.nodes.needs!.label = 'What every part needs'; wire(b, 'car', 'vehicle', 'needs', 'thing');
-    placeBlock(b, 'need', 0, 0, { kind: 'access' }, 'reachNeeds'); b.nodes.reachNeeds!.label = 'Who must reach what, how often'; wire(b, 'car', 'vehicle', 'reachNeeds', 'thing');
-    placeBlock(b, 'view.table', 0, 0, {}, 'reachRows'); b.nodes.reachRows!.label = 'Reached, a year'; wire(b, 'reachNeeds', 'needs', 'reachRows', 'rows');
-    placeBlock(b, 'piece', 0, 0, { name: '^petrol engine', where: 'where it sits' }, 'eng'); b.nodes.eng!.label = 'The engine, to see the maps round'; wire(b, 'car', 'vehicle', 'eng', 'thing');
-    for (const [k, kind, show] of [['h', 'heat', { slice: 'y', at: 0.45 }], ['m', 'motion', { slice: 'y', at: 0.45 }], ['r', 'reach', { slice: 'y', at: 0.7 }]] as [string, string, Record<string, unknown>][]) {
-      placeBlock(b, 'field', 0, 0, { kind }, `f${k}`); b.nodes[`f${k}`]!.label = `Map: ${kind}`; wire(b, 'car', 'vehicle', `f${k}`, 'thing');
-      placeBlock(b, 'field.show', 0, 0, show, `s${k}`); b.nodes[`s${k}`]!.label = `Show ${kind}: a level slice`; wire(b, `f${k}`, 'field', `s${k}`, 'field');
-    }
-    placeBlock(b, 'field.combine', 0, 0, { weights: '1 1 1' }, 'fc'); b.nodes.fc!.label = 'Heat, motion and reach as one cost'; for (const k of ['h', 'm', 'r']) wire(b, `f${k}`, 'field', 'fc', 'fields');
-    placeBlock(b, 'field.show', 0, 0, { slice: 'y', at: 0.7 }, 'sc'); b.nodes.sc!.label = 'The three as one cost: a level slice'; wire(b, 'fc', 'field', 'sc', 'field');
-    placeBlock(b, 'pick', 0, 0, { options: 'heat|motion|reach|all three', which: 'heat' }, 'pick'); b.nodes.pick!.label = 'Which map to see';
-    for (const [k, o] of [['h', 'heat'], ['m', 'motion'], ['r', 'reach'], ['c', 'all three']] as [string, string][]) wire(b, `s${k}`, 'view', 'pick', o);
-    placeBlock(b, 'combine', 0, 0, {}, 'scene'); b.nodes.scene!.label = 'The engine and the map'; wire(b, 'eng', 'piece', 'scene', 'things'); wire(b, 'pick', 'chosen', 'scene', 'things');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'scene', 'assembly', 'show', 'thing');
-    return b;
-  }],
-  ['A car down to its bolts: tyres made in depth, a shared battery, taken apart', () => {
-    // a Toyota Corolla by Toyota's figures, built part by part down to its wheel nuts; its four tyres swapped for one tyre
-    // made in depth (layers, beads, belts, a tread of pitches), the same one on every wheel; a group 35 battery (typical
-    // of Toyotas) over its gearbox on the left, where Toyota puts it; then taken apart three levels down: turn "how far
-    // apart" to 0 to put it back together
-    const b = emptyBoard('A car down to its bolts');
-    placeBlock(b, 'vehicle.model', 0, 0, { model: 'corolla' }, 'car'); b.nodes.car!.label = 'Corolla (Toyota\'s figures)';
-    placeBlock(b, 'tyre', 0, 0, { pattern: 'all-season', code: '205/55R16' }, 'tyre'); b.nodes.tyre!.label = 'Tyre 205/55R16, made in depth';
-    placeBlock(b, 'fit', 0, 0, {}, 'fit'); b.nodes.fit!.label = 'Fit it on every wheel'; wire(b, 'car', 'vehicle', 'fit', 'thing'); wire(b, 'tyre', 'tyre', 'fit', 'with');
-    placeBlock(b, 'battery.starter', 0, 0, { group: '35' }, 'bat'); b.nodes.bat!.label = 'Battery, BCI group 35';
-    placeBlock(b, 'place', 0, 0, { x: 1.56, y: 0.645, z: -0.275 }, 'batAt'); b.nodes.batAt!.label = 'Over the gearbox, left'; wire(b, 'bat', 'battery', 'batAt', 'thing');
-    placeBlock(b, 'combine', 0, 0, { name: 'Corolla, to its bolts' }, 'all'); wire(b, 'fit', 'fitted', 'all', 'things'); wire(b, 'batAt', 'placed', 'all', 'things');
-    placeBlock(b, 'explode', 0, 0, { amount: 0.5, levels: 3 }, 'apart'); wire(b, 'all', 'assembly', 'apart', 'thing');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
-    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
-    placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'car', 'vehicle', 'audit', 'thing');
-    return b;
-  }],
-  ['A truck from the ground up: axles, then tyres, then batteries', () => {
-    // a 6x4 highway tractor built from its axles up (where each is, its track, its tyres, steer or drive, twin tyres, how
-    // it hangs: the Cascadia's figures), its kind giving its cab, tanks, stacks and fifth wheel; a rib tyre fitted to its
-    // steer axle and a drive tyre to its eight drive wheels; three group 31 batteries in a row on its left rail behind
-    // its tank. Add an axle (wire another Axle in) and it is an 8x4; take one away and it is a 4x2
-    const b = emptyBoard('A truck from the ground up');
-    placeBlock(b, 'vehicle.axle', 0, 0, { steer: true, susp: 'leaf', x: 2.268, track: 2.05, tyre: '315/80R22.5', brakeD: 0.43 }, 'a1'); b.nodes.a1!.label = 'Steer axle';
-    placeBlock(b, 'vehicle.axle', 0, 0, { drive: true, dual: true, susp: 'air', x: -1.51, track: 1.85, tyre: '11R22.5', brakeD: 0.43 }, 'a2'); b.nodes.a2!.label = 'Drive axle, front';
-    placeBlock(b, 'vehicle.axle', 0, 0, { drive: true, dual: true, susp: 'air', x: -2.805, track: 1.85, tyre: '11R22.5', brakeD: 0.43 }, 'a3'); b.nodes.a3!.label = 'Drive axle, rear';
-    placeBlock(b, 'vehicle', 0, 0, { kind: 'truck', power: 'diesel', extras: 'cab, tanks, stacks, fifth wheel', L: 7.166, W: 2.5, H: 3.03, kW: 375, cc: 14800, color: '#c62828' }, 'truck'); b.nodes.truck!.label = 'Truck from its axles';
-    for (const a of ['a1', 'a2', 'a3']) wire(b, a, 'axle', 'truck', 'axles');
-    placeBlock(b, 'tyre', 0, 0, { pattern: 'rib', code: '315/80R22.5' }, 'ts'); b.nodes.ts!.label = 'Steer tyre (rib)';
-    placeBlock(b, 'tyre', 0, 0, { pattern: 'drive', code: '11R22.5' }, 'td'); b.nodes.td!.label = 'Drive tyre (lug)';
-    placeBlock(b, 'fit', 0, 0, { path: '^((outer|inner) )?tyre 315' }, 'f1'); b.nodes.f1!.label = 'Fit on the steer axle'; wire(b, 'truck', 'vehicle', 'f1', 'thing'); wire(b, 'ts', 'tyre', 'f1', 'with');
-    placeBlock(b, 'fit', 0, 0, { path: '^((outer|inner) )?tyre 11R' }, 'f2'); b.nodes.f2!.label = 'Fit on the drive axles'; wire(b, 'f1', 'fitted', 'f2', 'thing'); wire(b, 'td', 'tyre', 'f2', 'with');
-    placeBlock(b, 'battery.starter', 0, 0, { group: '31' }, 'bat'); b.nodes.bat!.label = 'Battery, BCI group 31';
-    placeBlock(b, 'place', 0, 0, { ry: Math.PI / 2 }, 'batTurn'); b.nodes.batTurn!.label = 'Turned across'; wire(b, 'bat', 'battery', 'batTurn', 'thing');
-    placeBlock(b, 'array', 0, 0, { pattern: 'line', n: 3, dx: 0.185 }, 'bats'); b.nodes.bats!.label = 'Three in a row'; wire(b, 'batTurn', 'placed', 'bats', 'thing');
-    placeBlock(b, 'place', 0, 0, { x: -0.83, y: 0.62, z: -0.66 }, 'batAt'); b.nodes.batAt!.label = 'On the left rail, behind the tank'; wire(b, 'bats', 'row', 'batAt', 'thing');
-    placeBlock(b, 'combine', 0, 0, { name: 'truck' }, 'all'); wire(b, 'f2', 'fitted', 'all', 'things'); wire(b, 'batAt', 'placed', 'all', 'things');
-    placeBlock(b, 'explode', 0, 0, { amount: 0, levels: 3 }, 'apart'); b.nodes.apart!.label = 'Take apart (turn it up)'; wire(b, 'all', 'assembly', 'apart', 'thing');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
-    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
-    placeBlock(b, 'audit.explode', 0, 0, {}, 'audit'); b.nodes.audit!.label = 'Does it come apart to the bottom?'; wire(b, 'truck', 'vehicle', 'audit', 'thing');
-    return b;
-  }],
-  ['An electric car\'s pack: 3,360 cells, one stored', () => {
-    // a sedan with electric drive; the box that stood for its pack swapped for a pack of 21700 cells: 96 in series of 35,
-    // six modules of 16 groups, 60 kWh (what the room under its floor takes laid this way); the same pack again beside it, so
-    // it can be seen (stored once, placed twice), and the cell itself
-    const b = emptyBoard('An electric car\'s pack');
-    placeBlock(b, 'vehicle', 0, 0, { kind: 'car', body: 'sedan', power: 'electric', color: '#eceff1' }, 'car'); b.nodes.car!.label = 'Sedan, electric';
-    placeBlock(b, 'battery.pack', 0, 0, { format: '21700', s: 96, p: 35, rows: 5, modules: '16, 16, 16, 16, 16, 16' }, 'pack'); b.nodes.pack!.label = 'Pack of 21700s, 96s35p';
-    placeBlock(b, 'fit', 0, 0, { path: '^battery pack' }, 'fit'); b.nodes.fit!.label = 'Fit it under the floor'; wire(b, 'car', 'vehicle', 'fit', 'thing'); wire(b, 'pack', 'pack', 'fit', 'with');
-    placeBlock(b, 'battery.cell', 0, 0, { format: '21700' }, 'cell'); b.nodes.cell!.label = 'One cell (21700)';
-    placeBlock(b, 'place', 0, 0, { x: -1.5, y: 0.035, z: 2.0 }, 'cellAt'); b.nodes.cellAt!.label = 'Beside it'; wire(b, 'cell', 'cell', 'cellAt', 'thing');
-    placeBlock(b, 'place', 0, 0, { x: 0, y: 0.04, z: 2.6 }, 'packAt'); b.nodes.packAt!.label = 'The same pack, beside it to be seen'; wire(b, 'pack', 'pack', 'packAt', 'thing');
-    placeBlock(b, 'combine', 0, 0, { name: 'electric car' }, 'all'); wire(b, 'fit', 'fitted', 'all', 'things'); wire(b, 'cellAt', 'placed', 'all', 'things'); wire(b, 'packAt', 'placed', 'all', 'things');
-    placeBlock(b, 'explode', 0, 0, { amount: 0, levels: 2 }, 'apart'); b.nodes.apart!.label = 'Take apart (turn it up)'; wire(b, 'all', 'assembly', 'apart', 'thing');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'apart', 'apart', 'show', 'thing');
-    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
-    return b;
-  }],
-  ['A computer down to the transistor: FinFET, cell, die, package, board, PC', () => {
-    // two FinFETs at Intel 14 nm's published pitches (an n-type, a p-type); made into a 6T SRAM bit and a NAND2 gate; those
-    // placed by the billion into a 4-core die (each core's logic and graphics an estimate); the die flipped into an
-    // LGA1151 package, socketed in an ATX board, in a tower PC. The same die beside the PC, face up, at its true size:
-    // zoom the 3D view (or the space's S) down into it, through its caches and rows of gates, to a single transistor
-    const b = emptyBoard('A computer down to the transistor');
-    placeBlock(b, 'chip.transistor', 0, 0, { proc: 'intel-14nm', type: 'n', fins: 1 }, 'tn'); b.nodes.tn!.label = 'nFET, 1 fin';
-    placeBlock(b, 'chip.transistor', 0, 0, { proc: 'intel-14nm', type: 'p', fins: 1 }, 'tp'); b.nodes.tp!.label = 'pFET, 1 fin';
-    placeBlock(b, 'chip.transistor', 0, 0, { proc: 'intel-14nm', type: 'n', fins: 2 }, 'tn2'); b.nodes.tn2!.label = 'nFET, 2 fins';
-    placeBlock(b, 'chip.transistor', 0, 0, { proc: 'intel-14nm', type: 'p', fins: 2 }, 'tp2'); b.nodes.tp2!.label = 'pFET, 2 fins';
-    placeBlock(b, 'chip.cell', 0, 0, { proc: 'intel-14nm', kind: 'SRAM bit (6T)' }, 'bit'); b.nodes.bit!.label = 'SRAM bit (6 transistors)'; wire(b, 'tn', 'transistor', 'bit', 'n'); wire(b, 'tp', 'transistor', 'bit', 'p');
-    placeBlock(b, 'chip.cell', 0, 0, { proc: 'intel-14nm', kind: 'NAND2 gate' }, 'gate'); b.nodes.gate!.label = 'NAND2 gate (4 transistors)'; wire(b, 'tn2', 'transistor', 'gate', 'n'); wire(b, 'tp2', 'transistor', 'gate', 'p');
-    placeBlock(b, 'chip.die', 0, 0, { proc: 'intel-14nm', cores: 4, coreMm2: 7, l2KB: 256, l3MB: 8, uncoreMm2: 50 }, 'die'); b.nodes.die!.label = 'Die, 4 cores'; wire(b, 'bit', 'cell', 'die', 'sram'); wire(b, 'gate', 'cell', 'die', 'nand');
-    placeBlock(b, 'chip.package', 0, 0, { socket: 'LGA1151' }, 'pkg'); wire(b, 'die', 'die', 'pkg', 'die');
-    placeBlock(b, 'pc.board', 0, 0, { form: 'ATX' }, 'board'); wire(b, 'pkg', 'package', 'board', 'package');
-    placeBlock(b, 'pc.desktop', 0, 0, {}, 'pc'); wire(b, 'board', 'board', 'pc', 'board');
-    placeBlock(b, 'place', 0, 0, { x: 0.45, y: 0.001 }, 'dieAt'); b.nodes.dieAt!.label = 'The die beside it, face up'; wire(b, 'die', 'die', 'dieAt', 'thing');
-    placeBlock(b, 'combine', 0, 0, { name: 'a computer, to its transistors' }, 'all'); wire(b, 'pc', 'pc', 'all', 'things'); wire(b, 'dieAt', 'placed', 'all', 'things');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
-    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
-    return b;
-  }],
   ['Physics: a steel ball let go into a tower of wooden blocks', () => {
     // 24 oak blocks 100 mm a side, two by two and six high; a 120 mm steel ball shoved at the tower for 0.1 s with 300 N.
     // Let it go runs Jolt once (each block a body, its mass from oak's density, friction and bounce from the materials
@@ -861,21 +338,6 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'go', 'moved', 'show', 'thing');
     return b;
   }],
-  ['Motion: a door swinging, and the room its swing needs', () => {
-    // a door mated into its wall, turned on its hinge edge (0 to 90° and back, at most 90°/s, 180°/s², about how a door is
-    // swung by hand: an estimate); its swing swept: the room it needs, shown
-    const b = emptyBoard('A door swinging, and the room its swing needs');
-    placeBlock(b, 'wall', 0, 0, { opening: 'door', name: 'wall', mat: 'brick', color: '#eceff1', finish: 'paint', L: 4, h: 2.4 }, 'wall');
-    placeBlock(b, 'seed.door', 0, 0, {}, 'door');
-    placeBlock(b, 'mate', 0, 0, { frame: 'fit', onto: 'opening', how: 'into' }, 'mate'); wire(b, 'door', 'door', 'mate', 'thing'); wire(b, 'wall', 'wall', 'mate', 'on');
-    placeBlock(b, 'time', 0, 0, {}, 'clock');
-    placeBlock(b, 'turn', 0, 0, { axis: 'y', keys: '0 s 0°, 2 s 90°, 5 s 90°, 7 s 0°', x: -0.43, y: 0, z: 0, speed: 90, accel: 180 }, 'swing'); b.nodes.swing!.label = 'Turn it on its hinge';
-    wire(b, 'mate', 'placed', 'swing', 'thing'); wire(b, 'clock', 't', 'swing', 't');
-    placeBlock(b, 'sweep', 0, 0, { axis: 'y', x: -0.43, from: 0, to: 90, n: 12 }, 'sweep'); b.nodes.sweep!.label = 'The room its swing needs'; wire(b, 'mate', 'placed', 'sweep', 'thing');
-    placeBlock(b, 'combine', 0, 0, { name: 'room corner' }, 'all'); wire(b, 'wall', 'wall', 'all', 'things'); wire(b, 'swing', 'turned', 'all', 'things'); wire(b, 'sweep', 'swept', 'all', 'things');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
-    return b;
-  }],
   ['Physics: a pendulum on a hinge', () => {
     // an oak plank 1 m long hung from a hinge 2 m up, let go from 60°: it swings, and the hinge's angle is kept over time
     const b = emptyBoard('A pendulum on a hinge');
@@ -886,81 +348,6 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'letgo', 0, 0, { seconds: 20 }, 'go'); wire(b, 'plankAt', 'placed', 'go', 'things'); wire(b, 'hinge', 'joint', 'go', 'joints'); wire(b, 'clock', 't', 'go', 't');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'go', 'moved', 'show', 'thing');
     return b;
-  }],
-  ['Mating: a door set in its wall by their frames', () => {
-    // the wall's opening is a frame; the door's middle is a frame; Mate puts the one on the other, facing as it faces.
-    // Change the wall's length or the opening's offset and the door follows
-    const b = emptyBoard('Mating by frames');
-    placeBlock(b, 'wall', 0, 0, { opening: 'door', name: 'wall', mat: 'brick', color: '#eceff1', finish: 'paint', L: 4, h: 2.4, off: 0.8 }, 'wall'); b.nodes.wall!.label = 'Wall with a door opening';
-    placeBlock(b, 'seed.door', 0, 0, { colour: '#8d6e63' }, 'door'); b.nodes.door!.label = 'Door (its frame: "fit")';
-    placeBlock(b, 'mate', 0, 0, { frame: 'fit', onto: 'opening', how: 'into' }, 'mate'); b.nodes.mate!.label = 'Mate: fit into opening';
-    wire(b, 'door', 'door', 'mate', 'thing'); wire(b, 'wall', 'wall', 'mate', 'on');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'mate', 'both', 'show', 'thing');
-    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'mate', 'both', 'measure', 'thing');
-    return b;
-  }],
-  ['Clear away: a field of grass, cleared where a road goes', () => {
-    // a flat field 20 m square covered a foot at a time with grass; the patches the road comes within 0.2 m of taken away
-    // whole (depth 0: each patch stays one shared thing; deeper, it would cut patches blade by blade)
-    const b = emptyBoard('Clearing by where things are');
-    placeBlock(b, 'terrain', 0, 0, { w: 20, d: 20, relief: 0, cells: 8, color: '#4e7d32' }, 'field'); b.nodes.field!.label = 'Field';
-    placeBlock(b, 'seed.grass', 0, 0, { blades: 16, soil: 'none' }, 'patch'); b.nodes.patch!.label = 'A foot of grass';
-    placeBlock(b, 'scatter', 0, 0, { mode: 'grid', step: 0.3048, w: 20, d: 20, turn: true }, 'lawn'); b.nodes.lawn!.label = 'Patches all over it';
-    wire(b, 'patch', 'patch', 'lawn', 'thing'); wire(b, 'field', 'ground', 'lawn', 'on');
-    placeBlock(b, 'seed.road', 0, 0, { L: 20 }, 'road'); b.nodes.road!.label = 'Road across it';
-    placeBlock(b, 'place', 0, 0, { y: 0.1 }, 'roadAt'); wire(b, 'road', 'road', 'roadAt', 'thing');
-    placeBlock(b, 'clear', 0, 0, { keep: false, depth: 0, gap: 0.2 }, 'clear'); b.nodes.clear!.label = 'Clear the grass the road is on';
-    wire(b, 'lawn', 'scattered', 'clear', 'thing'); wire(b, 'roadAt', 'placed', 'clear', 'near');
-    placeBlock(b, 'combine', 0, 0, { name: 'field with a road' }, 'all'); wire(b, 'field', 'ground', 'all', 'things'); wire(b, 'clear', 'cleared', 'all', 'things'); wire(b, 'roadAt', 'placed', 'all', 'things');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
-    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
-    return b;
-  }],
-  ['Seeds, one of each: window, door, toilet, sink, bed, car, stop light', () => seedBoard('Seeds, one of each', [
-    ['seed.window', 'Window', {}, { x: -6, y: 1.5 }, 'window'],
-    ['seed.door', 'Door', {}, { x: -4.5, y: 1.05 }, 'door'],
-    ['seed.toilet', 'Toilet', {}, { x: -3 }, 'toilet'],
-    ['seed.sink', 'Sink (choose it: its kind)', { kind: 'vanity' }, { x: -2 }, 'sink'],
-    ['seed.bed', 'Bed (choose it: its size)', {}, { x: 0 }, 'bed'],
-    ['seed.car', 'Car (choose it: its paint)', {}, { x: 4.5, z: 1 }, 'car'],
-    ['seed.stoplight', 'Stop light (choose it: which is lit)', { state: 'green' }, { x: 8.5 }, 'light'],
-    ['seed.grass', 'A foot of grass', {}, { x: 10 }, 'patch'],
-  ])],
-  ['Ground: a foot of grass, then a whole terrain of it', () => seedBoard('Ground from a foot of grass', [
-    ['seed.terrain', 'Terrain (choose it: its seed, its size, grassed or bare)', { size: 24 }, {}, 'terrain'],
-  ])],
-  ['Streets: a road and a stop light, then a road system', () => seedBoard('Streets from a road and a stop light', [
-    ['seed.roads', 'Road system (choose it: blocks each way, which light is lit)', {}, {}, 'roads'],
-  ])],
-  ['A neighbourhood, then a city, from seeds', () => seedBoard('A city from seeds', [
-    ['seed.city', 'City (choose it: neighbourhoods each way, its seed)', { n: 3 }, {}, 'city'],
-  ])],
-  ['A city from a few nodes: motor, drone, swarm, buildings', () => {
-    // a racing quad's parts at typical sizes: a 2207 brushless motor's bell about 28 mm across and 18 mm tall, a 5 inch
-    // (127 mm) prop, a frame of about 220 mm between opposite motors; buildings 20 m square, streets 10 m (typical)
-    const b = emptyBoard('A city from a few nodes');
-    placeBlock(b, 'shape.cyl', 0, 0, { name: 'motor bell', mat: 'al-6061', color: '#c9ced6', finish: 'brushed', r: 0.014, h: 0.018 }, 'bell');
-    placeBlock(b, 'shape.box', 0, 0, { name: 'prop', mat: 'pp', color: '#ff5252', w: 0.127, h: 0.002, d: 0.012 }, 'prop');
-    placeBlock(b, 'place', 0, 0, { y: 0.011 }, 'propUp'); wire(b, 'prop', 'part', 'propUp', 'thing');
-    placeBlock(b, 'combine', 0, 0, { name: 'motor' }, 'motor'); wire(b, 'bell', 'part', 'motor', 'things'); wire(b, 'propUp', 'placed', 'motor', 'things');
-    placeBlock(b, 'shape.box', 0, 0, { name: 'frame', mat: 'fibreglass', color: '#263238', w: 0.16, h: 0.004, d: 0.16 }, 'frame');
-    placeBlock(b, 'array', 0, 0, { pattern: 'ring', n: 4, r: 0.11 }, 'arms'); wire(b, 'motor', 'assembly', 'arms', 'thing');
-    placeBlock(b, 'place', 0, 0, { y: 0.011 }, 'armsUp'); wire(b, 'arms', 'ring', 'armsUp', 'thing');
-    placeBlock(b, 'combine', 0, 0, { name: 'drone' }, 'drone'); wire(b, 'frame', 'part', 'drone', 'things'); wire(b, 'armsUp', 'placed', 'drone', 'things');
-    placeBlock(b, 'array', 0, 0, { pattern: 'grid', nx: 10, nz: 10, sx: 1, sz: 1 }, 'swarm'); b.nodes.swarm!.label = 'Swarm'; wire(b, 'drone', 'assembly', 'swarm', 'thing');
-    // (flown clear of the tallest tower: 30 m, varied by up to 60 %, so 48 m)
-    placeBlock(b, 'place', 0, 0, { y: 55 }, 'swarmUp'); wire(b, 'swarm', 'grid', 'swarmUp', 'thing');
-    placeBlock(b, 'shape.box', 0, 0, { name: 'tower', mat: 'concrete', color: '#90a4ae', finish: 'concrete', w: 20, h: 30, d: 20 }, 'tower'); b.nodes.tower!.label = 'Tower';
-    placeBlock(b, 'place', 0, 0, { y: 15 }, 'towerUp'); wire(b, 'tower', 'part', 'towerUp', 'thing');
-    placeBlock(b, 'array', 0, 0, { pattern: 'grid', nx: 4, nz: 4, sx: 30, sz: 30, vary: 0.6, seed: 7 }, 'block'); b.nodes.block!.label = 'City block'; wire(b, 'towerUp', 'placed', 'block', 'thing');
-    placeBlock(b, 'array', 0, 0, { pattern: 'grid', nx: 5, nz: 5, sx: 140, sz: 140 }, 'city'); b.nodes.city!.label = 'City'; wire(b, 'block', 'grid', 'city', 'thing');
-    placeBlock(b, 'combine', 0, 0, { name: 'city and swarm' }, 'all'); wire(b, 'city', 'grid', 'all', 'things'); wire(b, 'swarmUp', 'placed', 'all', 'things');
-    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'all', 'assembly', 'show', 'thing');
-    placeBlock(b, 'measure', 0, 0, {}, 'measure'); wire(b, 'all', 'assembly', 'measure', 'thing');
-    // the motor and the drone folded into nodes of their own: open them to change them, save them to use anywhere
-    let r = collapse(b, ['bell', 'prop', 'propUp', 'motor'], 'Motor', 'gMotor'); tidy(r.board.nodes.gMotor!.inner!);
-    r = collapse(r.board, ['gMotor', 'frame', 'arms', 'armsUp', 'drone'], 'Drone', 'gDrone'); tidy(r.board.nodes.gDrone!.inner!);
-    return r.board;
   }],
 
   ['Parts in 3D: a bolt sized from its load, drawn whole', () => {

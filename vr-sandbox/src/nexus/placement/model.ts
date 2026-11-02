@@ -1,4 +1,4 @@
-// The placement model (docs/PLACEMENT.md): what every placement node reads and writes. A part says what it needs, not
+// The placement model (the placement module): what every placement node reads and writes. A part says what it needs, not
 // where it goes: what it mounts on, what it connects to, what it keeps out of (heat over its material's limit, what
 // moves), what it faces, and who must reach it. A solver places from needs; a field is a map of one quantity over the
 // space the parts are in; every result keeps its reason and how sure it is.

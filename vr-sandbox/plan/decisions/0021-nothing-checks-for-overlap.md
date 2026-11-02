@@ -31,7 +31,10 @@ one test fails when any rises. The first count, 2026-11-02: 1,203 in 46 files, `
 
 The operations' first slice is built (2026-11-02): `src/nexus/room.ts`, with the nodes Make a solid, Stack, Around, Into
 a room, Onto a face, Ring of copies and Through a line, and a starter board, a starter motor whose solenoid is refused
-inside it. The builders are not yet moved onto it.
+inside it. The same day the user had the old builds deleted rather than moved (asked, answered "All hand-placed
+builds"): the cars, trucks and karts, the engines, gearboxes, panels and fittings, the computer, the creatures, the
+hand-placed seeds and picture to model, with their nodes, starter boards and stored parts. What is made again is made
+with the operations.
 
 Task 10.T24 (interference as a gate) is superseded. The faults about the checker itself (D15, D26, and the clash rules'
 part of D29) are closed with it. The faults about overlaps drawn into builds (D14, D25) stay open, unmeasured: their

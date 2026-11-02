@@ -8,13 +8,12 @@
 // Sizes are real where they have a source (named), else typical; masses are worked out from each part's shape and its
 // material's density (estimates: the shapes are simple). A prop blaster is a shape only: it does not work as a weapon.
 
-import { VEHICLE_KITS, useMass } from './machines';
 import { DESIGNED, boltedJoint, exampleOf, partWords, use } from './components';
 import { assemble } from './mate';
 import { layout } from './make/space';
 import type { Lathe, Loft, Prism, Tube } from './form';
 import type { Patch } from './surface';
-import { DENSITY, massOf } from './mass';
+import { DENSITY, } from './mass';
 
 export type V3 = [number, number, number];
 export type Shape =
@@ -294,8 +293,6 @@ kit({
 
 // cars, karts, ATVs, motorcycles, forklifts, trucks and lawn tractors: one maker for every wheeled machine
 // (src/nexus/machines.ts), each kit only what can be chosen
-for (const k of VEHICLE_KITS) kit(k);
-useMass(massOf);
 
 // ---- a part on its own: any component the library draws (src/nexus/components.ts), by its words, its sizes in them
 // ("bolt M8x30", "angle 40x4 steel 1000mm", "bolted joint M10 22"), so it can be looked at, taken apart and checked alone

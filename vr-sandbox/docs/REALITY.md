@@ -1,5 +1,8 @@
 # Reality as one graph: laws, math, materials, models
 
+> Entries before 2026-11-02 describe builds since deleted (the cars, engines, panels, fittings, the computer, the seeds,
+> picture to model; decision 0021). They are history, not something to build on: build with the operations of `room.ts`.
+
 The user (2026-10-28): "Map out every known law of reality and turn them into connected, reusable nodes … connect
 every law through the math, variables, constants, and physical quantities they share … a unified math system …
 configurable settings for units, precision, solvers, assumptions, and accuracy … a unified material system that maps
@@ -2581,3 +2584,14 @@ solenoid (a room is used once: what went in first has it)". The board runs its 1
 red team's ten ways past the prototype (a room on a moving host, a bought host on a joint, the fixed 1e-12 m tolerance,
 rounding at 1e20 m, and caller data changed after it is checked) stand; round solids and lines run along y only; and no
 builder is moved onto it yet, so the count of places written by hand is unchanged (`node scripts/by-hand.mjs`).
+
+## 2026-11-02: the old builds deleted
+
+At the user's word ("get rid of the old builds", then "All hand-placed builds"), the builders that wrote places by hand
+are deleted with their nodes, starter boards and stored parts: `machines.ts`, `engines.ts`, `panels.ts`,
+`fittings.ts`, `drivetrain.ts`, `computer.ts`, `creatures.ts`, `reconstruct.ts`, `photo-marks.ts`, `power/`, every seed
+but the coil spring, the critic's checks of what turns or slides against what is round it, and the docs that described
+them (GAP-MAP, RECONSTRUCT, PLACEMENT). Measured on the code before this entry and its bookkeeping were added: 44 files changed, 14,115 lines out (`git diff
+--cached --shortstat`); 29 starter boards left of the 68; places still written by hand 612 in 37 files, down from 1,203 in 46
+(`node scripts/by-hand.mjs`). CLAUDE.md now says to build only with the operations of `room.ts` and names the nodes
+still in the library that set a place by number as old. The one test passes whole (`npm run gate`).

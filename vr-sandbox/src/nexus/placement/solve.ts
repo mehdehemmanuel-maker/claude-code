@@ -1,4 +1,4 @@
-// Placing a part from what it needs (docs/PLACEMENT.md, layer D: place.solve). The part is taken out; the space round
+// Placing a part from what it needs (layer D: place.solve). The part is taken out; the space round
 // where it could go is mapped (heat, motion, reach) without it; every place it fits whole, standing on something
 // solid (or within a bracket's reach of it) and under the hood or the body, is tried, at each of its turns about the vertical; what it must have is held (no cell of it hotter than the
 // least of its materials stands, none in what a moving part needs), and among the places that hold, the cheapest by

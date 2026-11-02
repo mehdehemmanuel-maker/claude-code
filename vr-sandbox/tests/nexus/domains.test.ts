@@ -48,7 +48,7 @@ import { applyImprint, boreGrips, boreThrough, fastenerFor, fit, imprint, portOf
 import { massOf } from '../../src/nexus/mass';
 import { jointsOfPorts, solveJoints, type Joint, type JointsSolved } from '../../src/nexus/placement/proximity';
 import { NEMA_FACE } from '../../src/nexus/families';
-import { KITS, makeKit, type Part, type V3 } from '../../src/nexus/kits';
+import type { Part, V3 } from '../../src/nexus/kits';
 import type { Assembly } from '../../src/nexus/assembly';
 import { Engine, Memo, digest, emptyBoard, placeBlock, wire, type Env } from '../../src/nexus/dataflow';
 import { nodesOf } from '../../src/nexus/boards';
@@ -66,7 +66,7 @@ const env: Env = { code: async (lang, code, inputs) => (await run({ id: 0, lang:
 const QUICK: Record<string, string> = {
   electrical: 'Electrical: a resistor heating', electronics: 'The 6502 from its transistors', finance: 'Business: cash flow',
   manufacturing: 'A battery built from its parts', mechanical: 'Physics: a steel ball let go', life: 'A body from its measured segments',
-  software: 'The gauntlet as nodes', structural: 'What it is made of, and what it carries', vehicles: 'Power as nodes',
+  software: 'The gauntlet as nodes', structural: 'What it is made of, and what it carries',
 };
 const root = resolve(__dirname, '../..');
 const resolveFrom = (dir: string, spec: string): string | null => {
@@ -112,9 +112,9 @@ describe('every domain, in one pass', () => {
     for (const [t] of starterBoards()) { const q = t.split(':')[0]!; if (!top(q, (f) => f.board === t)) lost.push(`board "${q.slice(0, 50)}"`); }
     for (const [id, name] of APP) if (!top(name, (f) => f.id === id)) lost.push(`app "${name}"`);
     // (asked as a person asks: [what is typed, what must come in the first three])
-    const ASKED: [string, string][] = [['buton', 'control.button'], ['joystick', 'control.stick'], ['intractable', 'control.button'], ['walk', 'app.walk'], ['make a house', 'seed.house'],
+    const ASKED: [string, string][] = [['buton', 'control.button'], ['joystick', 'control.stick'], ['intractable', 'control.button'], ['walk', 'app.walk'],
       ['scrape a website', 'api.zenrows'], ['exprt step', 'export.files'], ['wieght', 'law.weight'], ['ask claude', 'agent.build'], ['explode', 'explode'], ['take apart', 'explode'],
-      ['stres test', 'sweep.range'], ['sprng', 'load.spring'], ['city', 'seed.city'], ['person', 'body'], ['fold into a group', 'app.fold'], ['undo', 'app.undo'], ['slider', 'control.slider'], ['fit to a target', 'fit.target']];
+      ['stres test', 'sweep.range'], ['sprng', 'load.spring'], ['person', 'body'], ['fold into a group', 'app.fold'], ['undo', 'app.undo'], ['slider', 'control.slider'], ['fit to a target', 'fit.target']];
     for (const [q, want] of ASKED) if (!top(q, (f) => f.id === want || f.add?.block === want)) lost.push(`asked "${q}" (wants ${want}; got ${search(q, 3).map((f) => f.add?.block ?? f.id).join(', ')})`);
     expect(lost, `not found in the first three: ${lost.join('; ')}`).toEqual([]);
   }, 120_000);
@@ -584,8 +584,7 @@ describe('every domain, in one pass', () => {
   // here (see its REALITY entry))
   it('every port and old interface of a thing is one interface with a stable id', () => {
     const things: [string, Part | Assembly][] = DESIGNED.map((f) => [f, use(exampleOf(f))]);
-    for (const [id, words] of [['go kart', 'a go kart'], ['atv', 'a honda rancher'], ['semi truck', 'a freightliner cascadia']] as const) { const k = KITS.find((x) => x.id === id); expect(k, `the ${id} kit`).toBeTruthy(); things.push([words, makeKit(k!, words, 7).part]); }
-    expect(things.length, 'the corpus').toBeGreaterThan(40);
+    expect(things.length, 'the corpus').toBeGreaterThan(30);
     const ids: Record<string, string[]> = {}, kinds = new Set<string>(); let said = 0, framed = 0;
     for (const [name, t] of things) {
       let ports = 0, ifaces = 0; const count = (p: Part | Assembly): void => { ports += p.ports?.length ?? 0; if ('items' in p) { for (const it of p.items) count(it.of); return; } ifaces += p.iface?.length ?? 0; for (const k of p.parts ?? []) count(k); };
@@ -603,7 +602,7 @@ describe('every domain, in one pass', () => {
         if ((x.kind === 'bore' || x.kind === 'shaft') && !x.frame) expect(x.says ?? '', `${name}: ${x.id} unframed, and why`).toMatch(/drawn/); }
     }
     expect(framed, 'old interfaces framed').toBeGreaterThan(0);
-    expect([...kinds].sort(), 'the kinds the corpus holds').toEqual(expect.arrayContaining(['bore', 'frame', 'holes', 'shaft', 'thread.external', 'thread.internal']));
+    expect([...kinds].sort(), 'the kinds the corpus holds').toEqual(expect.arrayContaining(['bore', 'holes', 'shaft', 'thread.external', 'thread.internal']));
     const file = join(root, 'tests/nexus/interfaces.ids.json');
     if (process.env.UPDATE_DOCS || !existsSync(file)) writeFileSync(file, JSON.stringify(ids, null, 1) + '\n');
     else expect(ids, 'the same ids as the build that wrote tests/nexus/interfaces.ids.json (UPDATE_DOCS=1 writes it again)').toEqual(JSON.parse(readFileSync(file, 'utf8')));
@@ -839,7 +838,7 @@ describe('every domain, in one pass', () => {
   // catalogue's screw, said why; mate() lays its fasteners through it; a bolt's bore is ISO 273's; and the four machines'
   // fasteners as they were before (tests/nexus/fasteners.before.json, taken at a8ecae3, before the change; less, from
   // 2026-11-02, the oil pan bolts that were drawn through the crank where it passes the pan's ends: fault D24))
-  it('the fastener for a stack: case 8 chooses its bolt; the machines\' fasteners unchanged', () => {
+  it('the fastener for a stack: case 8 chooses its bolt', () => {
     const c8 = (JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; fastener?: { thread: string; plies: number[]; how: 'through'; expect: Record<string, unknown> } }[] }).cases.find((c) => c.case === 8)!.fastener!;
     const f = fastenerFor({ thread: c8.thread, plies: c8.plies.map((x) => x / 1000), how: c8.how }) as Fastener;
     expect({ words: f.words, std: f.std, L: f.L, nut: f.nut, washers: f.washers }, f.why.join('; ')).toEqual(c8.expect);
@@ -848,11 +847,6 @@ describe('every domain, in one pass', () => {
     expect([tap.words, tap.why.some((w) => /Bossard/.test(w))], 'tapped into 6061: engaged 12 mm, the screw 6 + 12 = 18 mm or the next sold').toEqual(['screw M6x18', true]);
     expect(ins.words, 'into a TC-M4x8.1: from 3 + 7.1 = 10.1 to 3 + 9.1 = 12.1 mm, so 12').toBe('screw M4x12');
     expect(boreThrough({ name: 'plate', shape: { box: [0.1, 0.01, 0.1] }, at: [0, 0, 0] }, use('bolt M8x30')).says, 'a bolt\'s bore ISO 273 medium').toMatch(/9\.0 mm \(ISO 273 medium for M8\)/);
-    const before = JSON.parse(readFileSync(join(root, 'tests/nexus/fasteners.before.json'), 'utf8')) as Record<string, Record<string, number>>, now: Record<string, Record<string, number>> = {};
-    for (const [id, w] of [['car', 'a toyota corolla'], ['atv', 'a honda rancher'], ['go kart', 'a go kart'], ['semi truck', 'a freightliner cascadia']]) { const t = makeKit(KITS.find((x) => x.id === id)!, w!, 7).part, m: Record<string, number> = {};
-      const walk = (p: Part) => { if (/\b(bolt|screw|nut|washer|stud)\b/i.test(p.name) && (p.shape || p.parts) && !(p.parts ?? []).some((q) => /\b(bolt|screw|nut|washer|stud)\b/i.test(q.name))) { const k = p.name.replace(/ \d+$/, ''); m[k] = (m[k] ?? 0) + 1; } for (const q of p.parts ?? []) walk(q); };
-      walk(t); now[w!] = Object.fromEntries(Object.entries(m).sort()); }
-    expect(now, 'every fastener of the four machines as it was before').toEqual(before);
   }, 300_000);
   // (a shared pattern and the changes that follow (spec 01, I11; evaluation case 9): a board where the bore feeds the bolt
   // circle's radius, one circle both the flange's and the cover's holes read, and the bolts laid from it; the bore widened
@@ -1372,7 +1366,6 @@ describe('every domain, in one pass', () => {
     expect(good.part.parts!.slice(0, 2).map((p) => (p.cuts ?? []).map((c) => +(2 * c.r * 1000).toFixed(2))), 'each 9 mm across').toEqual([[9], [9]]);
     const off = boreGrips({ name: 'a plate in the washer', parts: [ply('plate one', -h - 0.002), ply('plate two', -h - 0.009), j12] });
     expect(off.part.parts![0]!.cuts, 'the plate drawn into the washer: not bored').toBeUndefined();
-    expect(readFileSync(join(root, 'src/nexus/machines.ts'), 'utf8'), 'every machine made so').toMatch(/return boreGrips\(P\(m\.name/);
   }, 60_000);
   // (nothing checks for overlap (decision 0021, the user, 2026-11-02): where a place is still written by hand is counted
   // instead, builder by builder, and no count may rise; a builder moved onto the operations that cannot write an overlap
@@ -1545,11 +1538,6 @@ describe('every domain, in one pass', () => {
     expect(p.outdated.length, `${p.outdated.length} pieces stored that no build makes any more (UPDATE_DOCS=quick deletes them): ${say(p.outdated)}`).toBe(0);
     expect(p.misplaced.length, `${p.misplaced.length} pieces stored where their build no longer has them (UPDATE_DOCS=quick): ${say(p.misplaced)}`).toBe(0);
   }, 120_000);
-  // (a kit given words that name another kit's thing makes that thing and says so, never a random one of its own)
-  it('words that name another kit are made by it, and it is said', () => {
-    const car = KITS.find((k) => k.id === 'car')!;
-    for (const [w, id] of [['rancher', 'atv'], ['cascadia', 'semi truck'], ['corolla', 'car']] as const) { const m = makeKit(car, w, 7); expect(m.kit.id, w).toBe(id); expect(!!m.moved, w).toBe(id !== 'car'); }
-  });
   for (const d of DOMAINS) {
     it(d.name, async () => {
       const nodes = [...LIBRARY.values()].filter((b: BlockDef) => b.domains.includes(d.id));

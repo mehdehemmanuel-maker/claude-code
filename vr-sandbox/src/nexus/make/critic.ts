@@ -25,13 +25,8 @@ import { DENSITY, massOf, type Part } from '../kits';
 import { loadPath } from '../embody/tree';
 import type { Part as EPart } from '../embody/part';
 import { classOf, onePiece, sealedIn } from './detail';
-import { contacts, dirToLocal, grownOf, layout, least, sat, thingOf, toLocal, type Node, type OBB } from './space';
-import { insideBy, stationAt, type Lathe, type Loft, type Station } from '../form';
-import { inSweep } from '../panels';
-/** How wide a turned part is along its axis: a tyre's width at its sidewalls' widest, from its section (its covering
- *  boxes stand a few millimetres proud of it, which is room for them, not for it). */
-const latheWidth = (l: Lathe) => Math.max(...l.map((q) => q[1])) - Math.min(...l.map((q) => q[1]));
-import { closestOn, draft, fairness, patchAt, patchPoints, type Patch, type V3 as SV3 } from '../surface';
+import { contacts, grownOf, layout, least, thingOf, type Node, } from './space';
+import { closestOn, draft, fairness, patchAt, type Patch, type V3 as SV3 } from '../surface';
 
 export interface Finding { check: string; part: string; says: string; fixed: boolean }
 
@@ -54,15 +49,7 @@ export function turning(p: Part): { clearance: number; why: string; /** beside i
 }
 const ancestors = (n: Node) => { const a: Node[] = []; for (let x = n.parent; x; x = x.parent) a.push(x); return a; };
 const isUnder = (a: Node, b: Node): boolean => { for (let x: Node | null = a; x; x = x.parent) if (x === b) return true; return false; };
-/** The axis a turning thing turns about: its own round shape's, or its largest round part's. */
-function axisOf(n: Node, nodes: Node[]): THREE.Vector3 {
-  const round = (x: Node) => x.p.shape && ('torus' in x.p.shape || 'cyl' in x.p.shape || 'lathe' in x.p.shape) && x.obb;
-  const r = round(n) ? n : nodes.filter((x) => isUnder(x, n) && round(x) && !x.p.detail).sort((a, b) => Math.max(...b.obb!.h) - Math.max(...a.obb!.h))[0];
-  if (!r) { const o = n.obb; if (!o) return new THREE.Vector3(0, 0, 1); const k = [0, 1, 2].reduce((b, i) => (o.h[i]! < o.h[b]! ? i : b), 0); return o.u[k]!.clone(); }
-  return ('torus' in r.p.shape! ? r.obb!.u[2] : r.obb!.u[1]).clone();
-}
 const WALL: [RegExp, number, string][] = [[/^(abs|pp|pc|pmma|nylon)$/, 0.0008, 'moulded plastic'], [/^glass$/, 0.0032, 'toughened glass'], [/^cast-iron$/, 0.003, 'a casting'], [/^(wood|oak|bamboo)$/, 0.003, 'wood'], [/steel|stainless/, 0.0006, 'pressed steel'], [/^al-/, 0.0008, 'aluminium sheet']];
-const boxOBB = (b: THREE.Box3): OBB => { const c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3()).multiplyScalar(0.5); return { c, u: [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)], h: [s.x, s.y, s.z] }; };
 
 /** An interface checked: who offers, who asks, and each figure against the other. */
 export interface Contract { kind: string; provider: string; requirer: string; rows: { what: string; required: string; provided: string; ok: boolean }[]; ok: boolean }
@@ -88,119 +75,12 @@ export function contracts(nodes: Node[], touch = contacts(nodes)): Contract[] {
   }
   return out;
 }
-/** The parts paired by an interface: what goes through a hub is its shaft, not in its way. */
-function paired(nodes: Node[], touch: ReturnType<typeof contacts>): Set<string> {
-  const out = new Set<string>(); const has = (n: Node) => !!n.p.iface?.length;
-  for (const c of contracts(nodes, touch)) { const a = nodes.find((n) => n.p.name === c.provider), b = nodes.find((n) => n.p.name === c.requirer); if (a && b) { out.add(`${a.path}|${b.path}`); out.add(`${b.path}|${a.path}`); } }
-  for (const t of touch) if (has(t.a) && has(t.b) && t.a.p.iface!.some((x) => t.b.p.iface!.some((y) => y.kind === x.kind && y.role !== x.role))) { out.add(`${t.a.path}|${t.b.path}`); out.add(`${t.b.path}|${t.a.path}`); }
-  return out;
-}
 
 /** What is wrong with a thing, and what was put right (the thing is changed in place). */
 export function critique(root: Part): Finding[] {
   const out: Finding[] = [], say = (check: string, part: string, says: string, fixed: boolean) => out.push({ check, part, says, fixed });
   let nodes = layout(root, undefined, { sealedWhole: true });
-  // ---- room to move: each turning thing (the outermost of what turns together) against the fixed parts near it ----
-  const movers = nodes.filter((n) => turning(n.p) && n.sub && !n.p.detail && !sealedIn(n) && !ancestors(n).some((a) => turning(a.p)));
-  const pairs = paired(nodes, contacts(nodes, (n) => !!n.p.iface?.length));
-  const pairedTo = new Map<string, string[]>(); for (const k of pairs) { const [a, b] = k.split('|') as [string, string]; (pairedTo.get(a) ?? pairedTo.set(a, []).get(a)!).push(b); }
-  let dirty = false;
-  for (const m0 of movers) {
-    if (dirty) { nodes = layout(root, undefined, { sealedWhole: true }); dirty = false; } const m = nodes.find((x) => x.path === m0.path)!, need = turning(m.p)!, ax = axisOf(m, nodes);
-    // (what turns is what is of its link: a brake's caliper carried in a wheel's group, on its own link (its knuckle's, its
-    // fork's), does not turn with it, and the room is the wheel's, not the caliper's)
-    const ownLink = (x: Node): boolean => { for (let y: Node | null = x; y && y !== m; y = y.parent) if (y.p.link !== undefined && y.p.link !== m.p.link) return false; return true; };
-    const turns = nodes.filter((x) => isUnder(x, m) && x.box && ownLink(x)), box = turns.length ? turns.reduce((b, x) => b.union(x.box!), new THREE.Box3()) : m.sub!, ctr = box.getCenter(new THREE.Vector3());
-    // the room it needs: the disc it sweeps round its axis (a blade's, not its still box), and the room past that
-    // (a round thing's reach is its radius; a blade's, the farthest corner of it from its axis)
-    // (a wheel sweeps a ring: inside its rim, behind its face, is where its knuckle, brake and strut foot live)
-    const ringIn = nodes.filter((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.p.shape && ('torus' in x.p.shape || 'lathe' in x.p.shape)).map((x) => 'torus' in x.p.shape! ? x.p.shape.torus[0] - x.p.shape.torus[1] : Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r)));
-    // (inside its rim's barrel is free for what does not turn, 10 mm clear of the barrel's well, typical of a caliper's
-    // room to its wheel: measured from the rim where it is drawn, else 30 mm in from the tyre's bead)
-    const rimIn = nodes.filter((x) => isUnder(x, m) && /\brim\b/i.test(x.p.name) && classOf(x.p.mat ?? '') === 'metal' && x.p.shape && 'lathe' in x.p.shape).map((x) => Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r)));
-    const bore = rimIn.length ? Math.max(0, Math.min(...rimIn) - 0.01) : ringIn.length ? Math.max(0, Math.min(...ringIn) - 0.03) : 0;
-    const roundish = nodes.some((x) => isUnder(x, m) && x.p.shape && ('torus' in x.p.shape || 'cyl' in x.p.shape || 'lathe' in x.p.shape) && !x.p.detail), ext = box.getSize(new THREE.Vector3());
-    const sweep = roundish ? Math.max(...[0, 1, 2].map((i) => (ext.getComponent(i) / 2) * Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)))) : Math.max(...corners(box).map((q) => q.clone().sub(ctr).sub(ax.clone().multiplyScalar(q.clone().sub(ctr).dot(ax))).length())), along = Math.max(...corners(box).map((q) => Math.abs(q.clone().sub(ctr).dot(ax))));
-    const sideRoom = need.side ?? need.clearance, env = new THREE.Box3().setFromCenterAndSize(ctr, new THREE.Vector3(...[0, 1, 2].map((i) => 2 * (Math.abs(ax.getComponent(i)) * (along + sideRoom) + Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)) * (sweep + need.clearance)))));
-    // turning inside its own housing (a mower's blades in their deck, a fan in its duct, an auger in its trough): its tip
-    // kept the room asked inside the housing's walls
-    const blocked = new Set(nodes.filter((x) => isUnder(x, m)).flatMap((x) => pairedTo.get(x.path) ?? []));
-    const house = ancestors(m).find((a) => a.p.shape && 'loft' in a.p.shape && a.p.shell);
-    if (house) { const l = (house.p.shape as { loft: Loft }).loft, u = new THREE.Vector3(1, 0, 0).cross(ax).lengthSq() > 1e-6 ? new THREE.Vector3(1, 0, 0).cross(ax).normalize() : new THREE.Vector3(0, 1, 0).cross(ax).normalize(), v = ax.clone().cross(u);
-      // along its housing (a fan in its duct, an auger in its trough): its tip within the section; across it (a mower's
-      // blades under their deck, open below): within the housing's outline in plan
-      const duct = Math.abs(dirToLocal(house, ax).x) > 0.9, xs = l.st.map((q) => q.x), x0 = Math.min(...xs), x1 = Math.max(...xs);
-      let worst = Infinity; for (let i = 0; i < 24; i++) { const a = (i / 24) * 2 * Math.PI, q = toLocal(house, ctr.clone().addScaledVector(u, Math.cos(a) * sweep).addScaledVector(v, Math.sin(a) * sweep)), st = stationAt(l, q.x); worst = Math.min(worst, !st ? -1 : duct ? roomIn(st, q.y, q.z) : Math.min(Math.max(st.w, st.wt ?? 0) - Math.abs(q.z), q.x - x0, x1 - q.x)); }
-      if (worst < need.clearance) say('room to move', m.p.name, `${need.why}: its tip comes ${worst < 0 ? 'outside' : `within ${(worst * 1000).toFixed(0)} mm of`} the ${house.p.name}`, false);
-    }
-    for (const f of nodes) {
-      if (blocked.has(f.path)) continue; // an interface (its axle in its hub), not in its way
-      // (what is carried with it, steered and risen with it as a knuckle is with its wheel, is never in its way)
-      if ([f, ...ancestors(f)].some((a) => a.p.movesWith === m.p.name)) continue;
-      if (f === m || !f.obb || f.p.detail || isUnder(f, m) || isUnder(m, f) || turning(f.p) || ancestors(f).some((a) => turning(a.p)) || !f.p.mat || classOf(f.p.mat) === 'soft' || classOf(f.p.mat) === 'organic') continue;
-      if (!env.intersectsBox(f.box!) || !f.pieces.some((pc) => sat(boxOBB(env), pc, 0))) continue;
-      // (and then exactly: within the cylinder it sweeps, not merely that cylinder's box)
-      if (!f.pieces.some((pc) => hitsCylinder(pc, ctr, ax, sweep + need.clearance, along + sideRoom, bore))) continue;
-      // a skin (src/nexus/panels.ts) is tested exactly, point by point on it, against the room the wheel sweeps through
-      // its lock and its bump: its arch is its maker's to draw (from that same sweep), never the critic's to cut
-      if (f.p.shape && 'surf' in f.p.shape) {
-        // (its tyre sweeps the ring about the tyre's own middle, its full width; what is inside its rim, the hub and the
-        // brake, reaches further in but only within the rim's bore)
-        const ez = ax.clone().normalize(), ey = new THREE.Vector3(0, 1, 0).addScaledVector(ez, -ez.y).normalize(), ex = ey.clone().cross(ez), tr = m.p.travel ?? {};
-        const tyreN = nodes.find((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.box), tc = tyreN ? tyreN.box!.getCenter(new THREE.Vector3()) : ctr, tw = !tyreN ? 2 * along : tyreN.p.shape && 'lathe' in tyreN.p.shape ? latheWidth(tyreN.p.shape.lathe) : Math.abs(tyreN.box!.getSize(new THREE.Vector3()).dot(ez));
-        const off = tc.clone().sub(ctr).dot(ez), room = { radial: need.clearance, side: sideRoom, poses: 7 };
-        const section = tyreN?.p.shape && 'lathe' in tyreN.p.shape ? tyreN.p.shape.lathe : undefined, tyreSweep = { name: m.p.name, x: 0, y: 0, z: off, R: sweep, w: tw, steer: tr.steer ?? 0, bump: tr.bump ?? 0, section }, hubSweep = { ...tyreSweep, z: 0, R: Math.max(0, bore), w: 2 * along, section: undefined };
-        // (a skin by the wheel straight ahead through its bump and at full lock at ride height, as its arch is drawn (BODY_RULES
-        // 'lip'); a wheelhouse's liner by its whole sweep, lock in bump, from the strip along its lip on in: that strip is the
-        // arch's, the tyre passing just behind it)
-        const liner = /liner/.test(f.p.name), straight = { ...tyreSweep, steer: 0 }, atRest = { ...tyreSweep, bump: 0 };
-        const hit = patchPoints(f.p.shape.surf as Patch, 30, 14).map((q) => new THREE.Vector3(...q).applyMatrix4(f.m).sub(ctr)).find((d, i) => { const l: [number, number, number] = [d.dot(ex), d.dot(ey), d.dot(ez)]; if (inSweep(l, hubSweep, { ...room, radial: 0 })) return true; return liner ? (i % 15) / 14 >= 0.15 && inSweep(l, tyreSweep, room) : inSweep(l, straight, room) || inSweep(l, atRest, room); });
-        if (!hit) continue;
-        say('room to move', m.p.name, `${need.why}${tr.steer || tr.bump ? `, steered ${Math.round(((tr.steer ?? 0) * 180) / Math.PI)}° either way and risen ${Math.round((tr.bump ?? 0) * 1000)} mm` : ''}: the ${f.p.name} is in its way`, false); continue;
-      }
-      const opened = (f.p.parts ?? []).some((q) => q.detail === 'room to move' && q.name === `opening for ${m.p.name}`);
-      if (opened) continue;
-      // a lofted panel over a wheel (a car's body, a fender): its lower edge raised round the wheel, so the panel is
-      // cut back into an arch with the room asked between them
-      if (f.p.shape && 'loft' in f.p.shape) {
-        const lc = toLocal(f, ctr), la = dirToLocal(f, ax);
-        if (Math.abs(la.z) > 0.9) {
-          const ext = m.sub!.getSize(new THREE.Vector3()), k = [0, 1, 2].reduce((b, i) => (Math.abs(ax.getComponent(i)) > Math.abs(ax.getComponent(b)) ? i : b), 0);
-          const R = Math.max(...[0, 1, 2].filter((i) => i !== k).map((i) => ext.getComponent(i) / 2)) + need.clearance, halfW = ext.getComponent(k) / 2, r = archOf(f.p.shape.loft, lc.x, lc.y, Math.abs(lc.z) - halfW, R);
-          if (r === 'clear') continue;
-          if (r === 'cut') { dirty = true; say('room to move', m.p.name, `${need.why}: the ${f.p.name} is cut back round it into an arch ${(R * 1000).toFixed(0)} mm round its axle`, true); continue; }
-          say('room to move', m.p.name, `${need.why}: the ${f.p.name} is lower than the top of it there, and cannot be cut back round it`, false); continue;
-        }
-      }
-      if (f.p.shell && f.box!.containsPoint(ctr)) {
-        // turning inside a box-shaped shell, which cannot be cut into an arch: the shell opened round it (a dark opening on
-        // its side) and the wheel set out to stand 2 mm proud of it, so it can be seen (a lofted body is cut instead, above)
-        const k = [0, 1, 2].reduce((b, i) => (Math.abs(ax.getComponent(i)) > Math.abs(ax.getComponent(b)) ? i : b), 0), fc = f.box!.getCenter(new THREE.Vector3()), side = Math.sign(ctr.getComponent(k) - fc.getComponent(k)) || 1;
-        const half = (m.sub!.max.getComponent(k) - m.sub!.min.getComponent(k)) / 2, faceAt = side > 0 ? f.box!.max.getComponent(k) : f.box!.min.getComponent(k), want = faceAt - side * (half - 0.002);
-        const R = Math.max(...[0, 1, 2].filter((i) => i !== k).map((i) => (m.sub!.max.getComponent(i) - m.sub!.min.getComponent(i)) / 2)) + need.clearance;
-        if (Math.abs(ctr.getComponent(k) - want) > 1e-3) { const shift = new THREE.Vector3(); shift.setComponent(k, want - ctr.getComponent(k)); moveBy(m, shift); }
-        dirty = true;
-        const at = ctr.clone(); at.setComponent(k, faceAt + side * 0.003); const loc = toLocal(f, at), dir = new THREE.Vector3(); dir.setComponent(k, side);
-        const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.transformDirection(f.m.clone().invert())));
-        (f.p.parts ??= []).push({ name: `opening for ${m.p.name}`, shape: { cyl: [R, 0.004] }, at: [loc.x, loc.y, loc.z], rot: [e.x, e.y, e.z], color: 0x0c0c0e, kg: 0, detail: 'room to move' });
-        say('room to move', m.p.name, `${need.why}: it turned inside the ${f.p.name}, so the ${f.p.name} is opened round it (${(R * 1000).toFixed(0)} mm) and it is set flush with its side`, true);
-        break;
-      }
-      say('room to move', m.p.name, `${need.why}: the ${f.p.name} is in its way`, false);
-    }
-  }
-  // ---- room to slide: each part that slides (its travel along an axis said: a carriage on its rail, a rod in its tube),
-  // with everything on its link, swept from one end of its travel to the other against the fixed parts near it: one
-  // clear of it where it is drawn but inside that sweep is in its way ----
-  const linkAt = (x: Node): string | undefined => { for (let y: Node | null = x; y; y = y.parent) if (y.p.link !== undefined) return y.p.link; return undefined; };
-  for (const s0 of nodes.filter((n) => n.p.travel?.slide && !n.p.detail)) {
-    const sl = s0.p.travel!.slide!, link = linkAt(s0), dir = new THREE.Vector3(...sl.dir).transformDirection(s0.m).normalize();
-    const mine = nodes.filter((x) => x.box && (isUnder(x, s0) || (link !== undefined && linkAt(x) === link)));
-    if (!mine.length) continue;
-    const rest = mine.reduce((b, x) => b.union(x.box!), new THREE.Box3()), swept = rest.clone().translate(dir.clone().multiplyScalar(sl.from)).union(rest.clone().translate(dir.clone().multiplyScalar(sl.to)));
-    const inWay = nodes.filter((f) => f.box && f.p.shape && !f.p.detail && !mine.includes(f) && !isUnder(s0, f) && !f.box.intersectsBox(rest) && f.box.intersectsBox(swept));
-    for (const f of inWay.slice(0, 8)) say('room to slide', s0.p.name, `it slides ${((sl.to - sl.from) * 1000).toFixed(0)} mm along its travel: the ${f.p.name} is in its way`, false);
-  }
+  // (what turns or slides is not checked against what is round it: nothing checks for overlap, decision 0021)
   // ---- held up: the embodiment's load path, from the ground (or, for a thing held or flying, its heaviest piece) ----
   nodes = layout(root, undefined, { sealedWhole: true });
   // (what grew, a tree's twigs on its branches, is held by growing, not by resting)
@@ -255,40 +135,6 @@ export function critique(root: Part): Finding[] {
   return out;
 }
 function centreOfMass(nodes: Node[]): THREE.Vector3 { const c = new THREE.Vector3(); let m = 0; for (const n of nodes) { if (!n.box) continue; const own = massOf({ ...n.p, parts: [] }); if (own <= 0) continue; c.addScaledVector(n.box.getCenter(new THREE.Vector3()), own); m += own; } return m > 0 ? c.divideScalar(m) : c; }
-/** The least move that brings one box against another (along the axis they are nearest across). */
-/** A loft cut back round a wheel at (x, y) in its own frame, its inner face at |z| = zIn, its room R: the loft's lower edge
- *  raised to the circle's top at every station over it (stations added at its middle, at 0.7 R and at R either side, so
- *  the arch is round). 'clear' if the loft does not reach it, 'cut' if cut, 'too low' if the loft's top is below it. */
-function archOf(l: Loft, x: number, y: number, zIn: number, R: number): 'clear' | 'cut' | 'too low' {
-  const circle = (dx: number) => y + Math.sqrt(Math.max(0, R * R - dx * dx));
-  // (in its span only: at R either side the room's circle comes down to the axle's height and no further)
-  const near = [-0.95, -0.7, -0.35, 0, 0.35, 0.7, 0.95].map((f) => stationAt(l, x + f * R)).filter((s): s is Station => !!s);
-  if (!near.some((s) => s.w > zIn && s.lo < circle(s.x - x) - 1e-4)) return 'clear';
-  // the arch's stations: over it, and at its feet (the axle's height at R, the sill again a little past it)
-  for (const f of [-1.15, -1, -0.95, -0.7, -0.35, 0, 0.35, 0.7, 0.95, 1, 1.15]) { const s = stationAt(l, x + f * R); if (s && !l.st.some((q) => Math.abs(q.x - s.x) < 1e-6)) l.st.push(s); }
-  let low = false;
-  for (const s of l.st) {
-    const dx = s.x - x; if (Math.abs(dx) > R * 1.0001 || s.w <= zIn) continue;
-    const top = Math.abs(dx) >= R * 0.999 ? y : circle(dx); if (s.lo >= top) continue;
-    if (top > s.hi - 0.03) { low = true; continue; } s.lo = top;
-  }
-  l.st.sort((a, b) => a.x - b.x);
-  return low ? 'too low' : 'cut';
-}
-/** How far a point (y, z in a loft's frame) lies inside a station's section, m (negative: outside it). */
-const roomIn = (s: Station, y: number, z: number) => insideBy(s, y, z);
-/** Whether an oriented box reaches into a cylinder (its middle, axis, radius and half-length): the box sampled on a grid
- *  finer than a quarter of the radius, each point tested by its distance along and from the axis. */
-function hitsCylinder(o: OBB, c: THREE.Vector3, ax: THREE.Vector3, R: number, L: number, Rin = 0): boolean {
-  const n = o.h.map((h) => Math.max(2, Math.min(14, Math.ceil((2 * h) / Math.max(1e-3, R / 4)) + 1)));
-  const q = new THREE.Vector3(), d = new THREE.Vector3();
-  for (let i = 0; i < n[0]!; i++) for (let j = 0; j < n[1]!; j++) for (let k = 0; k < n[2]!; k++) {
-    q.copy(o.c).addScaledVector(o.u[0], o.h[0] * (2 * i / (n[0]! - 1) - 1)).addScaledVector(o.u[1], o.h[1] * (2 * j / (n[1]! - 1) - 1)).addScaledVector(o.u[2], o.h[2] * (2 * k / (n[2]! - 1) - 1));
-    d.copy(q).sub(c); const a = d.dot(ax); if (Math.abs(a) > L) continue; const r = d.addScaledVector(ax, -a).length(); if (r <= R && r >= Rin) return true;
-  }
-  return false;
-}
-const corners = (b: THREE.Box3) => [0, 1, 2, 3, 4, 5, 6, 7].map((i) => new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z));
 /** How far apart two boxes are (0 if they touch or overlap). */
 const boxGap = (a: THREE.Box3, b: THREE.Box3) => Math.hypot(...[0, 1, 2].map((k) => Math.max(0, b.min.getComponent(k) - a.max.getComponent(k), a.min.getComponent(k) - b.max.getComponent(k))));
 function gapBetween(a: THREE.Box3, b: THREE.Box3): THREE.Vector3 {

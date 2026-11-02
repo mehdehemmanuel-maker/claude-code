@@ -1,4 +1,4 @@
-// Lines (docs/PLACEMENT.md, layer F: route, size.line). Cables, hoses, wires, pipes, brake lines, circuit traces and
+// Lines (layer F: route, size.line). Cables, hoses, wires, pipes, brake lines, circuit traces and
 // roads are one thing: a section swept along a path. The section is layers from the inside out (a core that is solid,
 // copper or a cable's strands, or a bore that carries a fluid; then walls, insulation, jackets; or, flat, a trace's
 // copper or a road's courses), each of a material; the path is found, not typed, by one search whose logics are costs:

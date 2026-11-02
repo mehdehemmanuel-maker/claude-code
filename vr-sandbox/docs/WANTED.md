@@ -459,3 +459,7 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   it runs, sent every so often)
 - 2026-11-02: "What is taking so long"
 - 2026-11-02: "I’m approaching limit I need to see some major results"
+- 2026-11-02: "Yes and get rid of the old builds and clean up context so it don’t start using old stuff" (yes to moving
+  the builds onto the operations; asked which old builds go, answered "All hand-placed builds (Recommended)": the
+  builders, their nodes, starter boards and stored parts deleted; materials, laws, standard parts, physics and the space
+  of operations kept; the docs and CLAUDE.md pointing only at the operations)

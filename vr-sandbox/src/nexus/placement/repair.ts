@@ -1,4 +1,4 @@
-// The autopilot (docs/PLACEMENT.md, section 4; layer H: auto.loop, repair.library). A thing is checked by the rules; the
+// The autopilot (section 4; layer H: auto.loop, repair.library). A thing is checked by the rules; the
 // findings are grouped into problems (a rule, the part at fault and the unit it harms or runs into); each problem is tried
 // with the repairs the library holds for its rule, cheapest first: route a line again, move the part (the placement
 // solver), put a heat shield between. The rule is heat: nothing is checked for overlap (decision 0021). A repair is kept only if its problem is gone and the parts it changed have

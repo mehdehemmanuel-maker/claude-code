@@ -1,7 +1,7 @@
-// Picking a catalogue item by its duty (docs/PLACEMENT.md, layer E: size.select). The duty is read from the thing, never
+// Picking a catalogue item by its duty (layer E: size.select). The duty is read from the thing, never
 // typed: a starting battery's from its engine (fuel and displacement, as the engine part states them). Every item in the
 // catalogue is weighed against the duty; the lightest that meets it is chosen, and what the thing has now is said beside
-// it, with its margin. Batteries first; motors, fans, bolts, bearings and pumps are to come (docs/PLACEMENT.md, step 7).
+// it, with its margin. Batteries first; motors, fans, bolts, bearings and pumps are to come (step 7).
 
 import type { Part } from '../kits';
 import { BCI_GROUPS, type BciGroup } from '../../data/batteries';

@@ -18,8 +18,7 @@
 //   posed        &pose=steer:<rad>,bump:<m> (each wheel that steers turned so far, each that rises risen so far, with what
 //                is carried with it: its knuckle, its strut's tube and spring), so what clears it can be looked at where
 //                it moves to
-//   tried        &rules=<JSON> and &lines=<JSON> try body rules and lines (src/nexus/panels.ts) on what is made, so a
-//                critic can show what it would change
+//   (tried       body rules and lines went with the old car builder)
 // And on window.look: parts() (each part drawn: name, holders, material, finish, colour, what it says of itself, its
 // bounds), facts() (what the thing says of itself and its measured size), pick(x, y) (the part under a pixel),
 // gap(a, b) (the least distance
@@ -31,17 +30,14 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { KITS, makeKit, massOf, type Part } from '../kits';
-import '../creatures';
 import { perfect } from '../make/pipeline';
 import { frame, held, leastDistance, LEAST_METHOD, meshClashes, type TriMesh } from '../make/critic';
-import { tryBody } from '../panels';
 import { kitView, studioScene } from './kit3d';
 import { draft } from '../surface';
 
 const q = new URLSearchParams(location.search), kit = KITS.find((k) => k.id === (q.get('kit') ?? 'car')) ?? KITS[0]!, words = q.get('words') ?? kit.name, seed = Number(q.get('seed') ?? 7);
 const num3 = (s: string | null) => (s ? (s.split(',').map(Number) as [number, number, number]) : null);
 // (a trial of rules or lines, before anything is made)
-if (q.get('rules') || q.get('lines')) tryBody({ rules: q.get('rules') ? JSON.parse(q.get('rules')!) : undefined, lines: q.get('lines') ? JSON.parse(q.get('lines')!) : undefined });
 // (a logarithmic depth buffer, and the near plane set by how far the camera stands: so two faces a millimetre apart are
 // told apart close up, not drawn through each other as they are with a fixed 5 mm near plane and 500 m far one)
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true }); renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setSize(innerWidth, innerHeight);

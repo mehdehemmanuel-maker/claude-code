@@ -15,8 +15,6 @@ import { DISCIPLINE } from '../data/disciplines';
 import { MATERIALS, GROUND_MATERIALS } from '../data/materials';
 import { BCI_GROUPS } from '../data/batteries';
 import { MOTORS, GEARHEADS } from '../data/motors';
-import { MACHINES } from './machines';
-import { POWERTRAINS } from './power/drive';
 import { SUBSTANCES } from './aware/gas';
 import { ACTORS } from './aware/tags';
 import { SECTIONS } from './placement/line';
@@ -27,7 +25,6 @@ import { starterBoards } from './starters';
 import { searchCatalogue } from './catalogue';
 import { NAMED } from './navigate-named';
 import { stocked } from './stock';
-import './reconstruct';
 import type { Board, BoardNode, BoardEdge } from './boards';
 
 const nodesIn = (b: Board): (BoardNode & { id: string })[] => Object.entries(b.nodes).filter(([, n]) => !n.deleted && n.block).map(([id, n]) => ({ ...n, id }));
@@ -38,7 +35,7 @@ export interface Library { id: string; name: string; type: string; says: string;
 
 /** What in a node's code names each library (read from blocks.ts by the test that writes navigate-named.ts). */
 export const NAMED_BY: Record<string, RegExp> = {
-  machines: /\bMACHINES\b|\bmachineOf\(|\bmakeMachine\(/, powertrains: /\bPOWERTRAINS\b/, inventory: /\bINVENTORY\b|\bitemOf\(|\bfindItem\(|\bfeed\(feedLinesOf/,
+  inventory: /\bINVENTORY\b|\bitemOf\(|\bfindItem\(|\bfeed\(feedLinesOf/,
   components: /\bDESIGNED\b|\bcomponent\(|\bcomponentFromParams\(|\buse\(/, families: /\bFAMILIES\b|\bfamilyOf\(|\bcallFamily\(/, catalogue: /\bcatalogue\(|\bcatalogueItem\(/,
   faces: /\bSTANDARD\b/, sections: /\bSECTIONS\b|\bsectionOf\(/, bci: /\bBCI_GROUPS\b|\bstarterBattery\(/, motors: /\bMOTORS\b/, gearheads: /\bGEARHEADS\b/,
   materials: /\bMATERIALS\b|\bgetMaterial\(/, gases: /\bSUBSTANCES\b|\breleasesOf\(|\beffectsOf\(/, actors: /\bACTORS\b/, references: /\bREFERENCE_NOTES\b|\breferenceOf\(/, programs: /\bPROGRAMS\b/,
@@ -94,8 +91,6 @@ export function libraries(): Library[] {
     { id: 'laws', name: 'Laws', type: 'nodes', says: 'every physical law as a calculator', source: 'src/nexus/law.ts', entries: () => blocks.filter((b) => b.kind === 'law').map((b) => ({ library: 'laws', id: b.id, name: b.name, says: b.says })) },
     { id: 'seeds', name: 'Seeds', type: 'nodes', says: 'things built from nodes, kept as one node each (a door, a room, a house, a city)', source: 'src/nexus/seeds.ts', entries: () => blocks.filter((b) => b.id.startsWith('seed.')).map((b) => ({ library: 'seeds', id: b.id, name: b.name, says: b.says })) },
     { id: 'boards', name: 'Starter boards', type: 'flows', says: 'whole pipelines across fields, to open and change', source: 'src/nexus/starters.ts', entries: () => boards().map(([t]) => ({ library: 'boards', id: t, name: t.split(':')[0]!, says: t })) },
-    { id: 'machines', name: 'Machines', type: 'products', says: 'real models by their makers\' published figures', source: 'src/nexus/machines.ts', entries: () => MACHINES.map((m) => ({ library: 'machines', id: m.short ?? m.id, name: m.name, says: m.source })) },
-    { id: 'powertrains', name: 'Powertrains', type: 'products', says: 'what is known to run a machine by name: compression, gearbox, final drive, drag', source: 'src/nexus/power/drive.ts', entries: () => rec(POWERTRAINS, (k) => `${MACHINES.find((m) => m.short === k)?.name ?? k}: its powertrain`, (_k, v) => v.source, 'powertrains') },
     { id: 'inventory', name: 'Inventory', type: 'products', says: 'what real products contain, all the way down to their materials', source: 'src/nexus/inventory.ts', entries: () => [...INVENTORY.values()].map((it) => ({ library: 'inventory', id: it.id, name: it.name, says: it.says })) },
     { id: 'components', name: 'Designed components', type: 'parts', says: 'parts drawn once in 3D from their standard, used by every build', source: 'src/nexus/components.ts', entries: () => DESIGNED.map((d) => ({ library: 'components', id: d, name: d, says: `use("${d} …")` })) },
     { id: 'families', name: 'Part families', type: 'parts', says: 'kinds of part made to any size by their standard\'s table', source: 'src/nexus/families.ts', entries: () => FAMILIES.map((f) => ({ library: 'families', id: f.id, name: f.name, says: f.says })) },

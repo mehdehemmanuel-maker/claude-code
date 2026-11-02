@@ -1,8 +1,8 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 01.I16 (failing on its blind clause); nothing checks for overlap now (decision 0021), places written by hand counted (`node scripts/by-hand.mjs`); spec 13 in the plan, nothing of it built
+Task in hand: 01.I16 (failing on its blind clause); the old builds deleted and every new thing made with the operations of room.ts (decision 0021; places still written by hand: `node scripts/by-hand.mjs`)
 Spec in hand: spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 68aaea5 (2026-11-02)
+Last commit the gate passed: a16c350 (2026-11-02)
 
 ## Next three (from the start queue in `plan/README.md`)
 
