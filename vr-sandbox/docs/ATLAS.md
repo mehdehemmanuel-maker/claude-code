@@ -10,7 +10,7 @@ What a board is built from: the node library, its laws, its seeds (nodes built f
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Node library | 262 | the library panel | `src/nexus/blocks.ts` |
+| Node library | 272 | the library panel | `src/nexus/blocks.ts` |
 | Laws | 330 | the library panel | `src/nexus/law.ts` |
 | Seeds | 23 | the library panel | `src/nexus/seeds.ts` |
 
@@ -20,7 +20,7 @@ Boards: whole pipelines of nodes to start from, and yours.
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Starter boards | 64 | the library panel | `src/nexus/starters.ts` |
+| Starter boards | 67 | the library panel | `src/nexus/starters.ts` |
 
 ### Products
 
@@ -40,7 +40,7 @@ What builds are made of, by standard: designed components, families sized by the
 | --- | --- | --- | --- |
 | Designed components | 41 | `part.family` (its family); `card.part` (in its code) | `src/nexus/components.ts` |
 | Part families | 340 | `part.family` (its family) | `src/nexus/families.ts` |
-| Built parts | 4,735 | `stock.part` (its id) | `src/data/stock.json` |
+| Built parts | 4,864 | `stock.part` (its id) | `src/data/stock.json` |
 | Catalogue sizes | 56,064 | `card.part` (its what): 14,577 of its 56,064 sizes, those of the 41 kinds drawn in 3D; the rest are known by name and size and not drawn yet | `src/nexus/catalogue.ts` |
 | Standard faces | 14 | **no node reaches it yet** | `src/nexus/mate.ts` |
 | Line sections | 11 | `tether` (its section), `line` (its section), `route` (its section) | `src/nexus/placement/line.ts` |
@@ -81,7 +81,7 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 
 | Flow | Nodes | Which |
 | --- | --- | --- |
-| Worked once: from its inputs, again only when they change (most nodes) | 572 | the rest |
+| Worked once: from its inputs, again only when they change (most nodes) | 582 | the rest |
 | With the clock: again as the board's time goes on | 2 | Approved, Clock |
 | Worked once, played by the clock: a simulation run once and posed at any time | 3 | Agent, Follow a path, Let it go |
 | Many at once: one thing for each row or point: spawned, scattered, patterned | 6 | City, Neighbourhood, Pattern of, Road system, Scatter, Spawn |
@@ -99,7 +99,7 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 | Traffic on the clock: cars round a block, stopping at red | structural | 9 | 2 3 5 6 9 10 | · |
 | A world without end: neighbourhoods for ever, each its own | structural | 6 | 2 5 6 10 | · |
 | A battery built from its parts, node by node: grid, paste, separator… | manufacturing | 24 | 2 3 5 10 | it has what plays with time, and no clock |
-| An engine from its first parts: piston, rod, crank, block, head, the… | mechanical | 30 | 1 2 3 5 6 10 | · |
+| An engine from its first parts: piston, rod, crank, block, head, the… | mechanical | 36 | 1 2 3 5 6 10 | · |
 | Research to what is missing: Toyota's engine held against its sources | mechanical | 19 | 1 2 5 9 10 11 | · |
 | The gauntlet as nodes: makers through gate after gate, the unknown s… | software | 26 | 1 2 5 9 10 | · |
 | The 6502 from its transistors: a real program run switch by switch, … | electronics | 9 | 5 6 10 | · |
@@ -158,7 +158,10 @@ Not reached by any node yet: Standard faces. Each is a node to make, or a settin
 | Bolt: shear, tightening torque and margin | mechanical | 13 | 1 5 8 10 11 | · |
 | Business: cash flow, loan and what it is worth | finance | 12 | 1 8 9 10 | · |
 | Electrical: a resistor heating, swept over current | electrical | 11 | 1 5 8 10 11 | · |
+| Paste a bolt onto anything: one cap screw stood on a plate, a round … | mechanical | 15 | 2 3 5 10 | · |
+| Cut by the standards: a bearing's housing and its shaft, a dowel's h… | mechanical | 25 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
+| The cover follows the bore: widen the bore and the bolt circle, both… | structural | 16 | 1 2 3 9 10 | · |
 
 ## Nodes no starter board uses yet
 
-96 of 285 (laws aside): Accuracy, four ways (silhouette, features, surface, dimensions), Add, Ask Claude, Battery runtime at constant power, Body fitted to a picture (analysis by synthesis), Bore where it passes, Break-even analysis (cost–volume–profit), Chain round wheels, Choose, Claude (Anthropic Messages API), Claude builds a board, Coil spring, made and loaded, Compare, Compound interest (future value), Cone, Conservation balance (in − out − accumulation), Critical path method (CPM), Crossing, Cut gear or sprocket, Daily photovoltaic energy yield, Dense outline on the image's edges (active contour, one step), Divide, Exact solids (B-rep, OpenCascade), Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Gemini: draw from words, Gemini: look at pictures, Geometry fitted to its features (windows, flares, wing, skirts; the intake taken off the picture), Gross margin and markup, Higgsfield: pictures and video, Hole, Integral, Interfaces, Interference two ways (exact booleans, the rules), Internal rate of return, Keep where, LED series current-limiting resistor, Laws by field, List of numbers, Machining time, Made whole (the attention-to-detail pass and its critic), Mate by a measure, Mirror, Move rows, Next best view or measurement (uncertainty ranking), Onto a shaft, Onto the ground, Overall equipment effectiveness (OEE), PID loop on a lag, Pass, Photogrammetric dimensions (back-projection onto its middle plane), Picture from words (image model), Point along, Power, Quantity, RC low-pass cutoff frequency (−3 dB), Relative change (percentage), Resistive voltage divider (unloaded), Round, Rows on a grid, Rules over rows, Same-camera view (z-buffered render), Search the web (Wikidata), Side by side from the same camera, Signal cycle, Silhouette comparison (IoU, signed contour error), Silhouette rendering from a camera, Slope, Solve for zero, Solve through laws, Sort, Spindle speed, Spring under load, Stored part (the built-parts library), Straight-line depreciation, Stress three ways (CalculiX, the book, our frame), Tether, Through time, Turn (lathe), Turn it over and check, Turned part, Unit converter, Variant, Wall, What a material is, What each touches, Winding, Wound roll, Yes / no, ZenRows: read a web page, Zone, fal.ai: draw from words (FLUX).
+95 of 295 (laws aside): Accuracy, four ways (silhouette, features, surface, dimensions), Add, Ask Claude, Battery runtime at constant power, Body fitted to a picture (analysis by synthesis), Bore where it passes, Break-even analysis (cost–volume–profit), Chain round wheels, Choose, Claude (Anthropic Messages API), Claude builds a board, Coil spring, made and loaded, Compare, Compound interest (future value), Cone, Conservation balance (in − out − accumulation), Critical path method (CPM), Crossing, Cut gear or sprocket, Daily photovoltaic energy yield, Dense outline on the image's edges (active contour, one step), Divide, Exact solids (B-rep, OpenCascade), Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Gemini: draw from words, Gemini: look at pictures, Geometry fitted to its features (windows, flares, wing, skirts; the intake taken off the picture), Gross margin and markup, Higgsfield: pictures and video, Hole, Integral, Interference two ways (exact booleans, the rules), Internal rate of return, Joints solved together, Keep where, LED series current-limiting resistor, Laws by field, List of numbers, Machining time, Made whole (the attention-to-detail pass and its critic), Mate by a measure, Mirror, Move rows, Negative of an interface, Next best view or measurement (uncertainty ranking), Onto a shaft, Onto the ground, Overall equipment effectiveness (OEE), PID loop on a lag, Pass, Photogrammetric dimensions (back-projection onto its middle plane), Picture from words (image model), Point along, Power, Quantity, RC low-pass cutoff frequency (−3 dB), Relative change (percentage), Resistive voltage divider (unloaded), Round, Rows on a grid, Rules over rows, Same-camera view (z-buffered render), Search the web (Wikidata), Side by side from the same camera, Signal cycle, Silhouette comparison (IoU, signed contour error), Silhouette rendering from a camera, Slope, Solve for zero, Solve through laws, Sort, Spindle speed, Spring under load, Stored part (the built-parts library), Straight-line depreciation, Stress three ways (CalculiX, the book, our frame), Tether, Through time, Turned part, Unit converter, Variant, Wall, What a material is, What each touches, Winding, Wound roll, Yes / no, ZenRows: read a web page, Zone, fal.ai: draw from words (FLUX).

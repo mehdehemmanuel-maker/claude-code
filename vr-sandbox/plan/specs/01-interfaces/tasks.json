@@ -223,9 +223,10 @@
    "meets": [
     "R17"
    ],
-   "owner": "view/dock3d.ts, view/space.ts, view/pad.ts",
+   "owner": "view/dock3d.ts, view/space.ts, view/pad.ts, view/space3d.ts, view/kit3d.ts, view/nodes.ts, view/dashboard.ts, mate.ts, blocks.ts, built.ts (decision 0016)",
    "check": "in the browser: a bolt dragged onto a plate shows its negative and verdict, cuts on accept, cancels on Esc; screenshots; the blind check names what it shows",
    "status": "failing",
+  "evidence": "2026-11-02, built, waiting on its verdict (decision 0016 widens its owners to the files its preview reads). The view never imprints anything itself: a drop is found from what is drawn (the piece and its matrix, walked up the board's wires to the first part that holds it there: hostOf), stood on as the paste node stands (dropOn), and previewed by the board's own paste node run on that point (runBlock); only what that run gives is drawn, from its new imprinted record (mate.ts bodiesOf, and a refusal keeps what it tried). Accepting is one node spliced into the wire toward the view (pasteEdit), one undo step; Esc and Cancel leave the board as it was; a refusal draws what would be cut and says how short; an interface is copied by the node that made it (recordAt, makerOf, copyRecipe). The node test 'drag to imprint (01.I16): the drop found by what is drawn; its preview the node's own run; accepted as one node spliced in; copied by its maker' checks (a) to (k) by hand-worked numbers in the gate; the browser test tests/evals/imprint-drag.cjs drives it by real mouse, keys and touch (63 checks, every part under two minutes, its screenshots shown to the user); the blind check tests/evals/imprint-blind.eval.ts reads its shots with three readers each. Fault D16 fixed in the view (contrast, grid at the floor, label, count, rounds drawn within 0.05 mm); D28 (a keep box swollen along its axis) found and fixed; D29 (the checks' 24 facets) and D30 (the paste board's things floating) filed; D27 in part (failing checks counted).",
    "after": [
     "I13"
    ]

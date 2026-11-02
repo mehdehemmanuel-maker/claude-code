@@ -972,6 +972,107 @@ describe('every domain, in one pass', () => {
     cb.nodes.bore!.set = { ...cb.nodes.bore!.set, value: 0.05 }; ce.touch('bore'); await ce.run();
     expect([co('cover on flange').freedom, co('cover on flange').violation], 'widened: still on, still held').toEqual([0, '']); expect(holesAt(), 'its holes followed to the 35.8 mm circle').toEqual(Array(6).fill(35.8));
   }, 120_000);
+  // (drag to imprint (spec 01, I16; design §2.9, decision 0016): the drop is found from what is drawn (the leaf a ray meets
+  // and its matrix, walked up the board's wires to the first part that holds it there); the preview is the board's own paste
+  // node run on that point, and only what it gives is drawn; accepting it is one node spliced into the wire toward the view;
+  // an interface is copied by the node that made it. Every value here worked out by hand: 1.2 × 9.0 = 10.8, 7.5 + 7.5 = 15,
+  // 2.2 × 9.0 = 19.8, √(50² + 30²) = 58.31, 50 − 30 = 20)
+  it('drag to imprint (01.I16): the drop found by what is drawn; its preview the node\'s own run; accepted as one node spliced in; copied by its maker', async () => {
+    const { hostOf, dropOn, planOf, previewInputs, pasteEdit, recordAt, makerOf, copyRecipe, verdictLines, boltSources } = await import('../../src/nexus/view/dock3d');
+    const { flatten, leavesOf, isPart: isPartV } = await import('../../src/nexus/assembly');
+    const { geometry: geo3 } = await import('../../src/nexus/view/kit3d');
+    const { runBlock } = await import('../../src/nexus/dataflow');
+    const boards = new Map(starterBoards()), byTitle = (re: RegExp) => [...boards].find(([t]) => re.test(t))!;
+    const pb = byTitle(/^Paste a bolt onto anything/)[1](), pe = new Engine(pb); await pe.run();
+    const po = (id: string) => pe.state.get(id)?.out as Record<string, unknown> | undefined, out = (id: string) => po(id)!;
+    const flats = (a: unknown) => { const f: { leaf: Part; m: THREE.Matrix4 }[] = []; flatten(a as Part, (x) => { f.push({ leaf: x.leaf, m: x.m }); }); return f; };
+    // (a) what the view draws reaches it by identity, down to the part pasted
+    const all = out('all').assembly as Assembly, p1 = out('p1').placed as Assembly;
+    expect([all.items[0]!.of === p1, p1.items[0]!.of === out('on plate').pasted], '(a) values reach the view by identity').toEqual([true, true]);
+    // (b) the host: the plate's leaf, at its matrix in the view
+    const W = flats(all), plateAt = W.find((f) => f.leaf.name === 'plate')!;
+    const h1 = hostOf(pb, po, { key: 'show', leaf: plateAt.leaf, m: plateAt.m });
+    if ('refused' in h1) throw new Error(h1.refused);
+    expect([h1.node, h1.out, pb.edges[h1.edge]!.to, pb.edges[h1.edge]!.in], '(b) the plate\'s host: the paste on the plate, its wire into p1').toEqual(['on plate', 'pasted', 'p1', 'thing']);
+    expect(h1.F.elements.every((x, i) => Math.abs(x - new THREE.Matrix4().elements[i]!) < 1e-12), '(b) placed where it is made').toBe(true);
+    // (the screw's head is one object in both pastes: the matrix decides which)
+    const screwParts = new Set(((out('on boss').pasted as Part).parts![1]!.parts ?? []).flatMap((p) => leavesOf({ name: 'w', parts: [p] }).map((l) => l.part)));
+    const widest = (p: Part) => Math.max(0, ...((p.shape as { lathe?: [number, number][] }).lathe ?? []).map((q) => q[0])), headR = Math.max(...[...screwParts].map(widest)), heads = W.filter((f) => screwParts.has(f.leaf) && widest(f.leaf) === headR);
+    const onBoss = heads.find((f) => f.m.elements[12]! > 0.1)!, h2 = hostOf(pb, po, { key: 'show', leaf: onBoss.leaf, m: onBoss.m });
+    expect(heads.filter((f) => f.leaf === onBoss.leaf).length, '(b) the same head drawn twice').toBeGreaterThanOrEqual(2);
+    expect('refused' in h2 ? h2.refused : h2.node, '(b) the head on the boss is the boss\'s paste\'s').toBe('on boss');
+    // (on the cover board: the flange's leaf, up to a part output that holds it, F·L = W)
+    const cb = byTitle(/^The cover follows the bore/)[1](), ce = new Engine(cb); await ce.run();
+    const co = (id: string) => ce.state.get(id)?.out as Record<string, unknown> | undefined, flange = flats(co('all')!.assembly).find((f) => f.leaf.name === 'flange')!;
+    const h3 = hostOf(cb, co, { key: 'show', leaf: flange.leaf, m: flange.m }); if ('refused' in h3) throw new Error(h3.refused);
+    const L = leavesOf(h3.value).find((l) => l.part === flange.leaf)!.m, FL = h3.F.clone().multiply(L);
+    expect([isPartV(h3.value), FL.elements.every((x, i) => Math.abs(x - flange.m.elements[i]!) < 1e-9), flats(co(cb.edges[h3.edge]!.to)![Object.keys(co(cb.edges[h3.edge]!.to)!).find((k) => flats(co(cb.edges[h3.edge]!.to)![k]).some((f) => f.leaf === flange.leaf))!]).some((f) => f.leaf === flange.leaf)], '(b) the cover board\'s flange: a part output, F·L = W, its wire\'s target holding it').toEqual([true, true, true]);
+    console.log(`I16 (b): the flange's host on the cover board is ${h3.node}.${h3.out}, by the wire into ${cb.edges[h3.edge]!.to}.${cb.edges[h3.edge]!.in}`);
+    // (c) the drop: a ray onto the plate's top, and onto the boss's round side at 120° round from its first hole
+    const ray = (from: V3, to: V3) => [new THREE.Vector3(...from), new THREE.Vector3(...to).sub(new THREE.Vector3(...from)).normalize()] as const;
+    const d1 = dropOn(h1, ...ray([0.2, 0.3, 0.25], [-0.03, 0.005, -0.03]))!;
+    expect([d1.at.map((x, i) => Math.abs(x - [-0.03, 0.005, -0.03][i]!) < 1e-9), d1.n.map((x) => +x.toFixed(9) + 0), d1.piece, d1.toward], '(c) on the plate\'s top').toEqual([[true, true, true], [0, 1, 0], 'plate', '-y']);
+    expect(dropOn(h1, ...ray([0.2, 0.3, 0.25], [0.6, 0.6, 0.6])), '(c) a ray at nothing').toBeNull();
+    const bossLeaf = W.find((f) => f.leaf.name === 'round boss')!, hb = hostOf(pb, po, { key: 'show', leaf: bossLeaf.leaf, m: bossLeaf.m }); if ('refused' in hb) throw new Error(hb.refused);
+    const th = (120 * Math.PI) / 180, nb: V3 = [Math.cos(th), 0, Math.sin(th)], pw: V3 = [0.15 + 0.03 * nb[0], 0, 0.03 * nb[2]];
+    const d2 = dropOn(hb, ...ray(pw.map((x, i) => x + 0.1 * nb[i]!) as V3, pw))!;
+    expect([hb.node, d2.at.map((x, i) => Math.abs(x - [0.03 * nb[0], 0, 0.03 * nb[2]][i]!) < 1e-9), d2.n.map((x, i) => Math.abs(x - nb[i]!) < 1e-6), d2.toward], '(c) on the boss\'s side at 120°: (−15, 0, 25.98) mm in its frame, the normal radial').toEqual(['on boss', [true, true, true], [true, true, true], '-z']);
+    // (d) the preview: the paste node's own run at the drop
+    const [screwSrc] = boltSources(pb, po), plan = planOf(screwSrc!, h1, d1), t0 = performance.now(), pv = await runBlock('imprint', previewInputs(plan, po)), ms = performance.now() - t0;
+    console.log(`I16 (d): one preview run took ${ms.toFixed(0)} ms (printed, not asserted)`);
+    const im = pv.imprinted as { frame: { at: V3 }; cuts: Part['cuts'] & object[]; keep: { size: V3 }[]; contact: { r0: number; r: number; at: V3 }[]; refused: unknown };
+    expect(im.frame.at.map((x, i) => Math.abs(x - d1.at[i]!) < 1e-9), '(d) its frame the drop').toEqual([true, true, true]);
+    const rows = (pv.checks as { check: string; ok: boolean; need: number; have: number; source: string }[]).map((r) => [r.check, r.ok, r.need, r.have, ...(r.source ? [r.source] : [])]);
+    expect(rows, '(d) its checks: the edge, breaking in and the spacing from the first hole, the key\'s room, the depth').toEqual([['edge distance', true, 10.8, 20, 'EN 1993-1-8'], ['breaking in', true, 15, 58.31, 'its own cuts'], ['spacing', true, 19.8, 58.31, 'EN 1993-1-8'], ['room', true, 24, 24, 'its keep'], ['depth', true, 10, 10, 'ISO 273']]);
+    const mm3 = (x: number) => +(x * 1000).toFixed(3) + 0, cut0 = im.cuts[0] as { prof: [number, number][] };
+    expect([im.cuts.length, cut0.prof.map(([r, d]) => [mm3(r), mm3(d)])], '(d) one turned remove: the counterbore 15 across, 8.5 deep, then the 9 mm hole through').toEqual([1, [[7.5, 0], [7.5, 8.5], [4.5, 8.5], [4.5, 10]]]);
+    expect([im.keep.length, im.keep[0]!.size.map(mm3)], '(d) one keep: the hex key\'s reach, r 7.5 mm, 24 mm out').toEqual([1, [15, 24, 15]]);
+    expect([im.contact.length, mm3(im.contact[0]!.r0), mm3(im.contact[0]!.r), mm3(im.contact[0]!.at[1])], '(d) one contact: 4.5 to 6.5 mm, 8.5 mm down from the top (5 mm)').toEqual([1, 4.5, 6.5, -3.5]);
+    // (e) the card's words
+    const v = verdictLines(pv, plan);
+    expect([v.fits, v.head, v.lines.length, v.lines.every((l) => l.mark === '✓'), v.lines[0]!.text], '(e) fits, in five lines in the rule\'s words').toEqual([true, 'Fits: M8 × 30 socket head cap screw on the plate at (-30, 5, -30) mm', 5, true, 'edge distance 20 mm, e₂ ≥ 1.2 d₀ = 1.2 × 9.0 mm asks 10.8 mm (EN 1993-1-8)']);
+    // (f) a refusal 4 mm from the edge: what would be cut still drawn, nothing cut
+    const near = planOf(screwSrc!, h1, { ...d1, at: [-0.046, 0.005, 0] }), pr = await runBlock('imprint', previewInputs(near, po)), ir = pr.imprinted as { refused: { rule: string; need: number; have: number; source: string }; cuts: unknown[] }, vr = verdictLines(pr, near);
+    const platePiece = (p: Part) => piecesIn(p).find((x) => x.p.name === 'plate')!.p;
+    expect([ir.refused.rule, ir.refused.need, ir.refused.have, ir.refused.source, ir.cuts.length, vr.fits, platePiece(pr.part as Part).cuts?.length], '(f) refused by its edge distance, the red still drawn, the plate as it was').toEqual(['edge distance', 10.8, 4, 'EN 1993-1-8', 1, false, 1]);
+    expect(vr.head, '(f) said how short').toBe('Does not fit: edge distance, short by 6.8 mm — nothing will be cut');
+    // (g) the angle's 5 mm leg: stood on, its negative refused for the counterbore, no body to draw
+    const ia = out('on angle').imprinted as { frame: unknown; tools: unknown[]; cuts: unknown[]; refused: { why: string } };
+    expect([!!ia.frame, ia.tools, ia.cuts, ia.refused.why], '(g) the angle: its frame, nothing to cut, why').toEqual([true, [], [], expect.stringMatching(/counterbore/)]);
+    // (h) accepted: one node spliced in, the board as it was beside it
+    const b2 = structuredClone(pb), before = JSON.stringify(pb), id = pasteEdit(plan, b2)(b2);
+    expect(JSON.stringify(pb), '(h) the board it was made from unchanged').toBe(before);
+    const added = Object.keys(b2.nodes).filter((k) => !pb.nodes[k]), newEdges = Object.entries(b2.edges).filter(([k]) => !pb.edges[k]).map(([, e]) => [e.from, e.out, e.to, e.in]).sort(), changed = Object.keys(pb.edges).filter((k) => JSON.stringify(pb.edges[k]) !== JSON.stringify(b2.edges[k]));
+    expect([added, b2.nodes[id]!.block, b2.nodes[id]!.set], '(h) one node: the paste node, set to the point').toEqual([[id], 'imprint', { toward: '-y', how: 'through', fit: 'medium', x: -0.03, y: 0.005, z: -0.03 }]);
+    expect(newEdges, '(h) two wires: the screw and the part it goes on').toEqual([['on plate', 'pasted', id, 'part'], ['screw', 'part', id, 'it']].sort());
+    expect([changed, b2.edges[h1.edge]], '(h) the wire toward the view, its id kept, now from the new node').toEqual([[h1.edge], { ...pb.edges[h1.edge], from: id, out: 'pasted' }]);
+    const e2 = new Engine(b2); await e2.run(); const o2 = (k: string) => e2.state.get(k)!.out as Record<string, unknown>, cutPlate = platePiece(o2(id).part as Part);
+    expect([Object.keys(b2.nodes).filter((k) => e2.state.get(k)!.status !== 'ok'), cutPlate.cuts?.length, cutPlate.ports?.length, cutPlate.imprints?.length], '(h) every node runs; the plate cut twice, two ports, two records').toEqual([[], 2, 2, 2]);
+    expect([o2(id).checks, (o2(id).imprinted as { cuts: unknown }).cuts], '(h) the board\'s cut is the preview\'s').toEqual([pv.checks, im.cuts]);
+    expect([o2('on plate').checks, o2('on plate').says], '(h) the paste on the plate unchanged').toEqual([out('on plate').checks, out('on plate').says]);
+    // (i) copy and paste: the first hole's record, its maker, the recipe; pasted on the boss's end face from the same screw
+    const rec = recordAt(plateAt.leaf, [0.02 - 0.0074, 0.003, 0])!; // (on the counterbore's wall, 2 mm down: what a right-click on the hole meets)
+    expect([recordAt(plateAt.leaf, [0.02 - 0.0085, 0.005, 0]), recordAt(plateAt.leaf, [-0.03, 0.005, -0.03])], '(i) beside the hole on the top, and far off: no record').toEqual([null, null]);
+    expect([rec === plateAt.leaf.imprints![0], makerOf(pb, po, rec)], '(i) the record under the point, made by the paste on the plate').toEqual([true, 'on plate']);
+    const cr = copyRecipe(pb, po, 'on plate'); if ('refused' in cr) throw new Error(cr.refused);
+    expect([cr.block, cr.wires, cr.set], '(i) its recipe: its own wire from the screw, its settings but where').toEqual(['imprint', [{ in: 'it', from: 'screw', out: 'part' }], { how: 'through', fit: 'medium' }]);
+    const dTop = dropOn(hb, ...ray([0.15, 0.1, 0], [0.15, 0, 0]))!, b3 = structuredClone(pb), id3 = pasteEdit(planOf(cr, hb, dTop), b3)(b3);
+    const its = Object.values(b3.edges).filter((e) => e.to === id3 && e.in === 'it' && !e.deleted).map((e) => [e.from, e.out]);
+    expect([dTop.at.map((x) => mm3(x)), dTop.toward, its], '(i) pasted on the boss\'s end face: its it from the screw, one source (R15)').toEqual([[0, 20, 0], '-y', [['screw', 'part']]]);
+    const e3 = new Engine(b3); await e3.run(); expect([e3.state.get(id3)!.status, (e3.state.get(id3)!.out as Record<string, unknown>).violation], '(i) and it runs and fits').toEqual(['ok', '']);
+    // (j) what the strip offers: the paste board's one screw; on the cover board none (its bolts are made for the holes)
+    expect([boltSources(pb, po).map((r) => [r.block, r.wires, r.name]), boltSources(cb, co)], '(j) the bolts the boards make').toEqual([[['imprint', [{ in: 'it', from: 'screw', out: 'part' }], 'M8 × 30 socket head cap screw']], []]);
+    // (k) D16: an 80 mm boss drawn round to within 0.05 mm (worked out from its own vertices: the widest gap round its rim)
+    const g = geo3({ cyl: [0.08, 0.006] }, undefined, undefined, undefined, true)!, P = g.getAttribute('position'), angs: number[] = [];
+    for (let k = 0; k < P.count; k++) { const x = P.getX(k), z = P.getZ(k); if (Math.abs(Math.hypot(x, z) - 0.08) < 1e-6) angs.push(Math.atan2(z, x)); }
+    const un = [...new Set(angs.map((a) => +a.toFixed(9)))].sort((a, b) => a - b), gap = Math.max(...un.map((a, k) => (k ? a - un[k - 1]! : a + 2 * Math.PI - un[un.length - 1]!))), sag = 0.08 * (1 - Math.cos(gap / 2));
+    console.log(`I16 (k): the 80 mm boss's rim in ${un.length} facets, its sag ${(sag * 1000).toFixed(4)} mm`);
+    expect(sag * 1000, '(k) its rim within 0.05 mm of round').toBeLessThanOrEqual(0.05 + 1e-9);
+    // (as drawn; the checks read it with the 24 facets they had (fault D28: finer ones cost the engine board's checks five times
+    // their time), pinned here so a change of it is made on purpose)
+    const gc = geo3({ cyl: [0.08, 0.006] }, undefined)!, pc = gc.getAttribute('position'); let rim = 0; const seenA = new Set<string>(); for (let k = 0; k < pc.count; k++) if (Math.abs(Math.hypot(pc.getX(k), pc.getZ(k)) - 0.08) < 1e-6) seenA.add(Math.atan2(pc.getZ(k), pc.getX(k)).toFixed(9)); rim = seenA.size;
+    expect(rim, '(k) the checks\' mesh: 24 facets round').toBe(24);
+  }, 120_000);
   // (the AI builds by joints and leads with what fails (spec 01, I14; design §2.8), through its real tools, no model (C8):
   // a build whose assertion fails answers FAILS first; a change that breaks a check that held is not taken, the board left as
   // it was and the change kept as a shadow read can read; a change that keeps every check is taken; a plan's s may give an

@@ -989,6 +989,16 @@ export const wall = {
   /** The board's title. */
   boardTitle: () => root.title || 'Board',
   board: () => root,
+  /** A node's outputs as the board's last run left them (on the board's root): what the 3D view's paste reads. */
+  outputsOf: (id: string): Record<string, unknown> | undefined => engine.state.get(id)?.out as Record<string, unknown> | undefined,
+  /** One change to the board, made on its root (a group open is left first), as one undo step: the node it returns
+   *  chosen, what it says said. The 3D view's paste is made by it. */
+  change(fn: (b: Board) => string, says?: string): string {
+    if (path.length) up(0); let id = ''; edit((b) => { id = fn(b); });
+    if (id && root.nodes[id]) { sel.clear(); sel.add(id); } renderInspector(true); draw(); if (says) toast(says); wall.changed?.(); return id;
+  },
+  /** Whether the board has finished running (nothing running, nothing waiting to). */
+  settled: (): boolean => !running && !again,
   /** The board's history: how many states, and which it is at; and going to any of them. */
   history: () => ({ count: undo.length + redo.length + 1, at: undo.length, saved: undo.length ? 'changes' : 'start' }),
   goto(i: number): void { const k = Math.max(0, Math.min(undo.length + redo.length, Math.round(i))); while (undo.length > k) doUndo(); while (undo.length < k && redo.length) doRedo(); },

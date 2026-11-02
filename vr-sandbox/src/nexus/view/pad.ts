@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { pressButton, pushStick, controlState, setControl, type ButtonState, type ControlSpec } from '../controls';
 import { wall } from './nodes';
+import type { Verdict } from './dock3d';
 
 const CSS = `.pad{position:absolute;inset:0;pointer-events:none;z-index:5;font:12px system-ui,sans-serif;color:#e8f1ff;user-select:none;-webkit-user-select:none}
 .pad .stick{position:absolute;bottom:18px;width:116px;height:116px;border-radius:50%;background:rgba(20,32,52,.55);border:1px solid rgba(128,222,234,.45);pointer-events:auto;touch-action:none}
@@ -171,3 +172,89 @@ export class Pad {
 export function keyOf(k: string): string { const t = k.trim(); if (/^[a-z]$/i.test(t)) return `Key${t.toUpperCase()}`; if (/^[0-9]$/.test(t)) return `Digit${t}`; if (/^space$/i.test(t) || t === ' ') return 'Space'; return t.charAt(0).toUpperCase() + t.slice(1); }
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const fmt = (v: number) => String(Number(v.toPrecision(3)));
+
+// ---- the paste card (spec 01, I16): the strip of what can be pasted, the verdict beside its negative, accept or cancel ---
+// The view's own words and buttons for a paste (view/dock3d.ts's PasteSession drives it): a strip along the bottom of
+// the 3D view with a chip for each bolt the board makes (and one copied); pressed and dragged over the view, or tapped and
+// then the part tapped, its negative is drawn and this card says what the paste node found, in the rule's own words.
+// Released, the card is pinned with its buttons: Cut it (Enter) and Cancel (Esc), each at least 44 px square (WCAG 2.5.5).
+/** What the card asks of the paste session. */
+export interface PasteHooks { begin(key: string, x: number, y: number): void; move(x: number, y: number): void; release(x: number, y: number, moved: boolean): void; accept(): void; cancel(): void; menu(item: 'copy' | 'paste'): void; active(): boolean; pinned(): boolean; fits(): boolean }
+const PASTE_CSS = `#stat3d{z-index:6;background:rgba(8,14,24,.72);padding:3px 7px;border-radius:6px;color:#c9d6e6!important}
+.paste-strip{position:absolute;left:8px;right:8px;bottom:8px;z-index:7;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font:12px system-ui,sans-serif;color:#d6e2f0;pointer-events:none}
+.paste-strip .lab{flex:none;background:rgba(8,14,24,.72);padding:4px 8px;border-radius:6px}
+.paste-strip .chip{flex:none;width:auto;height:auto;white-space:nowrap;pointer-events:auto;touch-action:none;min-height:44px;min-width:44px;display:flex;align-items:center;gap:6px;padding:0 12px;border-radius:22px;background:rgba(20,32,52,.9);border:1px solid rgba(64,196,255,.6);color:#e8f1ff;cursor:grab;user-select:none;-webkit-user-select:none;font:inherit}
+.paste-strip .chip.armed{background:#00838f;border-color:#80deea}
+.paste-strip .chip b{font-weight:600}
+.paste-card{position:absolute;z-index:8;max-width:min(420px,calc(100% - 24px));background:rgba(8,14,24,.92);border:1px solid rgba(64,196,255,.45);border-radius:10px;padding:10px 12px;font:12px/1.45 system-ui,sans-serif;color:#e3ecf6;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+.paste-card .head{font-size:13px;font-weight:600;margin-bottom:4px}.paste-card .head.ok{color:#9be7a0}.paste-card .head.no{color:#ff8a80}
+.paste-card .cut{color:#b8c7d9;margin-bottom:4px}.paste-card ul{list-style:none;margin:0 0 6px;padding:0}.paste-card li{margin:1px 0}
+.paste-card .legend{display:flex;flex-direction:column;gap:2px;color:#b8c7d9;margin:4px 0}.paste-card .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.paste-card .note{color:#ffd180;margin:4px 0}.paste-card details.more summary{cursor:pointer;color:#80deea;min-height:24px}.paste-card .note.bad{color:#ff8a80}.paste-card .busy{color:#80deea}
+.paste-card .btns{display:flex;gap:8px;margin-top:6px}.paste-card button{min-width:44px;min-height:44px;padding:0 14px;border-radius:8px;border:1px solid rgba(255,255,255,.3);background:#1d2b3f;color:#fff;font:inherit;cursor:pointer}
+.paste-card button.go{background:#c62828;border-color:#ff8a80}.paste-card button:disabled{opacity:.45;cursor:not-allowed}
+.paste-menu{position:absolute;z-index:9;background:rgba(8,14,24,.96);border:1px solid rgba(64,196,255,.5);border-radius:8px;padding:4px;display:flex;flex-direction:column;font:12px system-ui,sans-serif}
+.paste-menu button{min-height:44px;text-align:left;padding:0 12px;background:none;border:none;color:#e8f1ff;font:inherit;cursor:pointer;border-radius:6px}.paste-menu button:hover:not(:disabled){background:#1d2b3f}.paste-menu button:disabled{opacity:.5;cursor:not-allowed}
+.paste-menu .why{color:#9fb3c8;padding:0 12px 6px;font-size:11px}`;
+export class PasteCard {
+  readonly strip = document.createElement('div'); readonly card = document.createElement('div'); private readonly menuEl = document.createElement('div');
+  private armedKey = ''; private onKey: (e: KeyboardEvent) => void;
+  constructor(private readonly host: HTMLElement, private readonly hooks: PasteHooks) {
+    if (!document.getElementById('paste-css')) { const st = document.createElement('style'); st.id = 'paste-css'; st.textContent = PASTE_CSS; document.head.appendChild(st); }
+    this.strip.className = 'paste-strip'; this.card.className = 'paste-card'; this.card.style.display = 'none'; this.menuEl.className = 'paste-menu'; this.menuEl.style.display = 'none';
+    host.append(this.strip, this.card, this.menuEl);
+    // (Esc and Enter taken before the dashboard's, the board's and the walker's own, only while a paste is under way)
+    this.onKey = (e) => { if (!hooks.active() && this.menuEl.style.display === 'none') return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); this.closeMenu(); hooks.cancel(); }
+      else if (e.key === 'Enter' && hooks.pinned()) { e.preventDefault(); e.stopImmediatePropagation(); if (hooks.fits()) hooks.accept(); } };
+    window.addEventListener('keydown', this.onKey, true);
+    window.addEventListener('pointerdown', (e) => { if (this.menuEl.style.display !== 'none' && !this.menuEl.contains(e.target as Node)) this.closeMenu(); }, true);
+  }
+  /** The strip: a chip for each thing that can be pasted, or the note of how to get one. */
+  chips(list: { key: string; name: string; says: string }[], note?: string): void {
+    this.strip.replaceChildren(); const lab = document.createElement('span'); lab.className = 'lab';
+    lab.textContent = list.length ? 'Paste onto a surface:' : note ?? 'Put a bolt or a screw on the board (Part families: screw) and it shows here.'; this.strip.append(lab);
+    for (const c of list) { const b = document.createElement('button'); b.className = 'chip'; b.dataset.key = c.key; b.title = c.says; b.innerHTML = `<b>${esc(c.name)}</b>`; if (c.key === this.armedKey) b.classList.add('armed');
+      let start: [number, number] | null = null, moved = false;
+      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); b.setPointerCapture(e.pointerId); start = [e.clientX, e.clientY]; moved = false; this.hooks.begin(c.key, e.clientX, e.clientY); });
+      b.addEventListener('pointermove', (e) => { if (!start) return; if (Math.hypot(e.clientX - start[0], e.clientY - start[1]) > 6) moved = true; if (moved) this.hooks.move(e.clientX, e.clientY); });
+      b.addEventListener('pointerup', (e) => { if (!start) return; start = null; this.armedKey = moved ? '' : c.key; for (const x of this.strip.querySelectorAll('.chip')) x.classList.toggle('armed', (x as HTMLElement).dataset.key === this.armedKey); this.hooks.release(e.clientX, e.clientY, moved); });
+      b.addEventListener('pointercancel', () => { start = null; this.disarm(); this.hooks.cancel(); });
+      this.strip.append(b); }
+  }
+  /** The chip armed (tapped, waiting for a tap on the view) let go. */
+  disarm(): void { this.armedKey = ''; for (const x of this.strip.querySelectorAll('.chip')) x.classList.remove('armed'); }
+  /** The verdict shown: held (no buttons) or pinned (its buttons), in the corner of the view farthest from the point. */
+  show(v: Verdict, o: { pinned: boolean; at: [number, number] }): void {
+    const c = this.card; c.replaceChildren(); c.style.display = '';
+    const head = document.createElement('div'); head.className = `head ${v.fits ? 'ok' : 'no'}`; head.textContent = `${v.fits ? '✓' : '✕'} ${v.head}`; c.append(head);
+    if (v.cut.length) { const cut = document.createElement('div'); cut.className = 'cut'; cut.textContent = v.cut.join('; '); c.append(cut); }
+    // (on a narrow view (a phone) the checks and the legend fold under one line, so the card leaves the part in sight)
+    const narrow = this.host.clientWidth < 600, box: HTMLElement = narrow ? Object.assign(document.createElement('details'), { className: 'more' }) : c;
+    if (narrow) { const sm = document.createElement('summary'); sm.textContent = `${v.lines.length} checks and what the colours mean`; box.append(sm); c.append(box); }
+    const ul = document.createElement('ul'); for (const l of v.lines) { const li = document.createElement('li'); li.textContent = `${l.mark} ${l.text}`; ul.append(li); } box.append(ul);
+    const lg = document.createElement('div'); lg.className = 'legend'; for (const l of v.legend) { const s = document.createElement('span'); s.innerHTML = `<i class="sw" style="background:${l.colour}"></i>${esc(l.text)}`; lg.append(s); } box.append(lg);
+    if (v.note) { const n = document.createElement('div'); n.className = 'note bad'; n.textContent = v.note; c.append(n); }
+    const busy = document.createElement('div'); busy.className = 'busy'; busy.style.display = 'none'; busy.textContent = 'working…'; c.append(busy);
+    if (o.pinned) { const bs = document.createElement('div'); bs.className = 'btns';
+      const go = document.createElement('button'); go.className = 'go'; go.dataset.act = 'accept'; go.textContent = 'Cut it (Enter)'; go.disabled = !v.fits; go.title = v.fits ? 'cut it: one node on the board' : 'it does not fit: nothing can be cut here'; go.onclick = () => this.hooks.accept();
+      const no = document.createElement('button'); no.dataset.act = 'cancel'; no.textContent = 'Cancel (Esc)'; no.onclick = () => this.hooks.cancel(); bs.append(go, no); c.append(bs); }
+    this.place(o.at);
+  }
+  /** "working…" while the run for the point now held is out. */
+  busy(on: boolean): void { const b = this.card.querySelector('.busy') as HTMLElement | null; if (b) b.style.display = on ? '' : 'none'; else if (on) { this.card.style.display = ''; this.card.replaceChildren(Object.assign(document.createElement('div'), { className: 'busy', textContent: 'working…' })); } }
+  /** A line on its own (why nothing can be pasted here, or what an accepted paste found). */
+  note(text: string, bad = false): void { this.card.style.display = ''; this.card.replaceChildren(Object.assign(document.createElement('div'), { className: `note${bad ? ' bad' : ''}`, textContent: text })); }
+  hide(): void { this.card.style.display = 'none'; this.card.replaceChildren(); this.closeMenu(); }
+  /** A face's menu at a point: copy its interface, paste the one copied. */
+  menu(at: [number, number], items: { id: 'copy' | 'paste'; label: string; enabled: boolean; why?: string }[]): void {
+    const m = this.menuEl; m.replaceChildren(); for (const it of items) { const b = document.createElement('button'); b.dataset.item = it.id; b.textContent = it.label; b.disabled = !it.enabled; b.onclick = () => { this.closeMenu(); this.hooks.menu(it.id); }; m.append(b); if (it.why) { const w = document.createElement('div'); w.className = 'why'; w.textContent = it.why; m.append(w); } }
+    const r = this.host.getBoundingClientRect(); m.style.display = ''; m.style.left = `${Math.min(at[0] - r.left, r.width - 260)}px`; m.style.top = `${Math.min(at[1] - r.top, r.height - m.offsetHeight - 8)}px`;
+  }
+  closeMenu(): void { this.menuEl.style.display = 'none'; }
+  /** The card in the corner of the view farthest from the point, so it never covers what it speaks of. */
+  private place(at: [number, number]): void {
+    const r = this.host.getBoundingClientRect(), x = at[0] - r.left, y = at[1] - r.top, c = this.card.style; c.left = c.right = c.top = c.bottom = '';
+    if (x < r.width / 2) c.right = '12px'; else c.left = '12px'; if (y < r.height / 2) c.bottom = '64px'; else c.top = '44px';
+  }
+}

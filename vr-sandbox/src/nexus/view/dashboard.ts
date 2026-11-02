@@ -9,8 +9,8 @@
 //   side, a press to take one.
 
 import { wall, type RanNode } from './nodes';
-import { Dock3D } from './dock3d';
-import { Pad, Walker } from './pad';
+import { Dock3D, PasteSession, verdictLines } from './dock3d';
+import { Pad, PasteCard, Walker } from './pad';
 import type { Shown } from './space3d';
 import { runBlock } from '../dataflow';
 import { show, type PortDef } from '../blocks';
@@ -31,6 +31,9 @@ const pad = new Pad($('view3d'), walker, (on) => {
   else { walker.exit(); dock.walking = false; }
 });
 dock.piecePress = (name, down) => pad.pressPiece(name, down);
+// (drag to imprint (spec 01, I16): the strip of bolts the board makes along the view's foot; one held over a part shows the
+// board's own paste node's run there, its negative and its verdict; accepted, it is one node on the board)
+const paste = new PasteSession(dock, wall); paste.card = new PasteCard($('view3d'), paste); dock.paste = paste; paste.chips();
 const shown = (): Shown[] => wall.shown().filter((s) => thingy(s.thing)) as Shown[];
 $('fit3d').onclick = () => dock.fit();
 $('cut3d').onclick = () => { const a = dock.nextSection(); $('cut3d').textContent = a ? `Cut ${a}` : 'Cut'; };
@@ -81,18 +84,22 @@ function metrics(): void {
   let mass = 0, placed = 0, distinct = 0; const box = { x: 0, y: 0, z: 0 };
   for (const s of things) { mass += massOfAll(s.thing); placed += placedCount(s.thing); distinct += kindsOf(s.thing); const b = boundsOfAll(s.thing); if (!b.isEmpty()) { box.x = Math.max(box.x, b.max.x - b.min.x); box.y = Math.max(box.y, b.max.y - b.min.y); box.z = Math.max(box.z, b.max.z - b.min.z); } }
   const nodes = wall.board().nodes, total = Object.keys(nodes).length, failed = r.failed, waiting = r.waiting;
+  // (a board whose checks fail is not "all working" because its nodes ran: an assert that does not hold is counted and said
+  // (fault D27, the engine board's "36/36 all working" while two of its asserts failed))
+  const fails = Object.keys(nodes).filter((id) => wall.outputsOf(id)?.holds === false).length;
   const shared = placed ? 1 - distinct / placed : 0;
   $('gauges').innerHTML = [
     ring(null, '#ff6e40', mass ? show(mass, 'kg') : '—', 'Mass', things.length ? `of ${things.length} shown` : 'nothing shown'),
     ring(shared, '#ffd740', placed ? `${shared > 0.99 ? (Math.floor(shared * 1000) / 10).toFixed(1) : (shared * 100).toFixed(0)}%` : '—', 'Shared', `${placed.toLocaleString()} pieces, ${distinct.toLocaleString()} made`),
     ring(Math.min(1, r.ms / 16.7), r.ms > 16.7 ? '#ff5252' : '#69f0ae', `${r.ms.toFixed(r.ms < 10 ? 1 : 0)} ms`, 'Last run', 'a frame is 16.7 ms'),
-    ring(total ? (total - failed - waiting) / total : null, failed ? '#ff5252' : '#40c4ff', total ? `${total - failed - waiting}/${total}` : '—', 'Nodes', failed ? `${failed} failed` : waiting ? `${waiting} waiting` : 'all working'),
+    ring(total ? (total - failed - waiting) / total : null, failed || fails ? '#ff5252' : '#40c4ff', total ? `${total - failed - waiting}/${total}` : '—', 'Nodes', [failed ? `${failed} failed` : '', fails ? `${fails} check${fails > 1 ? 's' : ''} fail` : '', !failed && !fails && waiting ? `${waiting} waiting` : ''].filter(Boolean).join(', ') || 'all working'),
     ring(st.instances / 250_000, '#e040fb', st.instances >= 1000 ? `${(st.instances / 1000).toFixed(st.instances >= 1e4 ? 0 : 1)}k` : String(st.instances), 'Drawn', 'pieces, of 250k most'),
   ].join('');
   const endless = things.some((x) => isAssembly(x.thing) && x.thing.tiled);
   $('metNote').textContent = endless ? 'What is shown repeats for ever: these figures are for one cell of it.' : placed ? `What is shown spans ${show(box.x, 'm')} × ${show(box.z, 'm')}, ${show(box.y, 'm')} high.` : 'Wire something into a "Show in space" node to measure it here.';
   $('metOf').textContent = wall.boardTitle();
-  $('stat3d').textContent = st.instances ? `${st.instances.toLocaleString()} pieces drawn${st.boxes ? `, ${st.boxes.toLocaleString()} of them far away, shown as plain boxes` : ''}` : '';
+  // (what is drawn, said as it is: pieces inside or under others are drawn and counted, though not seen until cut open)
+  $('stat3d').textContent = st.instances ? `${st.instances.toLocaleString()} pieces drawn, counting those inside or under others (Cut shows them)${st.boxes ? `; ${st.boxes.toLocaleString()} far away, shown as plain boxes` : ''}` : '';
 }
 
 // ---- variations: one node, each of an input's choices -----------------------------------------------------------------
@@ -124,10 +131,10 @@ async function variations(force = false): Promise<void> {
 }
 
 // ---- keeping them up to date --------------------------------------------------------------------------------------------
-wall.ran = () => { const title = wall.boardTitle(); dock.show(shown(), title); logRun(); metrics(); drawClock(); $('boardName').textContent = title; };
+wall.ran = () => { const title = wall.boardTitle(); dock.show(shown(), title); paste.refresh(); logRun(); metrics(); drawClock(); $('boardName').textContent = title; };
 wall.changed = () => { void variations(); };
 $('stripBtn').onclick = () => $('strip').classList.toggle('open');
 window.setInterval(metrics, 1000);
 drawClock(); void variations();
 // what a browser test drives it by
-(window as unknown as { dashboard: object }).dashboard = { dock, wall, variations: () => variations(true), enter };
+(window as unknown as { dashboard: object }).dashboard = { dock, wall, paste, verdictLines, variations: () => variations(true), enter };

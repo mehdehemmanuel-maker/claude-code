@@ -1,8 +1,8 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 01.I16 (drag to imprint in the view, the negative shown before cutting)
+Task in hand: 01.I16 (drag to imprint in the view), built and waiting on its verdict; then the engine (faults D25, D26)
 Spec in hand: spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 800eb71 (2026-11-02)
+Last commit the gate passed: 1b08432 (2026-11-02)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -18,7 +18,8 @@ Last commit the gate passed: 800eb71 (2026-11-02)
 - 01.I17 passes (`plan/specs/00-structure/verdicts/01.I17.json`); the gaps its evaluator found by planting are closed in
   its tests. Fault D24 (the clash checker blind to a bar run into a round shaft) mended under 10.T24; what it then showed
   in the engines at rest is fault D25, mended in the gate's small engine, open in the larger ones (`npm run gate`).
-- Fault D16 open: the board's view of what it makes, as a blind reader saw it (a dark part on the dark view, the ground grid not on every board).
+- 01.I16 built (its node test in the gate, `npm run gate`; its browser test and blind check apart); fault D16 fixed in the view.
+- The engine next: moved whole, the Toyota engine's valves would strike its crowns (the workflow's estimate, to measure).
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
 - 10.T24 claimed in part: nothing excused by name; fault D14 open (the small caliper mended; the Cascadia's frame not).

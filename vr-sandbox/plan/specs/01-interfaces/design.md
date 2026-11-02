@@ -178,10 +178,13 @@ extends `placement/proximity.ts`, still the one solver.
 
 ### 2.9 The person (R17)
 
-In the 3D view: drag a part from the library onto a face; while held, its negative is drawn in place (remove in red,
-keep in amber, contact in green, the frame's axes) with the checks' verdict beside it ("fits: wall 14 mm ≥ 10.8 mm");
-release to cut it, Esc to cancel. A face's menu offers "copy its interface" and "paste an interface here". The same on a
-phone through `view/pad.ts`'s controls.
+In the 3D view: drag a bolt from the view's strip (the bolts and screws the board makes, or an interface copied) onto a
+face; while held, its negative is drawn in place (remove in red, keep in amber, contact in green, the frame's axes) with
+the checks' verdict beside it, in the rule's own words; release pins it, and only accepting it (its button, or Enter)
+cuts it: one node spliced into the board, one undo step (R17: cut only when the person accepts); Esc, or Cancel, leaves
+the board as it was. A face's menu offers "copy its interface" and "paste the copied interface here". The same on a
+phone through `view/pad.ts`'s controls (tap a chip, tap the part). Amended by decision 0016; the drag from the library
+is a follow-up.
 
 ## 3. Where the code goes (owners)
 

@@ -243,28 +243,42 @@ function surfGeometry(pt: Patch): THREE.BufferGeometry {
 const drilled = new Map<string, THREE.BufferGeometry>(), csg = new Evaluator(), UP = new THREE.Vector3(0, 1, 0);
 csg.attributes = ['position', 'normal']; csg.useGroups = false;
 const clean = (g: THREE.BufferGeometry) => { const h = g.index ? g.toNonIndexed() : g.clone(); for (const k of Object.keys(h.attributes)) if (k !== 'position' && k !== 'normal') h.deleteAttribute(k); if (!h.getAttribute('normal')) h.computeVertexNormals(); h.clearGroups(); return h; };
-function drill(g: THREE.BufferGeometry, cuts: Cut[], key: string): THREE.BufferGeometry {
+/** How many facets a round of radius r (m) is drawn with: enough that a facet's chord lies within 0.05 mm of the true
+ *  circle (n = ⌈π / acos(1 − e/r)⌉, e = 0.05 mm: a drawing choice, half a pixel where a 100 mm part fills 1000 px),
+ *  at least 24 and at most 96 (a cost choice), fewer at a coarser detail (lod.ts). An 80 mm boss gets 89 (a 0.05 mm
+ *  sag) where 24 sagged 0.684 mm (fault D16). */
+/* (only where it is drawn: the clash rules (make/rules.ts) and the fields read the same leaves with the 24 facets they had,
+ *  as finer ones cost the engine board's checks five times their time (49.7 s to 263 s, measured 2026-11-02): fault D28,
+ *  the checks' own sag, is 10.T24's to answer with an exact test, not the view's) */
+export function roundSegments(r: number): number { const e = 5e-5, n = r > e ? Math.ceil(Math.PI / Math.acos(1 - e / r)) : 24; return divisions(Math.max(24, Math.min(96, n)), 24); }
+/** The solid a cut takes away, placed in its piece's frame (what `drill` subtracts, and what a preview draws before
+ *  anything is cut: spec 01, I16): a cylinder from just outside its face to its depth inside, its axis along the hole; a
+ *  turned cut its profile turned about that axis, from just outside its face; a cut of any section (a keyway, a panel's
+ *  cut-out) its outline pushed in along its axis from just outside its face, turned so its x lies along its u, run on a
+ *  tenth of a millimetre past its depth where it goes `through` (so no skin is left on the far face). */
+export function cutSolid(c: Cut, through = false, drawn = true): THREE.BufferGeometry {
+  if (c.sect) { const f = cutFrame(c), g2 = new THREE.ExtrudeGeometry(new THREE.Shape(c.sect.map(([x, y]) => new THREE.Vector2(x, y))), { depth: c.depth + (through ? 2e-4 : 1e-4), bevelEnabled: false, curveSegments: 1 }); g2.translate(0, 0, -1e-4);
+    const g = clean(g2); g.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(...f.u), new THREE.Vector3(...f.w), new THREE.Vector3(...f.d)).setPosition(...c.at)); return g; }
+  const dir = new THREE.Vector3(...c.dir).normalize(), turned = c.prof ? [[0, -1e-4], [c.prof[0]![0], -1e-4], ...c.prof, [0, c.prof[c.prof.length - 1]![1]]].map(([a, y]) => new THREE.Vector2(a!, y!)) : null;
+  const n = c.n ?? (drawn ? roundSegments(Math.max(c.r, ...(c.prof ?? []).map((p) => p[0]))) : 24), g = clean(turned ? new THREE.LatheGeometry(turned, n) : new THREE.CylinderGeometry(c.r, c.r, c.depth + 2e-4, n));
+  const at = new THREE.Vector3(...c.at); if (!turned) at.addScaledVector(dir, c.depth / 2 - 1e-4);
+  g.applyMatrix4(new THREE.Matrix4().compose(at, new THREE.Quaternion().setFromUnitVectors(UP, dir), new THREE.Vector3(1, 1, 1))); return g;
+}
+function drill(g: THREE.BufferGeometry, cuts: Cut[], key: string, drawn = false): THREE.BufferGeometry {
   const had = drilled.get(key); if (had) return had;
   let a = new Brush(clean(g)); a.updateMatrixWorld();
   for (const c of cuts) {
-    // (a cylinder from just outside its face to its depth inside, its axis along the hole; a turned cut its profile turned
-    // about that axis, from just outside its face)
-    // (a cut of any section, a keyway or a panel's cut-out: its outline pushed in along its axis, from just outside its face,
-    // turned so its x lies along its u (spec 01, I17))
-    // (one that runs out through the far side runs on a tenth of a millimetre past it, so no skin is left on that face; one
-    // that stops inside keeps its own depth)
-    if (c.sect) { const f = cutFrame(c), bb = (g.boundingBox ?? (g.computeBoundingBox(), g.boundingBox))!, far = Math.max(...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => (k & 1 ? bb.max.x : bb.min.x) * f.d[0] + (k & 2 ? bb.max.y : bb.min.y) * f.d[1] + (k & 4 ? bb.max.z : bb.min.z) * f.d[2])) - (c.at[0] * f.d[0] + c.at[1] * f.d[1] + c.at[2] * f.d[2]);
-      const through = c.depth >= far - 1e-6, g2 = new THREE.ExtrudeGeometry(new THREE.Shape(c.sect.map(([x, y]) => new THREE.Vector2(x, y))), { depth: c.depth + (through ? 2e-4 : 1e-4), bevelEnabled: false, curveSegments: 1 }); g2.translate(0, 0, -1e-4);
-      const b = new Brush(clean(g2)); b.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(...f.u), new THREE.Vector3(...f.w), new THREE.Vector3(...f.d))); b.position.set(...c.at); b.updateMatrixWorld();
-      a = csg.evaluate(a, b, SUBTRACTION); continue; }
-    const dir = new THREE.Vector3(...c.dir).normalize(), turned = c.prof ? [[0, -1e-4], [c.prof[0]![0], -1e-4], ...c.prof, [0, c.prof[c.prof.length - 1]![1]]].map(([a, y]) => new THREE.Vector2(a!, y!)) : null;
-    const b = new Brush(clean(turned ? new THREE.LatheGeometry(turned, c.n ?? 24) : new THREE.CylinderGeometry(c.r, c.r, c.depth + 2e-4, c.n ?? 24)));
-    b.quaternion.setFromUnitVectors(UP, dir); b.position.set(...c.at); if (!turned) b.position.addScaledVector(dir, c.depth / 2 - 1e-4); b.updateMatrixWorld();
+    // (a cut of any section that runs out through the far side runs on past it; one that stops inside keeps its own depth)
+    let through = false;
+    if (c.sect) { const f = cutFrame(c), bb = (g.boundingBox ?? (g.computeBoundingBox(), g.boundingBox))!, far = Math.max(...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => (k & 1 ? bb.max.x : bb.min.x) * f.d[0] + (k & 2 ? bb.max.y : bb.min.y) * f.d[1] + (k & 4 ? bb.max.z : bb.min.z) * f.d[2])) - (c.at[0] * f.d[0] + c.at[1] * f.d[1] + c.at[2] * f.d[2]); through = c.depth >= far - 1e-6; }
+    const b = new Brush(cutSolid(c, through, drawn)); b.updateMatrixWorld();
     a = csg.evaluate(a, b, SUBTRACTION);
   }
   const out = a.geometry; drilled.set(key, out); return out;
 }
-export function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: number): THREE.BufferGeometry | null {
+/** A shape's mesh: `drawn` where it is drawn to be seen (its rounds to within 0.05 mm: roundSegments), else as the checks
+ *  read it (24 facets round). */
+export function geometry(s: Shape, mat: string | undefined, make?: 'pressed', facets?: number, drawn = false): THREE.BufferGeometry | null {
   if ('ground' in s) return groundGeometry(s.ground);
   if ('surf' in s) return surfGeometry(s.surf);
   if ('loft' in s) return loftGeometry(s.loft);
@@ -276,7 +290,7 @@ export function geometry(s: Shape, mat: string | undefined, make?: 'pressed', fa
   if (facets && 'cyl' in s) return new THREE.CylinderGeometry(s.cyl[2] ?? s.cyl[0], s.cyl[0], s.cyl[1], facets);
   const f = edgeRadius(mat, thinnest(s), make);
   if ('box' in s) { const [w, h, d] = s.box; return f > 1e-4 ? new RoundedBoxGeometry(w, h, d, 2, f) : new THREE.BoxGeometry(w, h, d); }
-  if ('cyl' in s) { const [r, h, r2 = r] = s.cyl; return filletCyl(r2, h, r, f); }
+  if ('cyl' in s) { const [r, h, r2 = r] = s.cyl; return filletCyl(r2, h, r, f, drawn ? roundSegments(Math.max(r, r2)) : 24); }
   if ('sphere' in s) return new THREE.SphereGeometry(s.sphere, divisions(18, 6), divisions(12, 4));
   if ('cone' in s) return new THREE.ConeGeometry(s.cone[0], s.cone[1], divisions(16, 6));
   if ('torus' in s) return new THREE.TorusGeometry(s.torus[0], s.torus[1], divisions(12, 4), divisions(28, 8));
@@ -299,16 +313,17 @@ const leafGeos = new Map<string, THREE.BufferGeometry | null>();
 /** (Each part's geometry and materials kept with the part itself: a city draws the same piece a million times a frame, and
  *  its key, the shape written out, costs more than drawing it.) */
 const geoOfPart = new WeakMap<Part, THREE.BufferGeometry | null>(), matOfPart = new WeakMap<Part, Map<string, THREE.MeshStandardMaterial>>();
-export function leafGeometry(p: Part): THREE.BufferGeometry | null {
-  const was = geoOfPart.get(p); if (was !== undefined) return was;
-  const g = leafGeometryMade(p); geoOfPart.set(p, g); return g;
+export function leafGeometry(p: Part, drawn = false): THREE.BufferGeometry | null {
+  const kept = drawn ? geoDrawnOfPart : geoOfPart, was = kept.get(p); if (was !== undefined) return was;
+  const g = leafGeometryMade(p, drawn); kept.set(p, g); return g;
 }
-function leafGeometryMade(p: Part): THREE.BufferGeometry | null {
+const geoDrawnOfPart = new WeakMap<Part, THREE.BufferGeometry | null>();
+function leafGeometryMade(p: Part, drawn: boolean): THREE.BufferGeometry | null {
   if (!p.shape || 'stars' in p.shape || 'field' in p.shape || 'heap' in p.shape) return null;
-  const key = JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts, detail()]); if (leafGeos.has(key)) return leafGeos.get(key)!;
-  let g = geometry(p.shape, p.mat, p.make, p.facets);
+  const key = JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts, detail(), drawn]); if (leafGeos.has(key)) return leafGeos.get(key)!;
+  let g = geometry(p.shape, p.mat, p.make, p.facets, drawn);
   if (g && p.base) { const s = p.shape, h = 'cyl' in s ? s.cyl[1] : 'cone' in s ? s.cone[1] : 'capsule' in s ? s.capsule[1] : 'box' in s ? s.box[1] : 0; g = g.clone(); g.translate(0, h / 2, 0); }
-  if (g && p.cuts?.length) g = drill(g, p.cuts, key);
+  if (g && p.cuts?.length) g = drill(g, p.cuts, key, drawn);
   leafGeos.set(key, g); return g;
 }
 /** What wear reads from a surface's own shape, on each vertex, made once per geometry: its mean curvature (from each edge
@@ -356,8 +371,15 @@ export function leafMaterial(p: Part, over: { color?: number; mat?: string; fini
 function leafMaterialMade(p: Part, over: { color?: number; mat?: string; finish?: string; look?: Look }): THREE.MeshStandardMaterial {
   // ground is shaded by its height, which its vertices carry
   if (p.shape && 'ground' in p.shape) { const c = over.color ?? p.color ?? 0x5d8a3a, k = String(c); return groundMats.get(k) ?? groundMats.set(k, new THREE.MeshStandardMaterial({ color: c, vertexColors: true, roughness: 0.95 })).get(k)!; }
-  return matFor(over.color ?? p.color ?? 0x999999, over.mat ?? p.mat, !!p.glow, over.finish ?? p.finish, p.wear, !!p.shape && ('lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape), over.look ?? p.look);
+  const m = matFor(over.color ?? p.color ?? 0x999999, over.mat ?? p.mat, !!p.glow, over.finish ?? p.finish, p.wear, !!p.shape && ('lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape), over.look ?? p.look);
+  // (a drilled piece drawn from both sides: its holes are cut by booleans, which leave points lying on other triangles'
+  // edges, and between those the backdrop showed through as dotted lines across a plate (the I16 blind check's readers saw
+  // them); seen through such a crack now is the piece's own far face, lit alike. A solid's back faces are otherwise behind
+  // its front ones, so nothing else changes)
+  if (!p.cuts?.length || m.side === THREE.DoubleSide) return m;
+  let d = bothSides.get(m); if (!d) { d = m.clone(); d.side = THREE.DoubleSide; bothSides.set(m, d); } return d;
 }
+const bothSides = new WeakMap<THREE.MeshStandardMaterial, THREE.MeshStandardMaterial>();
 /** A galaxy's stars: on logarithmic spiral arms r = a e^(θ tan φ) (a bar across the middle if it is barred), a bulge of
  *  old stars, the disc thin; drawn as points, each going round at a flat rotation curve's speed (ω = v / r). */
 function galaxy(g: Extract<Shape, { stars: unknown }>['stars']): { obj: THREE.Points; turn: (dt: number) => void } {

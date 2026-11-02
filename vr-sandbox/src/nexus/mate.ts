@@ -383,6 +383,14 @@ export interface Imprinted { frame: { at: V3; n: V3; u: V3 }; piece: string; pat
    *  the point (m), the free way out along n (Infinity where nothing is met) */ measured: HostMeasure;
   /** how far each of the negative's section tools starts out in front of the point stood on, so its outline meets the
    *  surface all round (a slot in a bore: the bore falls away under its corners), m; 0 for any other tool */ lead: number[] }
+/** A ring a negative's contact bears on (a head's underside on the counterbore's floor): its middle, its normal, from r0 to
+ *  r (m), in the frame of the piece it stood on. */
+export interface Ring { at: V3; n: V3; r0: number; r: number; why: string }
+/** What an imprint refused after it stood and measured had found (spec 01, I16): where it stood, what it measured, the
+ *  negative it made (null where the negative itself was refused) and the checks it ran, the failing one last; its section
+ *  tools' lead not measured (0), as nothing is cut. A preview draws what would have been cut from it, in red, refused. */
+export type Tried = Pick<Imprinted, 'frame' | 'piece' | 'path' | 'measured'> & { negative: Negative | null; checks: CutCheck[]; lead: number[] };
+export interface ImprintRefusal extends Refusal { tried?: Tried }
 /** What the imprint measures on the host, by a check's measure (I17): each answers what was found (m) against what the
  *  check asks, once or once for each of the piece's other cuts. */
 interface Measuring { at: THREE.Vector3; n: THREE.Vector3; u: THREE.Vector3; v: THREE.Vector3; depth: number; q: { p: Part; m: THREE.Matrix4 }; host: Part; neg: Negative;
@@ -421,7 +429,7 @@ const MEASURE: Record<Measure, (c: PlannedCheck, x: Measuring) => Found[]> = {
  *  line, the spacing from the piece's other cuts, that it breaks into none, the room its keep needs against the thing's other
  *  pieces, a value settled from the measures); a check whose `when` does not hold there is recorded as not applying. The
  *  first check that fails is the refusal, with its rule, the value needed and the value found; nothing is cut here (I8 cuts). */
-export function imprint(host: Part, asking: Asking, from: V3, dir: V3, o: { turn?: number; fit?: 'fine' | 'medium' | 'coarse'; geometry?: (s: Shape) => THREE.BufferGeometry | null; /** rows given at run time, for a row asked by name */ rows?: Record<string, NegativeRow> } = {}): Imprinted | Refusal {
+export function imprint(host: Part, asking: Asking, from: V3, dir: V3, o: { turn?: number; fit?: 'fine' | 'medium' | 'coarse'; geometry?: (s: Shape) => THREE.BufferGeometry | null; /** rows given at run time, for a row asked by name */ rows?: Record<string, NegativeRow> } = {}): Imprinted | ImprintRefusal {
   let f = standOn(host, from, dir, o); if (!f) return { refused: true, rule: 'a surface to stand on', need: 0, have: 0, unit: '', source: '', why: 'the ray meets nothing of the host' };
   const q = piecesIn(host).find((x) => x.p.name === f!.piece)!, mm = 1e-3, inv = q.m.clone().invert(), solo: Part = { name: 'piece', parts: [{ ...q.p, parts: undefined, at: [0, 0, 0], rot: [0, 0, 0] }] };
   const hit = (p: THREE.Vector3, d: THREE.Vector3) => { const h = standOn(solo, p.clone().applyMatrix4(inv).toArray() as V3, d.clone().transformDirection(inv).toArray() as V3, o); return h ? new THREE.Vector3(...h.at).applyMatrix4(q.m) : null; };
@@ -437,13 +445,13 @@ export function imprint(host: Part, asking: Asking, from: V3, dir: V3, o: { turn
   // way out along n, to whatever of the piece stands across it)
   const inside = at.clone().addScaledVector(n, -1e-5), ends = [u, u.clone().negate()].map((d) => hit(inside, d)), tp = ends[0] ? ends[0].distanceTo(inside) : NaN, tm = ends[1] ? ends[1].distanceTo(inside) : NaN;
   const out = hit(at.clone().addScaledVector(n, 1e-6), n), measured: HostMeasure = { material: q.p.mat ?? 'steel-low', thickness: depth, ...(Number.isFinite(tp + tm) ? { span: tp + tm, mid: (tp - tm) / 2 } : {}), free: out ? out.distanceTo(at) : Infinity };
-  const neg = negativeOf(asking, measured, { ...(o.fit ? { fit: o.fit } : {}), ...(o.rows ? { rows: o.rows } : {}) }); if ('refused' in neg) return neg;
+  const frame = { at: f.at, n: f.n, u: f.u }, neg = negativeOf(asking, measured, { ...(o.fit ? { fit: o.fit } : {}), ...(o.rows ? { rows: o.rows } : {}) }); if ('refused' in neg) return { ...neg, tried: { frame, piece: f.piece, path: q.path, measured, negative: null, checks: [], lead: [] } };
   const removes = neg.tools.filter((x) => x.role === 'remove'), radial = (x: ToolBody) => (x.sect ? Math.max(...x.sect.map(([a, b]) => Math.hypot(a, b))) : Math.max(0, ...(x.prof ?? []).map((p) => p[0])));
   const widest = removes.length ? Math.max(...removes.map(radial)) : 0, outline = removes.flatMap((t) => (t.sect ?? Array.from({ length: ROUND }, (_, i): [number, number] => [radial(t) * Math.cos((2 * Math.PI * i) / ROUND), radial(t) * Math.sin((2 * Math.PI * i) / ROUND)])).map(([a, b]): [number, number] => [a + (t.at?.[0] ?? 0), b + (t.at?.[2] ?? 0)]));
   const checks: CutCheck[] = [], put = (c: CutCheck) => { checks.push(c); return c.ok; }, at3 = (x: number) => +(x / mm).toFixed(3), x: Measuring = { at, n, u, v, depth, q, host, neg, hit, widest, outline };
   for (const c of neg.checks) for (const r of MEASURE[c.measure](c, x)) {
     const applies = !c.when || truth(c.when, scopeOf({ ...(neg.scope ?? {}), have: r.have }));
-    if (!put({ check: c.check, ok: !applies || r.ok, need: at3(r.need), have: at3(r.have), unit: 'mm', rule: r.rule ?? c.rule, source: c.source, ...(applies ? {} : { applies: false }) })) return refusal(checks);
+    if (!put({ check: c.check, ok: !applies || r.ok, need: at3(r.need), have: at3(r.have), unit: 'mm', rule: r.rule ?? c.rule, source: c.source, ...(applies ? {} : { applies: false }) })) return { ...refusal(checks), tried: { frame, piece: f.piece, path: q.path, measured, negative: neg, checks, lead: neg.tools.map(() => 0) } };
   }
   put({ check: 'depth', ok: true, need: at3(depth), have: at3(depth), unit: 'mm', rule: 'the negative made for the depth found', source: neg.mirror.std ?? '' });
   // (a section tool's lead: rays back along −n from points all along its outline's edges (a millimetre apart, not its corners alone: a square
@@ -452,14 +460,17 @@ export function imprint(host: Part, asking: Asking, from: V3, dir: V3, o: { turn
   const raise = Math.min((measured.free ?? Infinity) / 2, 0.01), along = (pts: [number, number][]) => pts.flatMap(([a, b], i) => { const [c, d] = pts[(i + 1) % pts.length]!, m = Math.max(1, Math.ceil(Math.hypot(c - a, d - b) / 0.001)); return Array.from({ length: m }, (_, k): [number, number] => [a + ((c - a) * k) / m, b + ((d - b) * k) / m]); });
   const lead = neg.tools.map((t) => { if (!t.sect) return 0; const P = at.clone().addScaledVector(u, t.at?.[0] ?? 0).addScaledVector(n, t.at?.[1] ?? 0).addScaledVector(v, t.at?.[2] ?? 0);
     return Math.max(0, ...along(t.sect).map(([a, b]) => { const p = P.clone().addScaledVector(u, a).addScaledVector(v, b), h = hit(p.clone().addScaledVector(n, raise), n.clone().negate()); return h ? h.sub(p).dot(n) : 0; })); });
-  return { frame: { at: f.at, n: f.n, u: f.u }, piece: f.piece, path: q.path, turn: o.turn ?? 0, asking, negative: neg, checks, measured, lead };
+  return { frame, piece: f.piece, path: q.path, turn: o.turn ?? 0, asking, negative: neg, checks, measured, lead };
 }
 
 /** An imprint applied (spec 01, I8; R9): its negative's remove bodies cut into the piece (turned cuts, its own frame), its
  *  keep bodies made the piece's keep zones, the mirror interface the piece gains made a port the fastener's finds by fit()
  *  (a clearance hole's holes, a tapped or insert hole's threads), and the imprint recorded on the piece. The thing is not
  *  changed in place: the piece and what holds it are new. */
-export function applyImprint(host: Part, im: Imprinted, of: string): { part: Part; port: Port; says: string } {
+/** A negative's bodies placed on the piece it stood on, in that piece's own frame (spec 01, I16): the cuts it removes
+ *  (a section tool started its lead in front), the keep zones it holds clear, the rings its contacts bear on, and the
+ *  piece's matrix in the host. What applyImprint cuts and what a preview draws, from one place. */
+export function bodiesOf(host: Part, im: Pick<Imprinted, 'frame' | 'path' | 'negative' | 'lead'>, of: string): { m: THREE.Matrix4; cuts: Cut[]; keep: Keep[]; contact: Ring[] } {
   const q = piecesIn(host).find((x) => x.path.join('/') === im.path.join('/'))!, inv = q.m.clone().invert();
   const loc = (v: V3) => new THREE.Vector3(...v).applyMatrix4(inv), dirL = (v: V3) => new THREE.Vector3(...v).transformDirection(inv);
   const at = loc(im.frame.at), n = dirL(im.frame.n), u = dirL(im.frame.u), w = n.clone().cross(u).normalize(), neg = im.negative; // (w = n × u, as frameOf and mate() read a port)
@@ -471,8 +482,19 @@ export function applyImprint(host: Part, im: Imprinted, of: string): { part: Par
     if (x.sect) return { r: Math.max(...x.sect.map(([a, b]) => Math.hypot(a, b))), depth: (x.depth ?? 0) + lead, at: place(x.at).addScaledVector(n, lead).toArray() as V3, dir: n.clone().negate().toArray() as V3, u: u.toArray() as V3, sect: x.sect.map(([a, b]): [number, number] => [a, -b]) };
     const prof = x.prof!, rIn = Math.min(...prof.filter((p) => p[0] > 0).map((p) => p[0])), depth = Math.max(...prof.map((p) => p[1]));
     return { r: rIn, depth, at: place(x.at).toArray() as V3, dir: n.clone().negate().toArray() as V3, ...(prof.length === 2 && prof[0]![0] === prof[1]![0] ? {} : { prof }) }; });
-  const keeps: Keep[] = neg.tools.filter((x) => x.role === 'keep').map((x) => { const a = place(x.at), b = a.clone().addScaledVector(n, (x.along === '-n' ? -1 : 1) * (x.length ?? 0)), box = new THREE.Box3().setFromPoints([a, b]).expandByScalar(x.r ?? 0), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
+  // (a keep's box round its cylinder: its length along n, its radius across; never swollen along its own axis, which ran it
+  // a radius past each end (the I16 test found it: a 24 mm key's reach kept as 39 mm, 2026-11-02))
+  const keeps: Keep[] = neg.tools.filter((x) => x.role === 'keep').map((x) => { const a = place(x.at), b = a.clone().addScaledVector(n, (x.along === '-n' ? -1 : 1) * (x.length ?? 0)), r = x.r ?? 0, box = new THREE.Box3();
+    for (const p of [a, b]) for (const su of [-1, 1]) for (const sw of [-1, 1]) box.expandByPoint(p.clone().addScaledVector(u, su * r).addScaledVector(w, sw * r));
+    const c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
     return { name: `room for ${of}`, kind: 'box', at: c.toArray() as V3, size: sz.toArray() as V3, why: x.why }; });
+  const contact: Ring[] = neg.tools.filter((x) => x.role === 'contact').map((x) => ({ at: place(x.at).toArray() as V3, n: n.toArray() as V3, r0: x.r0 ?? 0, r: x.r ?? 0, why: x.why }));
+  return { m: q.m.clone(), cuts, keep: keeps, contact };
+}
+export function applyImprint(host: Part, im: Imprinted, of: string): { part: Part; port: Port; says: string } {
+  const q = piecesIn(host).find((x) => x.path.join('/') === im.path.join('/'))!, inv = q.m.clone().invert();
+  const loc = (v: V3) => new THREE.Vector3(...v).applyMatrix4(inv), dirL = (v: V3) => new THREE.Vector3(...v).transformDirection(inv);
+  const at = loc(im.frame.at), n = dirL(im.frame.n), u = dirL(im.frame.u), neg = im.negative, { cuts, keep: keeps } = bodiesOf(host, im, of);
   const holes = neg.tools.filter((x) => x.role === 'remove'), pattern: [number, number][] = holes.length > 1 ? holes.filter((x) => (x.at?.[0] ?? 0) !== 0 || (x.at?.[2] ?? 0) !== 0).map((x) => [x.at![0], x.at![2]]) : [[0, 0]];
   const thread = neg.mirror.takes ?? String(neg.mirror.size.thread ?? ''), sex: Port['sex'] = neg.mirror.sex ?? (neg.mirror.kind === 'hole.tapped' || neg.mirror.kind === 'hole.insert' ? 'threads' : 'holes');
   // (each imprinted port named apart: mate() and assemble() find a port by its name)

@@ -89,7 +89,7 @@ function colourOf(t: Part | Assembly): number {
   colourKept.set(t, c); return c;
 }
 
-interface Batch { geo: THREE.BufferGeometry; mat: THREE.Material; m: number[]; owners: string[]; names: string[] }
+interface Batch { geo: THREE.BufferGeometry; mat: THREE.Material; m: number[]; owners: string[]; names: string[]; leaves: (Part | null)[] }
 
 // ---- stand-ins: a thing far off drawn as its biggest pieces --------------------------------------------------------------
 /** How many pieces a stand-in keeps. */
@@ -180,7 +180,7 @@ export class SpaceView {
    *  exactly as one at hand (a GPU keeps 24 bits: at 10,000 km that is a metre). */
   readonly origin = new THREE.Vector3();
   private shown: Shown[] = []; private dirty = true; private lastCam = ''; private lastBuild = 0;
-  private meshes = new Map<string, THREE.InstancedMesh>(); private owners = new Map<THREE.InstancedMesh, string[]>(); private names = new Map<THREE.InstancedMesh, string[]>();
+  private meshes = new Map<string, THREE.InstancedMesh>(); private owners = new Map<THREE.InstancedMesh, string[]>(); private names = new Map<THREE.InstancedMesh, string[]>(); private leaves = new Map<THREE.InstancedMesh, (Part | null)[]>();
   private readonly sphere = new THREE.Sphere(); 
 
   /** The things to draw now. */
@@ -202,9 +202,10 @@ export class SpaceView {
     const toLocal = world.clone().invert(); this.origin.copy(eye).applyMatrix4(toLocal);
     const worldScale = new THREE.Vector3().setFromMatrixScale(world).x || 1;
     let count = 0, boxes = 0, hidden = 0, stand = 0;
-    const add = (key: string, geo: THREE.BufferGeometry, mat: THREE.Material, m: THREE.Matrix4, owner: string, name = '') => {
-      let b = batches.get(key); if (!b) { b = { geo, mat, m: [], owners: [], names: [] }; batches.set(key, b); }
-      const e = m.elements, o = this.origin; b.m.push(e[0]!, e[1]!, e[2]!, e[3]!, e[4]!, e[5]!, e[6]!, e[7]!, e[8]!, e[9]!, e[10]!, e[11]!, e[12]! - o.x, e[13]! - o.y, e[14]! - o.z, e[15]!); b.owners.push(owner); b.names.push(name); count++;
+    // (the leaf drawn kept with it, where it is one of a thing's own pieces, drawn whole or in its stand-in: a box is none)
+    const add = (key: string, geo: THREE.BufferGeometry, mat: THREE.Material, m: THREE.Matrix4, owner: string, name = '', leaf: Part | null = null) => {
+      let b = batches.get(key); if (!b) { b = { geo, mat, m: [], owners: [], names: [], leaves: [] }; batches.set(key, b); }
+      const e = m.elements, o = this.origin; b.m.push(e[0]!, e[1]!, e[2]!, e[3]!, e[4]!, e[5]!, e[6]!, e[7]!, e[8]!, e[9]!, e[10]!, e[11]!, e[12]! - o.x, e[13]! - o.y, e[14]! - o.z, e[15]!); b.owners.push(owner); b.names.push(name); b.leaves.push(leaf); count++;
     };
     const scratch = new THREE.Matrix4();
     // what can be seen at all: the view's frustum, in the space's frame (whole groups leave it by one test)
@@ -295,7 +296,7 @@ export class SpaceView {
           // the coarsest level of its stand-in whose error is under the threshold (4 pieces, 12, 48)
           const lv = p.levels.find((l) => l.error * per < ERR_PX * this.coarse);
           if (lv) {
-            for (const q of [...p.pieces.slice(0, lv.k), ...p.marks.filter((x) => !p.pieces.slice(0, lv.k).includes(x))]) { const o = { ...q.over, ...effective(overs, q.part.name) }; if (o.hide) continue; const g0 = leafGeometry(q.part); if (!g0) continue; const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : (o.look ?? q.part.look)?.wear ? wornGeometry(g0) : g0, mat = o.overlay ? overlayMaterial(o.color ?? q.part.color ?? 0xffffff) : fb ? fieldMaterial() : leafMaterial(q.part, o); add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, q.m), owner, q.part.name); }
+            for (const q of [...p.pieces.slice(0, lv.k), ...p.marks.filter((x) => !p.pieces.slice(0, lv.k).includes(x))]) { const o = { ...q.over, ...effective(overs, q.part.name) }; if (o.hide) continue; const g0 = leafGeometry(q.part, true); if (!g0) continue; const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : (o.look ?? q.part.look)?.wear ? wornGeometry(g0) : g0, mat = o.overlay ? overlayMaterial(o.color ?? q.part.color ?? 0xffffff) : fb ? fieldMaterial() : leafMaterial(q.part, o); add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, q.m), owner, q.part.name, q.part); } // (a stand-in's pieces are its own leaves at their own places: kept with them)
             stand++; continue;
           }
         }
@@ -305,9 +306,9 @@ export class SpaceView {
       }
       for (const l of leavesOf(t)) {
         const o = effective(overs, l.part.name); if (o.hide) continue;
-        const g0 = leafGeometry(l.part); if (!g0) continue;
+        const g0 = leafGeometry(l.part, true); if (!g0) continue;
         const fb = o.bend ?? o.field, geo = fb ? fieldGeometry(g0, fb) : (o.look ?? l.part.look)?.wear ? wornGeometry(g0) : g0, mat = o.overlay ? overlayMaterial(o.color ?? l.part.color ?? 0xffffff) : fb ? fieldMaterial() : leafMaterial(l.part, o);
-        add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, l.m), owner, l.part.name);
+        add(`${geo.uuid}|${mat.uuid}`, geo, mat, scratch.multiplyMatrices(m, l.m), owner, l.part.name, l.part);
       }
     }
     // the meshes: kept and grown when they must be, so moving the view does not make them again
@@ -322,7 +323,7 @@ export class SpaceView {
       }
       mesh.position.copy(this.origin); mesh.updateMatrix();
       (mesh.instanceMatrix.array as Float32Array).set(b.m); mesh.count = n; mesh.instanceMatrix.needsUpdate = true; mesh.visible = true; mesh.boundingSphere = null; mesh.boundingBox = null;
-      this.owners.set(mesh, b.owners); this.names.set(mesh, b.names);
+      this.owners.set(mesh, b.owners); this.names.set(mesh, b.names); this.leaves.set(mesh, b.leaves);
     }
     for (const [key, mesh] of this.meshes) if (!used.has(key)) { mesh.count = 0; mesh.visible = false; }
     const ms = performance.now() - t0; this.reach = cut;
@@ -340,11 +341,13 @@ export class SpaceView {
     if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
     const m = new THREE.Matrix4(); mesh.getMatrixAt(i, m); return mesh.geometry.boundingBox!.clone().applyMatrix4(m.premultiply(mesh.matrixWorld));
   }
-  /** The piece a ray meets first: its name and its box (to fly the view to it). */
-  pieceAt(ray: THREE.Raycaster): { name: string; box: THREE.Box3 } | null {
+  /** The piece a ray meets first: its name and its box (to fly the view to it), the node whose thing it is, the leaf drawn
+   *  (null for a box) and its matrix in the world (the mesh's, times the instance's: Float32, so matched
+   *  within a tolerance), and where the ray met it. */
+  pieceAt(ray: THREE.Raycaster): { name: string; box: THREE.Box3; key: string; leaf: Part | null; m: THREE.Matrix4; point: THREE.Vector3 } | null {
     const vis = [...this.meshes.values()].filter((m) => m.visible && m.count > 0), h = ray.intersectObjects(vis, false)[0];
-    if (!h || h.instanceId === undefined) return null; const mesh = h.object as THREE.InstancedMesh;
-    return { name: this.names.get(mesh)?.[h.instanceId] ?? '', box: this.boxOf(mesh, h.instanceId) };
+    if (!h || h.instanceId === undefined) return null; const mesh = h.object as THREE.InstancedMesh, m = new THREE.Matrix4(); mesh.getMatrixAt(h.instanceId, m); m.premultiply(mesh.matrixWorld);
+    return { name: this.names.get(mesh)?.[h.instanceId] ?? '', box: this.boxOf(mesh, h.instanceId), key: this.owners.get(mesh)?.[h.instanceId] ?? '', leaf: this.leaves.get(mesh)?.[h.instanceId] ?? null, m, point: h.point.clone() };
   }
   /** The box round every drawn piece whose name is like `re`, and how many there are. */
   piecesNamed(re: RegExp): { box: THREE.Box3; n: number } {

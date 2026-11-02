@@ -2464,3 +2464,38 @@ view (photographed in the built app). Its results panel still reads "all working
 37 s to run in the page (fault D27). Building this, the I16 judge found the new "Cut by a standard" node had taken the
 id of "Negative of an interface" and silently replaced it; it has its own id now, and two nodes under one id stop the
 library from loading. Checked with `npm run gate`.
+
+## 2026-11-02: drag a bolt onto a part in the 3D view, its negative shown before anything is cut (spec 01, I16; fault D16)
+
+In the dashboard's 3D view a strip along its foot offers each bolt or screw the board makes. Held over a part, the view
+finds what is drawn under the pointer (the piece and its matrix), walks the board's wires up from the view to the first
+part that holds that piece there, stands the ray on it as the paste node does, and runs the board's own paste node on
+that point: only what that run gives is drawn (the hole and counterbore to be cut in red, seen through the part; the
+hex key's room as an amber cage; the ring the head bears on in green; the face's normal; the screw as it will sit) beside
+its checks in the standards' own words. Released, the card is pinned; Cut it (or Enter) is one node spliced into the wire
+toward the view, one undo step, and the board's own run then cuts it; Esc or Cancel leaves the board as it was. A refusal
+draws what would have been cut and says by how much it is short; Cut it is disabled. A right-click on a hole (or on the
+bolt in it) copies the interface by the node that made it, and pastes it elsewhere from the same screw node. On a phone:
+tap the chip, tap the part. The node test checks each step by hand-worked numbers (1.2 × 9.0 = 10.8 mm, √(50² + 30²) =
+58.31 mm) and the browser test drives it by real mouse, keys and touch, reading the colours off its own screenshots
+(`npm run gate`; `node tests/evals/imprint-drag.cjs <dir>`, 63 checks, all passing, each part under two minutes).
+
+Found on the way, each measured: a keep zone's box ran a radius past each end along its axis (a 24 mm key's room kept as
+39 mm: fault D28, fixed); the view could not find a piece drawn inside a stand-in (it keeps their leaves now); a move of
+the paste waited on a whole frame, and a frame in the test's software renderer took about 0.9 s at full size, so the view
+now draws only when something changed, coarser while things move, and sharp again when they stand still (moves went from
+about 2 s to about 0.3 to 0.5 s there); drilled faces showed the backdrop through their seams as dotted lines (drawn from
+both sides now). Rounds are drawn to within 0.05 mm (an 80 mm boss in 89 facets, sag 0.0498 mm); the clash checks keep
+24 facets, as finer ones took the engine board's run from 49.7 s to 263 s, one run each (fault D29, 10.T24's).
+
+Fault D16, the view: a backdrop of its own, the parts lit from the view; by WCAG's measure, what is shown stands 4.85:1
+and 7.88:1 against the backdrop beside it on the two boards, the plate 8.14:1 (it was 2.07:1 for the plate); the grid
+at the floor of what is shown; the label above the canvas, the count said as it is (`node tests/evals/imprint-drag.cjs
+<dir> d16`). The results panel now counts failing checks (fault D27, in part).
+
+The blind check (`npx vitest run --config vitest.eval.config.ts tests/evals/imprint-blind.eval.ts`, three readers a shot,
+told nothing) is run apart from the gate. Its first run, on shots taken before the last two fixes, stopped on a network
+reset after grading four of its eight shots: the readers named every fact of the held, pinned and cut shots, fewer of the
+first; and two or more named a fault of D16's on each (facets; on the held shot also darkness and the grid). Their words
+were lost with that run (it now keeps them as it goes), so which part they read as faceted is not known; the seams one
+reader described as dotted lines across the plate are fixed. It is being run again on the new shots.
