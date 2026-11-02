@@ -1135,6 +1135,28 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 1040, 160, {}, 'joint said'); b.nodes['joint said']!.label = 'The cover\'s joints, solved together'; wire(b, 'cover on flange', 'says', 'joint said', 'value');
     return b;
   }],
+  ['Nothing can overlap: a starter motor put together by operations, its solenoid refused inside it', () => {
+    // (the user, 2026-11-02: "No nothing should be checked for overlap it shouldn't be possible"; decision 0021) No node
+    // here takes an x, a y or a z: the armature goes into its can's room, the solenoid against the motor's side, the
+    // pair onto a bracket, a bolt along the bracket's hole. Asked to put the solenoid into the motor too, the room is
+    // already used: refused, and said. Sizes are a typical small starter's (estimates).
+    const b = emptyBoard('Nothing can overlap: a starter motor');
+    const make = (id: string, label: string, set: Record<string, unknown>) => { placeBlock(b, 'room.make', 0, 0, set, id); b.nodes[id]!.label = label; };
+    make('can', 'Motor can: a cup, its cavity a room', { name: 'motor can', shape: 'cup', mat: 'steel-low', a: 26, b: 72, c: 2, d: 3 });
+    make('arm', 'Armature', { name: 'armature', shape: 'rod', mat: 'copper', a: 21, b: 58 });
+    placeBlock(b, 'room.into', 0, 0, { fit: 'clear' }, 'motor'); b.nodes.motor!.label = 'The armature into its can'; wire(b, 'can', 'block', 'motor', 'host'); wire(b, 'arm', 'block', 'motor', 'child');
+    make('sol', 'Solenoid', { name: 'solenoid', shape: 'rod', mat: 'steel-alloy', a: 16, b: 70 });
+    placeBlock(b, 'room.into', 0, 0, { fit: 'clear', refused: 'say' }, 'inside'); b.nodes.inside!.label = 'Try: the solenoid inside the motor'; wire(b, 'motor', 'block', 'inside', 'host'); wire(b, 'sol', 'block', 'inside', 'child');
+    placeBlock(b, 'view.show', 0, 0, {}, 'why'); b.nodes.why!.label = 'Refused, and why'; wire(b, 'inside', 'refused', 'why', 'value');
+    placeBlock(b, 'room.onto', 0, 0, { face: '+x', fit: 'clear' }, 'pair'); b.nodes.pair!.label = 'The solenoid against the motor\'s side'; wire(b, 'motor', 'block', 'pair', 'host'); wire(b, 'sol', 'block', 'pair', 'child');
+    make('bracket', 'Bracket, two bolt holes', { name: 'bracket', shape: 'box', mat: 'al-6061', a: 160, b: 8, c: 70, holes: 2, pcd: 66, hole: 5 });
+    placeBlock(b, 'room.onto', 0, 0, { face: '-y', fit: 'touch' }, 'mounted'); b.nodes.mounted!.label = 'The pair on its bracket'; wire(b, 'pair', 'block', 'mounted', 'host'); wire(b, 'bracket', 'block', 'mounted', 'child');
+    make('bolt', 'Bolt', { name: 'bolt', shape: 'rod', mat: 'steel-alloy', a: 4, b: 22 });
+    placeBlock(b, 'room.through', 0, 0, { line: 'bracket/holes', which: 0, from: 'below', fit: 'clear' }, 'bolted'); b.nodes.bolted!.label = 'A bolt along the bracket\'s hole'; wire(b, 'mounted', 'block', 'bolted', 'host'); wire(b, 'bolt', 'block', 'bolted', 'passer');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'bolted', 'thing', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'bolted', 'says', 'said', 'value');
+    return b;
+  }],
   ] as [string, Make][]);
   return boards.map(([n, f]) => [n, () => tidy(f())] as [string, Make]);
 }

@@ -549,6 +549,13 @@ export const BUILT: Record<string, string> = {
   "research.notes":"2026-10-27T09:49:49.000Z",
   "research.parts":"2026-10-27T05:54:58.000Z",
   "research.toInventory":"2026-10-27T05:54:58.000Z",
+  "room.around":"2026-11-02T18:47:36.000Z",
+  "room.into":"2026-11-02T18:47:36.000Z",
+  "room.make":"2026-11-02T18:47:36.000Z",
+  "room.onto":"2026-11-02T18:47:36.000Z",
+  "room.ring":"2026-11-02T18:47:36.000Z",
+  "room.stack":"2026-11-02T18:47:36.000Z",
+  "room.through":"2026-11-02T18:47:36.000Z",
   "route":"2026-10-27T14:16:39.000Z",
   "rows.grid":"2026-10-26T13:27:56.000Z",
   "rows.ground":"2026-10-26T14:10:44.000Z",
@@ -703,5 +710,6 @@ export const BOARDS_BUILT: Record<string, string> = {
   "Electrical: a resistor heating, swept over current":"2026-10-28T02:22:33.000Z",
   "Paste a bolt onto anything: one cap screw stood on a plate, a round boss and a steel angle, its hole cut by its standards":"2026-11-01T17:57:00.000Z",
   "Cut by the standards: a bearing's housing and its shaft, a dowel's hole, a key's keyways, a pipe port and a panel's cut-out":"2026-11-02T02:29:07.000Z",
-  "The cover follows the bore: widen the bore and the bolt circle, both parts' holes, the bolts and the cover's place follow":"2026-11-01T17:57:00.000Z"
+  "The cover follows the bore: widen the bore and the bolt circle, both parts' holes, the bolts and the cover's place follow":"2026-11-01T17:57:00.000Z",
+  "Nothing can overlap: a starter motor put together by operations, its solenoid refused inside it":"2026-11-02T18:47:43.000Z"
 };

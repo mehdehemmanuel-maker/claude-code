@@ -29,6 +29,10 @@ the heat exposure check). `scripts/by-hand.mjs` counts, in each file under `src/
 `rot` properties written in object literals, read from the syntax tree; `scripts/by-hand.json` holds the counts, and the
 one test fails when any rises. The first count, 2026-11-02: 1,203 in 46 files, `src/nexus/engines.ts` the most (222).
 
+The operations' first slice is built (2026-11-02): `src/nexus/room.ts`, with the nodes Make a solid, Stack, Around, Into
+a room, Onto a face, Ring of copies and Through a line, and a starter board, a starter motor whose solenoid is refused
+inside it. The builders are not yet moved onto it.
+
 Task 10.T24 (interference as a gate) is superseded. The faults about the checker itself (D15, D26, and the clash rules'
 part of D29) are closed with it. The faults about overlaps drawn into builds (D14, D25) stay open, unmeasured: their
 last counts are the ones written in `plan/DEFECTS.md`, and they go when those builders are placed by the operations.

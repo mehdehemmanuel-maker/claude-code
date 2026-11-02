@@ -458,3 +458,4 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
 - 2026-11-02: "I wanna see ss every now and then of what’s actually going on in app" (screenshots of the app itself, as
   it runs, sent every so often)
 - 2026-11-02: "What is taking so long"
+- 2026-11-02: "I’m approaching limit I need to see some major results"

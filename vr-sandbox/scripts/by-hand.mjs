@@ -1,7 +1,8 @@
 // Where a place is still written by hand (decision 0021): nothing checks for overlap, so what is not yet placed by the
 // operations that cannot write one is counted instead, builder by builder. A place written by hand is a property `at`
 // or `rot` in an object literal, read from the syntax tree of each file under src/nexus (oxc's parser, as the bundler
-// rolldown carries it; the views' own panels and cameras, src/nexus/view, are not builds and are not counted). Each count
+// rolldown carries it; the views' own panels and cameras, src/nexus/view, are not builds and are not counted, nor
+// src/nexus/room.ts, the operations themselves, where every place is what an operation gives). Each count
 // may only fall: a builder moved onto the operations counts 0 (scripts/by-hand.json holds the counts it may not rise
 // above).
 //
@@ -16,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const LIMITS = join(root, 'scripts/by-hand.json');
 
-const files = (dir) => readdirSync(dir).flatMap((f) => { const p = join(dir, f); return statSync(p).isDirectory() ? (f === 'view' ? [] : files(p)) : /\.ts$/.test(f) ? [p] : []; });
+const files = (dir) => readdirSync(dir).flatMap((f) => { const p = join(dir, f); return statSync(p).isDirectory() ? (f === 'view' ? [] : files(p)) : /\.ts$/.test(f) && !(f === 'room.ts' && dir.endsWith('nexus')) ? [p] : []; });
 
 /** Each file under src/nexus with a place written by hand, and how many. */
 export function byHand() {

@@ -2569,3 +2569,15 @@ the rest of its cuts, and every other part's, still by booleans): the 72 parts t
 8,788 triangles, and the longest freeze opening the board in the app is 7.8 s (one run each, the same shot script). The
 plate's holes and volume are held by the test "a plate drilled straight through" (`npm run gate`). Fault D36, small
 gaps the booleans leave in a thin gasket's slanted holes, was there before and is filed.
+
+## 2026-11-02: the space where nothing can overlap, first slice in the app
+
+The operations designed for the space (made, stack, around, into, onto, ring, through) are now `src/nexus/room.ts`,
+seven nodes in the library, and a starter board: a starter motor whose armature goes into its can's room, its solenoid
+against the motor's side, the pair on a bracket, a bolt along the bracket's hole. No node takes an x, a y or a z. Asked
+to put the solenoid into the motor as well, the node says "no room: the motor can has no free room left for the
+solenoid (a room is used once: what went in first has it)". The board runs its 13 nodes with none failing (the test
+"every domain, in one pass" runs each node's own tests and the starter boards, `npm run gate`). What is not closed: the
+red team's ten ways past the prototype (a room on a moving host, a bought host on a joint, the fixed 1e-12 m tolerance,
+rounding at 1e20 m, and caller data changed after it is checked) stand; round solids and lines run along y only; and no
+builder is moved onto it yet, so the count of places written by hand is unchanged (`node scripts/by-hand.mjs`).

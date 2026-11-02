@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 624 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 631 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -35,16 +35,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 7 | a standard's, a maker's or a reference table's figure |
-| derived | 338 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 344 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 13 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 7 | typical values or an estimate, said so |
 | simplified | 41 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 86 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 87 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 555 tested here (their own tests: that they do what they say, not that the world does); 59 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 562 tested here (their own tests: that they do what they say, not that the world does); 59 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 194 of 624 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 194 of 631 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (15)
 
@@ -66,10 +66,11 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
 - **ZenRows: read a web page** (`api.zenrows`): A web page fetched through ZenRows (ZENROWS_API_KEY under Node): its scripts run where asked, its words back as Markdown or its HTML as it is. *given, untested*
 
-## 2 · Make: shapes, parts, things (85)
+## 2 · Make: shapes, parts, things (92)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
+- **Around** (`room.around`): A housing made round a block: its cavity is what the block takes (and sweeps as it moves) with the fit's gap, its wall and ends its own; the block inside, never through it *derived, tested here*
 - **Axle** (`vehicle.axle`): An axle of a vehicle: where it is along it (+ forward of its middle), its track, its tyres by size code, whether it steers, drives, has twin tyres, its brakes and how it hangs from the frame. *hypothetical, tested here, before the update*
 - **Bathroom fittings** (`seed.fittings.bathroom`): What makes a room a bathroom: a toilet and a basin against the back wall, a bath along the left (a 1.7 × 0.75 m bath, typical) *hypothetical, untested, before the update*
 - **Battery pack** (`battery.pack`): Cells in a pack: so many groups in series, each so many cells in parallel standing in staggered rows, a busbar over each group, the groups in modules, the modules in a tray. *hypothetical, tested here, before the update*
@@ -107,6 +108,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Grass patch** (`seed.grass`): A foot square (0.3048 m) of lawn: blades scattered on soil from a seed (each drawn blade standing for many) *hypothetical, untested, before the update*
 - **Higgsfield: pictures and video** (`api.higgsfield`): A request to one of Higgsfield's models (its path, as its docs name it: higgsfield-ai/soul/v2/standard for pictures, a video model's for video), its words and any pictures' addresses, sent with HIGGSFIELD_KEY_ID and … *hypothetical, untested*
 - **House** (`seed.house`): A house: its rooms laid out from the plan you pick (studio, 1, 2 or 3 bed) either side of a hall, each spawned as a Room with its fittings, its doors onto the hall and its windows outside decided by what each wall … *hypothetical, untested, before the update*
+- **Into a room** (`room.into`): A block put into a room its host offers (a cup's cavity): standing on its floor on its axis, within it with the fit's gap, and the room then used. *derived, tested here*
 - **Into its cells** (`make.into`): A thing put into each cell of an enclosure (its frames "cell 1", …), every other one turned half round if asked, so each one's plus lies beside the next one's minus. *derived, tested here, before the update*
 - **Joints solved together** (`joints.solve`): Every joint wired in, solved together by least squares (Levenberg–Marquardt): each part's pose found so that all hold, or as near as they let it; each joint's residual in mm and degrees, the parts turned end for end … *derived, tested here*
 - **Kitchen fittings** (`seed.fittings.kitchen`): What makes a room a kitchen: a run of base cabinets and a worktop along the back wall, the sink in it, a stove and a fridge (cabinets 600 deep, 900 high; a 760 mm range; a 750 × 1750 mm fridge: typical) *hypothetical, untested, before the update*
@@ -115,8 +117,10 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Logic or memory cell** (`chip.cell`): Transistors made into a cell: a 6T SRAM bit (two inverters holding it, two pass gates) or a NAND2 gate (two p-type in parallel, two n-type in series), with its first metal wires. *hypothetical, tested here, before the update*
 - **Loop round a block** (`path.loop`): A path round a rectangle, in its lane (inset from the road's middle), driven with the block on the right as traffic keeps right; and where it must stop: before each crossing it meets, every so many metres *hypothetical, tested here, before the update*
 - **Made whole (the attention-to-detail pass and its critic)** (`make.whole`): A thing taken through the make pipeline (make/pipeline.ts): its conditions, its details by rule (welds, screws, finishes; on a road vehicle its mirrors and number plates), and its critic, again until nothing more is … *derived, untested*
+- **Make a solid** (`room.make`): One solid at the origin: a box, a rod, a tube or a cup (its cavity offered as a room); a circle of holes through it if asked, each offered as a line. *hypothetical, tested here*
 - **Motherboard** (`pc.board`): A motherboard of a form factor (ATX, microATX, Mini-ITX: their standards' sizes) with the package in its socket: memory modules (JEDEC DDR4), power stages, chipset, a PCIe x16 slot, an M.2 2280 drive, power … *hypothetical, tested here, before the update*
 - **Neighbourhood** (`seed.neighbourhood`): Streets of blocks with four houses to a block, each house's plan and colours and the car in its drive picked from the seed (change the seed for another street), and cars driving round it, stopping at its lights, as … *hypothetical, untested, before the update*
+- **Onto a face** (`room.onto`): A block put against a face of another (its top, its side), in the space beyond that face, centred on it, with the fit's gap: beside it, never in it *derived, tested here*
 - **Part** (`card.part`): A real part, drawn whole from its standard with every piece inside it: 41 kinds (stepper nema17 40, led red 5mm, bearing 608, rail MGN12H 400, motorplate nema17 t3 aluminium, bolt M8x30, screw M3x10, panhead M1.6 L2 … *specified, tested here, before the update*
 - **Photograph (pixels and its marks)** (`photo.load`): A photograph from the library (view/public/photos), decoded to its pixels, with the points marked on it (photo-marks.ts: its wheels, its outline round it by region), who marked them and how, the thing it is of, and … *hypothetical, tested here*
 - **Picture from words (image model)** (`ai.draw`): Words sent to an image model (fal.ai's FLUX where FAL_KEY is set, else Gemini's), a picture back for each try: ideas to look at, judge, and model from. *hypothetical, untested*
@@ -126,12 +130,14 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Processor die** (`chip.die`): A processor die: its cores (each its logic and its L2), its L3, its uncore (graphics, memory controller, I/O), each from the cells below it placed by the million and billion, never copied; its transistors counted from … *hypothetical, tested here, before the update*
 - **Processor package** (`chip.package`): A die flipped face down into its package: solder bumps in underfill, a soldered heat spreader, the gold lands under it as its socket's datasheet counts them (LGA1151, LGA1700) *hypothetical, tested here, before the update*
 - **Ring** (`shape.torus`): A ring round z: its radius to the middle of the tube, and the tube's radius *hypothetical, tested here, before the update*
+- **Ring of copies** (`room.ring`): So many copies of a block round the y axis at a radius, each in its own wedge with the fit's gap; refused, with both numbers, where a copy needs more than its wedge gives *derived, tested here*
 - **Road** (`seed.road`): A street along x: two lanes of asphalt, centre dashes, sidewalks each side; its length yours (3.6 m lanes, MUTCD dashes, typical) *hypothetical, untested, before the update*
 - **Road system** (`seed.roads`): Streets on a grid of blocks, nx by nz, with a crossing and its stop lights wherever two meet, the lights on their cycle as the clock runs (or held) *hypothetical, untested, before the update*
 - **Room** (`seed.room`): A room: floor, four Walls (each plain, with a door, with a window, or open), and the fittings its type plugs in (a bedroom's bed, a bathroom's toilet, a kitchen's sink…). *hypothetical, untested, before the update*
 - **Sensor** (`make.sensor`): Any sensor as it is made, from one node: a threaded probe (hex, thread, sealing ring, its element in its tip: a temperature sender, a pressure switch, an oxygen sensor), a puck bolted through its middle (a knock … *hypothetical, tested here, before the update*
 - **Sink** (`seed.sink`): A sink with its back to the wall at z = 0, facing +z: a pedestal basin, a vanity, or a kitchen sink in its base cabinet, by its kind (typical sizes) *hypothetical, untested, before the update*
 - **Sphere** (`shape.sphere`): A ball of one material: its radius, so its volume and its mass from its material *hypothetical, tested here, before the update*
+- **Stack** (`room.stack`): Blocks end to end along x, y or z, in the order they are wired, each starting where the last one ends (and past what it sweeps as it moves) with the fit's gap; centred across. *derived, tested here*
 - **Stack** (`make.stack`): Things stacked along x, so many in all, a pitch apart, taking the things wired in in turn: a cell's negative and positive plates, a heat sink's fins, a stator's laminations, a capacitor's foils. *hypothetical, tested here, before the update*
 - **Standard part by size** (`part.family`): A part drawn whole from its standard, its sizes set one by one: 41 families (bolts, nuts, bearings, steppers, rails, extrusions, beams, pipes…) *specified, tested here, before the update*
 - **Starting battery** (`battery.starter`): A 12 V lead-acid starting battery by its BCI group (its case is the standard): six cells of plates and separators, straps, joints through the partitions, electrolyte, vent caps and SAE posts. *specified, tested here, before the update*
@@ -140,6 +146,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Strap across** (`make.strap`): A strap cast or welded over every piece named like a pattern, one for each side they stand on (a cell's plate straps over their lugs, a busbar over a row of terminals); or, in series, the pieces on each side joined … *derived, tested here, before the update*
 - **Terrain** (`terrain`): Ground over w by d, its hills from a seeded noise (the same seed, the same land): relief is how high its highest is over its lowest, roughness how much small detail it has *hypothetical, tested here, before the update*
 - **Terrain of grass patches** (`seed.terrain`): Ground of hills from a seed, covered a foot square at a time with Grass patches standing on it (or bare) *hypothetical, untested, before the update*
+- **Through a line** (`room.through`): A block (a bolt, a shaft) passed along a line its host offers (a hole's, an axis), from below or above: the room it takes, with the fit's gap, is cut from every solid it crosses, so it passes through holes, never … *derived, tested here*
 - **Toilet** (`seed.toilet`): A close-coupled toilet with its back to the wall at z = 0, facing +z, standing on the floor: pan, seat 400 mm up, cistern and flush (typical sizes) *hypothetical, untested, before the update*
 - **Transistor (FinFET)** (`chip.transistor`): The smallest working part of a computer: a FinFET at a real process's published pitches (Intel 22 nm, Intel 14 nm, TSMC N5 as reported): its fins, metal gate on its high-k liner, spacers, raised source and drain, … *specified, tested here, before the update*
 - **Tube** (`shape.tube`): A straight tube along y: outside radius, wall and length *hypothetical, tested here, before the update*

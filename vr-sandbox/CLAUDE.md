@@ -85,6 +85,7 @@ known gaps are there too.
 | Navigation (libraries, flows, search) | `nexus/navigate.ts` (`docs/ATLAS.md` generated); pipelines you run as boards `flows.ts` |
 | Only what the app reaches is kept | the reach check in `tests/nexus/domains.test.ts` |
 | Things placed, never copied; frames; fit in; take apart | `nexus/assembly.ts` |
+| The space where nothing can overlap: solids made and put together only by operations (make, stack, around, into, onto, ring, through), no place ever an input, a room used once, a refusal with both sizes (decision 0021) | `nexus/room.ts` (nodes Make a solid, Stack, Around, Into a room, Onto a face, Ring of copies, Through a line) |
 | Layout, contacts, contact patches of a placed tree | `nexus/make/space.ts` |
 | The contact graph of any thing (what touches what, from the geometry; each distinct thing once); what flows through it, how it bends, buckles and grows when warmed (steps C to F) | `nexus/graph.ts` (nodes `graph`, `flow`, `bend`) |
 | Rules: the heat gate; nothing checks for overlap (decision 0021): places still written by hand counted, each count only falls | `nexus/make/rules.ts`; the count `../scripts/by-hand.mjs` |

@@ -212,8 +212,9 @@ export class PasteCard {
   }
   /** The strip: a chip for each thing that can be pasted, or the note of how to get one. */
   chips(list: { key: string; name: string; says: string }[], note?: string): void {
-    this.strip.replaceChildren(); const lab = document.createElement('span'); lab.className = 'lab';
-    lab.textContent = list.length ? 'Paste onto a surface:' : note ?? 'Put a bolt or a screw on the board (Part families: screw) and it shows here.'; this.strip.append(lab);
+    // (nothing to paste and nothing to say: no strip at all, not a hint over what is shown)
+    this.strip.replaceChildren(); this.strip.style.display = list.length || note ? '' : 'none'; const lab = document.createElement('span'); lab.className = 'lab';
+    lab.textContent = list.length ? 'Paste onto a surface:' : note ?? ''; this.strip.append(lab);
     for (const c of list) { const b = document.createElement('button'); b.className = 'chip'; b.dataset.key = c.key; b.title = c.says; b.innerHTML = `<b>${esc(c.name)}</b>`; if (c.key === this.armedKey) b.classList.add('armed');
       let start: [number, number] | null = null, moved = false;
       b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); b.setPointerCapture(e.pointerId); start = [e.clientX, e.clientY]; moved = false; this.hooks.begin(c.key, e.clientX, e.clientY); });
