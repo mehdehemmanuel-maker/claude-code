@@ -704,5 +704,6 @@ export const BOARDS_BUILT: Record<string, string> = {
   "Business: cash flow, loan and what it is worth":"2026-10-28T02:22:33.000Z",
   "Electrical: a resistor heating, swept over current":"2026-10-28T02:22:33.000Z",
   "Paste a bolt onto anything: one cap screw stood on a plate, a round boss and a steel angle, its hole cut by its standards":"2026-11-01T17:57:00.000Z",
+  "Cut by the standards: a bearing's housing and its shaft, a dowel's hole, a key's keyways, a pipe port and a panel's cut-out":"2026-11-02T02:26:25.000Z",
   "The cover follows the bore: widen the bore and the bolt circle, both parts' holes, the bolts and the cover's place follow":"2026-11-01T17:57:00.000Z"
 };

@@ -2438,3 +2438,16 @@ the centre electrode's tip; the oil filter's can drawn open at its foot over its
 its rail and its drain plug away from the pickup. That engine now shows none at rest (one probe). The larger engines are
 not clean, measured at rest by one probe each: a twin-cam four (80.5 × 97.6 mm) 22, a diesel ohv six (137 × 169 mm) 68, a
 60° V6 (89 × 80 mm) 105. They stay open in fault D25. Checked with `npm run gate`.
+
+## 2026-11-02: the standards' rows asked from the board, and seen in the 3D view (spec 01, I17; I13)
+
+The rows could not be asked from the node board, so nothing of them could be seen in the app. A node, Cut by a standard,
+now asks any row of a part at a point (each row carries the asking a board uses by default), and says its checks and the
+limits its surfaces are held to; a starter board, Cut by the standards, cuts all five into parts: the 6205's housing bore
+and shoulder and its journal on a stepped shaft, the key's keyways in a shaft and through a hub, a dowel's hole, a G 1/2
+port, the push button's cut-out. Photographed in the built app (its board, the 3D view filled, and close-ups by a double
+press on a part). The close-up of the panel showed its cut-out closed by a skin of no thickness: the views drilled a
+section to its depth exactly, so a cut through ended on the far face; one that runs out through the far side now runs a
+tenth of a millimetre past it, and one that stops inside keeps its depth (the views still take 793.5 mm³ from the panel,
+its outline times its thickness, the test "the rest of R18 by rows: imprinted, cut, and found by their own interfaces").
+Checked with `npm run gate`.

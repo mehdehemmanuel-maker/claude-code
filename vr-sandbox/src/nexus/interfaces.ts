@@ -401,6 +401,7 @@ export interface SideRow { frame: 'surface' | 'axis'; /** the material families 
   adds?: { words: string; at: [Ex, Ex, Ex]; why: string }[] }
 export interface NegativeRow { of: { kind: string; says: string }; /** the sizes it is asked for */ asks: string[]; lookups: Lookup[]; let?: LetRow[];
   /** the asker's own surface and its class, so a fit is judged against it */ partner?: { on: string; cls: string }; /** why no fit is judged, where the asker's own limits are not held */ unjudged?: string;
+  /** what it is asked for, as a board asks it by default (lengths in mm) */ example?: Record<string, number | string>;
   sides: Record<string, SideRow>; side: string; sources: string[] }
 const UNIT = { mm: MM, um: 1e-6, '1': 1 } as const;
 // ---- rows (data): the tables rows read and the rows; no code above or below names a row ---------------------------------
@@ -462,7 +463,7 @@ const CLEAR_OF_HOLES: CheckRow = { check: 'breaking in', measure: 'breaking in',
 export const NEGATIVE_ROWS: Record<string, NegativeRow> = {
   // (a 6205's seats: the housing's bore and shoulder, the shaft's journal and shoulder, each ring's class from SKF's tables
   // and its limits from ISO 286; the fit with the ring is not judged, its own tolerance (ISO 492) not held)
-  'bearing seat': { of: { kind: 'bearing seat', says: 'a rolling bearing\'s seat: the housing\'s bore and shoulder, or the shaft\'s journal and shoulder' }, asks: ['number', 'duty'],
+  'bearing seat': { of: { kind: 'bearing seat', says: 'a rolling bearing\'s seat: the housing\'s bore and shoulder, or the shaft\'s journal and shoulder' }, asks: ['number', 'duty'], example: { number: '6205', duty: 'rotating inner ring, normal load' },
     lookups: [{ table: 'BEARINGS', key: '{number}' }, { table: 'SEAT', key: '{number}' }], unjudged: 'the ring\'s own tolerance (ISO 492) is not held here',
     sides: {
       housing: { frame: 'surface', lookups: [{ table: 'BEARING_FIT', band: 'D', where: { ring: 'outer', duty: '{duty}' }, as: { cls: 'fit' } }],
@@ -482,7 +483,7 @@ export const NEGATIVE_ROWS: Record<string, NegativeRow> = {
         mirror: { kind: 'shaft', sex: 'pins', takes: 'Ø{d}', size: { d: 'd', B: 'B' }, std: 'ISO 15', fit: '{fit}', joint: 'fixed' } } },
     side: 'housing', sources: ['ISO 15', 'SKF 6205', 'SKF 17000/1', 'ISO 286-2 deviations'] },
   // (a dowel's hole in each plate it locates: its class by how the part is held, judged against the pin's own m6)
-  'dowel hole': { of: { kind: 'dowel hole', says: 'a dowel\'s hole: the pin locating two parts, its hole held to a class' }, asks: ['d', 'std', 'hold'],
+  'dowel hole': { of: { kind: 'dowel hole', says: 'a dowel\'s hole: the pin locating two parts, its hole held to a class' }, asks: ['d', 'std', 'hold'], example: { d: 6, std: 'ISO 8734', hold: 'located' },
     lookups: [{ table: 'PIN_FIT', key: '{std}', as: { cls: 'pin' } }, { table: 'HOLE_FIT', key: '{hold}', as: { cls: 'hole' } }], partner: { on: 'd', cls: '{pin}' },
     sides: { plate: { frame: 'surface', tools: [{ role: 'remove', turned: [['d/2', '0'], ['d/2', 't']], why: 'the hole for an {std} dowel, Ø{d} mm through, {hole} ({hold})' }],
       zones: [{ on: 'd', basic: 'd', cls: '{hole}' }],
@@ -491,7 +492,7 @@ export const NEGATIVE_ROWS: Record<string, NegativeRow> = {
     side: 'plate', sources: ['ISO 8734', 'MISUMI fits', 'EKINSUN dowels', 'ISO 286-2 deviations'] },
   // (a parallel key's keyways: the shaft's milled with round ends and the key standing out of it; the hub's broached
   // through its length, square, started where the bore falls away under its corners)
-  'parallel key': { of: { kind: 'parallel key', says: 'a parallel key\'s keyways: the shaft\'s, milled with round ends, and the hub\'s, broached through' }, asks: ['d', 'L', 'fit'],
+  'parallel key': { of: { kind: 'parallel key', says: 'a parallel key\'s keyways: the shaft\'s, milled with round ends, and the hub\'s, broached through' }, asks: ['d', 'L', 'fit'], example: { d: 30, L: 40, fit: 'normal' },
     lookups: [{ table: 'KEYS', band: 'd' }, { table: 'KEYWAY', key: '{b}x{h}' }, { table: 'KEY_FIT', key: '{fit}', as: { shaft: 'shaftFit', hub: 'hubFit' } }],
     sides: {
       shaft: { frame: 'surface', tools: [{ role: 'remove', outline: { rect: ['L', 'b'], r: 'b/2' }, depth: 't1', why: 'the shaft\'s keyway {b} mm wide and {L} mm long, its ends round (an end mill\'s), {t1} mm deep (DIN 6885-1)' }],
@@ -507,7 +508,7 @@ export const NEGATIVE_ROWS: Record<string, NegativeRow> = {
         mirror: { kind: 'keyway', sex: 'holes', takes: 'key {b}x{h}', size: { b: 'b', h: 'h', t2: 't2' }, std: 'DIN 6885-1', fit: '{hubFit}', t: 't2', joint: 'slider' } } },
     side: 'shaft', sources: ['DIN 6885-1', 'ISO 286-2 deviations'] },
   // (a port for a parallel pipe thread: drilled, chamfered and tapped, its seal on the face; in metal only)
-  'pipe port': { of: { kind: 'pipe port', says: 'a port for a parallel pipe thread, sealed on its face (ISO 1179-1)' }, asks: ['thread'],
+  'pipe port': { of: { kind: 'pipe port', says: 'a port for a parallel pipe thread, sealed on its face (ISO 1179-1)' }, asks: ['thread'], example: { thread: 'G1/2' },
     lookups: [{ table: 'BSP', key: '{thread}' }, { table: 'G_THREAD', key: '{thread}' }, { table: 'G_PORT', key: '{thread}' }, { table: 'G_TAP_DRILL', key: '{thread}' }],
     let: [{ name: 'P', ex: '25.4 mm / tpi', unit: 'mm', says: 'its pitch, 25.4 mm over the threads in it (derived)' }],
     sides: { port: { frame: 'surface', family: ['steel', 'stainless steel', 'cast iron', 'aluminium', 'copper alloy'],
@@ -521,7 +522,7 @@ export const NEGATIVE_ROWS: Record<string, NegativeRow> = {
       mirror: { kind: 'thread.internal', sex: 'threads', takes: '{thread}', size: { d: 'd', minor: 'minor', P: 'P' }, std: 'ISO 1179-1', fit: 'ISO 228-1', t: 'threadDepth', joint: 'fixed' } } },
     side: 'port', sources: ['ISO 228-1', 'ISO 1179-1', 'BSP taps'] },
   // (a panel's cut-out for a 22 mm control device, its key recess cut with it, its corners sharp within the limit)
-  'panel cut-out': { of: { kind: 'panel cut-out', says: 'a panel\'s cut-out for a 22 mm control device, its key recess with it' }, asks: ['device'],
+  'panel cut-out': { of: { kind: 'panel cut-out', says: 'a panel\'s cut-out for a 22 mm control device, its key recess with it' }, asks: ['device'], example: { device: 'D22' },
     lookups: [{ table: 'CUTOUT', key: '{device}' }],
     sides: { panel: { frame: 'surface', tools: [{ role: 'remove', outline: { circle: 'd', notch: { w: 'notchW', to: 'across - d/2' } }, depth: 't', why: 'the cut-out Ø{d} mm and its key recess {notchW} mm wide, {across} mm across both (IEC 60947-5-1)' }],
       zones: [{ on: 'd', basic: 'd', lo: '0', hi: 'dHi', src: 'IEC 60947-5-1' }, { on: 'recess width', basic: 'notchW', lo: '0', hi: 'notchWHi', src: 'IEC 60947-5-1' }, { on: 'across the recess', basic: 'across', lo: '0', hi: 'acrossHi', src: 'IEC 60947-5-1' },

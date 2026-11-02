@@ -2,7 +2,7 @@
 
 Task in hand: 01.I16 (drag to imprint in the view, the negative shown before cutting)
 Spec in hand: spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 1d55003 (2026-11-02)
+Last commit the gate passed: 800eb71 (2026-11-02)
 
 ## Next three (from the start queue in `plan/README.md`)
 

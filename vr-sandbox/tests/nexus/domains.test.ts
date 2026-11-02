@@ -1042,9 +1042,10 @@ describe('every domain, in one pass', () => {
     expect(planted.match(KIND)?.[0], 'a row tested by a pattern in reapplyImprints, planted').toBe('bearing');
     expect(`function pick(a) {\n  if (a.row === 'bearing seat') return 1;\n}`.match(KIND), 'a row tested by its name, planted').not.toBeNull();
     // (no source file asks for a row by its key outside the rows block: as a row asked, an index, a test or a case (a
-    // family's display name that reads the same is not a reference to the row))
+    // family's display name that reads the same is not a reference to the row). The starter boards are data, as the
+    // evaluation cases are: a board asks a standard by its name)
     const src = (d: string): string[] => readdirSync(join(root, d), { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? src(join(d, e.name)) : /\.ts$/.test(e.name) ? [join(d, e.name)] : []));
-    const texts = src('src').map((f) => { let t = readFileSync(join(root, f), 'utf8'); if (f.endsWith('nexus/interfaces.ts')) { const a = t.indexOf('// ---- rows (data)'), b = t.indexOf('// ---- end of rows'); expect(a > 0 && b > a, 'the rows block marked').toBe(true); t = t.slice(0, a) + t.slice(b); } return [f, t] as const; });
+    const texts = src('src').filter((f) => !f.endsWith('nexus/starters.ts')).map((f) => { let t = readFileSync(join(root, f), 'utf8'); if (f.endsWith('nexus/interfaces.ts')) { const a = t.indexOf('// ---- rows (data)'), b = t.indexOf('// ---- end of rows'); expect(a > 0 && b > a, 'the rows block marked').toBe(true); t = t.slice(0, a) + t.slice(b); } return [f, t] as const; });
     const asks = (k: string) => new RegExp(`(\\brow\\s*:\\s*|\\[\\s*|[!=]==?\\s*|\\bcase\\s+)['"\`]${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"\`]`);
     const named = (keys: string[]) => texts.flatMap(([f, t]) => keys.filter((k) => asks(k).test(t)).map((k) => `${f}: ${k}`));
     expect(['if (a.row === \'parallel key\') x();', "imprint(h, { row: 'pipe port', size }, a, b)", "NEGATIVE_ROWS['bearing seat']", "name: 'parallel key', path: []"].map((t) => ['parallel key', 'pipe port', 'bearing seat'].some((k) => asks(k).test(t))), 'asked by name, planted three ways; a display name is not').toEqual([true, true, true, false]);

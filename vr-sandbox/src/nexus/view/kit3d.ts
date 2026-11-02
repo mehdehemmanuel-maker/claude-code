@@ -251,7 +251,10 @@ function drill(g: THREE.BufferGeometry, cuts: Cut[], key: string): THREE.BufferG
     // about that axis, from just outside its face)
     // (a cut of any section, a keyway or a panel's cut-out: its outline pushed in along its axis, from just outside its face,
     // turned so its x lies along its u (spec 01, I17))
-    if (c.sect) { const f = cutFrame(c), g2 = new THREE.ExtrudeGeometry(new THREE.Shape(c.sect.map(([x, y]) => new THREE.Vector2(x, y))), { depth: c.depth + 1e-4, bevelEnabled: false, curveSegments: 1 }); g2.translate(0, 0, -1e-4);
+    // (one that runs out through the far side runs on a tenth of a millimetre past it, so no skin is left on that face; one
+    // that stops inside keeps its own depth)
+    if (c.sect) { const f = cutFrame(c), bb = (g.boundingBox ?? (g.computeBoundingBox(), g.boundingBox))!, far = Math.max(...[0, 1, 2, 3, 4, 5, 6, 7].map((k) => (k & 1 ? bb.max.x : bb.min.x) * f.d[0] + (k & 2 ? bb.max.y : bb.min.y) * f.d[1] + (k & 4 ? bb.max.z : bb.min.z) * f.d[2])) - (c.at[0] * f.d[0] + c.at[1] * f.d[1] + c.at[2] * f.d[2]);
+      const through = c.depth >= far - 1e-6, g2 = new THREE.ExtrudeGeometry(new THREE.Shape(c.sect.map(([x, y]) => new THREE.Vector2(x, y))), { depth: c.depth + (through ? 2e-4 : 1e-4), bevelEnabled: false, curveSegments: 1 }); g2.translate(0, 0, -1e-4);
       const b = new Brush(clean(g2)); b.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(...f.u), new THREE.Vector3(...f.w), new THREE.Vector3(...f.d))); b.position.set(...c.at); b.updateMatrixWorld();
       a = csg.evaluate(a, b, SUBTRACTION); continue; }
     const dir = new THREE.Vector3(...c.dir).normalize(), turned = c.prof ? [[0, -1e-4], [c.prof[0]![0], -1e-4], ...c.prof, [0, c.prof[c.prof.length - 1]![1]]].map(([a, y]) => new THREE.Vector2(a!, y!)) : null;
