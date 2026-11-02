@@ -1,8 +1,8 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 01.I16 (failing on its blind clause); designing, nothing built: the node creator, the watchers, a space with no overlap
+Task in hand: 01.I16 (failing on its blind clause); the node creator's spec in the plan (13.NC1), nothing of it built; designing: the watchers, a space with no overlap
 Spec in hand: spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 74155a9 (2026-11-02)
+Last commit the gate passed: 9a8862f (2026-11-02)
 
 ## Next three (from the start queue in `plan/README.md`)
 

@@ -9,8 +9,8 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 
 | What | Count |
 | --- | --- |
-| Tasks in the specs | 130: 25 passing (by the evaluator), 7 claimed by the builder and not yet judged, the rest failing |
-| Faults found in the code | 31 (16 fixed) |
+| Tasks in the specs | 145: 25 passing (by the evaluator), 7 claimed by the builder and not yet judged, the rest failing |
+| Faults found in the code | 35 (16 fixed) |
 | Rules in the constitution | 29 (12 not yet enforced by a check) |
 | Questions for the user | 15 (0 unanswered: ) |
 | Research passes | 35 in 6 rounds |
@@ -75,6 +75,10 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | D29 | The clash rules and the fields read each round with 24 facets whatever its size: an 80 mm round's chord lies 0.684 mm inside its true surface, so a fit closer than that is read by the facets, not the part. Drawn finer (I16, within 0.05 mm), the engine board's checks took 263 s where they took 49.7 s (one run each, 2026-11-02), so the checks keep 24 until they are made exact | `src/nexus/make/rules.ts`, `src/nexus/make/critic.ts` (meshClashes over `leafGeometry`) | open | 10.T24 |
 | D30 | The paste board ("Paste a bolt onto anything") centres each thing on y = 0, so the 10 mm plate stands 15 mm above the 40 mm boss's floor and, with the grid laid at the floor of what is shown, reads as floating (the I16 blind check's readers said so) | `src/nexus/starters.ts` | open | 01.I13 |
 | D31 | The built-parts check failed whenever its walk ran in the pool's workers and passed in one thread: the workers' bundle (`node_modules/.cache/nexus-trial-worker.mjs`) was one file for every checkout sharing `node_modules`, so a copy's edited engine builder (the engine workflow's agents, 2026-11-02) ran in this checkout's workers; 235 pieces of the engine head, the whole engine and the Corolla read as unstored, on the commit before I16 too | `src/nexus/pool.ts` (nodeHands) | fixed 2026-11-02: the bundle named for its checkout (decision 0017); the walk spread over the workers finds 0 unstored, 0 outdated, 0 misplaced (`npm run gate`) | 11.LW15 |
+| D32 | A fold can reorder a many-input, though `collapse` says "What the board computes is the same before and after": the engine feeds a many-input's wires sorted by their source's id, and `collapse` gives the group a new id (`uid('g')`, a 'g' and seven random letters or digits, so it sorts before every `p…`), `expand` gives an inner node whose id is taken a random one, and `mergeTwins` moves wires to the first twin, so the piece moves in a combine's list and the assembly changes. Probed: "Steel, finished five ways" with f1, s1 and p1 folded with the default id, all's assembly differs 10 times in 10 (under 'g1' it differs, under 'p1z' it does not); two folds given one inner board, unfolded, differ; twins 'z1' and 'a0' merged turn a combine's 'other, twin' into 'twin, other'. It breaks C26 | `src/nexus/dataflow.ts:325` (the sort), `:480-482` (collapse, its comment and its id), `:539` (expand), `:610` (mergeTwins); `src/nexus/boards.ts:145` (uid) | open | 13.NC2 |
+| D33 | "Open a copy to change" drops a made node's values: `openCopy` puts the block's board in the node's place with no `set`, so every value typed on the node (kept in its `set` by the inspector, read by the engine for an unwired input) is lost, and the copy runs on its inside's defaults. Probed by running the statement on a board: a block `a*3` placed with 5 typed gives 15; its copy gives 3; with its `set` kept, 15. Every node type would meet it | `src/nexus/view/nodes.ts:482` (openCopy), `:756-760` (typed values kept in `set`), `src/nexus/dataflow.ts:334` (an unwired input read from `set`) | open | 13.NC10 |
+| D34 | A saved block whose board holds another saved block fails on the pool's workers: `carryOf` carries the one block's board, and the worker registers only that block, so a node of the inner block finds no block of its id there. Probed 2026-11-02: 2,000 jobs of such a block sent with wide: true, only the outer block carried, ran on 4 workers and 1,999 failed with 'no block … in the library' (the first, run here, passed). A made node holding made nodes would meet it, and so would a fit, sweep or variants run over it on the workers. Planted in 13.NC8's check: with only the outer block carried, a fit.target over it run on the workers fails | `src/nexus/trial-worker.ts:14` (one `register`, of the block carried), `src/nexus/dataflow.ts:705` (carryOf), `src/nexus/pool.ts:13` (Carry) | open | 13.NC8 |
+| D35 | `wide: true` does not put a batch on the workers, though `ManyOptions` says "On the workers whatever the first trial took": the test at `:72` reads `wide` (or workers already started) as a lower bar, a batch going wide only when its rest would take over 50 ms, so a quick batch stays here. Probed 2026-11-02: 5 jobs with wide: true on 4 cores ran here (wide false, 1 worker). A check that means to run on the workers (13.NC8's planted pool case) can pass without reaching them | `src/nexus/pool.ts:62` (the comment), `:72` (the test) | open | 13.NC8 |
 
 ## Findings by theme (numbers are rows of `research/00-synthesis.md`)
 
@@ -281,6 +285,26 @@ found in the code), `QUESTIONS.md` (what only the user decides), `research/` (th
 | CC3 | `cost.process` (Ashby) with its envelope; `dfa.check` (the three Boothroyd–Dewhurst questions) | CC1 | failing |
 | CC4 | Learning curves with their fitted window named; inflation and exchange as visible dated nodes | CC3 | failing |
 | CC5 | Supply-risk rollup below the BOM | CC1 | failing |
+
+### 13-node-creator (15)
+
+| Id | Task | After | State |
+| --- | --- | --- | --- |
+| NC1 | Decision 0019 (the node creator extends its owners; what is done on a board is recorded once, and read by every agent that needs it) and spec 13 … | — | failing |
+| NC2 | A fold keeps a many-input's order (fault D32): only a wire made in place of another (by collapse, expand, mergeTwins or a rewrite) carries … | NC1 | failing |
+| NC3 | A fold no stronger than its inside: runInside returns each output's evidence, its warnings and whether it extrapolated (_evidence by port, … | NC1 | failing |
+| NC4 | Repeats found by an id-free shape key, by extending shapeKeys and patterns (not a second miner): places grown in step while every place still … | NC1 | failing |
+| NC5 | An input that sets an inner setting: group.in gains `into`; runInside runs a bound copy of the inner board, cached for each set of bound values, … | NC1 | failing |
+| NC6 | A node or a node type from a shape's places: what agrees a constant; what differs an input (type, unit and choices from its own definition; … | NC4, NC5 | failing |
+| NC7 | Proved before offered, against the board's own last run: a place into which a ± comes, or a proposal with a block that is not pure below a place, … | NC2, NC3, NC6 | failing |
+| NC8 | One node, one block, and who made it: a type's id from its identity (shape key, constants, inputs with bindings and defaults); the same identity … | NC7, 01 I16 | failing |
+| NC9 | A whole board as one node (foldBoard): every node but in.* nodes, sinks and notes folded; each in.* stays on the board as the node's input, its … | NC7, NC8 | failing |
+| NC10 | Open a copy keeps a made node's values (fault D33): copyInside, beside expand in dataflow.ts, puts the block's board in the node's place with the … | NC5, 01 I16 | failing |
+| NC11 | opsOf: the operations between two boards (place, remove, set, move, label, wire, unwire, group, ungroup, block, title), inside groups by their … | NC1 | failing |
+| NC12 | The event and the log's rules in boards.ts, in place of the unused Board.calls: who, when, which board, what kind, the operations; appends only; … | NC11 | failing |
+| NC13 | The recorder on the page: the event closed at the next pushUndo or in a microtask; eight whole-board swaps through useBoard, each an 'open' by the … | NC12, 01 I16 | failing |
+| NC14 | The offer on the page, the computer and the phone: offersOf's proved proposals, read by suggest as kind 'type', one card at a time at 3 places or … | NC8, NC10, NC13, 01 I16 | failing |
+| NC15 | Every author's boards searched together: the open board, the boards the person kept and the boards of saved blocks, each place with its board; … | NC13, NC14, 01 I16 | failing |
 
 ## Rules not yet enforced
 

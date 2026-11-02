@@ -78,7 +78,7 @@ known gaps are there too.
 | The one test (every domain), the scans of what is written (sources, placeholders, keys), and the generated docs (NODES, ATLAS, DEPENDENCIES, nodes' dates) | `tests/nexus/domains.test.ts`, `tests/nexus/scans.ts`, `tests/nexus/docs.ts` (`UPDATE_DOCS=1`; it writes the nodes' dates to `nexus/built.ts`) |
 | Nodes: blocks, stages, the library catalogue | `nexus/blocks.ts` (`docs/NODES.md` generated) |
 | The built-parts library: every piece every build makes, stored by design, and its law | `nexus/stock.ts` (`src/data/stock.json` generated) |
-| Running boards (cache, lists, units on wires, groups, clock) | `nexus/dataflow.ts`; a board's own record `boards.ts` |
+| Running boards (cache, lists, units on wires, groups, clock); repeats made nodes and proved equal before they are offered (`offersOf`, `useOffer`), a board folded whole (`foldBoard`), a made node opened with its values (`copyInside`) (spec 13, not built) | `nexus/dataflow.ts`; a board's own record `boards.ts`, and its event log, the one record of who changed a board and how (spec 13, not built) |
 | Running many trials at once (workers, one for each core, each with the whole library) | `nexus/pool.ts`, `nexus/trial-worker.ts` |
 | Starter boards | `nexus/starters.ts` |
 | Navigation (libraries, flows, search) | `nexus/navigate.ts` (`docs/ATLAS.md` generated); pipelines you run as boards `flows.ts` |
