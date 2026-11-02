@@ -4,7 +4,7 @@
 // space (view/space.html: any scale, a headset) is one press further.
 
 import * as THREE from 'three';
-import { cutSolid, geometry, leafGeometry, leafMaterial, studioScene } from './kit3d';
+import { cutSolid, geometry, leafGeometry, studioScene } from './kit3d';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { SpaceView, type Shown } from './space3d';
 import { flatten, isAssembly, isPart, leavesOf, matrixOf, type Assembly } from '../assembly';
@@ -194,14 +194,14 @@ export class PasteSession implements PasteHooks {
   private recipe: PasteRecipe | null = null; private copied: PasteRecipe | null = null; private plan: PastePlan | null = null;
   private result: { plan: PastePlan; out: Record<string, unknown> | Error; verdict: Verdict } | null = null;
   private inflight: PastePlan | null = null; private queued: PastePlan | null = null; private screen: [number, number] = [0, 0];
-  private readonly preview = new THREE.Group(); private counts = { remove: 0, keep: 0, contact: 0 };
+  private readonly preview = new THREE.Group(); private counts = { remove: 0, keep: 0, contact: 0, ghost: 0 };
   private accepted: { id: string; checks: string } | null = null; private menuHit: { hit: Hit; point: THREE.Vector3; ray: THREE.Ray } | null = null;
   constructor(private readonly dock: Dock3D, private readonly wall: PasteWall) { this.preview.matrixAutoUpdate = false; this.preview.renderOrder = 20; dock.overlays.add(this.preview); }
   state(): 'idle' | 'armed' | 'held' | 'pinned' { return this.st; }
   active(): boolean { return this.st !== 'idle'; }
   pinned(): boolean { return this.st === 'pinned'; }
   fits(): boolean { return !!this.result && this.result.plan === this.plan && this.result.verdict.fits; }
-  drawn(): { remove: number; keep: number; contact: number } { return { ...this.counts }; }
+  drawn(): { remove: number; keep: number; contact: number; ghost: number } { return { ...this.counts }; }
   /** How long the last preview took: the paste node's run, and drawing what it gave (ms). */
   timing = { run: 0, draw: 0 };
   last(): { plan: PastePlan; out: Record<string, unknown> } | null { const r = this.result; return r && !(r.out instanceof Error) ? { plan: r.plan, out: r.out } : null; }
@@ -277,7 +277,7 @@ export class PasteSession implements PasteHooks {
   }
   private showCard(): void { const r = this.result; if (!this.card) return; if (!r || r.plan !== this.plan) { this.card.busy(true); return; } this.card.show(r.verdict, { pinned: this.st === 'pinned', at: this.screen }); this.card.busy(!!this.inflight); }
   private clear(): void { this.st = 'idle'; this.recipe = null; this.plan = null; this.result = null; this.queued = null; this.clearDrawn(); }
-  private clearDrawn(): void { for (const c of [...this.preview.children]) { this.preview.remove(c); c.traverse((o) => { const m = o as THREE.Mesh; if (!o.userData.shared) m.geometry?.dispose(); const mt = m.material as THREE.Material | THREE.Material[] | undefined; for (const x of Array.isArray(mt) ? mt : mt ? [mt] : []) x.dispose(); }); } this.counts = { remove: 0, keep: 0, contact: 0 }; this.dock.redraw(); }
+  private clearDrawn(): void { for (const c of [...this.preview.children]) { this.preview.remove(c); c.traverse((o) => { const m = o as THREE.Mesh; if (!o.userData.shared) m.geometry?.dispose(); const mt = m.material as THREE.Material | THREE.Material[] | undefined; for (const x of Array.isArray(mt) ? mt : mt ? [mt] : []) x.dispose(); }); } this.counts = { remove: 0, keep: 0, contact: 0, ghost: 0 }; this.dock.redraw(); }
   /** What the run gives, drawn: the cut solids in red over all (seen through the part), the keep zones as amber cages,
    *  the contacts as green rings, the frame's normal as a white arrow and its u as a blue tick, the bolt seated as a ghost. */
   private draw(plan: PastePlan, out: Record<string, unknown> | Error): void {
@@ -293,9 +293,10 @@ export class PasteSession implements PasteHooks {
     const reach = Math.max(0.01, ...im.cuts.map((c) => Math.max(c.r, ...(c.prof ?? []).map((p) => p[0])))) * 3, at = new THREE.Vector3(...im.frame.at), n = new THREE.Vector3(...im.frame.n), u = new THREE.Vector3(...im.frame.u);
     const arrow = new THREE.ArrowHelper(n, at, reach, 0xffffff, reach * 0.25, reach * 0.12); arrow.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material | undefined; if (m) { m.depthTest = false; m.transparent = true; } o.renderOrder = 32; }); this.preview.add(arrow);
     const tick = new THREE.Line(new THREE.BufferGeometry().setFromPoints([at, at.clone().addScaledVector(u, reach * 0.6)]), new THREE.LineBasicMaterial({ color: col(ROLE_COLOUR.u), depthTest: false })); tick.renderOrder = 32; this.preview.add(tick);
-    // (the ghost: the bolt as the node seats it, the part's second piece in its pasted output)
+    // (the ghost: the bolt as the node seats it, the part's second piece in its pasted output, seen through the part it goes
+    // into, as the legend says: it sat inside the uncut plate, drawn behind it, so it was never seen (the I16 evaluator))
     const pasted = out.pasted as Part | undefined, bolt = pasted?.parts?.[1];
-    if (bolt && !im.refused) for (const l of leavesOf({ name: 'ghost', parts: [bolt] })) { const g0 = leafGeometry(l.part, true); if (!g0) continue; const mat = leafMaterial(l.part).clone(); mat.transparent = true; mat.opacity = 0.3; mat.depthWrite = false; const m = new THREE.Mesh(g0, mat); m.userData.shared = true; m.matrixAutoUpdate = false; m.matrix.copy(l.m); m.renderOrder = 29; this.preview.add(m); }  // (its geometry the view's own, kept: never disposed with the preview)
+    if (bolt && !im.refused) for (const l of leavesOf({ name: 'ghost', parts: [bolt] })) { const g0 = leafGeometry(l.part, true); if (!g0) continue; const mat = new THREE.MeshBasicMaterial({ color: col(ROLE_COLOUR.ghost), transparent: true, opacity: 0.35, depthTest: false, depthWrite: false }); const m = new THREE.Mesh(g0, mat); m.userData.shared = true; m.matrixAutoUpdate = false; m.matrix.copy(l.m); m.renderOrder = 29; this.preview.add(m); this.counts.ghost++; }  // (its geometry the view's own, kept: never disposed with the preview)
     this.dock.redraw();
   }
 }
@@ -312,25 +313,25 @@ export class Dock3D {
   private gridCell = 0; private framed = '';
   private readonly ray = new THREE.Raycaster();
   private readonly sun = new THREE.DirectionalLight(0xffffff, 1.4);
-  private readonly catcher = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShadowMaterial({ opacity: 0.38, depthWrite: false }));
+  private readonly catcher = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.ShadowMaterial({ opacity: 0.24, depthWrite: false }));
   /** What is drawn over what is shown and is not of it (a paste's preview): out of picks and out of the view's bounds. */
   readonly overlays = new THREE.Group();
   /** A light from where the view stands, so the faces turned to it are never lost in the dark (fault D16). */
-  private readonly fill = new THREE.DirectionalLight(0xffffff, 1.3);
+  private readonly fill = new THREE.DirectionalLight(0xffffff, 1.0);
   /** The paste under way, if the page made one (view/dashboard.ts). */
   paste: PasteSession | null = null;
 
   constructor(private readonly host: HTMLElement, private readonly picked: (key: string) => void) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.5;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.3;
     this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; this.renderer.localClippingEnabled = true;
     // (the canvas first in its element, so the labels laid over it are painted above it (fault D16: the count was under it))
     host.prepend(this.renderer.domElement); this.renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;touch-action:none';
     // (fault D16: what is shown read too dark on the near-black it stood on. A backdrop of its own, lit from the view as well
     // as by the studio and the sun: drawing choices, tuned until a part stands out from it by at least WCAG's 3:1)
     this.scene.background = new THREE.Color(BACKDROP);
-    this.scene.environment = new THREE.PMREMGenerator(this.renderer).fromScene(studioScene(), 0.02).texture; this.scene.environmentIntensity = 2.8;
+    this.scene.environment = new THREE.PMREMGenerator(this.renderer).fromScene(studioScene(), 0.02).texture; this.scene.environmentIntensity = 2.4;
     this.scene.add(this.fill, this.fill.target);
     this.scene.add(new THREE.HemisphereLight(0xdfe9ff, 0x101820, 0.4));
     // the sun: high and to one side, casting shadows onto what is under it and onto the ground (a plane that shows only
@@ -462,7 +463,7 @@ export class Dock3D {
   }
   /** The ground's grid: cells a decade at a time, by how far the view is from what it looks at. */
   private layGrid(): void {
-    const dist = this.camera.position.distanceTo(this.controls.target), cell = 10 ** Math.floor(Math.log10(Math.max(1e-6, dist / 4)));
+    const dist = this.camera.position.distanceTo(this.controls.target), cell = 10 ** Math.floor(Math.log10(Math.max(1e-6, dist / 10)));  // (a decade finer than a quarter of the way off: a part a hand's width across stands on cells it can be measured by)
     if (cell === this.gridCell) return; this.gridCell = cell;
     for (const c of [...this.grid.children]) { this.grid.remove(c); ((c as THREE.LineSegments).geometry as THREE.BufferGeometry).dispose(); }
     // (just lighter than the backdrop: seen, never louder than what stands on it)

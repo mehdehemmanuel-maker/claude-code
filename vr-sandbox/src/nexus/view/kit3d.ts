@@ -141,7 +141,11 @@ const matFor = (color0: number, mat: string | undefined, glow: boolean, finish?:
     const rough = Math.min(1, (lk?.rough !== undefined ? lk.rough : sf ? Math.sqrt(sf.lay ? sf.alphaAlong : sf.alphaAcross) : f?.rough ?? (glass ? 0.05 : metal ? 0.35 : rubber ? 0.9 : mat === 'leaf' ? 0.8 : mat === 'cotton' || mat === 'foam' ? 0.95 : 0.6)) + w * 0.35);
     const aniso = sf?.lay && sf.alphaAcross > sf.alphaAlong ? Math.sqrt((sf.alphaAcross - sf.alphaAlong) / (1 - sf.alphaAlong)) : 0;
     // (tinted glass, a car's windows, is mostly reflection: nearly opaque, dark, glossy; clear glass and lenses are see-through)
-    const tinted = glass && c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.2, base = { color: c, roughness: rough, metalness: lk ? lk.metal : sf && metal ? 1 : f?.metal ?? (metal ? 0.85 : 0), transparent: glass && !glow, opacity: glass && !glow ? (tinted ? 0.86 : 0.3) : 1, ...(glow ? { emissive: color, emissiveIntensity: 1.6 } : {}) };
+    // (a near-black finish on a metal is a coating, not the metal: black oxide is a film of magnetite, drawn as a dark gloss
+    // that shows its form in what it reflects, not as a metal with a black mirror (which drew a socket screw as a black blob:
+    // the I16 blind check's readers). An estimate of how it looks)
+    const coated = metal && !lk && c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.2;
+    const tinted = glass && c.getHSL({ h: 0, s: 0, l: 0 }).l < 0.2, base = { color: c, roughness: coated ? Math.min(rough, 0.32) : rough, metalness: coated ? 0 : lk ? lk.metal : sf && metal ? 1 : f?.metal ?? (metal ? 0.85 : 0), transparent: glass && !glow, opacity: glass && !glow ? (tinted ? 0.86 : 0.3) : 1, ...(glow ? { emissive: color, emissiveIntensity: 1.6 } : {}) };
     // (a turned or lofted shell is open at its ends or its inside: drawn on both its faces; paint and glass take a clear
     // coat, the gloss that shows a body's shape in what it reflects)
     m = lk && lk.clear > 0 ? new THREE.MeshPhysicalMaterial({ ...base, clearcoat: lk.clear * (1 - w), clearcoatRoughness: 0.03 + w * 0.3, ...(aniso > 0 && lk.flake === 0 ? { anisotropy: aniso, anisotropyRotation: Math.PI / 2 } : {}) })

@@ -99,7 +99,10 @@ function metrics(): void {
   $('metNote').textContent = endless ? 'What is shown repeats for ever: these figures are for one cell of it.' : placed ? `What is shown spans ${show(box.x, 'm')} × ${show(box.z, 'm')}, ${show(box.y, 'm')} high.` : 'Wire something into a "Show in space" node to measure it here.';
   $('metOf').textContent = wall.boardTitle();
   // (what is drawn, said as it is: pieces inside or under others are drawn and counted, though not seen until cut open)
-  $('stat3d').textContent = st.instances ? `${st.instances.toLocaleString()} pieces drawn, counting those inside or under others (Cut shows them)${st.boxes ? `; ${st.boxes.toLocaleString()} far away, shown as plain boxes` : ''}` : '';
+  // (the things shown first, as a reader counts them; then the pieces they are drawn from, said as hidden where they are:
+  // "9 pieces drawn" beside three things seen read as a miscount to every blind reader)
+  const shownThings = things.reduce((k, x) => k + (isAssembly(x.thing) && !x.thing.tiled ? x.thing.items.length : 1), 0);
+  $('stat3d').textContent = st.instances ? `${shownThings.toLocaleString()} thing${shownThings === 1 ? '' : 's'} shown, drawn from ${st.instances.toLocaleString()} pieces, some inside others (Cut shows them)${st.boxes ? `; ${st.boxes.toLocaleString()} far away, shown as plain boxes` : ''}` : '';
 }
 
 // ---- variations: one node, each of an input's choices -----------------------------------------------------------------

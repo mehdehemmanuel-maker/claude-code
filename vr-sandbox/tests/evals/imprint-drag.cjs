@@ -84,9 +84,12 @@ async function partPaste(browser, port) {
     const P = [-0.03, 0.005, -0.03], pt = await proj(p, P), t0 = Date.now(); await drag(p, await chipAt(p), pt); await previewed(p); const tPrev = Date.now() - t0;
     const s1 = await shot(p, 'i16-1-held'), st1 = await p.evaluate(() => ({ st: window.dashboard.paste.state(), drawn: window.dashboard.paste.drawn(), at: window.dashboard.paste.last()?.plan.drop.at, head: document.querySelector('.paste-card .head')?.textContent }));
     console.log(`     the drag to its preview took ${tPrev} ms (moves and one or more runs)`);
-    ok(st1.st === 'held', `1: held (${st1.st})`); ok(JSON.stringify(st1.drawn) === JSON.stringify({ remove: 1, keep: 1, contact: 1 }), `1: drawn ${JSON.stringify(st1.drawn)}`);
+    ok(st1.st === 'held', `1: held (${st1.st})`); ok(st1.drawn.remove === 1 && st1.drawn.keep === 1 && st1.drawn.contact === 1 && st1.drawn.ghost >= 1, `1: drawn ${JSON.stringify(st1.drawn)}`);
     ok(st1.at && st1.at.every((v, i) => Math.abs(v - P[i]) < 2e-4), `1: dropped at (${(st1.at ?? []).map((v) => (v * 1000).toFixed(2)).join(', ')}) mm`); ok(/^✓ Fits:/.test(st1.head ?? ''), `1: the card says "${st1.head}"`);
     const ptsRole = { remove: await proj(p, [-0.03, 0.001, -0.03]), contact: await proj(p, [-0.03 + 0.0055, -0.0035, -0.03]), keep: await proj(p, [-0.03 + 0.006, 0.005 + 0.018, -0.03 + 0.006]) };
+    // (the ghost: the screw's shank below the plate, seen through it: lighter there than in shot 0)
+    const shank = await proj(p, [-0.03, -0.022, -0.03]), [g0, g1] = await Promise.all([patches(p, s0, [shank]), patches(p, (await p.screenshot()), [shank])]);
+    const lumOf = ([r, g, b]) => 0.2126 * r + 0.7152 * g + 0.0722 * b; ok(lumOf(g1[0]) - lumOf(g0[0]) >= 20, `1: the screw as it will sit seen through the plate (its shank ${lumOf(g0[0]).toFixed(0)} → ${lumOf(g1[0]).toFixed(0)})`);
     const [b0, b1] = await Promise.all([patches(p, s0, Object.values(ptsRole)), patches(p, s1, Object.values(ptsRole))]);
     Object.keys(ptsRole).forEach((k, i) => { const off = hueOff(b1[i], ROLE[k]), moved = dist(b1[i], b0[i]); ok(off <= 30 && moved >= 40, `1: ${k} seen where it is drawn: hue ${off.toFixed(0)}° from its colour, moved ${moved.toFixed(0)} from shot 0 (rgb ${b1[i].map((v) => v.toFixed(0)).join(',')})`); });
     const cb1 = await cardBox(p); ok(!(pt[0] >= cb1.x && pt[0] <= cb1.x + cb1.width && pt[1] >= cb1.y && pt[1] <= cb1.y + cb1.height), '1: the card does not cover the point');
@@ -128,8 +131,9 @@ async function partCancel(browser, port) {
     }
     // shot 7: refused 4 mm from the edge
     const j7 = await boardJSON(p); await drag(p, await chipAt(p), await proj(p, [-0.046, 0.005, 0])); await previewed(p); await p.mouse.up(); await frames(p); await shot(p, 'i16-7-refused');
-    const r7 = await p.evaluate(() => ({ head: document.querySelector('.paste-card .head')?.textContent, go: document.querySelector('.paste-card button[data-act=accept]')?.disabled, drawn: window.dashboard.paste.drawn() }));
-    ok(/Does not fit: edge distance, short by 6\.8 mm/.test(r7.head ?? ''), `7: "${r7.head}"`); ok(r7.go === true, '7: Cut it disabled');
+    const r7 = await p.evaluate(() => ({ head: document.querySelector('.paste-card .head')?.textContent, first: document.querySelector('.paste-card li')?.textContent, go: document.querySelector('.paste-card button[data-act=accept]')?.disabled, drawn: window.dashboard.paste.drawn() }));
+    ok(/^✕ edge distance 4 mm/.test(r7.first ?? ''), `7: its failing check crossed: "${r7.first}"`);
+    ok(/Does not fit: edge distance, short by 6\.8 mm/.test(r7.head ?? ''), `7: "${r7.head}"`); ok(r7.go === true, '7: Cut it disabled'); ok(await p.$eval('.paste-card button[data-act=accept]', (b) => b.textContent) === 'Cannot cut: it does not fit', '7: the button says why it cannot cut');
     await p.keyboard.press('Enter'); await frames(p); ok((await boardJSON(p)) === j7, '7: Enter changes nothing'); ok(r7.drawn.remove === 1, '7: the red still drawn');
     await p.keyboard.press('Escape');
     ok(!errs.length, `cancel: no page errors${errs.length ? `: ${errs.join(' | ')}` : ''}`);

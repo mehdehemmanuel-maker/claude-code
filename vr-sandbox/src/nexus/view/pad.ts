@@ -192,7 +192,7 @@ const PASTE_CSS = `#stat3d{z-index:6;background:rgba(8,14,24,.72);padding:3px 7p
 .paste-card .legend{display:flex;flex-direction:column;gap:2px;color:#b8c7d9;margin:4px 0}.paste-card .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
 .paste-card .note{color:#ffd180;margin:4px 0}.paste-card details.more summary{cursor:pointer;color:#80deea;min-height:24px}.paste-card .note.bad{color:#ff8a80}.paste-card .busy{color:#80deea}
 .paste-card .btns{display:flex;gap:8px;margin-top:6px}.paste-card button{min-width:44px;min-height:44px;padding:0 14px;border-radius:8px;border:1px solid rgba(255,255,255,.3);background:#1d2b3f;color:#fff;font:inherit;cursor:pointer}
-.paste-card button.go{background:#c62828;border-color:#ff8a80}.paste-card button:disabled{opacity:.45;cursor:not-allowed}
+.paste-card button.go{background:#c62828;border-color:#ff8a80}.paste-card button:disabled{background:#2a3240;border-color:#4a5568;color:#9aa5b4;cursor:not-allowed}
 .paste-menu{position:absolute;z-index:9;background:rgba(8,14,24,.96);border:1px solid rgba(64,196,255,.5);border-radius:8px;padding:4px;display:flex;flex-direction:column;font:12px system-ui,sans-serif}
 .paste-menu button{min-height:44px;text-align:left;padding:0 12px;background:none;border:none;color:#e8f1ff;font:inherit;cursor:pointer;border-radius:6px}.paste-menu button:hover:not(:disabled){background:#1d2b3f}.paste-menu button:disabled{opacity:.5;cursor:not-allowed}
 .paste-menu .why{color:#9fb3c8;padding:0 12px 6px;font-size:11px}`;
@@ -237,7 +237,7 @@ export class PasteCard {
     if (v.note) { const n = document.createElement('div'); n.className = 'note bad'; n.textContent = v.note; c.append(n); }
     const busy = document.createElement('div'); busy.className = 'busy'; busy.style.display = 'none'; busy.textContent = 'working…'; c.append(busy);
     if (o.pinned) { const bs = document.createElement('div'); bs.className = 'btns';
-      const go = document.createElement('button'); go.className = 'go'; go.dataset.act = 'accept'; go.textContent = 'Cut it (Enter)'; go.disabled = !v.fits; go.title = v.fits ? 'cut it: one node on the board' : 'it does not fit: nothing can be cut here'; go.onclick = () => this.hooks.accept();
+      const go = document.createElement('button'); go.className = 'go'; go.dataset.act = 'accept'; go.textContent = v.fits ? 'Cut it (Enter)' : 'Cannot cut: it does not fit'; go.disabled = !v.fits; go.title = v.fits ? 'cut it: one node on the board' : 'it does not fit: nothing can be cut here'; go.onclick = () => this.hooks.accept();
       const no = document.createElement('button'); no.dataset.act = 'cancel'; no.textContent = 'Cancel (Esc)'; no.onclick = () => this.hooks.cancel(); bs.append(go, no); c.append(bs); }
     this.place(o.at);
   }

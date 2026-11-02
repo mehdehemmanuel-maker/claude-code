@@ -995,6 +995,8 @@ describe('every domain, in one pass', () => {
     if ('refused' in h1) throw new Error(h1.refused);
     expect([h1.node, h1.out, pb.edges[h1.edge]!.to, pb.edges[h1.edge]!.in], '(b) the plate\'s host: the paste on the plate, its wire into p1').toEqual(['on plate', 'pasted', 'p1', 'thing']);
     expect(h1.F.elements.every((x, i) => Math.abs(x - new THREE.Matrix4().elements[i]!) < 1e-12), '(b) placed where it is made').toBe(true);
+    const astrayHit = hostOf(pb, po, { key: 'show', leaf: plateAt.leaf, m: plateAt.m.clone().premultiply(new THREE.Matrix4().makeTranslation(0.01, 0, 0)) });
+    expect('refused' in astrayHit, '(b) the plate\'s leaf where it is not drawn: refused').toBe(true);
     // (the screw's head is one object in both pastes: the matrix decides which)
     const screwParts = new Set(((out('on boss').pasted as Part).parts![1]!.parts ?? []).flatMap((p) => leavesOf({ name: 'w', parts: [p] }).map((l) => l.part)));
     const widest = (p: Part) => Math.max(0, ...((p.shape as { lathe?: [number, number][] }).lathe ?? []).map((q) => q[0])), headR = Math.max(...[...screwParts].map(widest)), heads = W.filter((f) => screwParts.has(f.leaf) && widest(f.leaf) === headR);
@@ -1031,11 +1033,14 @@ describe('every domain, in one pass', () => {
     // (e) the card's words
     const v = verdictLines(pv, plan);
     expect([v.fits, v.head, v.lines.length, v.lines.every((l) => l.mark === '✓'), v.lines[0]!.text], '(e) fits, in five lines in the rule\'s words').toEqual([true, 'Fits: M8 × 30 socket head cap screw on the plate at (-30, 5, -30) mm', 5, true, 'edge distance 20 mm, e₂ ≥ 1.2 d₀ = 1.2 × 9.0 mm asks 10.8 mm (EN 1993-1-8)']);
+    const astray = verdictLines(pv, { ...plan, drop: { ...plan.drop, at: [plan.drop.at[0] + 0.0002, plan.drop.at[1], plan.drop.at[2]] } });
+    expect([astray.fits, astray.note], '(e) the node standing 0.2 mm from the drop: not cut from here').toEqual([false, expect.stringMatching(/0\.2 mm from the point/)]);
     // (f) a refusal 4 mm from the edge: what would be cut still drawn, nothing cut
     const near = planOf(screwSrc!, h1, { ...d1, at: [-0.046, 0.005, 0] }), pr = await runBlock('imprint', previewInputs(near, po)), ir = pr.imprinted as { refused: { rule: string; need: number; have: number; source: string }; cuts: unknown[] }, vr = verdictLines(pr, near);
     const platePiece = (p: Part) => piecesIn(p).find((x) => x.p.name === 'plate')!.p;
     expect([ir.refused.rule, ir.refused.need, ir.refused.have, ir.refused.source, ir.cuts.length, vr.fits, platePiece(pr.part as Part).cuts?.length], '(f) refused by its edge distance, the red still drawn, the plate as it was').toEqual(['edge distance', 10.8, 4, 'EN 1993-1-8', 1, false, 1]);
     expect(vr.head, '(f) said how short').toBe('Does not fit: edge distance, short by 6.8 mm — nothing will be cut');
+    expect(vr.lines.map((l) => `${l.mark} ${l.text}`), '(f) its lines: the failing check crossed, the rest not measured').toEqual(['✕ edge distance 4 mm, e₂ ≥ 1.2 d₀ = 1.2 × 9.0 mm asks 10.8 mm (EN 1993-1-8)', '– breaking in: not measured (the first refusal stops the checks)', '– spacing: not measured (the first refusal stops the checks)', '– room: not measured (the first refusal stops the checks)']);
     // (g) the angle's 5 mm leg: stood on, its negative refused for the counterbore, no body to draw
     const ia = out('on angle').imprinted as { frame: unknown; tools: unknown[]; cuts: unknown[]; refused: { why: string } };
     expect([!!ia.frame, ia.tools, ia.cuts, ia.refused.why], '(g) the angle: its frame, nothing to cut, why').toEqual([true, [], [], expect.stringMatching(/counterbore/)]);
@@ -1050,9 +1055,12 @@ describe('every domain, in one pass', () => {
     expect([Object.keys(b2.nodes).filter((k) => e2.state.get(k)!.status !== 'ok'), cutPlate.cuts?.length, cutPlate.ports?.length, cutPlate.imprints?.length], '(h) every node runs; the plate cut twice, two ports, two records').toEqual([[], 2, 2, 2]);
     expect([o2(id).checks, (o2(id).imprinted as { cuts: unknown }).cuts], '(h) the board\'s cut is the preview\'s').toEqual([pv.checks, im.cuts]);
     expect([o2('on plate').checks, o2('on plate').says], '(h) the paste on the plate unchanged').toEqual([out('on plate').checks, out('on plate').says]);
+    const rec2 = cutPlate.imprints![1]!, o2f = (k: string) => e2.state.get(k)?.out as Record<string, unknown> | undefined;
+    expect([Object.keys(b2.nodes).indexOf('p1') < Object.keys(b2.nodes).indexOf(id), makerOf(b2, o2f, rec2)], '(h) the new hole made by the new node, not by the place node before it that reads it').toEqual([true, id]);
     // (i) copy and paste: the first hole's record, its maker, the recipe; pasted on the boss's end face from the same screw
     const rec = recordAt(plateAt.leaf, [0.02 - 0.0074, 0.003, 0])!; // (on the counterbore's wall, 2 mm down: what a right-click on the hole meets)
     expect([recordAt(plateAt.leaf, [0.02 - 0.0085, 0.005, 0]), recordAt(plateAt.leaf, [-0.03, 0.005, -0.03])], '(i) beside the hole on the top, and far off: no record').toEqual([null, null]);
+    expect([recordAt(plateAt.leaf, [0.02 - 0.003, 0.0075, 0]), recordAt(plateAt.leaf, [0.02 - 0.003, -0.0075, 0]), recordAt(plateAt.leaf, [0.02 - 0.003, -0.0055, 0]) === rec], '(i) over the hole 2.5 mm up, and 12.5 mm down past its 10 mm and the grace: none; at its foot: it').toEqual([null, null, true]);
     expect([rec === plateAt.leaf.imprints![0], makerOf(pb, po, rec)], '(i) the record under the point, made by the paste on the plate').toEqual([true, 'on plate']);
     const cr = copyRecipe(pb, po, 'on plate'); if ('refused' in cr) throw new Error(cr.refused);
     expect([cr.block, cr.wires, cr.set], '(i) its recipe: its own wire from the screw, its settings but where').toEqual(['imprint', [{ in: 'it', from: 'screw', out: 'part' }], { how: 'through', fit: 'medium' }]);
