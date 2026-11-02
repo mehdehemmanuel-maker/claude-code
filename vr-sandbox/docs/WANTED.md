@@ -342,3 +342,8 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
 - 2026-11-02: "Create a node creator agent that can see what everyone is doing manually and learns how to make nodes,node
   types, node boards collapsed into one node to make everything more efficient" (the node creator: what is done by hand,
   recorded and mined, made into nodes and node types, proved equal before it is offered; its spec written from it)
+- 2026-11-02: "Okay now add an efficiency agent buts it's more of an orchestrator type but not where it breaks it should
+  see what's taking too long it's flags negative repetition it can catch thing being counter intuitive it can see token
+  usage how long each and everything is taking   We may also need a context agent we need more eyes and more structure
+  more effeciency more failures made impossible and more successes made faster" (an efficiency agent that watches and
+  flags, never breaks: time, tokens, repetition, the counter-intuitive; a context agent; more structure)
