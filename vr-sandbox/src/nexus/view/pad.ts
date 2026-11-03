@@ -29,7 +29,8 @@ const CSS = `.pad{position:absolute;inset:0;pointer-events:none;z-index:5;font:1
 .pad .sliders input{width:130px;touch-action:none}
 .pad .walk{position:absolute;left:12px;top:12px;pointer-events:auto;background:rgba(10,18,30,.75);color:#e8f1ff;border:1px solid rgba(128,222,234,.5);border-radius:8px;padding:6px 10px;cursor:pointer;font:inherit}
 .pad .walk.on{background:#00838f}
-.pad .hint{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:rgba(10,18,30,.7);padding:5px 10px;border-radius:8px;color:#b8c7d9;pointer-events:none;white-space:nowrap}
+/* (the keys' hint at the bottom between the stick and the buttons, wrapping: at the top it ran under the sliders) */
+.pad .hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:rgba(10,18,30,.7);padding:5px 10px;border-radius:8px;color:#b8c7d9;pointer-events:none;max-width:calc(100% - 300px);text-align:center}
 /* (a page with its own links along the bottom raises the sticks over them) */
 .pad.raised .stick{bottom:64px}
 @media (max-width:640px),(pointer:coarse){#stat3d{display:none}.pad .hint{display:none!important}.pad .sliders{top:52px;left:12px;right:12px}.pad .sliders input{flex:1;width:auto}}

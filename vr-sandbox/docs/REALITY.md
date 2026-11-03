@@ -2595,3 +2595,15 @@ them (GAP-MAP, RECONSTRUCT, PLACEMENT). Measured on the code before this entry a
 --cached --shortstat`); 29 starter boards left of the 68; places still written by hand 612 in 37 files, down from 1,203 in 46
 (`node scripts/by-hand.mjs`). CLAUDE.md now says to build only with the operations of `room.ts` and names the nodes
 still in the library that set a place by number as old. The one test passes whole (`npm run gate`).
+
+## 2026-11-03: the critic's first audit
+
+`node scripts/audit.cjs` (every starter board opened in the built app) found 4 of 29 boards with something a person
+would see: the 6502 and the paint board each kept the page from answering for over 2 s (2,146 ms and 2,069 ms), the
+prompt trial fails because its image services do not answer here (fal.ai unreachable, the Gemini key over its quota),
+and a fit node dropped from the library failed, its default pointing at a load that needs a spring wired in. Looked at
+by eye: the battery board showed its exploded view as its picture, a jumble of plates (now shown whole; it reads as a
+plain black box, its posts not seen from the front); the controls board ran its key hint under its slider (moved to the
+bottom). The search nodes' defaults that named the deleted engine (`floatRpm`, `bore`) now name a bar under load. Open,
+in the order a person meets them: the black-box battery and the plain-box crates; 470 of 573 nodes on no starter board;
+113 plan tasks unbuilt, the node creator (spec 13) among them; the two slow boards.

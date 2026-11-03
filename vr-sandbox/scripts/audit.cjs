@@ -30,12 +30,14 @@ const titles = [...readFileSync(join(ROOT, 'src/nexus/starters.ts'), 'utf8').mat
       const row = { n, title, ran: false, nodes: '', fails: '', freezeMs: 0, errors, shot: '' };
       try {
         await p.goto(`http://127.0.0.1:${port}/index.html`); await p.evaluate(() => localStorage.clear()); await p.reload(); await p.waitForTimeout(1500);
-        const q = title.slice(0, 40); await p.fill('#libQ', q); await p.waitForTimeout(500);
-        let hit = null; for (const r of await p.$$('#shelves .blk')) if ((await r.textContent()).includes(q.slice(0, 25))) { hit = r; break; }
+        // (searched by its name before any colon, as the library lists it; matched on its first words)
+        const q = title.split(/[:(]/)[0].trim().slice(0, 32), key = q.slice(0, 18); await p.fill('#libQ', q); await p.waitForTimeout(500);
+        // (a starter board's row only: a node of the same name, clicked, would be put on whatever board is open)
+        let hit = null; for (const r of await p.$$('#shelves .blk')) if (/^(Open this board|Your board)/.test((await r.getAttribute('title')) ?? '') && (await r.textContent()).includes(key)) { hit = r; break; }
         if (!hit) { row.fails = 'not found in the library by its title'; rows.push(row); await p.close(); continue; }
         const t0 = Date.now(); await hit.click({ noWaitAfter: true });
         // (the page answers between tasks only: the longest wait for an answer is the longest freeze while it opens)
-        let longest = 0; while (Date.now() < t0 + 15000) { const a = Date.now(); await p.evaluate(() => 0); longest = Math.max(longest, Date.now() - a); await p.waitForTimeout(250); }
+        let longest = 0; while (Date.now() < t0 + 10000) { const a = Date.now(); await p.evaluate(() => 0); longest = Math.max(longest, Date.now() - a); await p.waitForTimeout(250); }
         row.freezeMs = longest;
         const gauges = await p.$eval('#gauges', (e) => e.innerText).catch(() => '');
         const m = /(\d+)\/(\d+)\s*NODES/i.exec(gauges); row.nodes = m ? `${m[1]}/${m[2]}` : '—'; row.ran = !!m && m[1] === m[2];

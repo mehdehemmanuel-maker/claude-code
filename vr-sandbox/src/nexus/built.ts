@@ -587,7 +587,7 @@ export const UNDATED: string[] = [];
  *  said to be from before it (its parts and its answers not yet re-worked through the contact graph, the frame and the
  *  laws with units). */
 export const BOARDS_BUILT: Record<string, string> = {
-  "A battery built from its parts, node by node: grid, paste, separator, plates, cell, case":"2026-10-28T02:22:33.000Z",
+  "A battery built from its parts, node by node: grid, paste, separator, plates, cell, case":"2026-11-03T00:00:29.000Z",
   "The gauntlet as nodes: makers through gate after gate, the unknown sorted and researched to the bottom":"2026-10-28T02:22:33.000Z",
   "The 6502 from its transistors: a real program run switch by switch, checked against its fast model":"2026-10-28T02:22:33.000Z",
   "A body from its measured segments, its math on every part":"2026-10-28T02:22:33.000Z",
@@ -596,7 +596,7 @@ export const BOARDS_BUILT: Record<string, string> = {
   "Colours with no dye: titanium anodised from 10 to 100 volts, and steel tempered as its oxide thickens, each colour worked out from light crossing a film of oxide":"2026-10-29T03:32:45.000Z",
   "One shape, eight looks: bare steel, aluminium and copper coloured by their optics, titanium anodised, steel heat tinted, a solid paint under clear coat, a metallic paint, and the same paint worn":"2026-10-29T03:40:31.000Z",
   "Paint jobs and wear: a striped panel new and worn, a two-tone drum, bare steel rusting in its hollows, the wear drawn where the shape puts it":"2026-10-29T04:43:14.000Z",
-  "Fit to a target: one node that sizes anything to what is asked of it: a bar's area for a stress; any block, or any pipeline folded into one, its inputs moved within ranges until its outputs meet their goals":"2026-11-02T23:11:12.000Z",
+  "Fit to a target: one node that sizes anything to what is asked of it: a bar's area for a stress; any block, or any pipeline folded into one, its inputs moved within ranges until its outputs meet their goals":"2026-11-02T23:13:25.000Z",
   "Choosing and fitting: a 40 kN/m coil spring as light as can be, 1.3 times as strong as it must be, from five ASTM wires and three to eight coils, its wire's size fitted in each: every way of choosing ranked, what each reached, and which cannot do it":"2026-10-30T10:39:36.000Z",
   "Controls you work while it runs: a stick drives the cart (the arrow keys, W A S D, a phone's drawn stick, a gamepad), the green button on the crate adds a crate to the row each press (E, the drawn button, or press it on the crate in 3D), the slider raises the tower; Walk (V) to stand in it at your own height":"2026-10-31T09:29:21.000Z",
   "Export: an M8 bolt as exact solids, written as STEP (named, coloured), STL, 3MF, glTF and its bill of materials, and the STEP read back by the kernel to prove it went out whole (wire any thing in: the engine is 1,512 solids and about a minute)":"2026-10-31T04:31:11.000Z",
