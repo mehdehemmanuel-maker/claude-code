@@ -466,6 +466,7 @@ export const BUILT: Record<string, string> = {
   "make.wrap":"2026-10-26T23:27:49.000Z",
   "mass.properties":"2026-10-28T11:09:18.000Z",
   "mate":"2026-10-28T01:04:43.000Z",
+  "mate.bolted":"2026-11-03T01:11:07.000Z",
   "mates":"2026-10-28T01:04:43.000Z",
   "math.add":"2026-10-27T08:19:24.000Z",
   "math.derivative":"2026-10-28T06:44:13.000Z",
@@ -503,6 +504,20 @@ export const BUILT: Record<string, string> = {
   "pattern.circle":"2026-11-01T17:02:05.000Z",
   "pick":"2026-10-26T13:27:56.000Z",
   "piece":"2026-10-27T03:19:31.000Z",
+  "piece.bolt":"2026-11-03T01:11:07.000Z",
+  "piece.bulb":"2026-11-03T01:11:07.000Z",
+  "piece.button":"2026-11-03T01:11:07.000Z",
+  "piece.coupling":"2026-11-03T01:11:07.000Z",
+  "piece.header":"2026-11-03T01:11:07.000Z",
+  "piece.led":"2026-11-03T01:11:07.000Z",
+  "piece.nut":"2026-11-03T01:11:07.000Z",
+  "piece.pipe":"2026-11-03T01:11:07.000Z",
+  "piece.plate":"2026-11-03T01:11:07.000Z",
+  "piece.standoff":"2026-11-03T01:11:07.000Z",
+  "piece.terminal":"2026-11-03T01:11:07.000Z",
+  "piece.washer":"2026-11-03T01:11:07.000Z",
+  "piece.winding":"2026-11-03T01:11:07.000Z",
+  "piece.wire":"2026-11-03T01:11:07.000Z",
   "place":"2026-10-27T09:49:49.000Z",
   "place.solve":"2026-10-27T11:24:59.000Z",
   "plan.rooms":"2026-10-26T13:27:56.000Z",
@@ -524,6 +539,7 @@ export const BUILT: Record<string, string> = {
   "room.into":"2026-11-02T18:50:27.000Z",
   "room.make":"2026-11-02T18:50:27.000Z",
   "room.onto":"2026-11-02T18:50:27.000Z",
+  "room.over":"2026-11-03T01:11:07.000Z",
   "room.ring":"2026-11-02T18:50:27.000Z",
   "room.stack":"2026-11-02T18:50:27.000Z",
   "room.through":"2026-11-02T18:50:27.000Z",
@@ -587,7 +603,7 @@ export const UNDATED: string[] = [];
  *  said to be from before it (its parts and its answers not yet re-worked through the contact graph, the frame and the
  *  laws with units). */
 export const BOARDS_BUILT: Record<string, string> = {
-  "A battery built from its parts, node by node: grid, paste, separator, plates, cell, case":"2026-11-03T00:00:29.000Z",
+  "A battery built from its parts, node by node: grid, paste, separator, plates, cell, case":"2026-11-03T00:02:25.000Z",
   "The gauntlet as nodes: makers through gate after gate, the unknown sorted and researched to the bottom":"2026-10-28T02:22:33.000Z",
   "The 6502 from its transistors: a real program run switch by switch, checked against its fast model":"2026-10-28T02:22:33.000Z",
   "A body from its measured segments, its math on every part":"2026-10-28T02:22:33.000Z",
@@ -615,5 +631,8 @@ export const BOARDS_BUILT: Record<string, string> = {
   "Paste a bolt onto anything: one cap screw stood on a plate, a round boss and a steel angle, its hole cut by its standards":"2026-11-01T17:57:00.000Z",
   "Cut by the standards: a bearing's housing and its shaft, a dowel's hole, a key's keyways, a pipe port and a panel's cut-out":"2026-11-02T02:29:07.000Z",
   "The cover follows the bore: widen the bore and the bolt circle, both parts' holes, the bolts and the cover's place follow":"2026-11-01T17:57:00.000Z",
-  "Nothing can overlap: a starter motor put together by operations, its solenoid refused inside it":"2026-11-02T18:50:27.000Z"
+  "Nothing can overlap: a starter motor put together by operations, its solenoid refused inside it":"2026-11-02T18:50:27.000Z",
+  "Common pieces: bolts, screws, nuts, washers, a standoff, a plate with its holes, a pipe, its coupling and a tube":"2026-11-03T01:11:13.000Z",
+  "Common pieces: copper wire bare and insulated, a winding on its bobbin, LEDs, a lamp, a pin header, a push button and a terminal block":"2026-11-03T01:11:13.000Z",
+  "Matings: two plates bolted twice, a wire's stripped end in its terminal, a coupling on a pipe, an LED through a board":"2026-11-03T01:11:13.000Z"
 };

@@ -467,3 +467,6 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   say why would I have to tell you to get rid of broken code that would cause problems in the future why would I have to
   tell you the engine that was generated had intersections and was blocky an unrealistic why would I have to say you
   need a node generator wasn’t there a whole research why do I have to say all of this wtuff"
+- 2026-11-03: "Okay but I want mostly dmaller peices built not whole engines yet just every common peice with all there
+  matings or whatever else screws bolts plates boxes hollows inverts inputs wires copper wraps copper wires aluminum and
+  tubes pipes leds lights allth lil stuff and everything"

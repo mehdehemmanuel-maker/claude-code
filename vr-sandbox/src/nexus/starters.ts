@@ -545,6 +545,67 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'bolted', 'says', 'said', 'value');
     return b;
   }],
+  ['Common pieces: bolts, screws, nuts, washers, a standoff, a plate with its holes, a pipe, its coupling and a tube', () => {
+    // (the small things builds are made of, each by its standard (common.ts): every one made by the operations, none
+    // placed by a number; laid in a row by Stack along x, each apart from the next by a clear fit)
+    const b = emptyBoard('Common pieces: fasteners, plates and pipes'), row: string[] = [];
+    const add = (id: string, block: string, set: Record<string, unknown>, label: string) => { placeBlock(b, block, 0, 0, set, id); b.nodes[id]!.label = label; row.push(id); };
+    add('hb', 'piece.bolt', { size: 'M8', length: 40, head: 'hex' }, 'Hex bolt M8 × 40 (ISO 4017)');
+    add('ss', 'piece.bolt', { size: 'M5', length: 20, head: 'socket' }, 'Socket screw M5 × 20 (ISO 4762)');
+    add('nt', 'piece.nut', { size: 'M8' }, 'Nut M8 (ISO 4032)');
+    add('ws', 'piece.washer', { size: 'M8' }, 'Washer M8 (ISO 7089)');
+    add('so', 'piece.standoff', { length: 10 }, 'Standoff M3 × 10');
+    add('pl', 'piece.plate', { name: 'plate', mat: 'al-6061', w: 80, t: 5, d: 50, holes: '-25,0; 25,0', hole: 9 }, 'Plate, two M8 clearance holes (9 mm, ISO 273)');
+    add('pp', 'piece.pipe', { size: 'copper 15×0.7', length: 100 }, 'Copper pipe 15 × 0.7 (EN 1057)');
+    add('cp', 'piece.coupling', { size: 'copper 15×0.7' }, 'Its coupling');
+    add('at', 'piece.pipe', { size: 'aluminium 20×2', length: 100 }, 'Aluminium tube 20 × 2');
+    placeBlock(b, 'room.stack', 0, 0, { name: 'fasteners, plates and pipes', axis: 'x', fit: 'clear', level: 'on the ground' }, 'row'); for (const id of row) wire(b, id, 'block', 'row', 'blocks');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'row', 'thing', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'row', 'says', 'said', 'value');
+    return b;
+  }],
+  ['Common pieces: copper wire bare and insulated, a winding on its bobbin, LEDs, a lamp, a pin header, a push button and a terminal block', () => {
+    const b = emptyBoard('Common pieces: wires, windings, lights and inputs'), row: string[] = [];
+    const add = (id: string, block: string, set: Record<string, unknown>, label: string) => { placeBlock(b, block, 0, 0, set, id); b.nodes[id]!.label = label; row.push(id); };
+    add('wr', 'piece.wire', { size: '1.5 mm²', length: 80, insulation: 'red', strip: 10 }, 'Wire 1.5 mm², red, stripped 10 mm');
+    add('wb', 'piece.wire', { size: '0.5 mm²', length: 80, insulation: 'black', strip: 8 }, 'Wire 0.5 mm², black');
+    add('cu', 'piece.wire', { size: '2.5 mm²', length: 80, insulation: 'none' }, 'Bare copper 2.5 mm²');
+    add('wd', 'piece.winding', { core: 12, length: 20, wire: 0.5 }, 'Winding on a bobbin (0.5 mm enamelled copper)');
+    add('l5', 'piece.led', { size: '5', colour: 'red', leads: 25 }, 'LED 5 mm, red');
+    add('l3', 'piece.led', { size: '3', colour: 'green', leads: 25 }, 'LED 3 mm, green');
+    add('bb', 'piece.bulb', {}, 'Lamp, E10');
+    add('hd', 'piece.header', { pins: 6 }, 'Pin header 1 × 6');
+    add('bt', 'piece.button', {}, 'Push button 6 × 6');
+    add('tb', 'piece.terminal', { poles: 3 }, 'Terminal block, 3 poles');
+    placeBlock(b, 'room.stack', 0, 0, { name: 'wires, windings, lights and inputs', axis: 'x', fit: 'clear', level: 'on the ground' }, 'row'); for (const id of row) wire(b, id, 'block', 'row', 'blocks');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'row', 'thing', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'row', 'says', 'said', 'value');
+    return b;
+  }],
+  ['Matings: two plates bolted twice, a wire\'s stripped end in its terminal, a coupling on a pipe, an LED through a board', () => {
+    // (each mating an operation on what the pieces offer: the bolt down a plate's hole with its head on top and its
+    // washer and nut slid over its end; the wire's stripped end down the terminal's hole; the coupling over the pipe's
+    // end; the LED's leads through the board's footprint, which cuts their holes. Nothing is placed by a number)
+    const b = emptyBoard('Matings: bolted, wired, coupled, soldered');
+    placeBlock(b, 'piece.plate', 0, 0, { name: 'bottom plate', mat: 'steel-low', w: 80, t: 5, d: 50, holes: '-25,0; 25,0', hole: 9 }, 'p1'); b.nodes.p1!.label = 'Bottom plate (steel)';
+    placeBlock(b, 'piece.plate', 0, 0, { name: 'top plate', mat: 'al-6061', w: 80, t: 5, d: 50, holes: '-25,0; 25,0', hole: 9 }, 'p2'); b.nodes.p2!.label = 'Top plate (aluminium)';
+    placeBlock(b, 'room.stack', 0, 0, { name: 'two plates', axis: 'y', fit: 'touch' }, 'plates'); wire(b, 'p1', 'block', 'plates', 'blocks'); wire(b, 'p2', 'block', 'plates', 'blocks');
+    placeBlock(b, 'mate.bolted', 0, 0, { line: 'top plate/holes', which: 0, size: 'M8', head: 'hex' }, 'j1'); b.nodes.j1!.label = 'Bolted through the first hole'; wire(b, 'plates', 'block', 'j1', 'held');
+    placeBlock(b, 'mate.bolted', 0, 0, { line: 'top plate/holes', which: 1, size: 'M8', head: 'socket' }, 'j2'); b.nodes.j2!.label = 'And the second, a socket screw'; wire(b, 'j1', 'block', 'j2', 'held');
+    placeBlock(b, 'piece.terminal', 0, 0, { poles: 2 }, 'tb'); b.nodes.tb!.label = 'Terminal block, 2 poles';
+    placeBlock(b, 'piece.wire', 0, 0, { size: '1.5 mm²', length: 60, insulation: 'red', strip: 10 }, 'wr'); b.nodes.wr!.label = 'Wire 1.5 mm², red';
+    placeBlock(b, 'room.through', 0, 0, { line: '2-pole terminal block/holes', which: 0, from: 'below', fit: 'slide' }, 'wired'); b.nodes.wired!.label = 'Its stripped end in the terminal'; wire(b, 'tb', 'block', 'wired', 'host'); wire(b, 'wr', 'block', 'wired', 'passer');
+    placeBlock(b, 'piece.pipe', 0, 0, { size: 'copper 15×0.7', length: 80 }, 'pp'); b.nodes.pp!.label = 'Copper pipe 15 mm';
+    placeBlock(b, 'piece.coupling', 0, 0, { size: 'copper 15×0.7' }, 'cp'); b.nodes.cp!.label = 'Its coupling';
+    placeBlock(b, 'room.over', 0, 0, { line: 'copper 15×0.7 pipe/axis', where: 'hi', fit: 'slide' }, 'coupled'); b.nodes.coupled!.label = 'The coupling over the pipe\'s end'; wire(b, 'pp', 'block', 'coupled', 'host'); wire(b, 'cp', 'block', 'coupled', 'sleeve');
+    placeBlock(b, 'piece.plate', 0, 0, { name: 'board', mat: 'fr4', w: 30, t: 1.6, d: 20, holes: '0,0', hole: 0 }, 'pcb'); b.nodes.pcb!.label = 'A board (FR-4, 1.6 mm), an LED\'s footprint';
+    placeBlock(b, 'piece.led', 0, 0, { size: '5', colour: 'red', leads: 4 }, 'led'); b.nodes.led!.label = 'LED 5 mm, its leads cut to 4 mm';
+    placeBlock(b, 'room.through', 0, 0, { line: 'board/holes', which: 0, from: 'below', fit: 'slide' }, 'lit'); b.nodes.lit!.label = 'Its leads through the board'; wire(b, 'pcb', 'block', 'lit', 'host'); wire(b, 'led', 'block', 'lit', 'passer');
+    placeBlock(b, 'room.stack', 0, 0, { name: 'four matings', axis: 'x', fit: 'clear', level: 'on the ground' }, 'row'); for (const id of ['j2', 'wired', 'coupled', 'lit']) wire(b, id, 'block', 'row', 'blocks');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'row', 'thing', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'row', 'says', 'said', 'value');
+    return b;
+  }],
   ] as [string, Make][]);
   return boards.map(([n, f]) => [n, () => tidy(f())] as [string, Make]);
 }

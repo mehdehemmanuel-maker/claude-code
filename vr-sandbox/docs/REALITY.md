@@ -2607,3 +2607,18 @@ plain black box, its posts not seen from the front); the controls board ran its 
 bottom). The search nodes' defaults that named the deleted engine (`floatRpm`, `bore`) now name a bar under load. Open,
 in the order a person meets them: the black-box battery and the plain-box crates; 470 of 573 nodes on no starter board;
 113 plan tasks unbuilt, the node creator (spec 13) among them; the two slow boards.
+
+## 2026-11-03: common pieces and their matings, by the operations
+
+The user asked for the small common pieces first, each with its matings. `src/nexus/common.ts` makes them with the
+operations only (no place written): hex bolts and socket screws M3 to M12 (ISO 4017, ISO 4762), nuts (ISO 4032),
+washers (ISO 7089), standoffs, plates with holes or footprints, copper and aluminium pipe and tube (EN 1057) and their
+couplings, copper wire bare or insulated and stripped (IEC 60228), a winding on a bobbin, 3 and 5 mm LEDs, a lamp, pin
+headers, a push button, terminal blocks, and the bolted joint. The space gained the shapes they need (a hex, bored or
+not; a dome; a coil) and the operation Over a shaft (a washer, nut, coupling or coil slid on, refused with both sizes
+where its bore is too small or something is in the way). Their masses, from their shapes and materials, against the
+parts as sold (one probe, `npx vitest run`, not kept): an M8 × 40 hex bolt 21.9 g, an M8 nut 5.1 g, an M8 washer 1.8 g,
+200 mm of 15 mm copper pipe 56 g, a 5 mm LED 0.27 g. Three starter boards show them: the fasteners, plates and pipes;
+the wires, windings, lights and inputs; and four matings (two plates bolted twice, a wire's stripped end in its
+terminal, a coupling on a pipe, an LED's leads through a board), every node on them running (`npm run gate`). Not yet:
+bends and elbows in pipe, square boxes with a hollow (only round cases), threads drawn, multi-layer windings.
