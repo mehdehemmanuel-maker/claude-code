@@ -85,12 +85,13 @@ export function wire(size: string, length: number, colour = 'none', strip = 0.01
 
 /** A bobbin (nylon, typical) and a winding of enamelled copper wound on its core, close-wound in one layer: as many turns
  *  as fit between its flanges. The winding is slid over the core: its bore the core's outside. */
-export function winding(coreOD: number, length: number, wireD: number, flangeOD = coreOD * 2, bore = coreOD * 0.6): Block {
+export function winding(coreOD: number, length: number, wireD: number, layers = 1, flangeOD = coreOD * 2, bore = coreOD * 0.6): Block {
+  if (!(Number.isInteger(layers) && layers >= 1)) throw new Error('a winding of one layer or more');
   const t = mm(1.5), core = made('bobbin core', 'nylon', { tube: [bore / 2, coreOD / 2, length] }), flange = () => made('bobbin flange', 'nylon', { tube: [bore / 2, flangeOD / 2, t] });
   const bob = stack('bobbin', 1, [{ b: flange() }, { b: core }, { b: flange() }]);
   const turns = Math.floor((length - wireD) / wireD); if (turns < 1) throw new Error(`no room for a turn: the core is ${length * 1000} mm long and the wire ${wireD * 1000} mm`);
-  if (!(coreOD / 2 + wireD < flangeOD / 2)) throw new Error('the flanges are no wider than one layer of wire');
-  const coil = made('copper winding', 'copper', { coil: [coreOD / 2 + wireD / 2, wireD, turns, wireD] });
+  if (!(coreOD / 2 + layers * wireD < flangeOD / 2)) throw new Error(`the flanges (${flangeOD * 1000} mm) are no wider than ${layers} layer${layers > 1 ? 's' : ''} of wire`);
+  const coil = made('copper winding', 'copper', { coil: [coreOD / 2 + wireD / 2, wireD, turns, wireD, layers] });
   return over(bob, 'bobbin core/axis', coil, 'mid', 'touch');
 }
 
@@ -143,3 +144,35 @@ export function boltedJoint(held: Block, port: string, size: string, i = 0, head
   const headed = onto(passed, '+y', top, 'touch', `${size} shank${tag}/axis`);
   return over(headed, `${size} shank${tag}/axis`, stack(`${size} washer and nut`, 1, [{ b: nut(size) }, { b: washer(size) }]), 'lo', 'touch');
 }
+
+/** A coil of wire on its own (air-cored, or to slide over a core): its mean radius, its wire, its turns close-wound, its
+ *  layers. Its bore is offered by its axis. */
+export const coil = (R: number, wireD: number, turns: number, layers = 1, mat = 'copper'): Block => made('coil', mat, { coil: [R, wireD, turns, wireD, layers] });
+
+/** Bars of a section, by kind and size (mm): an equal angle (its legs a × a, thick t), a channel (h high, b wide, its
+ *  web and flanges t), an I-beam (h, b, web tw, flanges tf), a tee (b wide, h high, t thick). Steel sizes from their
+ *  tables (IPE: EN 10365; equal angle: EN 10056); aluminium sizes typical of stock extrusions. Its profile is in x and y,
+ *  its length along z; a hole through a leg is a pattern like a plate's. */
+export const SECTIONS = {
+  'aluminium angle 20×20×2': { kind: 'angle', a: 20, t: 2, mat: 'al-6063' }, 'aluminium angle 40×40×4': { kind: 'angle', a: 40, t: 4, mat: 'al-6063' },
+  'steel angle 50×50×5 (EN 10056)': { kind: 'angle', a: 50, t: 5, mat: 'steel-low' },
+  'aluminium channel 25×25×2': { kind: 'channel', h: 25, b: 25, t: 2, mat: 'al-6063' }, 'aluminium channel 40×20×2': { kind: 'channel', h: 20, b: 40, t: 2, mat: 'al-6063' },
+  'steel IPE 80 (EN 10365)': { kind: 'I', h: 80, b: 46, tw: 3.8, tf: 5.2, mat: 'steel-low' }, 'steel IPE 100 (EN 10365)': { kind: 'I', h: 100, b: 55, tw: 4.1, tf: 5.7, mat: 'steel-low' },
+  'aluminium tee 25×25×3': { kind: 'T', b: 25, h: 25, t: 3, mat: 'al-6063' },
+} as const;
+export type SectionSize = keyof typeof SECTIONS;
+export function section(size: string, length: number): Block {
+  const q = SECTIONS[size as SectionSize] as { kind: string; a?: number; t?: number; h?: number; b?: number; tw?: number; tf?: number; mat: string };
+  if (!q) throw new Error(`no section ${size} (${Object.keys(SECTIONS).join(', ')})`);
+  const k = (v: number | undefined) => mm(v ?? 0), t = k(q.t), h = k(q.h), b = k(q.b), a = k(q.a), tw = k(q.tw), tf = k(q.tf);
+  const pts: [number, number][] = q.kind === 'angle' ? [[0, 0], [a, 0], [a, t], [t, t], [t, a], [0, a]]
+    : q.kind === 'channel' ? [[0, 0], [b, 0], [b, h], [b - t, h], [b - t, t], [t, t], [t, h], [0, h]]
+    : q.kind === 'I' ? [[-b / 2, -h / 2], [b / 2, -h / 2], [b / 2, -h / 2 + tf], [tw / 2, -h / 2 + tf], [tw / 2, h / 2 - tf], [b / 2, h / 2 - tf], [b / 2, h / 2], [-b / 2, h / 2], [-b / 2, h / 2 - tf], [-tw / 2, h / 2 - tf], [-tw / 2, -h / 2 + tf], [-b / 2, -h / 2 + tf]]
+    : [[-t / 2, 0], [t / 2, 0], [t / 2, h - t], [b / 2, h - t], [b / 2, h], [-b / 2, h], [-b / 2, h - t], [-t / 2, h - t]];
+  return made(`${size}, ${Math.round(length * 1000)} mm`, q.mat, { section: { pts, L: length } });
+}
+/** A box, hollow, open at the top (a project box, a tray, a tank): its walls and floor round a box-shaped cavity offered
+ *  as a room (`<name>/cavity`) for what goes in, refused with both sizes where it does not fit. */
+export const boxCase = (name: string, w: number, h: number, d: number, wall: number, floor: number, mat: string, color?: number): Block =>
+  made(name, mat, { case: [w, h, d, wall, floor] }, color !== undefined ? { color } : {});
+

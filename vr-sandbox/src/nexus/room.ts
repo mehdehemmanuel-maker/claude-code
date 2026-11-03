@@ -35,7 +35,10 @@ export type P3 = readonly [number, number, number];
 type V3 = [number, number, number];
 export type Axis = 0 | 1 | 2;
 export type Prim =
-  | { readonly k: 'box'; readonly c: P3; readonly size: P3 }
+  // (a box; or a case, its walls and floor round a box-shaped cavity open at the top (`tray`); or a bar of a section, its
+  // profile in x and y drawn along z (`sect`, about its bound's middle): an angle, a channel, an I-beam. Everything that
+  // measures room reads each as its box, a superset)
+  | { readonly k: 'box'; readonly c: P3; readonly size: P3; readonly tray?: { readonly wall: number; readonly floor: number }; readonly sect?: readonly (readonly [number, number])[] }
   | { readonly k: 'cyl'; readonly c: P3; readonly r: number; readonly h: number; readonly ri?: number }
   | { readonly k: 'cup'; readonly c: P3; readonly r: number; readonly h: number; readonly wall: number; readonly ends: number; readonly open: boolean }
   // (a hex prism about y, its flats `af` across, r its corners' radius: a nut's or a bolt head's; a dome, its flat face
@@ -43,7 +46,7 @@ export type Prim =
   // wire, its region the tube from R − d/2 to R + d/2: a winding)
   | { readonly k: 'hex'; readonly c: P3; readonly af: number; readonly r: number; readonly h: number; readonly ri?: number }
   | { readonly k: 'dome'; readonly c: P3; readonly r: number; readonly h: number }
-  | { readonly k: 'coil'; readonly c: P3; readonly R: number; readonly d: number; readonly turns: number; readonly pitch: number; readonly r: number; readonly ri: number; readonly h: number };
+  | { readonly k: 'coil'; readonly c: P3; readonly R: number; readonly d: number; readonly turns: number; readonly pitch: number; readonly layers: number; readonly r: number; readonly ri: number; readonly h: number };
 /** A solid: its base less the union of what was taken out of it. */
 export interface Solid { readonly base: Prim; readonly minus: readonly Prim[] }
 export interface Line { readonly port: string; readonly x: number; readonly z: number; readonly slot: number; readonly opening?: number }
@@ -53,7 +56,7 @@ export interface Face {
   readonly a: number; readonly b: number; readonly kind: 'contact' | 'gap'; readonly patch: 'area' | 'line'; readonly area: number; readonly length?: number;
   readonly at: P3; readonly normal: P3; readonly gap: number; readonly medium?: string; readonly gate?: string; readonly interference?: { readonly um: number; readonly pressure?: number; readonly src: string }; readonly by: string;
 }
-export interface RoomOf { readonly name: string; readonly c: P3; readonly r: number; readonly h: number; readonly open: boolean }
+export interface RoomOf { readonly name: string; readonly c: P3; readonly r: number; readonly h: number; readonly open: boolean; /** a box-shaped room's width (x) and depth (z); r then its half-diagonal */ readonly size?: readonly [number, number] }
 
 declare const ROOM: unique symbol;
 /** A length of room (a joint's travel): finite, never below zero. */
@@ -88,7 +91,9 @@ export const primBox = (p: Prim): [V3, V3] => p.k === 'box' ? [[p.c[0] - p.size[
 const shiftPrim = (p: Prim, d: P3): Prim => ({ ...p, c: add(p.c, d) }) as Prim;
 const inPrim = (p: Prim, x: number, y: number, z: number): boolean => {
   const dx = x - p.c[0], dy = y - p.c[1], dz = z - p.c[2];
-  if (p.k === 'box') return Math.abs(dx) < p.size[0] / 2 && Math.abs(dy) < p.size[1] / 2 && Math.abs(dz) < p.size[2] / 2;
+  if (p.k === 'box') { if (!(Math.abs(dx) < p.size[0] / 2 && Math.abs(dy) < p.size[1] / 2 && Math.abs(dz) < p.size[2] / 2)) return false;
+    if (p.tray && Math.abs(dx) < p.size[0] / 2 - p.tray.wall && Math.abs(dz) < p.size[2] / 2 - p.tray.wall && dy > -p.size[1] / 2 + p.tray.floor) return false;
+    return !p.sect || inPolygon(dx, dy, p.sect); }
   const rho = Math.hypot(dx, dz); if (!(rho < p.r && Math.abs(dy) < p.h / 2)) return false;
   if (p.k === 'cyl') return p.ri === undefined || rho > p.ri;
   if (p.k === 'coil') return rho > p.ri;
@@ -96,6 +101,8 @@ const inPrim = (p: Prim, x: number, y: number, z: number): boolean => {
   if (p.k === 'hex') return (p.ri === undefined || rho > p.ri) && [Math.PI / 6, Math.PI / 2, (5 * Math.PI) / 6].every((a) => Math.abs(dx * Math.sin(a) + dz * Math.cos(a)) < p.af / 2);
   return !(rho < p.r - p.wall && dy > -p.h / 2 + p.ends && (p.open || dy < p.h / 2 - p.ends));
 };
+/** Whether (x, y) is inside a closed outline (even-odd: a ray to +x crosses it an odd number of times). */
+const inPolygon = (x: number, y: number, pts: readonly (readonly [number, number])[]): boolean => { let n = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i]!, [xj, yj] = pts[j]!; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) n = !n; } return n; };
 const inSolid = (s: Solid, x: number, y: number, z: number) => inPrim(s.base, x, y, z) && !s.minus.some((m) => inPrim(m, x, y, z));
 const lift = (p: Piece, t: number) => (p.joint?.slide ? t * p.joint.slide : 0);
 const inPiece = (p: Piece, x: number, y: number, z: number, t = 0) => inSolid(p.solid, x, y - lift(p, t), z);
@@ -205,9 +212,13 @@ export class Block {
   /** One solid at the origin: a box, a rod, a tube or a cup (open at +y, its cavity offered as a room). Its lines: a round
    *  piece's axis, and a pattern's (a circle about its axis, or points), each with the slot it offers: as far as its edge,
    *  its bore and half its neighbour. Holes of a bought piece's pattern are its openings. */
-  static made(name: string, mat: string, s: { box: [number, number, number] } | { cyl: [number, number] } | { tube: [number, number, number] } | { cup: [number, number, number, number] } | { hex: [number, number] | [number, number, number] } | { dome: [number] } | { coil: [number, number, number, number] },
+  static made(name: string, mat: string, s: { box: [number, number, number] } | { cyl: [number, number] } | { tube: [number, number, number] } | { cup: [number, number, number, number] } | { hex: [number, number] | [number, number, number] } | { dome: [number] } | { coil: [number, number, number, number] | [number, number, number, number, number] } | { case: [number, number, number, number, number] } | { section: { pts: [number, number][]; L: number } },
     o: { joint?: Joint; bought?: boolean; color?: number; pattern?: { name: string; circle?: { n: number; r: number; phase?: number }; points?: [number, number][]; hole?: number } } = {}): Block {
-    const xs = 'box' in s ? s.box : 'cyl' in s ? s.cyl : 'tube' in s ? s.tube : 'cup' in s ? s.cup : 'hex' in s ? s.hex : 'dome' in s ? s.dome : s.coil; sizes(name, xs);
+    // (a section's outline, its own bound's middle at the origin)
+    const sx = 'section' in s ? s.section.pts.map((q) => q[0]) : [], sy = 'section' in s ? s.section.pts.map((q) => q[1]) : [];
+    if ('section' in s && (s.section.pts.length < 3 || !s.section.pts.every((q) => q.every(Number.isFinite)))) throw new Error(`${name}: a section of three points or more, each finite`);
+    const xs = 'box' in s ? s.box : 'cyl' in s ? s.cyl : 'tube' in s ? s.tube : 'cup' in s ? s.cup : 'hex' in s ? s.hex : 'dome' in s ? s.dome : 'case' in s ? s.case : 'section' in s ? [Math.max(...sx) - Math.min(...sx), Math.max(...sy) - Math.min(...sy), s.section.L] : s.coil; sizes(name, xs);
+    if ('case' in s && !(2 * s.case[3] < s.case[0] && 2 * s.case[3] < s.case[2] && s.case[4] < s.case[1])) throw new Error(`${name}: its walls within its width and depth, its floor within its height`);
     if ('hex' in s && s.hex[2] !== undefined && !(s.hex[2] < s.hex[0] / 2)) throw new Error(`${name}: a bore within its flats (${s.hex[2]} ≥ ${s.hex[0] / 2})`);
     if ('coil' in s && !(s.coil[1] < s.coil[0] && s.coil[3] >= s.coil[1])) throw new Error(`${name}: a coil's wire within its radius and its pitch at least its wire (no turn through the next)`);
     if ('tube' in s && !(s.tube[0] < s.tube[1])) throw new Error(`${name}: a bore within its outside (${s.tube[0]} ≥ ${s.tube[1]})`);
@@ -215,7 +226,9 @@ export class Block {
     if (o.joint !== undefined && !Joint.is(o.joint)) throw new Error(`${name}: a joint made by joint()`);
     const base: Prim = 'box' in s ? { k: 'box', c: [0, 0, 0], size: s.box } : 'cyl' in s ? { k: 'cyl', c: [0, 0, 0], r: s.cyl[0], h: s.cyl[1] } : 'tube' in s ? { k: 'cyl', c: [0, 0, 0], ri: s.tube[0], r: s.tube[1], h: s.tube[2] }
       : 'hex' in s ? { k: 'hex', c: [0, 0, 0], af: s.hex[0], r: s.hex[0] / Math.sqrt(3), h: s.hex[1], ...(s.hex[2] !== undefined ? { ri: s.hex[2] } : {}) } : 'dome' in s ? { k: 'dome', c: [0, 0, 0], r: s.dome[0], h: s.dome[0] }
-      : 'coil' in s ? { k: 'coil', c: [0, 0, 0], R: s.coil[0], d: s.coil[1], turns: s.coil[2], pitch: s.coil[3], r: s.coil[0] + s.coil[1] / 2, ri: s.coil[0] - s.coil[1] / 2, h: s.coil[2] * s.coil[3] + s.coil[1] }
+      : 'coil' in s ? { k: 'coil', c: [0, 0, 0], R: s.coil[0], d: s.coil[1], turns: s.coil[2], pitch: s.coil[3], layers: s.coil[4] ?? 1, r: s.coil[0] + s.coil[1] / 2 + ((s.coil[4] ?? 1) - 1) * s.coil[1], ri: s.coil[0] - s.coil[1] / 2, h: s.coil[2] * s.coil[3] + s.coil[1] }
+      : 'case' in s ? { k: 'box', c: [0, 0, 0], size: [s.case[0], s.case[1], s.case[2]], tray: { wall: s.case[3], floor: s.case[4] } }
+      : 'section' in s ? { k: 'box', c: [0, 0, 0], size: [xs[0]!, xs[1]!, s.section.L], sect: s.section.pts.map(([x, y]) => [x - (Math.max(...sx) + Math.min(...sx)) / 2, y - (Math.max(...sy) + Math.min(...sy)) / 2] as [number, number]) }
       : { k: 'cup', c: [0, 0, 0], r: s.cup[0], h: s.cup[1], wall: s.cup[2], ends: s.cup[3], open: true };
     const lines: Line[] = [], minus: Prim[] = [];
     if (base.k !== 'box') lines.push({ port: `${name}/axis`, x: 0, z: 0, slot: base.r });
@@ -233,7 +246,8 @@ export class Block {
       });
     }
     const piece: Piece = { name, mat, ...(o.color !== undefined ? { color: o.color } : {}), solid: { base, minus }, lines, ...(o.joint ? { joint: o.joint, ...(o.joint.turn ? { axis: [0, 0] as const } : {}) } : {}), ...(o.bought ? { bought: true as const } : {}) };
-    const rooms: RoomOf[] = base.k === 'cup' ? [{ name: `${name}/cavity`, c: [0, (base.ends) / 2, 0], r: base.r - base.wall, h: base.h - base.ends, open: true }] : [];
+    const rooms: RoomOf[] = base.k === 'cup' ? [{ name: `${name}/cavity`, c: [0, (base.ends) / 2, 0], r: base.r - base.wall, h: base.h - base.ends, open: true }]
+      : base.k === 'box' && base.tray ? [{ name: `${name}/cavity`, c: [0, base.tray.floor / 2, 0], r: Math.hypot(base.size[0] - 2 * base.tray.wall, base.size[2] - 2 * base.tray.wall) / 2, h: base.size[1] - base.tray.floor, open: true, size: [base.size[0] - 2 * base.tray.wall, base.size[2] - 2 * base.tray.wall] }] : [];
     return Block.#seal(name, [piece], [], rooms);
   }
 
@@ -373,12 +387,14 @@ export class Block {
     Block.#is(host); Block.#is(child); if (!(fit in FITS)) throw new Error(`into: a fit by name`);
     const r = host.rooms.find((x) => x.name === port); if (!r) throw new Error(`into: ${host.name} offers no room ${port} (it has ${host.rooms.map((x) => x.name).join(', ') || 'none'})`);
     const g = gapOf(fit), cx = (child.lo[0] + child.hi[0]) / 2, cz = (child.lo[2] + child.hi[2]) / 2, rho = Math.max(...child.pieces.map((p) => reach(sweepOf(p), cx, cz))), tall = child.hi[1] - child.lo[1];
-    if (rho + g > r.r + 1e-12) throw new Error(`no room in ${port}: the ${child.name} needs ${((rho + g) * 2000).toFixed(2)} mm across; it gives ${(r.r * 2000).toFixed(2)} mm`);
+    if (r.size) { const cw = child.hi[0] - child.lo[0] + 2 * g, cd = child.hi[2] - child.lo[2] + 2 * g;
+      if (cw > r.size[0] + 1e-12 || cd > r.size[1] + 1e-12) throw new Error(`no room in ${port}: the ${child.name} needs ${(cw * 1000).toFixed(2)} × ${(cd * 1000).toFixed(2)} mm; it gives ${(r.size[0] * 1000).toFixed(2)} × ${(r.size[1] * 1000).toFixed(2)} mm`); }
+    else if (rho + g > r.r + 1e-12) throw new Error(`no room in ${port}: the ${child.name} needs ${((rho + g) * 2000).toFixed(2)} mm across; it gives ${(r.r * 2000).toFixed(2)} mm`);
     if (!r.open && tall + g > r.h + 1e-12) throw new Error(`no room in ${port}: the ${child.name} needs ${((tall + g) * 1000).toFixed(2)} mm of height; it gives ${(r.h * 1000).toFixed(2)} mm`);
     const floor = r.c[1] - r.h / 2, C = Block.#shift(child, [r.c[0] - cx, floor + g - child.lo[1], r.c[2] - cz]), n = host.pieces.length;
     const pieces = [...host.pieces, ...C.pieces], faces: Face[] = [...host.faces, ...C.faces.map((f) => ({ ...f, a: f.a + n, b: f.b + n }))];
     const holder = host.pieces.findIndex((p) => `${p.name}/cavity` === port);
-    C.pieces.forEach((p, i) => { const w = roundFace(p, r.c[0], r.c[2], r.r - g, floor, floor + r.h, true);
+    C.pieces.forEach((p, i) => { const w = r.size ? { area: 0, length: 0, at: [0, 0, 0] as V3 } : roundFace(p, r.c[0], r.c[2], r.r - g, floor, floor + r.h, true);
       if (w.area > 0 || w.length > 0) faces.push({ a: holder, b: n + i, kind: g > 0 ? 'gap' : 'contact', patch: w.area > 0 ? 'area' : 'line', area: w.area, ...(w.area > 0 ? {} : { length: w.length }), at: w.at, normal: [1, 0, 0], gap: g, ...(g > 0 ? { medium: MEDIUM } : {}), by: `${child.name} into ${port}` }); });
     faces.push(...Block.#plane(pieces, holder, C.pieces.map((_, i) => n + i), 1, floor, g, `${child.name} on ${port}'s floor`, true));
     return Block.#seal(host.name, pieces, faces, host.rooms.filter((x) => x !== r).concat(C.rooms.map((x) => ({ ...x, open: x.open && r.open }))));
@@ -405,7 +421,11 @@ export class Block {
     if (bore + 1e-12 < need) throw new Error(`no room over ${port}: the ${sleeve.name}'s bore is ${(bore * 2000).toFixed(2)} mm across; it needs ${(need * 2000).toFixed(2)} mm`);
     const sb = primBox(o.p.solid.base), H = sleeve.hi[1] - sleeve.lo[1], y0 = where === 'lo' ? sb[0][1] : where === 'hi' ? sb[1][1] - H : (sb[0][1] + sb[1][1]) / 2 - H / 2;
     const S = Block.#shift(sleeve, [o.l.x - cx, y0 - sleeve.lo[1], o.l.z - cz]);
-    for (const q of host.pieces) { if (q === o.p) continue; const qb = boundOf(q); const hit = S.pieces.find((x) => meets(qb, boundOf(x))); if (hit) throw new Error(`no room over ${port}: the ${sleeve.name} would meet the ${q.name}`); }
+    // (a round piece on the same line that fits within the bore with the gap (the shaft a core sits on) passes inside it;
+    // any other piece of the host is tried by its bound against the sleeve's)
+    for (const q of host.pieces) { if (q === o.p) continue; const qs = sweepOf(q);
+      if (qs.k !== 'box' && !q.joint && Math.hypot(qs.c[0] - o.l.x, qs.c[2] - o.l.z) < 1e-12 && qs.r + g <= bore + 1e-12) continue;
+      const qb = boundOf(q); const hit = S.pieces.find((x) => meets(qb, boundOf(x))); if (hit) throw new Error(`no room over ${port}: the ${sleeve.name} would meet the ${q.name}`); }
     const n = host.pieces.length, faces: Face[] = [...host.faces, ...S.faces.map((f) => ({ ...f, a: f.a + n, b: f.b + n }))], rs = need - g;
     S.pieces.forEach((q, i) => { const qb = primBox(q.solid.base), lo = Math.max(qb[0][1], sb[0][1]), hi = Math.min(qb[1][1], sb[1][1]);
       if (hi > lo) faces.push({ a: o.k, b: n + i, kind: g > 0 ? 'gap' : 'contact', patch: 'area', area: 2 * Math.PI * rs * (hi - lo), at: [o.l.x, (lo + hi) / 2, o.l.z], normal: [1, 0, 0], gap: g, ...(g > 0 ? { medium: MEDIUM } : {}), by: `${sleeve.name} over ${port}` }); });
@@ -435,7 +455,7 @@ function boxSide(s: Piece, q: Piece, g: number): { area: number; length: number;
 export const made = Block.made, stack = Block.stack, around = Block.around, through = Block.through, into = Block.into, onto = Block.onto, ring = Block.ring, over = Block.over;
 
 // ---- a block as the app draws it --------------------------------------------------------------------------------
-const LOOK: Record<string, number> = { 'steel-low': 0x8a8c90, 'steel-alloy': 0x6e7175, copper: 0xb87333, brass: 0xc9a54a, 'al-6061': 0xc4c8cc, 'al-6063': 0xc8ccd0, 'al-a380': 0xb8bcc0, abs: 0x2e3033, 'stainless-304': 0xb8bcc2, fr4: 0x1f6b3a, pvc: 0x2a2a2a, nylon: 0xe8e4d8, glass: 0xdfe8ee, pc: 0xf2f2f0, epoxy: 0xf4f4f0, pom: 0x1c1c1c };
+const LOOK: Record<string, number> = { 'steel-low': 0x8a8c90, 'steel-alloy': 0x6e7175, copper: 0xb87333, brass: 0xc9a54a, 'al-6061': 0xc4c8cc, 'al-6063': 0xc8ccd0, 'al-a380': 0xb8bcc0, abs: 0xc9ccd1, 'stainless-304': 0xb8bcc2, fr4: 0x1f6b3a, pvc: 0x2a2a2a, nylon: 0xe8e4d8, glass: 0xdfe8ee, pc: 0xf2f2f0, epoxy: 0xf4f4f0, pom: 0x1c1c1c, ndfeb: 0x4a4d52 };
 /** A cup's wall, floor and (when closed) lid as a profile turned about y, [radius, height] about its middle. */
 const cupProfile = (b: Extract<Prim, { k: 'cup' }>): [number, number][] => {
   const h = b.h / 2, ri = b.r - b.wall;
@@ -458,7 +478,16 @@ export function partOfBlock(b: Block): Part {
       // than its fit's gap; the solid as the operations hold it has it)
       else if (!((m.k === 'cyl' || m.k === 'coil' || m.k === 'hex') && m.ri !== undefined && m.ri > 0)) cuts.push({ r: m.r, depth: h, at, dir: [0, -1, 0] });
     }
-    const shape: Shape = B.k === 'box' ? { box: [B.size[0], B.size[1], B.size[2]] } : B.k === 'cyl' || B.k === 'hex' ? { cyl: [B.r, B.h] } : B.k === 'dome' ? { lathe: domeProfile(B.r) }
+    const look = { mat: p.mat, ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}) };
+    // (a case: its floor and four walls, each where the case's own shape has it; a coil of several layers: a helix each)
+    if (B.k === 'box' && B.tray) { const [w, h, d] = B.size, { wall: t, floor: f } = B.tray, half = (x: number) => x / 2;
+      const walls: Part[] = [{ name: `${p.name} floor`, shape: { box: [w, f, d] }, at: [0, -half(h) + half(f), 0], ...look },
+        { name: `${p.name} wall`, shape: { box: [t, h - f, d] }, at: [-half(w) + half(t), half(f), 0], ...look }, { name: `${p.name} wall`, shape: { box: [t, h - f, d] }, at: [half(w) - half(t), half(f), 0], ...look },
+        { name: `${p.name} wall`, shape: { box: [w - 2 * t, h - f, t] }, at: [0, half(f), -half(d) + half(t)], ...look }, { name: `${p.name} wall`, shape: { box: [w - 2 * t, h - f, t] }, at: [0, half(f), half(d) - half(t)], ...look }];
+      return { name: p.name, item: p.name, one: true, at: [B.c[0], B.c[1], B.c[2]], parts: walls, ...look }; }
+    if (B.k === 'coil' && B.layers > 1) return { name: p.name, item: p.name, one: true, at: [B.c[0], B.c[1], B.c[2]], ...look,
+      parts: Array.from({ length: B.layers }, (_, k) => ({ name: `${p.name} layer ${k + 1}`, shape: { tube: { r: B.d / 2, pts: helix(B.R + k * B.d, B.turns, B.pitch, B.h - B.d) } }, at: [0, 0, 0] as [number, number, number], ...look })) };
+    const shape: Shape = B.k === 'box' ? (B.sect ? { prism: { pts: B.sect.map(([x, y]) => [x, y] as [number, number]), L: B.size[2] } } : { box: [B.size[0], B.size[1], B.size[2]] }) : B.k === 'cyl' || B.k === 'hex' ? { cyl: [B.r, B.h] } : B.k === 'dome' ? { lathe: domeProfile(B.r) }
       : B.k === 'coil' ? { tube: { r: B.d / 2, pts: helix(B.R, B.turns, B.pitch, B.h - B.d) } } : { lathe: cupProfile(B) };
     return { name: p.name, item: p.name, shape, at: [B.c[0], B.c[1], B.c[2]], mat: p.mat, ...(B.k === 'hex' ? { facets: 6 } : {}), ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}), ...(cuts.length ? { cuts } : {}) };
   });

@@ -1109,7 +1109,7 @@ describe('every domain, in one pass', () => {
     // (a plan's nodes sent as text are read; as a list, refused in one line, not one a character (it sent 500: 2026-11-01))
     expect(await t.doTool('build', { nodes: JSON.stringify({ k: { b: 'in.number', s: { value: 2 } } }) }), 'as text: read').toMatch(/^k ok value=2/);
     expect((await t.doTool('build', { nodes: [{ b: 'in.number' }] })).split('\n').filter((l) => l.startsWith('!')), 'as a list: one refusal').toEqual(['! nodes: write them as an object, {"name": {"b": "block id", "s": {…}}}']);
-    const guide = readFileSync(join(root, 'docs/FOR-AI.md'), 'utf8'); expect(guide, 'FOR-AI\'s rule: parts put together by joint and imprint, never by typed positions').toMatch(/Never place parts by typed positions[^]*`joint`[^]*`imprint`[^]*`assert`/);
+    const guide = readFileSync(join(root, 'docs/FOR-AI.md'), 'utf8'); expect(guide, 'FOR-AI\'s rule: things built from the common pieces and the operations, never by a typed position, and the nodes that set places by number never used').toMatch(/never by a typed position[^]*`room\.over`[^]*`room\.through`[^]*Never use `place`[^]*`assert`/);
   }, 120_000);
   // (ISO 286 classes as limits (spec 01, I17): H, h and JS from the IT grade alone, other letters from ISO 286-2's
   // fundamental deviations; each of the evaluation set's waiting cases' limits as the app now works them out, offset and

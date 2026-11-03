@@ -106,7 +106,7 @@ known gaps are there too.
 | Only what the app reaches is kept | the reach check in `tests/nexus/domains.test.ts` |
 | Things placed, never copied; frames; fit in; take apart | `nexus/assembly.ts` |
 | The space where nothing can overlap: solids (boxes, rods, tubes, cups, hexes, domes, coils) made and put together only by operations (make, stack, around, into, onto, ring, through, over), no place ever an input, a room used once, a refusal with both sizes (decision 0021) | `nexus/room.ts` (nodes Make a solid, Stack, Around, Into a room, Onto a face, Ring of copies, Through a line, Over a shaft) |
-| Common pieces made by those operations, by their standards, each saying how it mates (bolts, screws, nuts, washers, standoffs, plates, pipes, couplings, copper wire, windings, LEDs, lamps, headers, buttons, terminals; the bolted joint) | `nexus/common.ts` (nodes `piece.*`, `mate.bolted`) |
+| Common pieces made by those operations, by their standards, each saying how it mates (bolts, screws, nuts, washers, standoffs, plates, sections (angles, channels, I-beams, tees), hollow boxes, pipes, couplings, copper wire, coils and windings, LEDs, lamps, headers, buttons, terminals; the bolted joint) | `nexus/common.ts` (nodes `piece.*`, `mate.bolted`) |
 | Layout, contacts, contact patches of a placed tree | `nexus/make/space.ts` |
 | The contact graph of any thing (what touches what, from the geometry; each distinct thing once); what flows through it, how it bends, buckles and grows when warmed (steps C to F) | `nexus/graph.ts` (nodes `graph`, `flow`, `bend`) |
 | Rules: the heat gate; nothing checks for overlap (decision 0021): places still written by hand counted, each count only falls | `nexus/make/rules.ts`; the count `../scripts/by-hand.mjs` |

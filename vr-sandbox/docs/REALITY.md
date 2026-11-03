@@ -2622,3 +2622,17 @@ parts as sold (one probe, `npx vitest run`, not kept): an M8 × 40 hex bolt 21.9
 the wires, windings, lights and inputs; and four matings (two plates bolted twice, a wire's stripped end in its
 terminal, a coupling on a pipe, an LED's leads through a board), every node on them running (`npm run gate`). Not yet:
 bends and elbows in pipe, square boxes with a hollow (only round cases), threads drawn, multi-layer windings.
+
+## 2026-11-03: sections, hollow boxes, layered windings, and the first builds from the pieces
+
+The space gained a box hollow inside and open at the top, its cavity a box-shaped room (Into a room refuses with both
+sizes where a thing does not fit), bars of a section (an outline drawn along a length: aluminium angles, channels and
+tees, steel IPE beams from EN 10365), and coils of several layers. Over a shaft now lets a round piece on the same line
+that fits inside the bore pass (a shaft inside a core), where it had refused on the bounds. The first things built only
+from the pieces and the operations, as boards of nodes: a small DC motor (a rotor core with its coil in two layers slid
+over it, a commutator under it, a magnet ring slid round it with an air gap, the can made round all of it, the shaft
+passed along its axis, two terminal tabs against its foot) and a switch box (an LED and a push button through a board's
+footprints, the board into a project box's cavity). Every node on the three new boards runs (`npm run gate`). The in-app
+AI's guide (`docs/FOR-AI.md`) now tells it to build only with the pieces and the operations and never with the nodes
+that set places by number. Seen: from the 3D view's angle the box's 40 mm walls hide its floor, so the board is shown
+beside the box as well; the motor reads as a can with its shaft, its inside seen with Cut.

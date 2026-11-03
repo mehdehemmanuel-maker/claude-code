@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 590 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 593 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -40,11 +40,11 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 6 | typical values or an estimate, said so |
 | simplified | 39 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 63 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 66 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 554 tested here (their own tests: that they do what they say, not that the world does); 26 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 557 tested here (their own tests: that they do what they say, not that the world does); 26 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 153 of 590 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 153 of 593 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (15)
 
@@ -123,15 +123,17 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Wound roll** (`make.roll`): Strips laid over one another and wound round a core: a lithium cell's cathode, separator and anode; a coil's wire; a film capacitor; a roll of tape. *hypothetical, tested here, before the update*
 - **Wrap in** (`make.wrap`): A part wrapped in an envelope of a sheet folded round it and sealed at its edges, open at its top: a separator round a battery plate, a bag, a sleeve, shrink wrap *hypothetical, tested here, before the update*
 
-## 3 · Arrange and mate (49)
+## 3 · Arrange and mate (52)
 
 Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones and mates as numbers; proximity; routes.
 
+- **Bar of a section** (`piece.section`): A bar of a section by its size (steel IPE from EN 10365, equal angles from EN 10056; aluminium extrusions typical) and its length: its profile across, its length along z *hypothetical, tested here*
 - **Bolt or screw** (`piece.bolt`): A bolt by its metric size (M3 to M12) and length: its shank, its hex head (ISO 4017) or socket head (ISO 4762) on top. *hypothetical, tested here*
 - **Bolted joint** (`mate.bolted`): A bolted joint on a hole of what it holds (plates stacked): the bolt's shank down the hole from above, as long as the grip and its washer and nut, its head on top on that hole, a washer and a nut slid over the shank's … *derived, tested here*
 - **Bolts for a pattern** (`fasten.pattern`): The bolt the catalogue sells for two plates through a pattern (ISO 4017, its washers and nut, the shortest sold: fastenerFor), one at each of its points, and why that one; and the bolts themselves, each with its … *derived, tested here*
 - **Bore where it passes** (`bore`): A part bored wherever another runs through it: a hole along the other's line, cut in each piece it passes and in no other; for a bolt, a screw or a stud its standard's clearance hole (ISO 273 medium for its thread), … *derived, tested here*
 - **Clear away** (`clear`): What a thing places, less whatever comes within a distance of another thing (grass under a road, trees where a house stands) or, with "keep", only those: deleting by where things are *derived, tested here, before the update*
+- **Coil of wire** (`piece.coil`): A coil of copper wire on its own, close-wound: its mean radius, its wire, its turns and layers; its bore slides over a core (Over a shaft) *hypothetical, tested here*
 - **Combine** (`combine`): Several things as one assembly, each where it is: a frame and its motors, a city and the swarm over it *derived, tested here, before the update*
 - **Copper wire** (`piece.wire`): A solid copper wire by its section (IEC 60228, typical diameters), bare or in PVC insulation of a colour with each end stripped; its stripped end goes into a terminal (Through a line) *hypothetical, tested here*
 - **Cut by a standard** (`cut.standard`): Any kind of seat, hole or cut-out written as a row of data (a bearing's housing or shaft, a dowel's hole, a key's keyway in a shaft or a hub, a pipe port, a panel cut-out) asked of a part at a point: stood on the … *derived, tested here*
@@ -139,6 +141,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Fit to a target** (`fit.target`): Any block in the library, a law, a maker, a check, or a whole pipeline folded into one (Picture to model, a seed), run again and again with some of its inputs or settings moved within ranges, until its outputs meet … *derived, tested here*
 - **Frame** (`frame`): A named place on a thing, facing a way: where something is set on it, or where it is set on something (a door's middle, a house's drive). *derived, tested here, before the update*
 - **Hole** (`hole`): A hole drilled into a part: its radius and depth, where it starts on the part and which way it goes in; with sides, a hex or square pocket. *derived, tested here, before the update*
+- **Hollow box** (`piece.case`): A box hollow inside and open at the top (a project box, a tray, a tank): its walls and floor round a box-shaped cavity, offered as a room for a board or a part to go into (Into a room); refused with both sizes where … *hypothetical, tested here*
 - **Imprint a pattern** (`imprint.pattern`): Each hole of a pattern imprinted where it falls on a part's top face: stood on the face, its negative made for the part's material and depth (a clearance hole for its bolt, ISO 273), checked (edge, spacing, room), … *derived, tested here*
 - **It is** (`tag`): Says what a part is: its name, and the inventory item it is (so the audit holds it to its recipe and anything can find it). *derived, tested here, before the update*
 - **Its mates, measured** (`mates`): Every mate on everything in a thing, measured where it stands, as numbers: what each carries it to, its measure, its value, the range it must hold in, whether it holds, and whether it is in force in the state you give *derived, tested here, before the update*

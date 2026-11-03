@@ -606,6 +606,64 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'row', 'says', 'said', 'value');
     return b;
   }],
+  ['Common pieces: angles, a channel, an I-beam and a tee, a hollow box, a coil, a winding in three layers', () => {
+    const b = emptyBoard('Common pieces: sections, a hollow box, coils'), row: string[] = [];
+    const add = (id: string, block: string, set: Record<string, unknown>, label: string) => { placeBlock(b, block, 0, 0, set, id); b.nodes[id]!.label = label; row.push(id); };
+    add('a20', 'piece.section', { size: 'aluminium angle 20×20×2', length: 80 }, 'Aluminium angle 20 × 20 × 2');
+    add('a40', 'piece.section', { size: 'aluminium angle 40×40×4', length: 80 }, 'Aluminium angle 40 × 40 × 4');
+    add('ch', 'piece.section', { size: 'aluminium channel 25×25×2', length: 80 }, 'Aluminium channel 25 × 25 × 2');
+    add('ipe', 'piece.section', { size: 'steel IPE 80 (EN 10365)', length: 80 }, 'Steel IPE 80');
+    add('tee', 'piece.section', { size: 'aluminium tee 25×25×3', length: 80 }, 'Aluminium tee 25 × 25 × 3');
+    add('box', 'piece.case', { name: 'project box', mat: 'abs', w: 100, h: 40, d: 60, wall: 2, floor: 2 }, 'Hollow box (ABS), its cavity a room');
+    add('cl', 'piece.coil', { R: 7, wire: 0.5, turns: 20, layers: 1 }, 'A coil, 20 turns of 0.5 mm copper');
+    add('w3', 'piece.winding', { core: 12, length: 20, wire: 0.5, layers: 3 }, 'A winding in three layers on its bobbin');
+    placeBlock(b, 'room.stack', 0, 0, { name: 'sections, a hollow box, coils', axis: 'x', fit: 'clear', level: 'on the ground' }, 'row'); for (const id of row) wire(b, id, 'block', 'row', 'blocks');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'row', 'thing', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'row', 'says', 'said', 'value');
+    return b;
+  }],
+  ['Built from pieces: a small DC motor, its rotor wound, its magnets round it, its can round all, its shaft through', () => {
+    // (a motor of the common small size (a 20 mm can, typical), every piece made and put together by the operations:
+    // the rotor's core with its coil slid over it in two layers, its commutator stacked under it, a ring of magnets slid
+    // over the rotor with an air gap, the can made round all of it, the shaft passed along the can's axis (the can's
+    // ends and the core bored for it as it passes), two terminal tabs against its foot. Nothing is placed by a number)
+    const b = emptyBoard('Built from pieces: a small DC motor');
+    const make = (id: string, set: Record<string, unknown>, label: string) => { placeBlock(b, 'room.make', 0, 0, set, id); b.nodes[id]!.label = label; };
+    make('core', { name: 'rotor core', shape: 'tube', mat: 'steel-low', a: 1, b: 6.5, c: 12 }, 'Rotor core (laminated steel)');
+    placeBlock(b, 'piece.coil', 0, 0, { R: 6.75, wire: 0.5, turns: 23, layers: 2 }, 'coil'); b.nodes.coil!.label = 'Its coil, 23 turns in two layers';
+    placeBlock(b, 'room.over', 0, 0, { line: 'rotor core/axis', where: 'mid', fit: 'touch' }, 'wound'); b.nodes.wound!.label = 'The coil wound over the core'; wire(b, 'core', 'block', 'wound', 'host'); wire(b, 'coil', 'block', 'wound', 'sleeve');
+    make('comm', { name: 'commutator', shape: 'tube', mat: 'copper', a: 1, b: 2.5, c: 3 }, 'Commutator (copper)');
+    placeBlock(b, 'room.stack', 0, 0, { name: 'rotor', axis: 'y', fit: 'touch' }, 'rotor'); b.nodes.rotor!.label = 'The rotor: commutator under the wound core'; wire(b, 'comm', 'block', 'rotor', 'blocks'); wire(b, 'wound', 'block', 'rotor', 'blocks');
+    make('mag', { name: 'magnet ring', shape: 'tube', mat: 'ndfeb', a: 9, b: 10.5, c: 12 }, 'Magnet ring (NdFeB)');
+    placeBlock(b, 'room.over', 0, 0, { line: 'rotor core/axis', where: 'mid', fit: 'clear' }, 'field'); b.nodes.field!.label = 'Magnets round the rotor, an air gap'; wire(b, 'rotor', 'block', 'field', 'host'); wire(b, 'mag', 'block', 'field', 'sleeve');
+    placeBlock(b, 'room.around', 0, 0, { name: 'motor can', mat: 'steel-low', wall: 0.5, ends: 1, fit: 'clear', open: 'no' }, 'can'); b.nodes.can!.label = 'The can, made round all of it'; wire(b, 'field', 'block', 'can', 'child');
+    make('shaft', { name: 'shaft', shape: 'rod', mat: 'steel-alloy', a: 1, b: 30 }, 'Shaft, 2 mm');
+    placeBlock(b, 'room.through', 0, 0, { line: 'motor can/axis', which: 0, from: 'below', fit: 'slide' }, 'shafted'); b.nodes.shafted!.label = 'The shaft along its axis'; wire(b, 'can', 'block', 'shafted', 'host'); wire(b, 'shaft', 'block', 'shafted', 'passer');
+    make('tab', { name: 'terminal tab', shape: 'box', mat: 'brass', a: 2, b: 4, c: 0.4 }, 'Terminal tab (brass)');
+    placeBlock(b, 'room.ring', 0, 0, { name: 'terminals', n: 2, R: 5, fit: 'clear' }, 'tabs'); b.nodes.tabs!.label = 'Two of them'; wire(b, 'tab', 'block', 'tabs', 'block');
+    placeBlock(b, 'room.onto', 0, 0, { face: '-y', fit: 'touch' }, 'motor'); b.nodes.motor!.label = 'Against its foot'; wire(b, 'shafted', 'block', 'motor', 'host'); wire(b, 'tabs', 'block', 'motor', 'child');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'motor', 'thing', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'motor', 'says', 'said', 'value');
+    return b;
+  }],
+  ['Built from pieces: a switch box, a board with its LED and push button, into a hollow box', () => {
+    // (a board's two footprints take an LED and a push button through it; the board goes into a project box's cavity,
+    // refused if it did not fit. Every piece common, every mating an operation)
+    const b = emptyBoard('Built from pieces: a switch box');
+    placeBlock(b, 'piece.case', 0, 0, { name: 'project box', mat: 'abs', w: 100, h: 40, d: 60, wall: 2, floor: 2 }, 'box'); b.nodes.box!.label = 'Project box (ABS)';
+    placeBlock(b, 'piece.plate', 0, 0, { name: 'board', mat: 'fr4', w: 80, t: 1.6, d: 40, holes: '-20,0; 20,0', hole: 0 }, 'pcb'); b.nodes.pcb!.label = 'A board, two footprints';
+    placeBlock(b, 'piece.led', 0, 0, { size: '5', colour: 'green', leads: 4 }, 'led'); b.nodes.led!.label = 'LED 5 mm, green';
+    placeBlock(b, 'room.through', 0, 0, { line: 'board/holes', which: 0, from: 'below', fit: 'slide' }, 'lit'); b.nodes.lit!.label = 'The LED through the board'; wire(b, 'pcb', 'block', 'lit', 'host'); wire(b, 'led', 'block', 'lit', 'passer');
+    placeBlock(b, 'piece.button', 0, 0, {}, 'btn'); b.nodes.btn!.label = 'Push button 6 × 6';
+    placeBlock(b, 'room.through', 0, 0, { line: 'board/holes', which: 1, from: 'below', fit: 'slide' }, 'pressed'); b.nodes.pressed!.label = 'The button through the board'; wire(b, 'lit', 'block', 'pressed', 'host'); wire(b, 'btn', 'block', 'pressed', 'passer');
+    placeBlock(b, 'room.into', 0, 0, { room: 'project box/cavity', fit: 'clear' }, 'boxed'); b.nodes.boxed!.label = 'The board into the box'; wire(b, 'box', 'block', 'boxed', 'host'); wire(b, 'pressed', 'block', 'boxed', 'child');
+    // (shown beside the board before it went in: inside the box, below its walls, the board cannot be seen from the
+    // view's angle; Cut opens the box)
+    placeBlock(b, 'room.stack', 0, 0, { name: 'the board, and the board in its box', axis: 'x', fit: 'clear', level: 'on the ground' }, 'row'); b.nodes.row!.label = 'The board beside its box'; wire(b, 'pressed', 'block', 'row', 'blocks'); wire(b, 'boxed', 'block', 'row', 'blocks');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'row', 'thing', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'boxed', 'says', 'said', 'value');
+    return b;
+  }],
   ] as [string, Make][]);
   return boards.map(([n, f]) => [n, () => tidy(f())] as [string, Make]);
 }
