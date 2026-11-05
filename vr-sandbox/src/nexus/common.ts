@@ -26,36 +26,47 @@
 
 import { made, stack, through, onto, ring, over, into, joint, run, turn, branch, boundOf, FITS, type Block, type Fit, type P3, type RunSeg, type RunTube } from './room';
 import { SPRING_WIRES, springRate } from '../engineering/springs';
+import { ISO_METRIC } from './parts/bdw';
+import { BEARINGS as BEARING_SIZES, IPE, ballsOf } from './families';
 
 const mm = (x: number): number => x / 1000;
 
-/** ISO metric coarse, M3 to M12, in mm: d the thread, s across a hex's flats (ISO 4017, ISO 4032), k a hex head's
- *  height (ISO 4017), dk a socket head's diameter and its height d (ISO 4762), m a nut's height (ISO 4032), a washer's
- *  bore d1, outside d2 and thickness hw (ISO 7089), the clearance hole for it (ISO 273, medium). */
-export const METRIC = {
-  M3: { d: 3, s: 5.5, k: 2, dk: 5.5, m: 2.4, d1: 3.2, d2: 7, hw: 0.5, clear: 3.4 },
-  M4: { d: 4, s: 7, k: 2.8, dk: 7, m: 3.2, d1: 4.3, d2: 9, hw: 0.8, clear: 4.5 },
-  M5: { d: 5, s: 8, k: 3.5, dk: 8.5, m: 4.7, d1: 5.3, d2: 10, hw: 1, clear: 5.5 },
-  M6: { d: 6, s: 10, k: 4, dk: 10, m: 5.2, d1: 6.4, d2: 12, hw: 1.6, clear: 6.6 },
-  M8: { d: 8, s: 13, k: 5.3, dk: 13, m: 6.8, d1: 8.4, d2: 16, hw: 1.6, clear: 9 },
-  M10: { d: 10, s: 16, k: 6.4, dk: 16, m: 8.4, d1: 10.5, d2: 20, hw: 2, clear: 11 },
-  M12: { d: 12, s: 18, k: 7.5, dk: 18, m: 10.8, d1: 13, d2: 24, hw: 2.5, clear: 13.5 },
-} as const;
-export type Metric = keyof typeof METRIC;
-export const METRIC_SIZES = Object.keys(METRIC) as Metric[];
-const sizeOf = (size: string) => { const m = METRIC[size as Metric]; if (!m) throw new Error(`no metric size ${size} (${METRIC_SIZES.join(', ')})`); return m; };
+/** ISO metric coarse, M1.6 to M64, in mm, read from the one table of them (`ISO_METRIC`, src/nexus/parts/bdw.ts, copied
+ *  from bd_warehouse with its notice): d the thread, s across a hex's flats and k a hex head's height (ISO 4014/4017), dk
+ *  a socket head's diameter (its maximum) and ks its height (ISO 4762), m a nut's height (ISO 4032), a washer's bore d1,
+ *  outside d2 and thickness hw (ISO 7089, hw its maximum as bd_warehouse gives it), the clearance hole for it (ISO 273,
+ *  medium). (threads.ts keeps a nominal table of its own for the families and the interfaces, M1.6 to M24: merging it
+ *  moves the old imprint's figures by the maxima, left for the polish pass.) A size the standard has no
+ *  hex head, socket head, nut or washer for has that field missing, and a piece that needs it refuses the size, saying
+ *  which standard stops where. */
+export interface MetricSize { d: number; p: number; s?: number; k?: number; dk?: number; ks?: number; m?: number; d1?: number; d2?: number; hw?: number; clear?: number }
+export const METRIC: Record<string, MetricSize> = Object.fromEntries(Object.entries(ISO_METRIC).map(([k, r]) => [k, {
+  d: Number(k.slice(1)), p: r.p, ...(r.hex || r.nut ? { s: (r.hex ?? r.nut)!.s } : {}), ...(r.hex ? { k: r.hex.k } : {}), ...(r.socket ? { dk: r.socket.dk, ks: r.socket.k } : {}), ...(r.nut ? { m: r.nut.m } : {}),
+  ...(r.washer ? { d1: r.washer.d1, d2: r.washer.d2, hw: r.washer.h } : {}), ...(r.clear ? { clear: r.clear.normal } : {}) }]));
+export type Metric = string;
+export const METRIC_SIZES = Object.keys(METRIC);
+/** What each field is, and the standard whose table has it, for a refusal that says why. */
+const FIELD: Record<string, string> = { s: 'hex across flats (ISO 4014 / ISO 4032)', k: 'hex head (ISO 4014)', dk: 'socket head (ISO 4762)', ks: 'socket head (ISO 4762)', m: 'hex nut (ISO 4032)', d1: 'plain washer (ISO 7089)', d2: 'plain washer (ISO 7089)', hw: 'plain washer (ISO 7089)', clear: 'clearance hole (ISO 273)' };
+const has = (f: string) => METRIC_SIZES.filter((k) => (METRIC[k] as unknown as Record<string, unknown>)[f] !== undefined);
+/** A metric size's row, with the fields a piece needs: refused, naming the standard and the sizes it has, where one is
+ *  missing. */
+export function sizeOf<F extends keyof MetricSize>(size: string, ...need: F[]): MetricSize & Required<Pick<MetricSize, F>> {
+  const m = METRIC[size]; if (!m) throw new Error(`no metric size ${size} (${METRIC_SIZES.join(', ')})`);
+  for (const f of need) if (m[f] === undefined) { const ok = has(f); throw new Error(`no ${FIELD[f]} of ${size} in its table: it has ${ok[0]} to ${ok[ok.length - 1]} (${ok.length} sizes)`); }
+  return m as MetricSize & Required<Pick<MetricSize, F>>;
+}
 
 /** A bolt: its shank, and its head on top (a hex head, ISO 4017, or a socket head, ISO 4762). Its shank offers its axis
  *  (`<size> shank/axis`): a washer or a nut slides over it, and it passes through a hole. */
 export function bolt(size: string, length: number, head: 'hex' | 'socket' = 'hex', mat = 'steel-alloy'): Block {
   const m = sizeOf(size), shank = made(`${size} shank`, mat, { cyl: [mm(m.d) / 2, length] }, { color: 0x5c5f63 });
-  const top = head === 'hex' ? made(`${size} head`, mat, { hex: [mm(m.s), mm(m.k)] }, { color: 0x5c5f63 }) : made(`${size} head`, mat, { cyl: [mm(m.dk) / 2, mm(m.d)] }, { color: 0x2a2b2e });
+  const top = head === 'hex' ? (() => { const h = sizeOf(size, 's', 'k'); return made(`${size} head`, mat, { hex: [mm(h.s), mm(h.k)] }, { color: 0x5c5f63 }); })() : (() => { const h = sizeOf(size, 'dk', 'ks'); return made(`${size} head`, mat, { cyl: [mm(h.dk) / 2, mm(h.ks)] }, { color: 0x2a2b2e }); })();
   return stack(`${size}×${Math.round(length * 1000)} ${head === 'hex' ? 'hex bolt' : 'socket screw'}`, 1, [{ b: shank }, { b: top }]);
 }
 /** A hex nut, ISO 4032: its bore the thread's size (the thread itself not drawn). */
-export const nut = (size: string, mat = 'steel-low'): Block => { const m = sizeOf(size); return made(`${size} nut`, mat, { hex: [mm(m.s), mm(m.m), mm(m.d) / 2] }, { color: 0x8a8c90 }); };
+export const nut = (size: string, mat = 'steel-low'): Block => { const m = sizeOf(size, 's', 'm'); return made(`${size} nut`, mat, { hex: [mm(m.s), mm(m.m), mm(m.d) / 2] }, { color: 0x8a8c90 }); };
 /** A plain washer, ISO 7089. */
-export const washer = (size: string, mat = 'steel-low'): Block => { const m = sizeOf(size); return made(`${size} washer`, mat, { tube: [mm(m.d1) / 2, mm(m.d2) / 2, mm(m.hw)] }, { color: 0xa9acb0 }); };
+export const washer = (size: string, mat = 'steel-low'): Block => { const m = sizeOf(size, 'd1', 'd2', 'hw'); return made(`${size} washer`, mat, { tube: [mm(m.d1) / 2, mm(m.d2) / 2, mm(m.hw)] }, { color: 0xa9acb0 }); };
 /** A hex standoff, female both ends (M3, 5.5 mm across flats; its bore the M3 tap drill, 2.5 mm; typical). */
 export const standoff = (length: number, mat = 'brass'): Block => made(`M3 standoff ${Math.round(length * 1000)} mm`, mat, { hex: [mm(5.5), length, mm(2.5) / 2] });
 
@@ -213,11 +224,11 @@ export function boltedJoint(held: Block, port: string, size: string, i = 0, head
   if (o.dir && !(Math.abs(o.dir[0]) < 1e-9 && Math.abs(o.dir[2]) < 1e-9 && o.dir[1] > 0)) throw new Error(`bolted joint: the hole ${port} is turned (not along +y): bolt what it holds first, then turn the whole (not made yet)`);
   const owner = held.pieces.find((p) => p.lines.some((l) => l.port === port))!, ceiling = boundOf(owner)[1][1];
   const under = held.pieces.map(boundOf).filter((b) => b[0][0] < o.x && o.x < b[1][0] && b[0][2] < o.z && o.z < b[1][2] && b[1][1] <= ceiling + 1e-9);
-  const m = sizeOf(size), grip = ceiling - Math.min(...under.map((b) => b[0][1])), L = grip + mm(m.hw) + mm(m.m);
+  const m = sizeOf(size, 'hw', 'm'), grip = ceiling - Math.min(...under.map((b) => b[0][1])), L = grip + mm(m.hw) + mm(m.m);
   // (each joint's pieces named apart, so a second joint's washer and nut find its own shank: "M8 shank 2")
   const k = 1 + held.pieces.filter((p) => p.name.startsWith(`${size} shank`)).length, tag = k > 1 ? ` ${k}` : '';
   const shank = made(`${size} shank${tag}`, 'steel-alloy', { cyl: [mm(m.d) / 2, L] }, { color: 0x5c5f63 });
-  const top = head === 'hex' ? made(`${size} head${tag}`, 'steel-alloy', { hex: [mm(m.s), mm(m.k)] }, { color: 0x5c5f63 }) : made(`${size} head${tag}`, 'steel-alloy', { cyl: [mm(m.dk) / 2, mm(m.d)] }, { color: 0x2a2b2e });
+  const top = head === 'hex' ? (() => { const h = sizeOf(size, 's', 'k'); return made(`${size} head${tag}`, 'steel-alloy', { hex: [mm(h.s), mm(h.k)] }, { color: 0x5c5f63 }); })() : (() => { const h = sizeOf(size, 'dk', 'ks'); return made(`${size} head${tag}`, 'steel-alloy', { cyl: [mm(h.dk) / 2, mm(h.ks)] }, { color: 0x2a2b2e }); })();
   const passed = through(held, shank, { port, i, from: 'hi' }, fit);
   const headed = onto(passed, '+y', top, 'touch', `${size} shank${tag}/axis`);
   return over(headed, `${size} shank${tag}/axis`, stack(`${size} washer and nut`, 1, [{ b: nut(size) }, { b: washer(size) }]), 'lo', 'touch');
@@ -235,12 +246,13 @@ export const SECTIONS = {
   'aluminium angle 20×20×2': { kind: 'angle', a: 20, t: 2, mat: 'al-6063' }, 'aluminium angle 40×40×4': { kind: 'angle', a: 40, t: 4, mat: 'al-6063' },
   'steel angle 50×50×5 (EN 10056)': { kind: 'angle', a: 50, t: 5, mat: 'steel-low' },
   'aluminium channel 25×25×2': { kind: 'channel', h: 25, b: 25, t: 2, mat: 'al-6063' }, 'aluminium channel 40×20×2': { kind: 'channel', h: 20, b: 40, t: 2, mat: 'al-6063' },
-  'steel IPE 80 (EN 10365)': { kind: 'I', h: 80, b: 46, tw: 3.8, tf: 5.2, mat: 'steel-low' }, 'steel IPE 100 (EN 10365)': { kind: 'I', h: 100, b: 55, tw: 4.1, tf: 5.7, mat: 'steel-low' },
+  // (every IPE of the one IPE table, families.ts, EN 10365)
+  ...Object.fromEntries(Object.entries(IPE).map(([k, [h, b, tw, tf]]) => [`steel IPE ${k} (EN 10365)`, { kind: 'I', h, b, tw, tf, mat: 'steel-low' }])),
   'aluminium tee 25×25×3': { kind: 'T', b: 25, h: 25, t: 3, mat: 'al-6063' },
-} as const;
-export type SectionSize = keyof typeof SECTIONS;
+} as Record<string, { kind: string; a?: number; t?: number; h?: number; b?: number; tw?: number; tf?: number; mat: string }>;
+export type SectionSize = string;
 export function section(size: string, length: number): Block {
-  const q = SECTIONS[size as SectionSize] as { kind: string; a?: number; t?: number; h?: number; b?: number; tw?: number; tf?: number; mat: string };
+  const q = SECTIONS[size];
   if (!q) throw new Error(`no section ${size} (${Object.keys(SECTIONS).join(', ')})`);
   const k = (v: number | undefined) => mm(v ?? 0), t = k(q.t), h = k(q.h), b = k(q.b), a = k(q.a), tw = k(q.tw), tf = k(q.tf);
   const pts: [number, number][] = q.kind === 'angle' ? [[0, 0], [a, 0], [a, t], [t, t], [t, a], [0, a]]
@@ -374,7 +386,7 @@ export function bracket(name = 'L bracket', a = mm(40), t = mm(4), L = mm(40), s
   if (!(Number.isInteger(holes) && holes >= 1 && holes <= 6)) throw new Error('a bracket with 1 to 6 holes in its foot');
   if (!(Number.isInteger(upright) && upright >= 0 && upright <= 6)) throw new Error('a bracket with 0 to 6 holes in its upright');
   if (!(t < a / 2)) throw new Error(`a bracket's legs (${a * 1000} mm) more than twice its thickness (${t * 1000} mm)`);
-  const m = sizeOf(size), row = (n: number, x: number) => Array.from({ length: n }, (_, i) => [x, (i - (n - 1) / 2) * (L / n)] as [number, number]);
+  const m = sizeOf(size, 'clear'), row = (n: number, x: number) => Array.from({ length: n }, (_, i) => [x, (i - (n - 1) / 2) * (L / n)] as [number, number]);
   // (flat, its width across x; turned −90° about z its width stands up along y and its holes run along +x: a hole at
   // x = −t/2 in the flat plate stands t/2 above the upright's middle, the middle of its height above the foot)
   const up = turn(plate(`${name} upright`, a, t, L, mat, row(upright, -t / 2), mm(m.clear)), 2, -90);
@@ -397,16 +409,14 @@ export function boltedDown(held: Block, port: string, w: number, t: number, d: n
     return turn(boltedDown(turn(held, about, deg), port, w, t, d, mat, size, head), about, -deg);
   }
   const cx = (held.lo[0] + held.hi[0]) / 2, cz = (held.lo[2] + held.hi[2]) / 2;
-  let b = stack(`${held.name}, bolted down`, 1, [{ b: plate(`${held.name} base plate`, w, t, d, mat, ls.map((l) => [l.x - cx, l.z - cz] as [number, number]), mm(sizeOf(size).clear)) }, { b: held }]);
+  let b = stack(`${held.name}, bolted down`, 1, [{ b: plate(`${held.name} base plate`, w, t, d, mat, ls.map((l) => [l.x - cx, l.z - cz] as [number, number]), mm(sizeOf(size, 'clear').clear)) }, { b: held }]);
   for (let i = 0; i < ls.length; i++) b = boltedJoint(b, port, size, i, head);
   return b;
 }
-/** Deep-groove ball bearings: bore d, outside D and width B by ISO 15 (608 and the 6000s, dimension series 10), mm; their
- *  balls, how many and how big, typical (an estimate here, not read from one maker's table). */
-export const BEARINGS = {
-  '608': { d: 8, D: 22, B: 7, n: 7, Dw: 3.969 }, '6000': { d: 10, D: 26, B: 8, n: 7, Dw: 4.762 }, '6001': { d: 12, D: 28, B: 8, n: 8, Dw: 4.762 },
-  '6002': { d: 15, D: 32, B: 9, n: 9, Dw: 4.762 }, '6003': { d: 17, D: 35, B: 10, n: 10, Dw: 4.762 }, '6004': { d: 20, D: 42, B: 12, n: 9, Dw: 6.35 },
-} as const;
+/** Deep-groove ball bearings: bore d, outside D and width B, read from the one bearing table (`BEARINGS`, families.ts:
+ *  ISO 15, with BOSL2's makers' rows, src/nexus/parts/bosl2.ts); their balls, how many and how big, by `ballsOf` (each
+ *  about 0.3 of the rings' section, as many as a Conrad assembly takes: typical, an estimate). */
+export const BEARINGS: Record<string, { d: number; D: number; B: number; n: number; Dw: number }> = Object.fromEntries(Object.entries(BEARING_SIZES).map(([k, [d, D, B]]) => { const q = ballsOf(d, D); return [k, { d, D, B, n: q.z, Dw: +q.Db.toFixed(3) }]; }));
 /** A deep-groove ball bearing: its inner ring, its cage slid over it at the middle of its width, its outer ring slid over
  *  all, and each ball put through its pocket in the cage (a sliding fit), the balls on their pitch circle ((d + D) / 2)
  *  touching both rings. Approximated so: each ball drawn as its bounding cylinder (room.ts has no sphere yet), the rings'
@@ -414,7 +424,7 @@ export const BEARINGS = {
  *  fit), the cage drawn as a solid ring with its pockets. Its inner ring's bore takes a shaft (Through a line); its outer
  *  ring goes into a housing's bore. */
 export function bearing(size: string): Block {
-  const q = BEARINGS[size as keyof typeof BEARINGS]; if (!q) throw new Error(`no bearing ${size} (${Object.keys(BEARINGS).join(', ')})`);
+  const q = BEARINGS[size]; if (!q) throw new Error(`no bearing ${size} (${Object.keys(BEARINGS).join(', ')})`);
   const R = mm(q.d + q.D) / 4, r = mm(q.Dw) / 2, g = FITS.slide.gap, ri = R - r - g, ro = R + r + g, steel = 0xb8bcc2;
   const inner = made(`${size} inner ring`, 'steel-chrome', { tube: [mm(q.d) / 2, ri, mm(q.B)] }, { color: steel });
   const cage = made(`${size} cage`, 'steel-low', { tube: [ri, ro, 2 * r] }, { color: 0x8a7550, pattern: { name: 'pockets', circle: { n: q.n, r: R } } });
@@ -430,14 +440,14 @@ export function dowel(d: number, length: number): Block {
   if (!(DOWELS as readonly number[]).includes(d)) throw new Error(`no ISO 8734 dowel of Ø${d} mm (${DOWELS.join(', ')})`);
   return made(`Ø${d} × ${Math.round(length * 1000)} dowel pin`, 'steel-tool', { cyl: [mm(d) / 2, length] }, { color: 0x9ea2a8 });
 }
-/** Hex socket set screws, flat point (ISO 4026): the socket's width across flats s (as ISO 4026 gives it) and depth t
- *  (typical), mm. */
-export const SET_SCREWS = { M3: { s: 1.5, t: 1.2 }, M4: { s: 2, t: 1.5 }, M5: { s: 2.5, t: 2 }, M6: { s: 3, t: 2 }, M8: { s: 4, t: 3 } } as const;
+/** Hex socket set screws, flat point (ISO 4026): the socket's width across flats s and its depth t, mm, read from the one
+ *  metric table (`ISO_METRIC`, src/nexus/parts/bdw.ts), every size it has. */
+export const SET_SCREWS: Record<string, { s: number; t: number }> = Object.fromEntries(Object.entries(ISO_METRIC).filter(([, r]) => r.set).map(([k, r]) => [k, { s: r.set!.s, t: r.set!.t }]));
 /** A set screw, ISO 4026: its body and its socketed end (the socket drawn round, as wide as its hexagon's corners; the
  *  thread and the flat point's chamfer not drawn), as two solids of one screw. It goes down a tapped hole in a hub
  *  (Through a line, from above), its point on the shaft. */
 export function setScrew(size: string, length: number): Block {
-  const q = SET_SCREWS[size as keyof typeof SET_SCREWS]; if (!q) throw new Error(`no ISO 4026 set screw ${size} (${Object.keys(SET_SCREWS).join(', ')})`);
+  const q = SET_SCREWS[size]; if (!q) throw new Error(`no ISO 4026 set screw ${size} (${Object.keys(SET_SCREWS).join(', ')})`);
   const m = sizeOf(size); if (!(length > mm(q.t))) throw new Error(`a ${size} set screw longer than its socket (${q.t} mm)`);
   return stack(`${size}×${Math.round(length * 1000)} set screw`, 1, [{ b: made(`${size} set screw`, 'steel-alloy', { cyl: [mm(m.d) / 2, length - mm(q.t)] }, { color: 0x2a2b2e }) },
     { b: made(`${size} set screw socket end`, 'steel-alloy', { tube: [mm(q.s) / Math.sqrt(3), mm(m.d) / 2, mm(q.t)] }, { color: 0x2a2b2e }) }]);

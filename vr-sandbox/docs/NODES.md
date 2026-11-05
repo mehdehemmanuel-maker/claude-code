@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 621 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 630 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -35,16 +35,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 5 | a standard's, a maker's or a reference table's figure |
-| derived | 335 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 337 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 13 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 6 | typical values or an estimate, said so |
 | simplified | 39 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 91 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 98 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 585 tested here (their own tests: that they do what they say, not that the world does); 26 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 594 tested here (their own tests: that they do what they say, not that the world does); 26 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 153 of 621 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 153 of 630 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (15)
 
@@ -66,7 +66,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
 - **ZenRows: read a web page** (`api.zenrows`): A web page fetched through ZenRows (ZENROWS_API_KEY under Node): its scripts run where asked, its words back as Markdown or its HTML as it is. *given, untested*
 
-## 2 · Make: shapes, parts, things (53)
+## 2 · Make: shapes, parts, things (55)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
@@ -75,6 +75,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Body** (`body`): A human body from its measured segments, not drawn by eye: laid out from its height by Drillis and Contini's proportions, its sixteen segments each the share of its mass de Leva measured (men and women apart), shaped … *estimated, tested here*
 - **Bolt circle** (`pattern.circle`): A bolt circle as one record: its count, its radius, its turn and its thread, the points round it; every part wired from it reads the same one, never a copy (R15) *hypothetical, tested here*
 - **Box** (`shape.box`): A block: width (x), height (y), depth (z) *hypothetical, tested here, before the update*
+- **Branch into a side** (`room.branch`): A branch (a run whose first piece is a hollow straight) joined square into the middle of a hollow straight its host offers by a line, toward that straight's +x, +z, -x or -z (or degrees): the straight's wall opened by … *derived, tested here*
 - **Cast grid** (`make.grid`): A grid cast in one: a frame round its edge, bars upright and wires across inside it, and a lug at its top. *hypothetical, tested here, before the update*
 - **Chain round wheels** (`make.chain`): Roller chain round sprockets in a plane, link by link (inner links of plates, bushes and rollers; outer of plates and pins): a timing drive, a bicycle's, a conveyor's. *hypothetical, tested here, before the update*
 - **Coat** (`make.coat`): A part coated with another material, filling it and standing proud of it each side along its thinnest way: paste pressed into a grid, paint, plating, an overmould. *hypothetical, tested here, before the update*
@@ -98,13 +99,14 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Lithium cell** (`battery.cell`): A cylindrical lithium-ion cell by its format (18650, 21700, 4680): can, sleeve, its jelly roll wound turn by turn (cathode, anode, separator), insulators, cap with its vent disc and gasket *specified, tested here, before the update*
 - **Loop round a block** (`path.loop`): A path round a rectangle, in its lane (inset from the road's middle), driven with the block on the right as traffic keeps right; and where it must stop: before each crossing it meets, every so many metres *hypothetical, tested here, before the update*
 - **Made whole (the attention-to-detail pass and its critic)** (`make.whole`): A thing taken through the make pipeline (make/pipeline.ts): its conditions, its details by rule (welds, screws, finishes; on a road vehicle its mirrors and number plates), and its critic, again until nothing more is … *derived, untested*
-- **Make a solid** (`room.make`): One solid at the origin: a box, a rod, a tube or a cup (its cavity offered as a room); a circle of holes through it if asked, each offered as a line. *hypothetical, tested here*
+- **Make a solid** (`room.make`): One solid at the origin, sizes a to e in mm: box (a w, b h, c d), rod (a r, b h), tube (a bore r, b r, c h), cup (a r, b h, c wall, d floor), hex (a flats, b h, c bore r), dome (a r), sphere (a r, c bore r), cone (a r … *hypothetical, tested here*
 - **Onto a face** (`room.onto`): A block put against a face of another (its top, its side), in the space beyond that face, centred on it, with the fit's gap: beside it, never in it *derived, tested here*
-- **Over a shaft** (`room.over`): A sleeve (a washer, a nut, a coupling, a coil, a bobbin) slid over a line its host offers (a shank, a pipe, a core): its bore round what is on the line with the fit's gap, at the line's piece's low end, high end or … *derived, tested here*
+- **Over a shaft** (`room.over`): A sleeve (a washer, a nut, a coupling, a coil, a bobbin, a wheel) slid over a line its host offers (a shank, a pipe, a core): its bore round what is on the line with the fit's gap, at the line's piece's low end, high … *derived, tested here*
 - **Part** (`card.part`): A real part, drawn whole from its standard with every piece inside it: 41 kinds (stepper nema17 40, led red 5mm, bearing 608, rail MGN12H 400, motorplate nema17 t3 aluminium, bolt M8x30, screw M3x10, panhead M1.6 L2 … *specified, tested here, before the update*
 - **Picture from words (image model)** (`ai.draw`): Words sent to an image model (fal.ai's FLUX where FAL_KEY is set, else Gemini's), a picture back for each try: ideas to look at, judge, and model from. *hypothetical, untested*
 - **Ring** (`shape.torus`): A ring round z: its radius to the middle of the tube, and the tube's radius *hypothetical, tested here, before the update*
-- **Ring of copies** (`room.ring`): So many copies of a block round the y axis at a radius, each in its own wedge with the fit's gap; refused, with both numbers, where a copy needs more than its wedge gives *derived, tested here*
+- **Ring of copies** (`room.ring`): So many copies of a block round the y axis at a radius, each in its own wedge with the fit's gap; with out, each copy turned about its own upright middle by its angle round the ring so its +x faces out (fan blades, … *derived, tested here*
+- **Run of tube** (`room.run`): A tube, hose, cable or rod of any outside and bore (diameters, mm; bore 0: solid) laid with no coordinates: its steps in order, each from where the last one ended and turning with it: a straight's length in mm, or … *hypothetical, tested here*
 - **Sensor** (`make.sensor`): Any sensor as it is made, from one node: a threaded probe (hex, thread, sealing ring, its element in its tip: a temperature sender, a pressure switch, an oxygen sensor), a puck bolted through its middle (a knock … *hypothetical, tested here, before the update*
 - **Sphere** (`shape.sphere`): A ball of one material: its radius, so its volume and its mass from its material *hypothetical, tested here, before the update*
 - **Stack** (`room.stack`): Blocks end to end along x, y or z, in the order of the names of the nodes they come from (a before b, s1 before s2: name them in the order they go), each starting where the last one ends (and past what it sweeps as it … *derived, tested here*
@@ -116,7 +118,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Terrain** (`terrain`): Ground over w by d, its hills from a seeded noise (the same seed, the same land): relief is how high its highest is over its lowest, roughness how much small detail it has *hypothetical, tested here, before the update*
 - **Through a line** (`room.through`): A block (a bolt, a shaft) passed along a line its host offers (a hole's, an axis), from below or above: the room it takes, with the fit's gap, is cut from every solid it crosses, so it passes through holes, never … *derived, tested here*
 - **Tube** (`shape.tube`): A straight tube along y: outside radius, wall and length *hypothetical, tested here, before the update*
-- **Turn** (`room.turn`): A whole block turned rigidly about its bound's middle, by any angle about x, y or z: a plate tilted, a pipe laid across. *derived, tested here*
+- **Turn** (`room.turn`): A whole block turned rigidly about its bound's middle, by any angle about x, y, z or a direction ("1,1,0"): a plate tilted, a pipe laid across. *derived, tested here*
 - **Turn (lathe)** (`shape.lathe`): A profile of radius and height (mm) spun about y: a propeller hub, a pulley, a knob, a vase *hypothetical, tested here, before the update*
 - **Turned part** (`make.turned`): A part turned on a lathe from steps of radius and length along its axis: a shaft, a pin, a valve, an axle, a journal. *hypothetical, tested here, before the update*
 - **Wall with an opening** (`wall`): A wall along x, standing on y = 0, with an opening for a door or a window (or none) at an offset from its middle; gives the opening's middle, where a door or a window goes *hypothetical, tested here, before the update*
@@ -124,18 +126,19 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Wound roll** (`make.roll`): Strips laid over one another and wound round a core: a lithium cell's cathode, separator and anode; a coil's wire; a film capacitor; a roll of tape. *hypothetical, tested here, before the update*
 - **Wrap in** (`make.wrap`): A part wrapped in an envelope of a sheet folded round it and sealed at its edges, open at its top: a separator round a battery plate, a bag, a sleeve, shrink wrap *hypothetical, tested here, before the update*
 
-## 3 · Arrange and mate (79)
+## 3 · Arrange and mate (85)
 
 Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones and mates as numbers; proximity; routes.
 
-- **Ball bearing** (`piece.bearing`): A deep-groove ball bearing (608 and 6000 to 6004; bore, outside and width by ISO 15, its balls typical): its inner ring, its cage slid over it, its outer ring over all, each ball through its pocket. *hypothetical, tested here*
+- **Ball bearing** (`piece.bearing`): A deep-groove ball bearing (bore, outside and width by ISO 15 or the maker's page BOSL2 names; its balls typical): its inner ring, its cage slid over it, its outer ring over all, each ball through its pocket. *hypothetical, tested here*
 - **Bar of a section** (`piece.section`): A bar of a section by its size (steel IPE from EN 10365, equal angles from EN 10056; aluminium extrusions typical) and its length: its profile across, its length along z *hypothetical, tested here*
 - **Bent pipe** (`piece.bend`): A pipe of a standard size bent through an angle (up to 180°) round a bend radius to its middle line (0: 3.5 times its outside diameter, an estimate of a bending machine's former); refused where the radius is not above … *hypothetical, tested here*
-- **Bolt or screw** (`piece.bolt`): A bolt by its metric size (M3 to M12) and length: its shank, its hex head (ISO 4017) or socket head (ISO 4762) on top. *hypothetical, tested here*
+- **Bolt or screw** (`piece.bolt`): A bolt by its metric size and length: its shank, its hex head (ISO 4014/4017) or socket head (ISO 4762, its socket not drawn) on top. *hypothetical, tested here*
 - **Bolted down to a plate** (`mate.plate`): What offers holes (a bracket's foot, a plate) bolted down to a plate made under it: the plate's holes the reverse of its pattern (ISO 273 medium clearance), the two stacked, and each hole bolted (Bolted joint): head … *derived, tested here*
 - **Bolted joint** (`mate.bolted`): A bolted joint on a hole of what it holds (plates stacked): the bolt's shank down the hole from above, as long as the grip and its washer and nut, its head on top on that hole, a washer and a nut slid over the shank's … *derived, tested here*
 - **Bolts for a pattern** (`fasten.pattern`): The bolt the catalogue sells for two plates through a pattern (ISO 4017, its washers and nut, the shortest sold: fastenerFor), one at each of its points, and why that one; and the bolts themselves, each with its … *derived, tested here*
 - **Bore where it passes** (`bore`): A part bored wherever another runs through it: a hole along the other's line, cut in each piece it passes and in no other; for a bolt, a screw or a stud its standard's clearance hole (ISO 273 medium for its thread), … *derived, tested here*
+- **Bought part (its envelope)** (`piece.kind`): Any family of bought part the inventory knows (a servo, a fan, a DC motor, a relay, a dev board, a castor, a brick…) by its family and its sizes in words ("micro", "12V 40"; blank: its defaults): drawn as its … *hypothetical, tested here*
 - **Butt hinge** (`piece.hinge`): A butt hinge (typical of a 50 mm steel hinge): its knuckles stacked along its axis, its pin through them all, its two leaves against them each side, opened flat or at a right angle; each leaf made lying flat with its … *hypothetical, tested here*
 - **Cell (18650, AA, AAA)** (`piece.cell`): A cell (18650, typical; AA and AAA within IEC 60086-2): its steel can, its wound electrodes into it, its wrap slid over it, its + terminal on top; it goes into a holder's or a box's room (Into a room), its ends its … *hypothetical, tested here*
 - **Ceramic capacitor** (`piece.capacitor.ceramic`): A dipped radial ceramic capacitor (a multilayer chip; its body drawn as its box, typical sizes) on two leads 2.54 or 5.08 mm apart; its leads go down a board's footprints *hypothetical, tested here*
@@ -172,12 +175,15 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Mate** (`mate`): One thing set on another by their frames: its frame lands on the other's, turned to face as it does ("into": a door in its opening, a window in its wall) or back at it ("against": a face on a face). *derived, tested here, before the update*
 - **Mate by a measure** (`relate`): A mate as a number, put on the thing itself: to the nearest thing named like the one you give, a measure held in a range: the distance between their middles, the gap between their surfaces, how far off its front the … *derived, tested here, before the update*
 - **Mirror** (`mirror`): A thing and its mirror image across a plane through the origin *derived, tested here, before the update*
-- **Nut** (`piece.nut`): A hex nut (ISO 4032), M3 to M12: it slides over a bolt's shank (Over a shaft) *hypothetical, tested here*
+- **Nut** (`piece.nut`): A hex nut (ISO 4032), its bore the thread's size (the thread not drawn): it slides over a bolt's shank (Over a shaft). *hypothetical, tested here*
+- **O-ring** (`piece.oring`): An O-ring by its ISO 3601-1 size code (inside diameter and cross-section): nitrile, its round section swept round its middle circle as two half bends of a run (it offers no line yet: a bend offers none). *hypothetical, tested here*
 - **Onto a shaft** (`onto`): A part with a bore slid onto a round piece of another, their axes made one: a sprocket onto a cam's nose, a bearing onto its shaft, a pulley onto a crank. *derived, tested here, before the update*
 - **Onto a surface (any outline, laid on and following it)** (`onto.surface`): Any flat outline, a vent, a badge, a decal, a sign, a panel, an address number, laid onto any thing's surface: drawn as seen looking along a direction (its u across to the right, its v up), cast onto the thing from a … *derived, tested here*
+- **Parallel key** (`piece.key`): A parallel key (DIN 6885 A, its ends drawn square) by the shaft it is for (mm, the largest the row takes): b wide, h high, along z; it goes into a shaft's keyway (Into a room) and its hub's. *hypothetical, tested here*
 - **Paste onto a surface** (`imprint`): A bolt or a screw pasted onto a point of any part: its own thread read off it, stood square to the surface the ray from the point meets (a face, a round side), its negative made for the part's material and depth, … *derived, tested here*
 - **Pattern of** (`array`): A thing many times in a pattern, one thing stored and every one placed: in a row (each a step on from the last), round a ring (about y, each turned to face out: a drone's four motors, a wheel's bolts), or on a grid nx … *hypothetical, tested here, before the update*
 - **Pin header** (`piece.header`): A one-row pin header at 2.54 mm: its plastic body, each gilt pin put through it at its place (Through a line, as many times as it has pins) *hypothetical, tested here*
+- **Pipe by NPS** (`piece.npspipe`): A straight pipe by its nominal size (inches), material and schedule ("1/2 steel 40", "2 stainless 10S", "1 pvc 80", copper K/L/M): its outside and wall from its table, so long; it offers its axis, for a coupling over … *hypothetical, tested here*
 - **Pipe coupling** (`piece.coupling`): A straight coupling for a pipe of that size: its bore the pipe's outside and a sliding fit; it slides over the pipe's end (Over a shaft) *hypothetical, tested here*
 - **Pipe elbow** (`piece.elbow`): A copper socket elbow (capillary, after EN 1254-1; its sizes typical) for a 15, 22 or 28 mm pipe, 90° or 45°: a socket, its bent body, a socket, laid as a run. *hypothetical, tested here*
 - **Pipe or tube** (`piece.pipe`): A pipe or tube by its size (copper EN 1057; aluminium and PVC typical) and length; it offers its axis, for a coupling to slide over *hypothetical, tested here*
@@ -190,13 +196,15 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Proximity and mates** (`proximity`): Every zone a thing carries kept clear and every mate it carries held, as numbers (Zone: a door's sweep, a toilet's clear floor; Mate by a measure: a sofa facing, seeing and sitting at its distance from its … *derived, tested here, before the update*
 - **Push button** (`piece.button`): A 6 × 6 mm tactile switch: its four legs, body and plunger (typical) *hypothetical, tested here*
 - **Resistor** (`piece.resistor`): An axial resistor (1/8 to 1 W; carbon-film sizes, typical): a lead, its body and a lead end to end, stood upright; its lower lead goes down a board's footprint (Through a line) *hypothetical, tested here*
+- **Retaining ring** (`piece.circlip`): A retaining ring by the shaft (DIN 471) or bore (DIN 472) it is for, mm: drawn at its free size as a closed ring of its back's width (its gap and lugs not drawn: approximated). *hypothetical, tested here*
 - **Route** (`route`): A line's way through a thing, found, not drawn: from what it joins to what it joins (a port of that name if it has one, a battery's post; else the face nearest the other end; or a point), by a logic: clear (the … *derived, tested here, before the update*
 - **Run of pipe** (`piece.run`): A run of pipe laid with no coordinates: its steps in order, each starting where the last one ended and turning with it: a straight's length in mm, "bend 90" (R in mm, toward +x, +z, -x or -z of the run as it heads), … *hypothetical, tested here*
 - **Scatter** (`scatter`): A thing many times over an area: at seeded random places (the same seed, the same places), or on a grid; each turned and sized a little differently if asked; standing on ground where ground is wired in *hypothetical, tested here, before the update*
-- **Set screw** (`piece.setscrew`): A hex socket set screw with a flat point (ISO 4026), M3 to M8: its body and its socketed end; it goes down a hub's tapped hole from above (Through a line), its point on the shaft *hypothetical, tested here*
+- **Set screw** (`piece.setscrew`): A hex socket set screw with a flat point (ISO 4026): its body and its socketed end (the socket drawn round); it goes down a hub's tapped hole from above (Through a line), its point on the shaft. *hypothetical, tested here*
 - **Spawn** (`spawn`): A seed placed once for each row of a table: each row's x, y, z, ry (turn about y, radians) and s place it, and every other column sets the seed's input of that name (a house's plan, a car's paint). *hypothetical, untested, before the update*
 - **Spur gear** (`piece.gear`): A spur gear by its module (ISO 54) and teeth: its profile (ISO 53's rack, 20°: involute flanks, the root fillet not drawn) drawn along its width (its axis along z), its bore through it; it meshes with a gear of its … *hypothetical, tested here*
 - **Standoff** (`piece.standoff`): An M3 brass hex standoff (5.5 mm across flats, its bore 2.5 mm, typical): it holds a board off another, a screw into each end *hypothetical, tested here*
+- **Stepper motor (NEMA frame)** (`piece.stepper`): A stepper motor by its NEMA frame (6 to 42) and body length: its body a box (its face's four holes offered on their square as `<name>/holes`, their footprints), its pilot boss and its shaft stacked on its face (shaft … *hypothetical, tested here*
 - **Take apart** (`explode`): A thing taken apart to see what is in it, down to its smallest pieces: each piece moved out from the middle of what holds it, and what is inside each piece apart inside it (a truck into its cab, frame and batteries; a … *derived, tested here, before the update*
 - **Take out a piece** (`piece`): One piece of anything by its name (the first, or the nth, that matches): a valve spring out of an engine, a bolt out of a truck, a cell out of a battery. *hypothetical, tested here, before the update*
 - **Terminal block** (`piece.terminal`): A push-in terminal block at 5.08 mm: each pole a hole from above that a wire's stripped end goes down (Through a line) *hypothetical, tested here*
@@ -204,7 +212,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Transistor (TO-92)** (`piece.transistor`): A transistor in a TO-92 case (JEDEC TO-226AA; its body drawn as its box, its rounded back not drawn): three leads at 1.27 mm run up into its body, 12.7 mm below it; they go down a board's footprints *hypothetical, tested here*
 - **Variant** (`variant`): The same thing changed where it is placed: its colour, its material, its finish, its size along x, y and z, or hidden; on all of it, or only the pieces whose names a pattern finds ("prop", "arm|frame") *derived, tested here, before the update*
 - **Variants of anything (none twice)** (`variants`): Any block, or any pipeline folded into one, made again and again with some of its inputs or settings drawn from ranges or lists by seed: a window's width and frame, a house's plan and paint, a car's colour and wheels. *hypothetical, tested here*
-- **Washer** (`piece.washer`): A plain washer (ISO 7089), M3 to M12: it slides over a bolt's shank under its nut or head *hypothetical, tested here*
+- **Washer** (`piece.washer`): A plain washer (ISO 7089): it slides over a bolt's shank under its nut or head. *hypothetical, tested here*
 - **Winding on a bobbin** (`piece.winding`): A nylon bobbin (core and two flanges) and enamelled copper wound on its core in one close layer, as many turns as fit between the flanges: the coil slid over the core (Over a shaft) *hypothetical, tested here*
 - **Zone** (`zone`): The room a thing needs kept clear, put on the thing itself and worked out from its own size: in front of a face, so deep (a toilet's clear floor, a kitchen's work aisle), or swept from a hinge at one edge of that face … *derived, tested here, before the update*
 
@@ -232,7 +240,7 @@ Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is
 - **Solve through laws** (`law.solve`): What is known, one a line ("mass = 1000 kg"), and a quantity wanted: the laws of the book chained to reach it, as many as it takes and across fields, each solved forward or backward. *derived, tested here*
 - **What each part needs** (`need`): What every part of a thing needs of where it is, read from what its parts state, never typed: what it is mounted on, what it connects to or passes through, what it keeps out of (heat over its material's limit, what … *derived, tested here, before the update*
 
-## 5 · Check (28)
+## 5 · Check (29)
 
 Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, said with numbers.
 
@@ -241,6 +249,7 @@ Rules, clashes, loads, what is missing, how finely made, gates: what is wrong, s
 - **Blind judge (vision model)** (`ai.judge`): Pictures of anything (a render of a build from several sides, a photograph, a picture an image model drew) shown to a vision model that is told nothing but the criteria, several times apart: what it says the thing is, … *derived, untested*
 - **Candidates** (`gauntlet.candidates`): What is put through the gauntlet: blocks of the library (all, of a kind or a field, or made by you), or entries of the inventory (under a path, or yours), or named ones. *given, tested here, before the update*
 - **Check a limit** (`check.limit`): A value against its limit: whether it passes, the margin left, and the factor of safety *derived, tested here, before the update*
+- **Check a piece against its table row** (`check.row`): Holds a piece built by a table-driven family (piece.bolt, piece.nut, piece.washer, piece.bearing and the rest the maker makes) to its table's row: its bound and its mass, measured from what was built, against the … *derived, tested here*
 - **Comes apart to the bottom?** (`audit.explode`): How far a build really comes apart: the share of its mass in lumps (a piece drawn as one though what it is named for is an assembly in the inventory: a headlamp, a door, a fuel tank), each said with what it should … *derived, tested here, before the update*
 - **Compile: bill of materials and its audit** (`compile.bom`): Stages 6 and 7: the thing read into a hierarchical bill of materials (each component: its parent, how many, its material, how it is made, the standard it is to, its mass, and that its geometry is a mesh, not yet a … *derived, untested*
 - **Compile: exact solids (B-rep)** (`compile.solids`): Stages 10 and 12: the thing made exact solids by a CAD kernel other than the code that drew it, each checked valid by it, and the mass their volumes give set against the bill of materials' for the same pieces. *derived, untested*

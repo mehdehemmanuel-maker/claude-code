@@ -2721,3 +2721,27 @@ scratch folder, `node boards.cjs <out> "Desk fan" …`, run against `npm run app
 named the fan, the robot base, the quadcopter, and the pipes and tank. It called them flat and featureless: blades as
 plain boards, a battery box as one white block, a tank with no openings where the pipes meet it, props too thin to see.
 On the turned pieces board it could not pick out the DIPs or the jack. Those are the builds' own and stay open.
+
+## 2026-11-05: decision 0026, step 1: new solids, plans checked, part tables (rough, by three agents, merged here)
+
+The space gained a sphere, a cone, and a turned profile (a lathe). Holes can go on any face, blind, counterbored or
+countersunk. Lines run along a section's length (gears onto shafts). Ring copies can be turned to face out, and over can
+sit at a distance from an end. Bends are drawn hollow: a 90° 22 mm copper bend now draws at 64.52 g against 64.65 g for
+the same straight; drawn solid it was 412.0 g (the builder's probe, `npm run probe -- tests/nexus/zz_probe_room.test.ts`,
+deleted). Refusals name what is offered. `room.make` offers all 13 solids, `room.turn` turns about any direction, and
+`room.run` and `room.branch` are nodes. The AI's plans are checked as they are made, by a `block` port type and the
+engine's own wire check: one of the starter boards' existing wires is now refused (gauntlet g5.approved into
+tasks.done, an old fault). A node left waiting counts as failing. A Stack takes an `order` setting, because keeping
+wire order would have changed 21 of 43 many-inputs on the starter boards. Four worked plans follow the cards, and the
+cards are tiered (the core in full, the other pieces a line each). Part tables were copied with their licence notices
+from bd_warehouse (Apache-2.0) and BOSL2 (BSD-2). One maker turns a table row into a piece: bolts, nuts and washers
+M1.6 to M64, set screws, 82 bearings, circlips, keys, 349 O-rings, NPS pipe, NEMA steppers. Every one of the 340
+families can be placed as its envelope (`piece.kind`, labelled so). Every size was held to its row by `check.row` (the
+domains test, `npx vitest run tests/nexus/domains.test.ts`). Left open:
+- bearings are drawn at about half their mass, because each ball's cut goes through the rings as a whole hole;
+- threads.ts's nominal metric table is not merged with the copied maxima;
+- there are no countersunk or button heads yet;
+- no envelope has mounting holes except the stepper's;
+- bend end caps are not drawn;
+- a pipe into a tank closes its cavity;
+- no picture of the new solids was looked at.

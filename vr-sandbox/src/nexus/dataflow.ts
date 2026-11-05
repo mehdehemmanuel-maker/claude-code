@@ -322,7 +322,7 @@ export class Engine {
       const ws = wires.filter((e) => e.in === p.name);
       if (ws.length) {
         const vals: unknown[] = [];
-        for (const w of ws.sort((a, c) => (a.from < c.from ? -1 : a.from > c.from ? 1 : 0))) {
+        for (const w of ws.sort(manyOrder(this.board, p.many && b.settings?.some((x) => x.key === 'order') ? set.order : undefined))) {
           const s = this.state.get(w.from);
           if (!s || s.status !== 'ok' || !s.out || !(w.out! in s.out)) { missing.push(`${p.label ?? p.name} (from ${this.board.nodes[w.from]?.label || w.from}, ${s?.status === 'failed' ? 'which failed' : 'which has nothing yet'})`); continue; }
           const fromUnit = this.ports(w.from).outputs.find((o) => o.name === w.out)?.unit, u = s.uncertainty?.[w.out!];
@@ -456,6 +456,17 @@ export function convert(v: unknown, from?: string, to?: string): unknown {
   return Array.isArray(v) ? v.map(one) : one(v);
 }
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+/** The order the wires into an input that takes many come in: by their sources' ids as text (s10 before s2: every board
+ *  made so far is built on it, so it stays the default), or, where the block has an `order` setting (a Stack's) that is
+ *  not blank, as it lists those sources by id or label, split by commas; any it does not list after, by id (decision 0026:
+ *  the order the wires were made was tried and changed 21 of 43 many-inputs on the starter boards, so it is said). */
+export function manyOrder(b: Board, order: unknown): (a: LiveEdge, c: LiveEdge) => number {
+  const byId = (a: LiveEdge, c: LiveEdge) => (a.from < c.from ? -1 : a.from > c.from ? 1 : 0);
+  const names = typeof order === 'string' ? order.split(',').map((x) => x.trim()).filter(Boolean) : [];
+  if (!names.length) return byId;
+  const at = (e: LiveEdge) => { const k = names.indexOf(e.from); if (k >= 0) return k; const l = names.indexOf(String(b.nodes[e.from]?.label ?? '')); return l >= 0 ? l : names.length; };
+  return (a, c) => at(a) - at(c) || byId(a, c);
+}
 
 // ---- editing a board of blocks --------------------------------------------------------------------------------------
 /** A node of a block, at a place, with its settings. */

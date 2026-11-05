@@ -6,7 +6,9 @@
 //   I(B): at every pose of B's joints, B's solids are pairwise interior-disjoint and each lies in its bound; B's rooms
 //         are free of B's solids; every two pieces that touch have a face in B's record.
 //
-//   made     one solid at the origin, every size finite and above zero; its lines (axis, pattern) inside it.
+//   made     one solid at the origin (a box, rod, tube, cup, hex, dome, sphere, turned profile (a cone is one), case,
+//            section, bend or coil), every size finite and above zero; its lines (axis, a section's along z, a pattern's
+//            along y or into any face, through or blind, plain, counterbored or countersunk) inside it. (decision 0026)
 //   stack    blocks end to end along an axis: the next starts past the last one's movers' sweeps (unless they move
 //            with it) plus the fit's gap. Disjoint intervals at every pose.
 //   around   a host made round a child: its cavity holds the child's swept bound plus the fit. host ∩ child = ∅.
@@ -15,7 +17,8 @@
 //            passer's bound. (A − P) ∩ P = ∅. A bought solid is never cut: the passer goes only through its openings.
 //   into     a block into a room a host offers (a cup's cavity): its swept bound plus the fit within the room, or
 //            "no room" with both numbers. A room is used once. onto is into the space beyond a face of a bound.
-//   ring     n copies round an axis, each in its own wedge, or "no room" with both numbers.
+//   ring     n copies round an axis, each in its own wedge, or "no room" with both numbers; turned to face out if asked,
+//            each about the upright line through its own middle, which leaves its reach from that line as it was.
 //   turn     a whole block turned rigidly about its bound's middle by any angle about any axis (decision 0024): a rigid
 //            turn of a valid block is valid. Each solid then carries its frame, each line its direction, and every test
 //            here reads them: the inside test exactly, the bounds and the reach from a line as supersets.
@@ -37,7 +40,8 @@
 // keeps more room than it needs; through and over along a turned line are done in the line's own frame, and refuse a
 // turned or bent passer or sleeve and any piece on a joint; joints (slides along +y, turns about y) stay upright, a block
 // with one is not turned, a bolted joint on a turned hole is refused; a turned block's rooms are closed unless the turn
-// is about y; a bend is at most a half turn, and offers no line; no rooms on a moving host; a ring of turning copies is
+// is about y; a bend is at most a half turn, and offers no line; a turned profile's outline is not checked for crossing
+// itself (read by even-odd, as a section's), and its faces against a round wall are sampled, not worked out; no rooms on a moving host; a ring of turning copies is
 // refused; face patches are sampled (a 64-cell grid, so a few per cent), a turned piece laid on a plane touches it along
 // an edge and no face is written for it, and a face written before a later cut keeps its first area. Known ways past it, found by a red team on
 // 2026-11-02 and not yet closed: a room on a moving host, a bought host on a joint, the 1e-12 m tolerance at very small
@@ -69,7 +73,13 @@ export type Prim = Turned & (
   // +y and turning toward −x through `a` (radians, at most a half turn), ro and ri its tube's outside and bore about that
   // line; c its bound's middle. Its region exactly: the points whose angle round z is within (0, a) and whose distance
   // from the middle line is between ri and ro)
-  | { readonly k: 'bend'; readonly c: P3; readonly R: number; readonly ro: number; readonly ri?: number; readonly a: number });
+  | { readonly k: 'bend'; readonly c: P3; readonly R: number; readonly ro: number; readonly ri?: number; readonly a: number }
+  // (a sphere about c, h = 2r, a bore along y if ri; a turned profile (a lathe's): its outline of (radius, height) points
+  // about c turned about y, r its largest radius, h its height, ri its bore (the least radius of its outline where that is
+  // above zero): a wheel, a knob, a stepped shaft, a cone or frustum. Its region exactly: the points whose distance from
+  // its axis and height lie inside the outline (even-odd))
+  | { readonly k: 'sphere'; readonly c: P3; readonly r: number; readonly h: number; readonly ri?: number }
+  | { readonly k: 'lathe'; readonly c: P3; readonly pts: readonly (readonly [number, number])[]; readonly r: number; readonly h: number; readonly ri?: number });
 type Turned = { readonly frame?: M3 };
 /** A solid: its base less the union of what was taken out of it. */
 export interface Solid { readonly base: Prim; readonly minus: readonly Prim[] }
@@ -145,6 +155,12 @@ const upright = (p: Prim): boolean => !p.frame || (Math.abs(p.frame[1]) < 1e-12 
 // (a line along +y as it is: its x and z are where it runs)
 const alongY = (l: Line): boolean => !l.dir || (Math.abs(l.dir[0]) < 1e-9 && Math.abs(l.dir[2]) < 1e-9 && l.dir[1] > 0);
 const roundish = (p: Prim): p is Extract<Prim, { r: number }> => p.k !== 'box' && p.k !== 'bend';
+// (a round solid of one radius all along its height: its side is the cylinder of r (a sphere's and a turned profile's are not))
+const evenRound = (p: Prim): p is Extract<Prim, { r: number }> => roundish(p) && p.k !== 'sphere' && p.k !== 'lathe';
+/** What a round solid leaves free round its own axis (its bore), if anything. */
+const boreOf = (b: Prim): number | undefined => ((b.k === 'cyl' || b.k === 'coil' || b.k === 'hex' || b.k === 'sphere' || b.k === 'lathe') && b.ri !== undefined ? b.ri : undefined);
+/** The lines and rooms a block offers, for a refusal that names them. */
+const offered = (b: { readonly pieces: readonly Piece[]; readonly rooms?: readonly RoomOf[] }, rooms = false): string => { const xs = [...new Set(rooms ? (b.rooms ?? []).map((r) => r.name) : b.pieces.flatMap((p) => p.lines.map((l) => l.port)))].sort(); return xs.length ? xs.join(', ') : 'none'; };
 /** A bend's bound in its own frame, about the centre it is bent round. */
 const bendBox = (R: number, ro: number, a: number): [V3, V3] => {
   const pts: [number, number][] = [];
@@ -179,6 +195,8 @@ const inPrim = (p: Prim, x: number, y: number, z: number): boolean => {
   if (p.k === 'cyl') return p.ri === undefined || rho > p.ri;
   if (p.k === 'coil') return rho > p.ri;
   if (p.k === 'dome') return Math.hypot(rho, dy + p.h / 2) < p.r;
+  if (p.k === 'sphere') return Math.hypot(rho, dy) < p.r && (p.ri === undefined || rho > p.ri);
+  if (p.k === 'lathe') return inPolygon(rho, dy, p.pts);
   if (p.k === 'hex') return (p.ri === undefined || rho > p.ri) && [Math.PI / 6, Math.PI / 2, (5 * Math.PI) / 6].every((a) => Math.abs(dx * Math.sin(a) + dz * Math.cos(a)) < p.af / 2);
   return !(rho < p.r - p.wall && dy > -p.h / 2 + p.ends && (p.open || dy < p.h / 2 - p.ends));
 };
@@ -233,7 +251,7 @@ function linePatch(p: Piece, q: Piece, axis: Axis, c: number, gap: number, tp: n
   const none = { area: 0, length: 0, at: [0, 0, 0] as V3 };
   // (a turned round one lying along the plane: its extreme line on it, sampled along its axis against the other across)
   for (const [r, s, across, sg] of [[p, q, c + gap + EPS, 1], [q, p, c - EPS, -1]] as const) {
-    const b = r.solid.base; if (!roundish(b) || upright(b) || Math.abs(b.frame![axis * 3 + 1]!) > 1e-9 || Math.abs(b.c[axis] + sg * b.r - (sg > 0 ? c : c + gap)) > 1e-9) continue;
+    const b = r.solid.base; if (!evenRound(b) || upright(b) || Math.abs(b.frame![axis * 3 + 1]!) > 1e-9 || Math.abs(b.c[axis] + sg * b.r - (sg > 0 ? c : c + gap)) > 1e-9) continue;
     const u = [b.frame![1]!, b.frame![4]!, b.frame![7]!]; let n = 0; const mid: V3 = [0, 0, 0];
     for (let a = 0; a < N; a++) { const t = -b.h / 2 + ((a + 0.5) * b.h) / N, o: V3 = [b.c[0] + t * u[0]!, b.c[1] + t * u[1]!, b.c[2] + t * u[2]!]; o[axis] = across; if (inPiece(s, o[0], o[1], o[2], s === p ? tp : 0)) { n++; mid[0] += o[0]; mid[1] += o[1]; mid[2] += o[2]; } }
     if (n) { const at: V3 = [mid[0] / n, mid[1] / n, mid[2] / n]; at[axis] = c + gap / 2; return { area: 0, length: (n * b.h) / N, at }; }
@@ -242,7 +260,7 @@ function linePatch(p: Piece, q: Piece, axis: Axis, c: number, gap: number, tp: n
   const w = axis === 0 ? 2 : 0, y0 = Math.max(boundOf(p)[0][1], boundOf(q)[0][1]), y1 = Math.min(boundOf(p)[1][1], boundOf(q)[1][1]); if (!(y0 < y1)) return none;
   // (the round one's extreme line on the plane, tried against the other just across it)
   for (const [r, s, across] of [[p, q, c + gap + EPS], [q, p, c - EPS]] as const) {
-    const b = r.solid.base; if (!roundish(b) || !upright(b)) continue;
+    const b = r.solid.base; if (!evenRound(b) || !upright(b)) continue;
     const ext = r === p ? b.c[axis] + b.r : b.c[axis] - b.r; if (Math.abs(ext - (r === p ? c : c + gap)) > 1e-9) continue;
     let n = 0; for (let a = 0; a < N; a++) { const o: V3 = [0, y0 + ((a + 0.5) * (y1 - y0)) / N, 0]; o[w] = b.c[w]; o[axis] = across; if (inPiece(s, o[0], o[1], o[2], s === p ? tp : 0)) n++; }
     if (n) { const at: V3 = [0, (y0 + y1) / 2, 0]; at[w] = b.c[w]; at[axis] = c + gap / 2; return { area: 0, length: (n * (y1 - y0)) / N, at }; }
@@ -266,7 +284,7 @@ function planeFaces(ps: Piece[], low: number[], high: number[], axis: Axis, by: 
 /** A piece's side against the round surface at radius R about a line along y (a hole's wall, a cavity's wall). */
 function roundFace(p: Piece, x: number, z: number, R: number, y0: number, y1: number, inward: boolean): { area: number; length: number; at: V3 } {
   const b = p.solid.base, lo = Math.max(y0, primBox(b)[0][1]), hi = Math.min(y1, primBox(b)[1][1]); if (!(lo < hi)) return { area: 0, length: 0, at: [0, 0, 0] };
-  if (roundish(b) && upright(b)) { const d = Math.hypot(b.c[0] - x, b.c[2] - z);
+  if (evenRound(b) && upright(b)) { const d = Math.hypot(b.c[0] - x, b.c[2] - z);
     if (d < 1e-12 && Math.abs(b.r - R) < 1e-9) return { area: 2 * Math.PI * R * (hi - lo), length: 0, at: [x, (lo + hi) / 2, z] };
     if (d > 1e-12 && Math.abs(d + b.r - R) < 1e-9) { const ux = (b.c[0] - x) / d, uz = (b.c[2] - z) / d; return { area: 0, length: hi - lo, at: [x + ux * R, (lo + hi) / 2, z + uz * R] }; } }
   // (sampled round the line, in y between the solid's own breaks (its ends, its cuts), so a thin end is not missed)
@@ -338,15 +356,40 @@ export class Block {
     return Block.#seal(back.name, [...back.pieces], [...back.faces], b.rooms.filter((r) => !nb.some((q) => meets(q, primBox({ k: 'cyl', c: r.c, r: r.r, h: r.h })))));
   }
 
-  /** One solid at the origin: a box, a rod, a tube or a cup (open at +y, its cavity offered as a room). Its lines: a round
-   *  piece's axis, and a pattern's (a circle about its axis, or points), each with the slot it offers: as far as its edge,
-   *  its bore and half its neighbour. Holes of a bought piece's pattern are its openings. */
-  static made(name: string, mat: string, s: { box: [number, number, number] } | { cyl: [number, number] } | { tube: [number, number, number] } | { cup: [number, number, number, number] } | { hex: [number, number] | [number, number, number] } | { dome: [number] } | { coil: [number, number, number, number] | [number, number, number, number, number] } | { case: [number, number, number, number, number] } | { section: { pts: [number, number][]; L: number } } | { bend: [number, number, number] | [number, number, number, number] },
-    o: { joint?: Joint; bought?: boolean; color?: number; pattern?: { name: string; circle?: { n: number; r: number; phase?: number }; points?: [number, number][]; hole?: number } } = {}): Block {
+  /** One solid at the origin: a box, a rod, a tube, a cup (open at +y, its cavity offered as a room), a hex, a dome, a
+   *  sphere, a cone or frustum, a turned profile, a case, a section, a bend or a coil. Its lines: a round piece's axis, a
+   *  section's along its length (z) through its outline's own origin where that is clear of the outline, and a pattern's
+   *  (a circle about its middle, or points), each with the slot it offers: as far as its edge, its bore and half its
+   *  neighbour. A pattern runs along y through the whole piece, or, on a face (+x, −x, +y, −y, +z, −z), into it from that
+   *  face (its points in the face's other two axes, in the order x, y, z), through it or so deep, its hole plain,
+   *  counterbored or countersunk; its lines then carry their direction, into the piece. Holes of a bought piece's
+   *  pattern are its openings. */
+  static made(name: string, mat: string, s0: Shape0, o: MadeOpts = {}): Block {
+    // (a sphere, a cone and a turned profile made as their prims first; a cone is a turned profile of four points)
+    const s = s0 as Exclude<Shape0, { sphere: unknown } | { cone: unknown } | { lathe: unknown }>;
+    let turned: Prim | undefined;
+    if ('sphere' in s0) { const [r, ri] = s0.sphere; sizes(name, ri === undefined ? [r] : [r, ri]); if (ri !== undefined && !(ri < r)) throw new Error(`${name}: a bore within its radius (${ri} ≥ ${r})`); turned = { k: 'sphere', c: [0, 0, 0], r, h: 2 * r, ...(ri !== undefined ? { ri } : {}) }; }
+    if ('cone' in s0 || 'lathe' in s0) {
+      let pts: [number, number][], bore: number | undefined;
+      if ('cone' in s0) { const [r1, r2, h, ri] = s0.cone; sizes(name, [h, Math.max(r1, r2), ...(ri !== undefined ? [ri] : [])]);
+        if (!(Number.isFinite(r1) && Number.isFinite(r2) && r1 >= 0 && r2 >= 0)) throw new Error(`${name}: a cone's radii finite and never below zero (${r1}, ${r2})`);
+        if (ri !== undefined && !(ri < Math.min(r1, r2))) throw new Error(`${name}: a bore within both its ends' radii (${(ri * 1000).toFixed(2)} ≥ ${(Math.min(r1, r2) * 1000).toFixed(2)} mm)`);
+        pts = [[0, -h / 2], [r1, -h / 2], [r2, h / 2], [0, h / 2]]; bore = ri; }
+      else { const L = s0.lathe; if (L.pts.length < 3 || !L.pts.every((q) => q.every(Number.isFinite) && q[0] >= 0)) throw new Error(`${name}: a turned profile of three points or more, each finite, none at a radius below zero`);
+        if (L.bore !== undefined) sizes(`${name} bore`, [L.bore]); pts = L.pts.map((q) => [q[0], q[1]]); bore = L.bore; }
+      if (bore !== undefined) pts = clipOut(pts, bore);
+      pts = pts.filter((q, i) => Math.hypot(q[0] - pts[(i + 1) % pts.length]![0], q[1] - pts[(i + 1) % pts.length]![1]) > 1e-12);
+      const R = Math.max(0, ...pts.map((q) => q[0])), y0 = Math.min(...pts.map((q) => q[1])), y1 = Math.max(...pts.map((q) => q[1])), m = (y0 + y1) / 2, rmin = Math.min(...pts.map((q) => q[0]));
+      if (pts.length < 3 || !(R > 0 && y1 > y0)) throw new Error(`${name}: a turned profile that encloses something${bore !== undefined ? ` outside its bore of ${(bore * 1000).toFixed(2)} mm` : ''}`);
+      // (counter-clockwise in radius and height, as a lathe is drawn)
+      const area = pts.reduce((t, q, i) => { const w = pts[(i + 1) % pts.length]!; return t + q[0] * w[1] - w[0] * q[1]; }, 0); if (area < 0) pts.reverse();
+      const ri = bore ?? (rmin > 1e-12 ? rmin : undefined);
+      turned = { k: 'lathe', c: [0, 0, 0], pts: pts.map((q) => [q[0], q[1] - m] as const), r: R, h: y1 - y0, ...(ri !== undefined ? { ri } : {}) };
+    }
     // (a section's outline, its own bound's middle at the origin)
     const sx = 'section' in s ? s.section.pts.map((q) => q[0]) : [], sy = 'section' in s ? s.section.pts.map((q) => q[1]) : [];
     if ('section' in s && (s.section.pts.length < 3 || !s.section.pts.every((q) => q.every(Number.isFinite)))) throw new Error(`${name}: a section of three points or more, each finite`);
-    const xs = 'box' in s ? s.box : 'cyl' in s ? s.cyl : 'tube' in s ? s.tube : 'cup' in s ? s.cup : 'hex' in s ? s.hex : 'dome' in s ? s.dome : 'case' in s ? s.case : 'section' in s ? [Math.max(...sx) - Math.min(...sx), Math.max(...sy) - Math.min(...sy), s.section.L] : 'bend' in s ? s.bend : s.coil; sizes(name, xs);
+    const xs = turned ? [] : 'box' in s ? s.box : 'cyl' in s ? s.cyl : 'tube' in s ? s.tube : 'cup' in s ? s.cup : 'hex' in s ? s.hex : 'dome' in s ? s.dome : 'case' in s ? s.case : 'section' in s ? [Math.max(...sx) - Math.min(...sx), Math.max(...sy) - Math.min(...sy), s.section.L] : 'bend' in s ? s.bend : s.coil; sizes(name, xs);
     // (a bend: its bend radius to its middle line, its outside radius, its angle in degrees, its bore's radius if hollow)
     if ('bend' in s && !(s.bend[1] < s.bend[0] && s.bend[2] <= 180 && (s.bend[3] === undefined || s.bend[3] < s.bend[1]))) throw new Error(`${name}: a bend's radius above its tube's outside radius, its angle at most 180°, its bore within its outside (${s.bend.map((v) => +v.toPrecision(6)).join(', ')})`);
     if ('bend' in s && (o.pattern || o.joint)) throw new Error(`${name}: a bend offers no pattern and goes on no joint (not made yet)`);
@@ -356,7 +399,7 @@ export class Block {
     if ('tube' in s && !(s.tube[0] < s.tube[1])) throw new Error(`${name}: a bore within its outside (${s.tube[0]} ≥ ${s.tube[1]})`);
     if ('cup' in s && !(s.cup[2] < s.cup[0] && s.cup[3] < s.cup[1])) throw new Error(`${name}: a wall within its radius and an end within its height`);
     if (o.joint !== undefined && !Joint.is(o.joint)) throw new Error(`${name}: a joint made by joint()`);
-    const base: Prim = 'box' in s ? { k: 'box', c: [0, 0, 0], size: s.box } : 'cyl' in s ? { k: 'cyl', c: [0, 0, 0], r: s.cyl[0], h: s.cyl[1] } : 'tube' in s ? { k: 'cyl', c: [0, 0, 0], ri: s.tube[0], r: s.tube[1], h: s.tube[2] }
+    const base: Prim = turned ? turned : 'box' in s ? { k: 'box', c: [0, 0, 0], size: s.box } : 'cyl' in s ? { k: 'cyl', c: [0, 0, 0], r: s.cyl[0], h: s.cyl[1] } : 'tube' in s ? { k: 'cyl', c: [0, 0, 0], ri: s.tube[0], r: s.tube[1], h: s.tube[2] }
       : 'hex' in s ? { k: 'hex', c: [0, 0, 0], af: s.hex[0], r: s.hex[0] / Math.sqrt(3), h: s.hex[1], ...(s.hex[2] !== undefined ? { ri: s.hex[2] } : {}) } : 'dome' in s ? { k: 'dome', c: [0, 0, 0], r: s.dome[0], h: s.dome[0] }
       : 'coil' in s ? { k: 'coil', c: [0, 0, 0], R: s.coil[0], d: s.coil[1], turns: s.coil[2], pitch: s.coil[3], layers: s.coil[4] ?? 1, r: s.coil[0] + s.coil[1] / 2 + ((s.coil[4] ?? 1) - 1) * s.coil[1], ri: s.coil[0] - s.coil[1] / 2, h: s.coil[2] * s.coil[3] + s.coil[1] }
       : 'case' in s ? { k: 'box', c: [0, 0, 0], size: [s.case[0], s.case[1], s.case[2]], tray: { wall: s.case[3], floor: s.case[4] } }
@@ -365,10 +408,14 @@ export class Block {
       : { k: 'cup', c: [0, 0, 0], r: s.cup[0], h: s.cup[1], wall: s.cup[2], ends: s.cup[3], open: true };
     const lines: Line[] = [], minus: Prim[] = [];
     if (roundish(base)) lines.push({ port: `${name}/axis`, x: 0, z: 0, slot: base.r });
+    // (a section's line along its length, through its outline's own origin (a gear's or a pulley's centre, in its bore),
+    // its slot the distance from there to the outline)
+    if (base.k === 'box' && base.sect && 'section' in s) { const ox = -(Math.max(...sx) + Math.min(...sx)) / 2, oy = -(Math.max(...sy) + Math.min(...sy)) / 2, P = base.sect;
+      const slot = Math.min(...P.map((q, i) => segDist(ox, oy, q, P[(i + 1) % P.length]!))); if (slot > 1e-9) lines.push({ port: `${name}/axis`, x: ox, y: oy, z: 0, slot, dir: [0, 0, 1] }); }
     const pat = o.pattern; if (pat) {
       const pts: [number, number][] = pat.circle ? Array.from({ length: pat.circle.n }, (_, i) => { const a = (pat.circle!.phase ?? 0) + (2 * Math.PI * i) / pat.circle!.n; return [pat.circle!.r * Math.cos(a), pat.circle!.r * Math.sin(a)]; }) : (pat.points ?? []);
       if (pat.circle) sizes(`${name}/${pat.name}`, [pat.circle.n, pat.circle.r]); for (const q of pts) if (!q.every(Number.isFinite)) throw new Error(`${name}/${pat.name}: a point is finite`);
-      pts.forEach((q, i) => {
+      if (pat.face === undefined) pts.forEach((q, i) => {
         const edge = base.k === 'box' ? Math.min(base.size[0] / 2 - Math.abs(q[0]), base.size[2] / 2 - Math.abs(q[1])) : base.k === 'bend' ? 0 : base.r - Math.hypot(q[0], q[1]);
         const bore = base.k === 'cyl' && base.ri !== undefined ? Math.hypot(q[0], q[1]) - base.ri : Infinity;
         const near = Math.min(Infinity, ...pts.filter((_, k) => k !== i).map((w) => Math.hypot(w[0] - q[0], w[1] - q[1]) / 2)), slot = Math.min(edge, bore, near);
@@ -377,6 +424,32 @@ export class Block {
           minus.push({ k: 'cyl', c: [q[0], 0, q[1]], r: pat.hole, h: (base.k === 'box' ? base.size[1] : base.k === 'bend' ? 0 : base.h) + 2e-9 }); }
         lines.push({ port: `${name}/${pat.name}`, x: q[0], z: q[1], slot, ...(pat.hole !== undefined ? { opening: pat.hole } : {}) });
       });
+      else { // (on a face: along that face's axis, into the piece from it)
+        const f = pat.face; if (!FACES.includes(f)) throw new Error(`${name}/${pat.name}: a face is one of ${FACES.join(', ')} (${String(f)})`);
+        if (base.k === 'bend') throw new Error(`${name}: a bend offers no pattern (not made yet)`);
+        const k = 'xyz'.indexOf(f[1]!) as Axis, sg = f[0] === '+' ? 1 : -1, [i0, j0] = other(k), half = halfOf(base), dir = snapDir([0, 1, 2].map((a) => (a === k ? -sg : 0)) as unknown as P3);
+        const out: V3 = [0, 0, 0]; out[k] = sg; const frame = snap(tr(toY(out)));
+        const depth = pat.depth, L = depth === undefined ? 2 * half[k]! + 2e-9 : depth + 1e-9; if (depth !== undefined) { sizes(`${name}/${pat.name} depth`, [depth]); if (!(depth <= 2 * half[k]! + 1e-12)) throw new Error(`${name}/${pat.name}: a hole ${(depth * 1000).toFixed(2)} mm deep in a piece ${(2 * half[k]! * 1000).toFixed(2)} mm through`); }
+        const round = roundish(base), lim = (a: Axis) => (round && a !== 1 ? base.r : half[a]!);
+        pts.forEach((q, i) => {
+          const at: V3 = [0, 0, 0]; at[i0] = q[0]; at[j0] = q[1];
+          const edge = round && k === 1 ? base.r - Math.hypot(at[0], at[2]) : Math.min(lim(i0) - Math.abs(at[i0]), lim(j0) - Math.abs(at[j0]));
+          const bore = k === 1 && base.k === 'cyl' && base.ri !== undefined ? Math.hypot(at[0], at[2]) - base.ri : Infinity;
+          const near = Math.min(Infinity, ...pts.filter((_, m) => m !== i).map((w) => Math.hypot(w[0] - q[0], w[1] - q[1]) / 2)), slot = Math.min(edge, bore, near);
+          if (!(slot > 0)) throw new Error(`${name}/${pat.name} ${i}: the pattern lies outside the ${f} face (its slot ${(slot * 1000).toFixed(2)} mm)`);
+          if (pat.hole !== undefined) { sizes(`${name}/${pat.name} hole`, [pat.hole]); const wide = pat.sink ? ('cbore' in pat.sink ? pat.sink.cbore[0] : pat.sink.csink) : pat.hole;
+            if (!(wide < slot)) throw new Error(`${name}/${pat.name}: a hole of ${(wide * 1000).toFixed(2)} mm needs a slot of more; it has ${(slot * 1000).toFixed(2)} mm`);
+            const c: V3 = [at[0], at[1], at[2]]; c[k] = sg * (half[k]! + 1e-9 - L / 2); const r = pat.hole, top = L / 2, bot = -L / 2;
+            // (counterbored or countersunk: a turned cut, its own +y out of the face)
+            if (pat.sink) { const sk = pat.sink, [R, D] = 'cbore' in sk ? sk.cbore : [sk.csink, sk.csink - r]; sizes(`${name}/${pat.name} sink`, [R, D]);
+              if (!(R > r && D < L)) throw new Error(`${name}/${pat.name}: a ${'cbore' in sk ? 'counterbore' : 'countersink'} wider than its hole (${(R * 1000).toFixed(2)} > ${(r * 1000).toFixed(2)} mm) and shallower than it (${(D * 1000).toFixed(2)} < ${(L * 1000).toFixed(2)} mm)`);
+              const prof: (readonly [number, number])[] = 'cbore' in sk ? [[0, bot], [r, bot], [r, top - D], [R, top - D], [R, top], [0, top]] : [[0, bot], [r, bot], [r, top - D], [R, top], [0, top]];
+              minus.push({ k: 'lathe', c, pts: prof, r: R, h: L, ...(frame ? { frame } : {}) }); }
+            else minus.push({ k: 'cyl', c, r, h: L, ...(frame ? { frame } : {}) }); }
+          const up = dir[0] === 0 && dir[2] === 0 && dir[1] === 1;
+          lines.push({ port: `${name}/${pat.name}`, x: at[0], z: at[2], slot, ...(up ? {} : { y: at[1], dir }), ...(pat.hole !== undefined ? { opening: pat.hole } : {}) });
+        });
+      }
     }
     const piece: Piece = { name, mat, ...(o.color !== undefined ? { color: o.color } : {}), solid: { base, minus }, lines, ...(o.joint ? { joint: o.joint, ...(o.joint.turn ? { axis: [0, 0] as const } : {}) } : {}), ...(o.bought ? { bought: true as const } : {}) };
     const rooms: RoomOf[] = base.k === 'cup' ? [{ name: `${name}/cavity`, c: [0, (base.ends) / 2, 0], r: base.r - base.wall, h: base.h - base.ends, open: true }]
@@ -456,7 +529,7 @@ export class Block {
     Block.#is(b); Block.#is(passer); if (!(fit in FITS)) throw new Error(`through: a fit by name`);
     const offers = b.pieces.flatMap((p, k) => p.lines.filter((l) => l.port === on.port).map((l) => ({ p, k, l })));
     if (new Set(offers.map((o) => o.k)).size > 1) throw new Error(`through: ${new Set(offers.map((o) => o.k)).size} pieces offer ${on.port}: name them apart`);
-    const o = offers[on.i ?? 0]; if (!o) throw new Error(`through: ${b.name} offers no line ${on.port}${on.i !== undefined ? ` ${on.i}` : ''}`);
+    const o = offers[on.i ?? 0]; if (!o) throw new Error(`through: ${b.name} offers no line ${on.port}${on.i !== undefined ? ` ${on.i}` : ''}${offers.length ? ` (it has ${offers.length} of them: 0 to ${offers.length - 1})` : ` (it offers ${offered(b)})`}`);
     const bent = passer.pieces.find((q) => q.solid.base.frame || q.solid.base.k === 'bend'); if (bent) throw new Error(`through: the ${bent.name} is turned or bent: a passer goes along its line as it was made, straight; pass it, then turn the whole`);
     // (a turned line: in its own frame, where it runs along +y; lo and hi its own ends, against and along its direction)
     if (!alongY(o.l)) return Block.#inFrame(b, o.l.dir!, 'through', passer, (h) => Block.through(h, passer, on, fit));
@@ -555,24 +628,29 @@ export class Block {
   }
   /** A sleeve (a washer, a nut, a tube, a coil, a bobbin) slid over a line a host offers (a shaft's axis, a bolt's
    *  shank): every piece of the sleeve is round about its own axis with a bore, and that bore is at least what is on the
-   *  line there and the fit's gap; it stands at the line's piece's low end, its high end or its middle; and it meets no
-   *  other piece of the host. Else refused, with both sizes or what is in the way. A face round the bore. */
-  static over(host: Block, port: string, sleeve: Block, where: 'lo' | 'hi' | 'mid' = 'mid', fit: Fit = 'slide'): Block {
+   *  line there and the fit's gap; it stands at the line's piece's low end, its high end or its middle, or a distance
+   *  along the line from one of those ends (its near end that far from it: never an x, y or z, decision 0026), within the
+   *  piece's length; and it meets no other piece of the host. Else refused, with both sizes or what is in the way. A
+   *  face round the bore. */
+  static over(host: Block, port: string, sleeve: Block, where: 'lo' | 'hi' | 'mid' | { readonly from: 'lo' | 'hi'; readonly along: number } = 'mid', fit: Fit = 'slide'): Block {
     Block.#is(host); Block.#is(sleeve); if (!(fit in FITS)) throw new Error(`over: a fit by name`);
     const offers = host.pieces.flatMap((p, k) => p.lines.filter((l) => l.port === port).map((l) => ({ p, k, l })));
-    const o = offers[0]; if (!o) throw new Error(`over: ${host.name} offers no line ${port}`);
+    const o = offers[0]; if (!o) throw new Error(`over: ${host.name} offers no line ${port} (it offers ${offered(host)})`);
     const bent = sleeve.pieces.find((q) => q.solid.base.frame); if (bent) throw new Error(`over: the ${bent.name} is turned: a sleeve goes over its line as it was made; slide it on, then turn the whole`);
     // (a turned line: in its own frame, where it runs along +y; lo and hi its own ends)
     if (!alongY(o.l)) return Block.#inFrame(host, o.l.dir!, 'over', sleeve, (h) => Block.over(h, port, sleeve, where, fit));
     const g = gapOf(fit), cx = (sleeve.lo[0] + sleeve.hi[0]) / 2, cz = (sleeve.lo[2] + sleeve.hi[2]) / 2;
     // (its bore: the least, over its pieces, of what each leaves free round its axis; each centred on it)
     let bore = Infinity;
-    for (const q of sleeve.pieces) { const b = q.solid.base, inner = (b.k === 'cyl' || b.k === 'coil' || b.k === 'hex') && b.ri !== undefined ? b.ri : undefined;
+    for (const q of sleeve.pieces) { const b = q.solid.base, inner = boreOf(b);
       if (b.k === 'box' || inner === undefined) throw new Error(`over: the ${q.name} has no bore to slide on with`);
       if (Math.hypot(b.c[0] - cx, b.c[2] - cz) > 1e-12) throw new Error(`over: the ${q.name} is not round about the sleeve's axis`); bore = Math.min(bore, inner); }
     const need = reach(sweepOf(o.p), o.l.x, o.l.z) + g;
     if (bore + 1e-12 < need) throw new Error(`no room over ${port}: the ${sleeve.name}'s bore is ${(bore * 2000).toFixed(2)} mm across; it needs ${(need * 2000).toFixed(2)} mm`);
-    const sb = primBox(o.p.solid.base), H = sleeve.hi[1] - sleeve.lo[1], y0 = where === 'lo' ? sb[0][1] : where === 'hi' ? sb[1][1] - H : (sb[0][1] + sb[1][1]) / 2 - H / 2;
+    const sb = primBox(o.p.solid.base), H = sleeve.hi[1] - sleeve.lo[1], d = typeof where === 'object' ? where.along : 0, end = typeof where === 'object' ? where.from : where;
+    if (typeof where === 'object') { if (!(Number.isFinite(d) && d >= 0)) throw new Error(`over: a distance along ${port} is finite and never below zero (${d} m)`); if (where.from !== 'lo' && where.from !== 'hi') throw new Error(`over: a distance from lo or hi (${String(where.from)})`);
+      if (d + H > sb[1][1] - sb[0][1] + 1e-12) throw new Error(`no room over ${port}: the ${sleeve.name} ${(d * 1000).toFixed(2)} mm from its ${where.from} end needs ${((d + H) * 1000).toFixed(2)} mm of it; the ${o.p.name} is ${((sb[1][1] - sb[0][1]) * 1000).toFixed(2)} mm long`); }
+    const y0 = end === 'lo' ? sb[0][1] + d : end === 'hi' ? sb[1][1] - H - d : (sb[0][1] + sb[1][1]) / 2 - H / 2;
     const S = Block.#shift(sleeve, [o.l.x - cx, y0 - sleeve.lo[1], o.l.z - cz]);
     // (a round piece on the same line that fits within the bore with the gap (the shaft a core sits on) passes inside it;
     // any other piece of the host is tried by its bound against the sleeve's)
@@ -585,13 +663,16 @@ export class Block {
     return Block.#seal(host.name, [...host.pieces, ...S.pieces], faces, [...host.rooms]);
   }
   /** n copies round the y axis at radius R, each in its own wedge: refused, with both numbers, where a copy and its gap
-   *  need more than the pitch gives. Its copies stand apart: the fit leaves a gap. */
-  static ring(name: string, b: Block, n: number, R: number, fit: Fit = 'clear'): Block {
+   *  need more than the pitch gives. Its copies stand apart: the fit leaves a gap. With `out`, each copy is turned about
+   *  the upright line through its own middle by its angle round the ring, so its own +x faces out (fan blades, spokes,
+   *  vanes): a turn about that line leaves its reach from it as it was, so each still lies in its own wedge. */
+  static ring(name: string, b: Block, n: number, R: number, fit: Fit = 'clear', out = false): Block {
     Block.#is(b); sizes(name, [n, R]); if (!Number.isInteger(n) || n < 2) throw new Error(`${name}: a ring of two or more`); const g = gapOf(fit); if (!(g > 0)) throw new Error(`${name}: a ring's copies stand apart: a fit with a gap`);
     const cx = (b.lo[0] + b.hi[0]) / 2, cz = (b.lo[2] + b.hi[2]) / 2, rho = Math.max(...b.pieces.map((p) => reach(sweepOf(p), cx, cz))), half = R * Math.sin(Math.PI / n);
     if (rho + g / 2 > half + 1e-12) throw new Error(`no room in ${name}: each copy needs ${((2 * rho + g) * 1000).toFixed(2)} mm with its gap; the pitch gives ${(2 * half * 1000).toFixed(2)} mm`);
-    const pieces: Piece[] = [], faces: Face[] = [];
-    for (let i = 0; i < n; i++) { const a = (2 * Math.PI * i) / n, s = Block.#shift(b, [R * Math.cos(a) - cx, 0, R * Math.sin(a) - cz]), k = pieces.length; pieces.push(...s.pieces.map((p) => (p.joint ? { ...p, joint: p.joint } : p))); faces.push(...s.faces.map((f) => ({ ...f, a: f.a + k, b: f.b + k }))); }
+    const j = out ? b.pieces.find((p) => p.joint) : undefined; if (j) throw new Error(`${name}: the ${j.name} is on a joint (${j.joint!.name}): copies turned to face out are not made on a joint yet`);
+    const pieces: Piece[] = [], faces: Face[] = [], M: P3 = [cx, (b.lo[1] + b.hi[1]) / 2, cz];
+    for (let i = 0; i < n; i++) { const a = (2 * Math.PI * i) / n, t = out && i ? Block.#turned(b, turnOf(1, (-360 * i) / n), M, false) : b, s = Block.#shift(t, [R * Math.cos(a) - cx, 0, R * Math.sin(a) - cz]), k = pieces.length; pieces.push(...s.pieces.map((p) => (p.joint ? { ...p, joint: p.joint } : p))); faces.push(...s.faces.map((f) => ({ ...f, a: f.a + k, b: f.b + k }))); }
     return Block.#seal(name, pieces, faces);
   }
 
@@ -662,7 +743,7 @@ export class Block {
    *  (comparison (3)). A face where they meet, its area the ring's (its projection). (decision 0024) */
   static branch(host: Block, port: string, b: Block, toward = 0): Block {
     Block.#is(host); Block.#is(b); if (!Number.isFinite(toward)) throw new Error(`branch: a way round it in degrees (${toward})`);
-    const k = host.pieces.findIndex((p) => p.lines.some((l) => l.port === port)), o = host.pieces[k]; if (!o) throw new Error(`branch: ${host.name} offers no line ${port}`);
+    const k = host.pieces.findIndex((p) => p.lines.some((l) => l.port === port)), o = host.pieces[k]; if (!o) throw new Error(`branch: ${host.name} offers no line ${port} (it offers ${offered(host)})`);
     const A = o.solid.base, B0 = b.pieces[0]?.solid.base;
     if (A.k !== 'cyl' || A.ri === undefined || o.joint) throw new Error(`branch: the ${o.name} is not a hollow straight, off any joint`);
     if (!B0 || B0.k !== 'cyl' || B0.ri === undefined || b.pieces.some((p) => p.joint)) throw new Error(`branch: the ${b.name} does not start with a hollow straight, or moves`);
@@ -685,6 +766,28 @@ export class Block {
 export interface RunTube { readonly name: string; readonly mat: string; readonly ro: number; readonly ri?: number; readonly color?: number }
 /** A segment of a run: a straight (and a sleeve round it), or a bend. */
 export type RunSeg = RunTube & ({ readonly straight: number; readonly sleeves?: readonly (RunTube & { readonly from: number; readonly to: number })[] } | { readonly bend: number; readonly R: number; readonly toward?: number });
+/** The solids `made` makes, by their sizes (m; a bend's angle in degrees): box [w, h, d]; rod (cyl) [r, h]; tube [bore, r,
+ *  h]; cup [r, h, wall, floor]; hex [flats, h, bore?]; dome [r]; sphere [r, bore?]; cone [r below, r above, h, bore?] (a
+ *  frustum, or a point where a radius is 0); lathe (a profile of (radius, height) points turned about y, a bore if asked);
+ *  coil [R, wire, turns, pitch, layers?]; case [w, h, d, wall, floor]; section (x, y points along z for L); bend [R, r,
+ *  degrees, bore?]. */
+export type Shape0 = { box: [number, number, number] } | { cyl: [number, number] } | { tube: [number, number, number] } | { cup: [number, number, number, number] } | { hex: [number, number] | [number, number, number] } | { dome: [number] }
+  | { coil: [number, number, number, number] | [number, number, number, number, number] } | { case: [number, number, number, number, number] } | { section: { pts: [number, number][]; L: number } } | { bend: [number, number, number] | [number, number, number, number] }
+  | { sphere: [number] | [number, number] } | { cone: [number, number, number] | [number, number, number, number] } | { lathe: { pts: [number, number][]; bore?: number } };
+/** A face of a piece's own box a pattern goes into. */
+export type FaceName = '+x' | '-x' | '+y' | '-y' | '+z' | '-z';
+const FACES: readonly FaceName[] = ['+x', '-x', '+y', '-y', '+z', '-z'];
+/** What `made` is asked besides its shape: a joint, bought, a colour, and a pattern of holes and lines (a circle about
+ *  its middle or points; on a face, through or so deep, plain, counterbored [radius, depth] or countersunk to a radius at
+ *  the face, 90°). */
+export interface MadeOpts { joint?: Joint; bought?: boolean; color?: number;
+  pattern?: { name: string; circle?: { n: number; r: number; phase?: number }; points?: [number, number][]; hole?: number; face?: FaceName; depth?: number; sink?: { cbore: [number, number] } | { csink: number } } }
+// (an outline clipped to the radius at least ri: the part of a turned profile outside its bore (Sutherland-Hodgman, one edge))
+const clipOut = (pts: [number, number][], ri: number): [number, number][] => { const out: [number, number][] = [];
+  for (let i = 0; i < pts.length; i++) { const a = pts[i]!, b = pts[(i + 1) % pts.length]!, ia = a[0] >= ri, ib = b[0] >= ri; if (ia) out.push(a); if (ia !== ib) { const t = (ri - a[0]) / (b[0] - a[0]); out.push([ri, a[1] + t * (b[1] - a[1])]); } }
+  return out; };
+// (the distance from a point to a segment)
+const segDist = (x: number, y: number, a: readonly [number, number], b: readonly [number, number]): number => { const dx = b[0] - a[0], dy = b[1] - a[1], L = dx * dx + dy * dy, t = L > 0 ? Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L)) : 0; return Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy); };
 /** Where a straight's or a bend's middle line starts and ends, and its heading at each: read from the solid alone. */
 export function endsOf(p: Prim): { start: V3; end: V3; startDir: V3; endDir: V3 } {
   const f = p.frame ?? I3;
@@ -716,34 +819,59 @@ const cupProfile = (b: Extract<Prim, { k: 'cup' }>): [number, number][] => {
 const domeProfile = (r: number): [number, number][] => [[0, -r / 2], ...Array.from({ length: 13 }, (_, k) => { const a = (k / 12) * (Math.PI / 2); return [r * Math.cos(a), -r / 2 + r * Math.sin(a)] as [number, number]; })];
 /** A coil's wire as points along its helix (24 a turn), from its bottom to its top, about its middle. */
 const helix = (R: number, turns: number, pitch: number, H: number): [number, number, number][] => { const n = Math.max(2, Math.round(turns * 24)); return Array.from({ length: n + 1 }, (_, k) => { const a = (k / n) * turns * 2 * Math.PI; return [R * Math.cos(a), -H / 2 + (k / n) * turns * pitch, R * Math.sin(a)] as [number, number, number]; }); };
+/** A sphere's outline, about its middle: a half circle in 24 steps, closed along its axis. */
+const sphereProfile = (r: number): [number, number][] => Array.from({ length: 25 }, (_, k) => { const t = (k / 24) * Math.PI; return [k === 0 || k === 24 ? 0 : r * Math.sin(t), -r * Math.cos(t)] as [number, number]; });
+/** A closed outline as a lathe draws it: its first point again at its end. */
+const closedLathe = (pts: readonly (readonly [number, number])[]): [number, number][] => [...pts.map((q) => [q[0], q[1]] as [number, number]), [pts[0]![0], pts[0]![1]]];
 /** A block as the app's parts: each piece where the operations put it, what was taken out of it drawn as its cuts, its
  *  faces counted in what it says. Never edited back: a block is changed only by the operations. */
 export function partOfBlock(b: Block): Part {
   const parts = b.pieces.map((p): Part => {
     // (a turned piece drawn in its own frame, turned; a bend about the centre it is bent round, as a ring's arc is drawn;
     // each cut in the piece's own frame)
-    const B = p.solid.base, cuts: Cut[] = [], f = B.frame, own = (v: P3): V3 => (f ? mtv(f, v) : [v[0], v[1], v[2]]);
+    const B = p.solid.base, cuts: Cut[] = [], cores: Part[] = [], f = B.frame, own = (v: P3): V3 => (f ? mtv(f, v) : [v[0], v[1], v[2]]);
     const origin: V3 = B.k === 'bend' ? sub(B.c, f ? mv(f, bendMid(B)) : bendMid(B)) : [B.c[0], B.c[1], B.c[2]], turned = f ? { rot: eulerOf(f) } : {};
+    const look = { mat: p.mat, ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}) };
     if ((B.k === 'cyl' || B.k === 'hex') && B.ri !== undefined) cuts.push({ r: B.ri, depth: B.h, at: [0, B.h / 2, 0], dir: [0, -1, 0] });
     for (const m of p.solid.minus) {
       if (m.k === 'bend') continue; const h = m.k === 'box' ? m.size[1] : m.h, mf = m.frame ?? I3, at = own(sub(add(m.c, mv(mf, [0, h / 2, 0])), origin)), dir = own(mv(mf, [0, -1, 0]));
-      if (m.k === 'box') { const [w, , d] = m.size; cuts.push({ r: Math.hypot(w, d) / 2, depth: h, at, dir, u: own(mv(mf, [1, 0, 0])), sect: [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]] }); }
-      // (a ring a sleeve took out of a shaft's skin is not drawn: a cut is drawn as a whole hole, and the ring is thinner
-      // than its fit's gap; the solid as the operations hold it has it)
-      else if (!((m.k === 'cyl' || m.k === 'coil' || m.k === 'hex') && m.ri !== undefined && m.ri > 0)) cuts.push({ r: m.r, depth: h, at, dir });
+      if (m.k === 'box') { const [w, , d] = m.size; cuts.push({ r: Math.hypot(w, d) / 2, depth: h, at, dir, u: own(mv(mf, [1, 0, 0])), sect: [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]] }); continue; }
+      // (a counterbored or countersunk hole: a turned cut, its profile from its face down, its own +y out of the face)
+      if (m.k === 'lathe') { const rim = m.pts.filter((q) => q[0] > 1e-12), prof = (rim[0]![1] < rim[rim.length - 1]![1] ? [...rim].reverse() : rim).map((q) => [q[0], h / 2 - q[1]] as [number, number]);
+        cuts.push({ r: Math.min(...prof.map((q) => q[0])), depth: h, at, dir, prof }); continue; }
+      // (a ring a passer took out of a plain piece (a tube through a plate): drawn as the whole hole and the core it leaves
+      // standing inside it, as long as the piece is through along the ring's line)
+      const ring = (m.k === 'cyl' || m.k === 'coil' || m.k === 'hex') && m.ri !== undefined && m.ri > 0;
+      if (!ring) { cuts.push({ r: m.r, depth: h, at, dir }); continue; }
+      const ax = own(mv(mf, [0, 1, 0])), k = [0, 1, 2].find((a) => Math.abs(Math.abs(ax[a]!) - 1) < 1e-9) as Axis | undefined; if (k === undefined) continue;
+      const mid = own(sub(m.c, origin)), hb = halfOf(B), [u, v] = other(k);
+      // (a plain box with the ring wholly inside it across, or a solid rod the ring is round about along its own axis)
+      const inBox = B.k === 'box' && !B.tray && !B.sect && Math.abs(mid[u]) + m.r <= hb[u]! + 1e-12 && Math.abs(mid[v]) + m.r <= hb[v]! + 1e-12;
+      const onRod = B.k === 'cyl' && B.ri === undefined && k === 1 && Math.hypot(mid[0], mid[2]) < 1e-12; if (!inBox && !onRod) continue;
+      const lo = Math.max(mid[k] - h / 2, -hb[k]!), hi = Math.min(mid[k] + h / 2, hb[k]!), rc = onRod ? Math.min(m.ri!, (B as { r: number }).r) : m.ri!; if (!(hi > lo)) continue;
+      cuts.push({ r: onRod ? Math.min(m.r, (B as { r: number }).r) : m.r, depth: h, at, dir }); const c: V3 = [mid[0], mid[1], mid[2]]; c[k] = (lo + hi) / 2; const core = { lathe: closedLathe([[0, -(hi - lo) / 2], [rc, -(hi - lo) / 2], [rc, (hi - lo) / 2], [0, (hi - lo) / 2]]) };
+      const up: V3 = [0, 0, 0]; up[k] = 1; const cf = snap(tr(toY(up)));
+      cores.push({ name: `${p.name} core`, shape: core, at: c, ...(cf ? { rot: eulerOf(cf) } : {}), ...look });
     }
-    const look = { mat: p.mat, ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}) };
-    // (a case: its floor and four walls, each where the case's own shape has it; a coil of several layers: a helix each)
-    if (B.k === 'box' && B.tray) { const [w, h, d] = B.size, { wall: t, floor: f } = B.tray, half = (x: number) => x / 2;
-      const walls: Part[] = [{ name: `${p.name} floor`, shape: { box: [w, f, d] }, at: [0, -half(h) + half(f), 0], ...look },
-        { name: `${p.name} wall`, shape: { box: [t, h - f, d] }, at: [-half(w) + half(t), half(f), 0], ...look }, { name: `${p.name} wall`, shape: { box: [t, h - f, d] }, at: [half(w) - half(t), half(f), 0], ...look },
-        { name: `${p.name} wall`, shape: { box: [w - 2 * t, h - f, t] }, at: [0, half(f), -half(d) + half(t)], ...look }, { name: `${p.name} wall`, shape: { box: [w - 2 * t, h - f, t] }, at: [0, half(f), half(d) - half(t)], ...look }];
+    // (a case: its floor and four walls, each where the case's own shape has it, each with the cuts that reach it (each cut
+    // given to every wall its box meets); a coil of several layers: a helix each)
+    if (B.k === 'box' && B.tray) { const [w, h, d] = B.size, { wall: t, floor: fl } = B.tray, half = (x: number) => x / 2;
+      const walls: Part[] = [{ name: `${p.name} floor`, shape: { box: [w, fl, d] }, at: [0, -half(h) + half(fl), 0], ...look },
+        { name: `${p.name} wall`, shape: { box: [t, h - fl, d] }, at: [-half(w) + half(t), half(fl), 0], ...look }, { name: `${p.name} wall`, shape: { box: [t, h - fl, d] }, at: [half(w) - half(t), half(fl), 0], ...look },
+        { name: `${p.name} wall`, shape: { box: [w - 2 * t, h - fl, t] }, at: [0, half(fl), -half(d) + half(t)], ...look }, { name: `${p.name} wall`, shape: { box: [w - 2 * t, h - fl, t] }, at: [0, half(fl), half(d) - half(t)], ...look }];
+      for (const wl of walls) { const sz = (wl.shape as { box: V3 }).box, a = wl.at!;
+        const mine = cuts.filter((c) => { const e = c.at.map((v, k) => v + c.dir[k]! * c.depth); return [0, 1, 2].every((k) => Math.min(c.at[k]!, e[k]!) - c.r < a[k]! + sz[k]! / 2 && Math.max(c.at[k]!, e[k]!) + c.r > a[k]! - sz[k]! / 2); });
+        if (mine.length) wl.cuts = mine.map((c) => ({ ...c, at: [c.at[0] - a[0], c.at[1] - a[1], c.at[2] - a[2]] })); }
       return { name: p.name, item: p.name, one: true, at: origin, ...turned, parts: walls, ...look }; }
     if (B.k === 'coil' && B.layers > 1) return { name: p.name, item: p.name, one: true, at: origin, ...turned, ...look,
       parts: Array.from({ length: B.layers }, (_, k) => ({ name: `${p.name} layer ${k + 1}`, shape: { tube: { r: B.d / 2, pts: helix(B.R + k * B.d, B.turns, B.pitch, B.h - B.d) } }, at: [0, 0, 0] as [number, number, number], ...look })) };
+    // (a bend with a bore: its tube along its arc with its wall, so it is drawn and weighed hollow (it was drawn solid: 412.0 g
+    // where the same straight is 64.7 g, the research of 2026-11-05))
+    const arc = (bd: Extract<Prim, { k: 'bend' }>): [number, number, number][] => { const n = Math.max(4, Math.ceil(bd.a / (Math.PI / 24))); return Array.from({ length: n + 1 }, (_, k) => [bd.R * Math.cos((k / n) * bd.a), bd.R * Math.sin((k / n) * bd.a), 0] as [number, number, number]); };
     const shape: Shape = B.k === 'box' ? (B.sect ? { prism: { pts: B.sect.map(([x, y]) => [x, y] as [number, number]), L: B.size[2] } } : { box: [B.size[0], B.size[1], B.size[2]] }) : B.k === 'cyl' || B.k === 'hex' ? { cyl: [B.r, B.h] } : B.k === 'dome' ? { lathe: domeProfile(B.r) }
-      : B.k === 'coil' ? { tube: { r: B.d / 2, pts: helix(B.R, B.turns, B.pitch, B.h - B.d) } } : B.k === 'bend' ? { torus: [B.R, B.ro, B.a] } : { lathe: cupProfile(B) };
-    return { name: p.name, item: p.name, shape, at: origin, ...turned, mat: p.mat, ...(B.k === 'hex' ? { facets: 6 } : {}), ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}), ...(cuts.length ? { cuts } : {}) };
+      : B.k === 'sphere' ? (B.ri === undefined ? { sphere: B.r } : { lathe: closedLathe(clipOut(sphereProfile(B.r), B.ri)) }) : B.k === 'lathe' ? { lathe: closedLathe(B.pts) }
+      : B.k === 'coil' ? { tube: { r: B.d / 2, pts: helix(B.R, B.turns, B.pitch, B.h - B.d) } } : B.k === 'bend' ? (B.ri !== undefined ? { tube: { r: B.ro, pts: arc(B), wall: B.ro - B.ri, bend: B.R } } : { torus: [B.R, B.ro, B.a] }) : { lathe: cupProfile(B) };
+    return { name: p.name, item: p.name, shape, at: origin, ...turned, mat: p.mat, ...(B.k === 'hex' ? { facets: 6 } : {}), ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}), ...(cuts.length ? { cuts } : {}), ...(cores.length ? { parts: cores } : {}) };
   });
   return { name: b.name, parts, says: `${b.pieces.length} pieces, each placed by the operations; ${b.faces.length} faces where they meet` };
 }

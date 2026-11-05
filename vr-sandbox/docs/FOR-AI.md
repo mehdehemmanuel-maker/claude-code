@@ -56,11 +56,21 @@ z: make it upright, then turn it; over and through then follow its turned lines)
 resistor, capacitors, transistor, cell, toggle, fuse, jst, pot, bracket, bearing, dowel, setscrew, gear, pulley, spring,
 hinge, insert, dip (8, 14, 16 pins), jack and plug (the plug in by `room.through` on `DC jack housing front/bore`, from
 below, tight), tee (`piece.<name>`; `find` for their settings). The bracket's upright has holes: `mate.plate` on
-`L bracket upright/holes` bolts it to a wall. A Stack takes its blocks in the order of their nodes' names: name them so. A piece's `offers` names its lines and
+`L bracket upright/holes` bolts it to a wall. A Stack takes its blocks in the order its `order` setting lists their nodes (`"order": "bot,top"`); blank, by their names as text. A piece's `offers` names its lines and
 rooms (`<name>/axis`, `<name>/holes`, `<name>/cavity`): wire its `block` into the next operation and name the line in
 that operation's setting. A refusal (`no room …: needs …, gives …`) is an answer to say back, never to work round.
 Never use `place`, `array`, `mirror`, `mate`, `joint`, `imprint` or `place.solve` for a new build: they set places by number.
 Wire a piece's or an operation's `block` into the next operation; `thing` goes only to `space.show`, `measure` and `assert`.
+A wire that does not fit is refused with the fix, and so is a second wire into a single input (`*` on a card: takes
+many) or an `add` by a name already there; a line `x waiting:` fails too. The cards list what each piece `offers`
+(`<size> shank/axis`): name that line or room in the next operation. Start from the nearest worked plan after the cards.
+Fasteners, bearings, circlips, keys, O-rings and pipe come in every size of their standards (`size` by its name: M1.6 to
+M64, 608, '1/2 steel 40'); a size the standard lacks is refused with the sizes it has. `piece.stepper` (NEMA frames) and
+`piece.kind` (any family of bought part: servo, fan, relay, dev board, castor, brick) are envelopes: outlines only.
+`room.make` makes any solid (box, rod, tube, cup, sphere, cone, lathe by `pts`, case, hex, dome, section, bend, coil) with
+holes on any face (`face`, `depth`, `sink`); gears and pulleys go on a shaft by `room.through` along their `<name>/axis`;
+fan blades and spokes by `room.ring` with `out=yes`; a part at a distance along a shaft by `room.over` with `where` lo or
+hi and `along`; any hose, cable or tube by `room.run`.
 Show the last `thing` with `space.show`. Hold what matters with `assert`, a measured output wired in (a mass from
 `measure`). Replies start with `FAILS` lines (an assertion, a joint, a paste refused): say those first.
 

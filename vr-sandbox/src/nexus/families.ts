@@ -11,6 +11,7 @@ import { KINDS } from './kinds';
 import { CLEAR, NEMA, NEMA_FACE } from './kinds/motion';
 export { NEMA, NEMA_FACE };
 import { familyOf, partsOf, useFamilies } from './kinds/core';
+import { BEARINGS_BOSL2 } from './parts/bosl2';
 
 export { METRIC };
 
@@ -50,7 +51,7 @@ const washer: Family = {
   make(p) { const t = String(p.thread), T = METRIC[t]!, v = Math.PI * ((T.d2 / 2) ** 2 - (T.d1 / 2) ** 2) * T.h; return item(`washer-${t.toLowerCase()}`, `${t} washer`, 'Hardware/Fasteners/Washers', 'product', 'stamp', 'steel-low', 'a ring stamped from sheet', `ISO 7089: ${T.d1} × ${T.d2} × ${T.h} mm`, [T.d2, T.d2, T.h], mm3g(v, RHO.steel)); },
 };
 // ---- deep-groove ball bearings by their number (ISO 15 boundary dimensions) -------------------------------------------
-export const BEARINGS: Record<string, [number, number, number]> = {
+const BEARINGS_ISO15: Record<string, [number, number, number]> = {
   '623': [3, 10, 4], '624': [4, 13, 5], '625': [5, 16, 5], '626': [6, 19, 6], '608': [8, 22, 7], '6000': [10, 26, 8], '6001': [12, 28, 8], '6002': [15, 32, 9], '6003': [17, 35, 10], '6004': [20, 42, 12],
   '6200': [10, 30, 9], '6201': [12, 32, 10], '6202': [15, 35, 11], '6203': [17, 40, 12], '6204': [20, 47, 14], '6205': [25, 52, 15],
   '606': [6, 17, 6], '607': [7, 19, 6], '609': [9, 24, 7], '627': [7, 22, 7], '629': [9, 26, 8], '6005': [25, 47, 12], '6006': [30, 55, 13], '6206': [30, 62, 16], '6207': [35, 72, 17],
@@ -61,6 +62,9 @@ export const BEARINGS: Record<string, [number, number, number]> = {
   // ABMA, for a 1/4 in shaft)
   '684': [4, 9, 4], '685': [5, 11, 5], 'R4': [6.35, 15.875, 4.978],
 };
+/** The one bearing table (decision 0026): the rows above, and every open, unflanged row of BOSL2's table not among them,
+ *  each from the maker's page it names (src/nexus/parts/bosl2.ts). */
+export const BEARINGS: Record<string, [number, number, number]> = { ...Object.fromEntries(Object.entries(BEARINGS_BOSL2).map(([k, r]) => [k, [r.d, r.D, r.B] as [number, number, number]])), ...BEARINGS_ISO15 };
 /** A deep-groove bearing's balls: each about 0.3 of its rings' section across (typical), on the pitch circle midway
  *  between its bore and its outside, as many as its rings take when they are pushed eccentric to put them in (the Conrad
  *  assembly: about half the pitch circle full, and one more; typical, within one of makers' counts). */

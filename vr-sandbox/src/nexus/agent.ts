@@ -10,13 +10,14 @@
 // refuses (a block that does not exist, a port a block lacks: said back to it, so it can correct itself), where it runs
 // out of steps or time (said, with the board as far as it got), or where the service refuses (said as it said it).
 import type Anthropic from '@anthropic-ai/sdk';
-import { LIBRARY, block, defaultsOf, portsOf, register, type BlockDef, type PortDef, type Type } from './blocks';
+import { LIBRARY, block, defaultsOf, portsOf, register, type BlockDef, type PortDef, type SettingDef, type Type } from './blocks';
 import { Engine, collapse, emptyBoard, groupBlock, makeBlock, placeBlock, wire } from './dataflow';
 // (navigation and the starter boards are loaded when the agent runs, not when the library does: imported at the top they
 // change the order the library's modules start in, and a worker that loads the whole library then fails to start)
 import type { Board } from './boards';
 import { edgesOf, nodesOf } from './boards';
 import { certificatesOf, check, diffOf, type Certificate, type Verdict } from './certify';
+import { massOfAll, type Assembly } from './assembly';
 
 /** The docs the agent may read, by topic: the router in CLAUDE.md, as files under docs/. */
 const DOCS: Record<string, string> = { wanted: 'WANTED.md', owners: 'OWNERS.md', reality: 'REALITY.md', compiler: 'COMPILER.md', life: 'LIFE.md', nodes: 'NODES.md', atlas: 'ATLAS.md' };
@@ -35,9 +36,26 @@ export function brief(v: unknown, room = 400): string {
 
 /** A block on one line: what a builder needs of it and nothing more (its ports, `?` where optional, and its settings). */
 export function cardOf(d: BlockDef): string {
-  const ps = portsOf(d, defaultsOf(d)), port = (p: PortDef) => `${p.name}:${p.type}${p.unit ? `(${p.unit})` : ''}${p.optional ? '?' : ''}`;
-  const sets = (d.settings ?? []).map((x) => `${x.key}=${brief(x.default, 30)}${x.choices ? ` [${x.choices.slice(0, 8).join('|')}${x.choices.length > 8 ? '|…' : ''}]` : ''}`);
-  return `${d.id}: ${d.name} | in: ${ps.inputs.map(port).join(', ') || '-'} | out: ${ps.outputs.map(port).join(', ')} | set: ${sets.join('; ') || '-'} | ${(d.says ?? '').slice(0, 160)}`;
+  const ps = portsOf(d, defaultsOf(d)), port = (p: PortDef) => `${p.name}:${p.type}${p.unit ? `(${p.unit})` : ''}${p.optional ? '?' : ''}${p.many ? '*' : ''}`;
+  const sets = (d.settings ?? []).map((x) => `${x.key}=${brief(x.default, 30)}${x.choices ? ` [${x.choices.slice(0, 8).join('|')}${x.choices.length > 8 ? '|…' : ''}]` : ''}`), offers = offersOf(d);
+  return `${d.id}: ${d.name} | in: ${ps.inputs.map(port).join(', ') || '-'} | out: ${ps.outputs.map(port).join(', ')} | set: ${sets.join('; ') || '-'}${offers.length ? ` | offers: ${offers.join(', ')}` : ''} | ${(d.says ?? '').slice(0, 160)}`;
+}
+
+const offersKept = new Map<string, string[]>();
+/** The lines and rooms a piece offers, as its settings name them (`<name>/holes`, `<size> shank/axis`): the piece made
+ *  once with its defaults and each offer's setting value written back as the setting's key, so the AI knows what to
+ *  name in an operation's line or room before it builds (decision 0026). Only a piece (no inputs) is made; none else. */
+export function offersOf(d: BlockDef): string[] {
+  const kept = offersKept.get(d.id); if (kept) return kept;
+  let out: string[] = [];
+  if (/^(piece|room)\./.test(d.id) && d.run && !portsOf(d, defaultsOf(d)).inputs.length) {
+    try { const set = defaultsOf(d), r = d.run({}, { set }); const os = r instanceof Promise ? [] : ((r as Record<string, unknown>).offers as string[] | undefined) ?? [];
+      // (each text or choice setting's value, longest first, written back as <key>: "M8 shank/axis" → "<size> shank/axis")
+      const vals = (d.settings ?? []).filter((x) => (x.type === 'text' || x.type === 'choice') && typeof set[x.key] === 'string' && String(set[x.key]).length >= 2).map((x) => [String(set[x.key]), x.key] as const).sort((a, b) => b[0].length - a[0].length);
+      out = [...new Set(os.map((o) => { let t = o; for (const [v, k] of vals) t = t.split(v).join(`<${k}>`); return t; }))];
+      if (out.length > 4) out = [...out.slice(0, 4), `… ${out.length - 4} more`];
+    } catch { out = []; } }
+  offersKept.set(d.id, out); return out;
 }
 
 /** The agent's tools, each answering in as few words as will do (docs/FOR-AI.md says how they are used). */
@@ -57,7 +75,20 @@ const TOOLS: Anthropic.Tool[] = [
  *  the cards of the blocks most builds are made of (piecesCard), so a build needs no find and no card for them. One text,
  *  the same every call: cached, read again at a tenth of the price. */
 let guide: string | undefined;
-const guideOf = async (): Promise<string> => { if (guide) return guide; const { readFileSync } = await import(/* @vite-ignore */ 'node:fs'); return (guide = `${readFileSync(new URL('../../docs/FOR-AI.md', import.meta.url), 'utf8')}\n\n${piecesCard()}`); };
+const guideOf = async (): Promise<string> => { if (guide) return guide; const { readFileSync } = await import(/* @vite-ignore */ 'node:fs'); return (guide = `${readFileSync(new URL('../../docs/FOR-AI.md', import.meta.url), 'utf8')}\n\n${piecesCard()}\n\n${workedPlans()}`); };
+
+/** Worked plans, each one that runs with nothing failing (the test runs every one): the hand plan of tests/evals/phone.cjs,
+ *  and the starter boards built from pieces (two cells boxed, then a lid added by a change; a bolt and its nut through a
+ *  plate, as the by-hand steps join them). Sent after the cards, cached with them (decision 0026: a worked example to start
+ *  from does most of the work). Each `after` names the plan it changes. */
+export const WORKED: { says: string; after?: string; plan: AgentPlan['input'] & { tool: AgentPlan['tool'] } }[] = [
+  { says: 'two plates stacked, bolted at both holes, weighed and shown', plan: { tool: 'build', nodes: { bot: { b: 'piece.plate', s: { name: 'bottom plate', t: 3 } }, top: { b: 'piece.plate', s: { name: 'top plate', t: 3 } }, st: { b: 'room.stack', s: { axis: 'y', order: 'bot,top' } }, j0: { b: 'mate.bolted', s: { line: 'top plate/holes', which: 0, size: 'M8' } }, j1: { b: 'mate.bolted', s: { line: 'top plate/holes', which: 1, size: 'M8' } }, m: { b: 'measure' }, show: { b: 'space.show' } }, wires: ['bot.block>st.blocks', 'top.block>st.blocks', 'st.block>j0.held', 'j0.block>j1.held', 'j1.thing>m.thing', 'j1.thing>show.thing'] } },
+  { says: 'a bolt down a plate\'s first hole, its nut over the shank\'s top', plan: { tool: 'build', nodes: { pl: { b: 'piece.plate' }, bolt: { b: 'piece.bolt', s: { size: 'M8', length: 20 } }, thru: { b: 'room.through', s: { line: 'plate/holes' } }, nut: { b: 'piece.nut', s: { size: 'M8' } }, on: { b: 'room.over', s: { line: 'M8 shank/axis', where: 'hi', fit: 'touch' } }, show: { b: 'space.show' } }, wires: ['pl.block>thru.host', 'bolt.block>thru.passer', 'thru.block>on.host', 'nut.block>on.sleeve', 'on.thing>show.thing'] } },
+  { says: 'two 18650 cells side by side into a box\'s cavity', plan: { tool: 'build', nodes: { c1: { b: 'piece.cell', s: { size: '18650' } }, c2: { b: 'piece.cell', s: { size: '18650' } }, pair: { b: 'room.stack', s: { axis: 'x', fit: 'clear', order: 'c1,c2' } }, box: { b: 'piece.case', s: { name: 'cell box', w: 45, h: 70, d: 25 } }, boxed: { b: 'room.into', s: { room: 'cell box/cavity' } }, show: { b: 'space.show' } }, wires: ['c1.block>pair.blocks', 'c2.block>pair.blocks', 'box.block>boxed.host', 'pair.block>boxed.child', 'boxed.thing>show.thing'] } },
+  { says: 'then its lid, by a change: the one wire into show cut first, as an input that takes one wire is never replaced', after: 'two 18650 cells side by side into a box\'s cavity', plan: { tool: 'change', add: { lid: { b: 'mate.lid' } }, unwire: ['show.thing'], wires: ['boxed.block>lid.box', 'lid.thing>show.thing'] } },
+];
+/** The worked plans as the guide says them: a line of what each makes, then the plan as Assist writes it. */
+export const workedPlans = (): string => `## Worked plans (each runs with nothing failing; start from the nearest)\n${WORKED.map((w) => `${w.after ? 'On the board the plan above built: ' : ''}${JSON.stringify({ ...w.plan, says: w.says })}`).join('\n')}`;
 /** The model the AI in the app runs on unless more is asked: the cheapest (its node's setting lists the others). */
 export const AGENT_MODEL = 'claude-haiku-5-5';
 
@@ -66,7 +97,7 @@ export interface AgentStep { tool: string; input: unknown; result: string; ms: n
    *  (a failure past the cut was lost before: the evaluator, 2026-11-01) */ alerts?: string[] }
 /** A tool call as the run keeps it: its result cut short for the record, its refusals and failures kept whole. */
 export function stepOf(tool: string, input: unknown, out: string, ms: number, failed = false): AgentStep {
-  const alerts = out.split('\n').filter((l) => l.startsWith('! ') || /^\S+ (failed|error): /.test(l)).map((l) => l.slice(0, 300));
+  const alerts = out.split('\n').filter((l) => l.startsWith('! ') || /^\S+ (failed|error|waiting): /.test(l)).map((l) => l.slice(0, 300));
   return { tool, input, result: out.slice(0, 300), ms, ...(failed ? { failed: true as const } : {}), ...(alerts.length ? { alerts } : {}) };
 }
 /** A block the agent folded and saved: enough to register it again anywhere (a page keeps it with the blocks you saved). */
@@ -122,7 +153,7 @@ export function nearMissesOf(steps: AgentStep[], answer: string, board: Board): 
     if (s.failed) { out.push({ step: k + 1, tool: s.tool, what: `the tool failed: ${s.result.slice(0, 160)}`, ...caught('tool failed') }); return; }
     for (const l of s.alerts ?? s.result.split('\n')) {
       if (l.startsWith('! ')) out.push({ step: k + 1, tool: s.tool, what: l.slice(2), ...caught('refused') });
-      else { const f = /^(\S+) (failed|error): (.*)$/.exec(l); if (f) out.push({ step: k + 1, tool: s.tool, what: `node ${f[1]} failed: ${f[3]!.slice(0, 160)}`, ...caught('node failed') }); }
+      else { const f = /^(\S+) (failed|error|waiting): (.*)$/.exec(l); if (f) out.push({ step: k + 1, tool: s.tool, what: `node ${f[1]} ${f[2] === 'waiting' ? 'left waiting' : 'failed'}: ${f[3]!.slice(0, 160)}`, ...caught('node failed') }); }
     } });
   if (/\d/.test(answer) && !nodesOf(board).length) out.push({ step: steps.length, tool: 'answer', what: 'numbers given with no board behind them', ...caught('no board') });
   const lastChange = steps.map((s, k) => [s, k] as const).filter(([s]) => ['build', 'change', 'open'].includes(s.tool) && !s.failed).pop();
@@ -202,7 +233,7 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
     const ids = nodesOf(board).map((n) => n.id), out: string[] = failsOf(engine, board).map((f) => `FAILS ${f}`);
     for (const id of ids) { const st = engine.state.get(id), bad = st?.status !== 'ok'; if (only && !only.has(id) && !bad) continue;
       if (bad) { out.push(`${id} ${st?.status ?? '?'}: ${(st?.error ?? '').slice(0, 160)}`); continue; }
-      out.push(`${id} ok ${Object.entries(st!.out ?? {}).filter(([k]) => k !== 'says').slice(0, 6).map(([k, v]) => `${k}=${brief(v, 50)}`).join(' ')}`); }
+      out.push(`${id} ok ${spaceLine(st!.out ?? {}) ?? Object.entries(st!.out ?? {}).filter(([k]) => k !== 'says').slice(0, 6).map(([k, v]) => `${k}=${brief(v, 50)}`).join(' ')}`); }
     return out.length > 40 ? [...out.slice(0, 40), `… and ${out.length - 40} more lines`] : out;
   };
   /** What a plan's `s` may give a block: its settings, and the value of any input left unwired (as the page sets it). */
@@ -213,11 +244,15 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
     let nodes = given; if (typeof nodes === 'string') { try { nodes = JSON.parse(nodes); } catch { /* said below */ } }
     if (!nodes || typeof nodes !== 'object' || Array.isArray(nodes)) { if (given !== undefined) bad.push('nodes: write them as an object, {"name": {"b": "block id", "s": {…}}}'); return []; }
     for (const [nm, n] of Object.entries(nodes as Record<string, { b?: string; s?: Record<string, unknown> }>)) { const d = block(String(n.b)); if (!d) { bad.push(`${nm}: no block "${n.b}"`); continue; }
+      // (a name already on the board is refused, never silently replaced (decision 0026): the node there is kept)
+      const was = board.nodes[nm]; if (was && !was.deleted) { bad.push(`${nm}: a node of that name is on the board already (${was.block ?? 'a group'}): add it by another name, or set or remove that one`); continue; }
       const keys = keysOf(d), wrong = Object.keys(n.s ?? {}).filter((k) => !keys.has(k)); if (wrong.length) bad.push(`${nm}: ${d.id} has no setting or input ${wrong.join(', ')} (it has ${[...keys].join(', ') || 'none'})`);
       placeBlock(board, d.id, 0, 0, { ...defaultsOf(d), ...Object.fromEntries(Object.entries(n.s ?? {}).filter(([k]) => keys.has(k))) }, nm); board.nodes[nm]!.label = nm; }
     return Object.keys(nodes).filter((nm) => board.nodes[nm]);
   };
-  const wireAll = (ws: string[], bad: string[]) => { for (const w of ws) { const m = /^(\w+)\.(\w+)\s*>\s*(\w+)\.(\w+)$/.exec(String(w).trim()); if (!m) { bad.push(`wire "${w}": write it a.out>b.in`); continue; } try { wire(board, m[1]!, m[2]!, m[3]!, m[4]!); } catch (e) { bad.push(`wire ${w}: ${(e as Error).message}`); } } };
+  const wireAll = (ws: string[], bad: string[]) => { for (const w of ws) { const m = /^(\w+)\.(\w+)\s*>\s*(\w+)\.(\w+)$/.exec(String(w).trim()); if (!m) { bad.push(`wire "${w}": write it a.out>b.in`); continue; }
+    const why = wireRefused(board, m[1]!, m[2]!, m[3]!, m[4]!); if (why === '') continue; if (why) { bad.push(`wire ${m[1]}.${m[2]}>${m[3]}.${m[4]}: ${why}`); continue; }
+    try { wire(board, m[1]!, m[2]!, m[3]!, m[4]!); } catch (e) { bad.push(`wire ${w}: ${(e as Error).message}`); } } };
   const doTool = async (name: string, a: Record<string, unknown>): Promise<string> => {
     switch (name) {
       case 'find': return search(String(a.q ?? ''), 10).map((f) => (f.board ? `board "${f.board}" | ${f.says.slice(0, 90)}` : `${f.add?.block ?? f.id}${f.add?.set ? ` ${JSON.stringify(f.add.set)}` : ''} | ${f.name} | ${f.says.slice(0, 90)}`)).join('\n') || 'nothing matches';
@@ -260,6 +295,40 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
   return { doTool, board: () => board, made };
 }
 
+/** What a piece's or an operation's run is said as to the AI (decision 0026): its pieces, its mass and every line and
+ *  room it offers (what the next operation names), any refusal, never the block's insides; undefined for any other node. */
+export function spaceLine(o: Record<string, unknown>): string | undefined {
+  if (!o.block || typeof o.block !== 'object' || !Array.isArray(o.offers) || typeof o.pieces !== 'number') return undefined;
+  let kg: number | undefined; try { kg = o.thing ? massOfAll(o.thing as Assembly) : undefined; } catch { kg = undefined; }
+  return `pieces=${o.pieces}${kg !== undefined && Number.isFinite(kg) ? ` mass=${+(kg).toPrecision(4)} kg` : ''} offers=[${(o.offers as string[]).join('; ')}]${o.refused ? ` refused=${brief(o.refused, 200)}` : ''}${typeof o.rate === 'number' ? ` rate=${brief(o.rate)}` : ''}`;
+}
+
+/** Why the AI's wire may not be made, as the fix to make (decision 0026: its plans checked as they are made, by the same
+ *  check the dashboard's hand wiring uses, `Engine.canWire` and `fits`): no such node; an output that is not there, with
+ *  the ones that are; an input that is not there, with the ones that are; a thing where a block goes (or a block where a
+ *  thing goes), with the output to wire instead; any other type or unit that does not fit, or a loop; a second wire into
+ *  an input that takes one (never silently replaced: unwire it first). `''` for the very wire already there (nothing to
+ *  do), undefined where it may be made. */
+export function wireRefused(board: Board, from: string, out: string, to: string, inp: string): string | undefined {
+  const fn = board.nodes[from], tn = board.nodes[to];
+  if (!fn || fn.deleted) return `no node ${from} on the board`; if (!tn || tn.deleted) return `no node ${to} on the board`;
+  const e = new Engine(board), outs = e.ports(from).outputs, ins = e.ports(to).inputs, op = outs.find((p) => p.name === out), ip = ins.find((p) => p.name === inp);
+  const fb = fn.block ?? 'a group', tb = tn.block ?? 'a group';
+  if (!op && outs.length) return `${from} (${fb}) has no output ${out}: it gives ${outs.map((p) => p.name).join(', ')}`;
+  // (the sinks that take what they are given by any name, and a folded board with no inputs of its own, as wire() allows)
+  const open = ['group.out', 'view.show', 'view.table', 'view.chart', 'view.gauge', 'space.show'].includes(tb) || (!!tn.inner && !ins.length);
+  if (!ip) return open ? undefined : `${to} (${tb}) has no input ${inp}: it takes ${ins.map((p) => `${p.name}${p.many ? ' (many)' : ''}`).join(', ') || 'nothing'}`;
+  if (!op) return undefined;
+  const there = edgesOf(board).filter((x) => x.to === to && x.in === inp);
+  if (there.some((x) => x.from === from && x.out === out)) return '';
+  if (!ip.many && there.length) return `${to}.${inp} takes one wire and has one (${there[0]!.from}.${there[0]!.out}): unwire "${to}.${inp}" first to change it`;
+  const r = e.canWire(from, out, to, inp); if (r.ok) return undefined;
+  const gives = (t: string) => outs.find((p) => p.type === t)?.name;
+  if (ip.type === 'block' && op.type !== 'block') return `${to}.${inp} takes a block: ${gives('block') ? `wire ${from}.${gives('block')}, not ${from}.${out}` : `${from} (${fb}) gives none (a piece or an operation does: its block)`}`;
+  if (op.type === 'block' && ip.type === 'assembly') return `${to}.${inp} takes a thing: ${gives('assembly') ? `wire ${from}.${gives('assembly')}, not ${from}.${out}` : `${from} gives none`}`;
+  return r.why;
+}
+
 /** One turn's tool calls, each run, kept by stepOf (its refusals and failures whole) and answered to the model; a tool that
  *  throws is kept as failed. agentBuild's every turn goes through it. */
 export async function callTools(uses: readonly { id: string; name: string; input: unknown }[], doTool: (name: string, a: Record<string, unknown>) => Promise<string>, steps: AgentStep[]): Promise<Anthropic.ToolResultBlockParam[]> {
@@ -298,24 +367,36 @@ const ROOM_GIVES = 'block,thing,pieces,faces,offers,says';
 /** The cards of the blocks most builds are made of, a line each: the pieces, the operations, the bolted joint, and the
  *  show, measure and assert nodes; their inputs (`?` optional), and settings with defaults and choices. Read from the
  *  library, so a piece added there is here at once. */
+/** The pieces whose cards go in full with the guide: what most builds use. */
+const CORE_PIECES = new Set(['piece.bolt', 'piece.nut', 'piece.washer', 'piece.plate', 'piece.case', 'piece.pipe', 'piece.run', 'piece.section', 'piece.bearing', 'piece.cell', 'piece.led', 'piece.wire', 'piece.header', 'piece.standoff']);
 export function piecesCard(): string {
-  const ids = [...LIBRARY.keys()].filter((id) => /^(piece|room)\./.test(id) || ['mate.bolted', 'space.show', 'measure', 'assert'].includes(id)).sort();
-  const line = (d: BlockDef) => { const ps = portsOf(d, defaultsOf(d)), outs = ps.outputs.map((p) => p.name).join(',');
-    const sets = (d.settings ?? []).map((x) => `${x.key}=${brief(x.default, 24)}${x.choices ? ` [${x.choices.slice(0, 8).join('|')}${x.choices.length > 8 ? '|…' : ''}]` : ''}`);
-    return `${d.id}${ps.inputs.length ? `(${ps.inputs.map((p) => `${p.name}${p.optional ? '?' : ''}`).join(', ')})` : ''}${outs === ROOM_GIVES ? '' : ` → ${outs}`}${sets.length ? ` | ${sets.join('; ')}` : ''}`; };
-  return `## The cards you need most (as \`card\` gives them; each piece and operation gives ${ROOM_GIVES} unless an arrow says)\n${ids.map((id) => line(block(id)!)).join('\n')}`;
+  const ids = [...LIBRARY.keys()].filter((id) => /^(piece|room|mate)\./.test(id) || ['space.show', 'measure', 'assert'].includes(id)).sort();
+  // (a list of choices said by more than one card is said once, named, and each card names it: the pipe sizes, the
+  // metric sizes and the fits were most of the cards' length)
+  const listOf = (x: SettingDef) => `${x.choices!.slice(0, 8).join('|')}${x.choices!.length > 8 ? '|…' : ''}`, seen = new Map<string, number>();
+  for (const id of ids) for (const x of block(id)!.settings ?? []) if (x.choices) seen.set(listOf(x), (seen.get(listOf(x)) ?? 0) + 1);
+  const named = new Map([...seen].filter(([l, n]) => n > 1 && l.length > 20).map(([l], k) => [l, `L${k + 1}`] as const));
+  const line = (d: BlockDef) => { const ps = portsOf(d, defaultsOf(d)), outs = ps.outputs.map((p) => p.name).join(','), offers = offersOf(d);
+    const sets = (d.settings ?? []).map((x) => `${x.key}=${brief(x.default, 24)}${x.choices ? ` [${named.get(listOf(x)) ?? listOf(x)}]` : ''}`);
+    return `${d.id}${ps.inputs.length ? `(${ps.inputs.map((p) => `${p.name}${p.optional ? '?' : ''}${p.many ? '*' : ''}`).join(', ')})` : ''}${outs === ROOM_GIVES ? '' : ` → ${outs}`}${sets.length ? ` | ${sets.join('; ')}` : ''}${offers.length ? ` | offers ${offers.join(', ')}` : ''}`; };
+  // (the operations, the joints and the pieces most builds use, in full; every other piece a line of its id and name, to
+  // card when it is wanted: so the prefix grows a short line a piece, not a card (decision 0026))
+  const full = (id: string) => !id.startsWith('piece.') || CORE_PIECES.has(id), brief1 = (d: BlockDef) => `${d.id}: ${d.name}`;
+  return `## The cards you need most (as \`card\` gives them; each piece and operation gives ${ROOM_GIVES} unless an arrow says; block into the next operation, thing only to show, measure, assert; * takes many wires; offers: its lines and rooms, <key> a setting's value)\n${[...named].map(([l, n]) => `${n}=[${l}]`).join(' ')}\n${ids.filter(full).map((id) => line(block(id)!)).join('\n')}\n## The other pieces (\`card\` them for their settings and offers)\n${ids.filter((id) => !full(id)).map((id) => brief1(block(id)!)).join('\n')}`;
 }
 
 /** The board as the model is told it, short: a line a node (its name, its block, the settings that are not the block's
- *  own), then its wires. Empty for an empty board. */
-export function boardBrief(b: Board | undefined, room = 1600): string {
+ *  own, each value cut to 60 characters), then every wire: never cut (decision 0026: the quadcopter's and the robot
+ *  base's wires were lost at the old 1,600-character cut, and a change to them was planned blind); only past `room`
+ *  (a board of hundreds of nodes) are the settings dropped, the names, blocks and wires kept. Empty for an empty board. */
+export function boardBrief(b: Board | undefined, room = 12_000): string {
   const ns = b ? nodesOf(b) : []; if (!b || !ns.length) return '';
-  const lines = ns.map((n) => { const x = b.nodes[n.id]!, d = x.block ? block(x.block) : undefined, def = d ? defaultsOf(d) : {};
-    const set = Object.entries(x.set ?? {}).filter(([k, v]) => JSON.stringify(def[k]) !== JSON.stringify(v));
-    return `${n.id}: ${x.block ?? 'a group'}${set.length ? ` ${JSON.stringify(Object.fromEntries(set))}` : ''}`; });
+  const lineOf = (id: string, withSet: boolean) => { const x = b.nodes[id]!, d = x.block ? block(x.block) : undefined, def = d ? defaultsOf(d) : {};
+    const set = withSet ? Object.entries(x.set ?? {}).filter(([k, v]) => JSON.stringify(def[k]) !== JSON.stringify(v)).map(([k, v]) => [k, typeof v === 'string' && v.length > 60 ? `${v.slice(0, 60)}…` : v]) : [];
+    return `${id}: ${x.block ?? 'a group'}${set.length ? ` ${JSON.stringify(Object.fromEntries(set))}` : ''}`; };
   const ws = edgesOf(b).filter((e) => e.out && e.in).map((e) => `${e.from}.${e.out}>${e.to}.${e.in}`);
-  const t = `The board open (${ns.length} nodes; change it by these names):\n${lines.join('\n')}${ws.length ? `\nwires: ${ws.join(' ')}` : ''}`;
-  return t.length > room ? `${t.slice(0, room)}\n… (cut)` : t;
+  const of = (withSet: boolean) => `The board open (${ns.length} nodes; change it by these names):\n${ns.map((n) => lineOf(n.id, withSet)).join('\n')}${ws.length ? `\nwires: ${ws.join(' ')}` : ''}`;
+  const t = of(true); return t.length > room ? of(false) : t;
 }
 
 /** A plan: the build or change tool's own input, and a line of what it makes. */
@@ -354,8 +435,9 @@ export function planOf(text: string): AgentPlan {
 }
 
 /** The lines of a tool's result that say something failed: a refusal (`! `), a check that fails (`FAILS`), a change not
- *  taken, a node that failed. What Assist asks again with, and only that. */
-export const failingOf = (out: string): string[] => out.split('\n').filter((l) => /^(! |FAILS |NOT TAKEN)/.test(l) || /^\S+ (failed|error): /.test(l)).map((l) => l.slice(0, 300));
+ *  taken, a node that failed or is left waiting (it has nothing yet: decision 0026, so Assist never says nothing failed
+ *  while one waits). What Assist asks again with, and only that. */
+export const failingOf = (out: string): string[] => out.split('\n').filter((l) => /^(! |FAILS |NOT TAKEN)/.test(l) || /^\S+ (failed|error|waiting): /.test(l)).map((l) => l.slice(0, 300));
 
 /** A plan run on a board by toolsFor's own tools (the page runs it so, by hand or from Assist, and a test the same way). */
 export async function runPlan(plan: AgentPlan, board: Board, blocks?: AgentBlock[]): Promise<PlanRan> {
@@ -374,7 +456,9 @@ export function joinPlan(board: Board, piece: { b: string; s?: Record<string, un
   const d = block(join.op); if (!d) throw new Error(`no operation "${join.op}"`);
   const ins = portsOf(d, { ...defaultsOf(d), ...join.s }).inputs.map((x) => x.name), op = name(join.op);
   const wires = ins.includes('host') ? [`${join.host}.block>${op}.host`, `${p}.block>${op}.${ins.find((x) => x !== 'host')}`] : [`${join.host}.block>${op}.${ins[0]}`, `${p}.block>${op}.${ins[0]}`];
-  return { tool: 'change', input: { add: { [p]: node, [op]: { b: join.op, ...(join.s && Object.keys(join.s).length ? { s: join.s } : {}) } }, wires }, says: `${what}, ${d.name.toLowerCase()} of ${join.host}` };
+  // (a stack is told its order, the host first, so it does not hang on the names' order as text: decision 0026)
+  const os = { ...(join.s ?? {}), ...(!ins.includes('host') && (d.settings ?? []).some((x) => x.key === 'order') && !join.s?.order ? { order: `${join.host},${p}` } : {}) };
+  return { tool: 'change', input: { add: { [p]: node, [op]: { b: join.op, ...(Object.keys(os).length ? { s: os } : {}) } }, wires }, says: `${what}, ${d.name.toLowerCase()} of ${join.host}` };
 }
 
 /** How Assist's one call is told to answer (after the guide and the cards, so it is cached with them). */
