@@ -67,6 +67,11 @@ critic's miss: add it to the critic's checks.
 
 ## When work is slow: step back
 
+- **Rough the whole first, polish at the end** (the user, 2026-11-05: "if something takes too long cut it wether it's a
+  audit test or whatever we build rough the whole thing then come back at the end and polish it"). Every part of a round
+  is built rough before any one is polished; anything past its time (an audit, a test, a run, a build) is cut, never
+  waited on, and what was cut is said and listed for the polish pass. Long runs carry their own limit (`timeout 120`,
+  the audit's `AUDIT_SECONDS`).
 - Past about **two minutes** on one run, or **three tries** at one fix: stop. Ask whether this is population (easy, just
   many) or a **missing pipeline** (the same judgement made by hand again and again). If it is a missing pipeline, say so
   and build the pipeline (a board of nodes, AI gates where judgement is needed) instead of doing the next one by hand.

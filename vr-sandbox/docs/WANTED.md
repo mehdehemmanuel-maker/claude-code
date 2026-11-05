@@ -477,3 +477,11 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   in a chat, Claude builds it from the pieces with the nodes, the 3D result fills the screen and grows as it works;
   served at once from the session (`npm run app`), the phone opening it there; decision 0023)
 - 2026-11-05: "Try again" (after the session's context ran out: carry on with the phone page)
+- 2026-11-05: "Okay and if something takes too long cut it wether it’s a audit test or whatever we build rough the whole
+  thing then come back at the end and polish it and for this app and vibing features I want a
+  manual-semiautomatic-automatic(fully ai vibing) okay and try to minimize Claude’s token usage with applications , also
+  yea so Claude has more freedom we need to finish the previous plan and populate the nodes, Next in this direction: pipe
+  bends and elbows, and parts that can turn to any angle; right now round parts only stand upright.And more" (anything
+  past its time is cut and noted, never waited on; rough the whole first, polish at the end; three ways to build on the
+  phone page: by hand, with the AI proposing and the person taking it, and by the AI alone; the in-app AI's tokens
+  measured and kept low; more nodes for the AI to build with; pipe bends and elbows; any part turned to any angle)
