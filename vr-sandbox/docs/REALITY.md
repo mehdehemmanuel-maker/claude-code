@@ -2745,3 +2745,41 @@ domains test, `npx vitest run tests/nexus/domains.test.ts`). Left open:
 - bend end caps are not drawn;
 - a pipe into a tank closes its cavity;
 - no picture of the new solids was looked at.
+
+## 2026-11-05: decision 0026, step 2: the library filled from tables by trade (rough, by five agents, merged here)
+
+Five builders, one a trade, each wrote one file under `src/nexus/parts/`. Every family is rows from a table and one
+recipe of the room operations, with nothing placed by hand (`node scripts/by-hand.mjs`: 612 places in 37 files,
+unchanged). Counted with `grep -cE "^\s*id: 'piece\." src/nexus/parts/<file>.ts`:
+- hardware, 33 families: countersunk, button, pan, shoulder and wood screws, threaded rod, flange, nyloc, square, wing,
+  cap and T-slot nuts, rivets, rivet nuts, pins, lock and fender washers, heat-set inserts, magnets, handles, star knobs,
+  feet, drawer slides, gas struts, piano hinges, cable ties;
+- motion, 19: T-slot extrusion, corner brackets, shafts, lead screws and nuts, couplers, collars, LMxUU and SCxxUU
+  bushings, MGN rails, pillow and flange blocks, GT2 belt, wheels, castors, DC and gear motors, servos, motor plates;
+- electronics, 18: dev boards (Uno, Mega, Nano, Pi 4 and 5, Pico, ESP32, NodeMCU) with their holes where the makers'
+  drawings put them, USB, RJ45, audio, JST, D-sub, screw terminals, displays, fans, TO-220, diodes, crystals, buzzers,
+  relays, switches, breadboards;
+- plumbing, 17: ISO 228 fittings, ball, check and needle valves, hose and barbs, clamps, push-fit and air tube, PVC and
+  copper, EN 1092-1 and ASME B16.5 flanges, gaskets, a tank with a port in its side;
+- building, 14: timber, sheet goods, bricks and blocks, a wall laid of them, I and H beams, angles, hollow sections,
+  bar, rebar, anchors, nails, deck screws, joist hangers, angle brackets.
+Two builders both made a wall plug; the building one was deleted. Each builder held every row of its families to its
+row, by its own probe (deleted): hardware 514 checks, plumbing 455 builds in 548 ms, building 511 checks in 702 ms,
+electronics all 124 rows, motion 159 sizes, with no miss except as listed below. The motion builder found why bearings
+weighed half: each ball's cut was drawn through the rings as a whole hole. A cut that takes nothing from its piece is
+now not drawn. A 608 bearing draws 12.43 g against its row's 12.29 g, where it drew 6.62 g. The other pieces' cards are
+now their short ids, a line a trade, so the cards sent with every call came to 5336 characters (a probe printing
+`piecesCard().length`, deleted). Each builder's test runs a joined build: a drawer front with its handle screwed on; a
+stepper on a plate on an extrusion, a collar on its shaft, 30 pieces; a Pi bolted down with a fan; a DN50 flanged pipe
+end, 20 pieces; a steel post bolted through a block, 19 pieces. Left open, for the polish pass:
+- tees and crosses are drawn 15 to 60 % light: a branch's cuts are weighed whole (copper 15 tee 20.6 g drawn against
+  31.7 g sampled);
+- a countersunk or button screw through a plate cuts a counterbore, because `grow` cuts a cone or lathe passer as a
+  cylinder;
+- a passer's cut over an existing bore is subtracted twice;
+- no joints move (slides, hinges, struts drawn static); no threads drawn; valves have no insides;
+- connectors, displays and relays are envelopes, said so in their cards;
+- some rows are recalled and labelled typical (ISO 7040, 1234, 2341; UPN; seven RHS sizes not in FreeCAD's list);
+- there is no aircrete, OSB or mortar density;
+- no ball casters, T-nuts in a slot, MGN counterbores, belts round pulleys, stepper pilot mounts or D-shaft flats;
+- no picture of any new piece was looked at.

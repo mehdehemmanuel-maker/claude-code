@@ -379,10 +379,12 @@ export function piecesCard(): string {
   const line = (d: BlockDef) => { const ps = portsOf(d, defaultsOf(d)), outs = ps.outputs.map((p) => p.name).join(','), offers = offersOf(d);
     const sets = (d.settings ?? []).map((x) => `${x.key}=${brief(x.default, 24)}${x.choices ? ` [${named.get(listOf(x)) ?? listOf(x)}]` : ''}`);
     return `${d.id}${ps.inputs.length ? `(${ps.inputs.map((p) => `${p.name}${p.optional ? '?' : ''}${p.many ? '*' : ''}`).join(', ')})` : ''}${outs === ROOM_GIVES ? '' : ` → ${outs}`}${sets.length ? ` | ${sets.join('; ')}` : ''}${offers.length ? ` | offers ${offers.join(', ')}` : ''}`; };
-  // (the operations, the joints and the pieces most builds use, in full; every other piece a line of its id and name, to
-  // card when it is wanted: so the prefix grows a short line a piece, not a card (decision 0026))
-  const full = (id: string) => !id.startsWith('piece.') || CORE_PIECES.has(id), brief1 = (d: BlockDef) => `${d.id}: ${d.name}`;
-  return `## The cards you need most (as \`card\` gives them; each piece and operation gives ${ROOM_GIVES} unless an arrow says; block into the next operation, thing only to show, measure, assert; * takes many wires; offers: its lines and rooms, <key> a setting's value)\n${[...named].map(([l, n]) => `${n}=[${l}]`).join(' ')}\n${ids.filter(full).map((id) => line(block(id)!)).join('\n')}\n## The other pieces (\`card\` them for their settings and offers)\n${ids.filter((id) => !full(id)).map((id) => brief1(block(id)!)).join('\n')}`;
+  // (the operations, the joints and the pieces most builds use, in full; every other piece only its short id, a line of
+  // them a trade, to card when it is wanted: so the prefix grows a word a piece, not a card (decision 0026); `find`
+  // reaches them by what they are)
+  const full = (id: string) => !id.startsWith('piece.') || CORE_PIECES.has(id), trades = new Map<string, string[]>();
+  for (const id of ids.filter((x) => !full(x))) { const t = block(id)!.domains?.[0] ?? 'other'; trades.set(t, [...(trades.get(t) ?? []), id.slice('piece.'.length)]); }
+  return `## The cards you need most (as \`card\` gives them; each piece and operation gives ${ROOM_GIVES} unless an arrow says; block into the next operation, thing only to show, measure, assert; * takes many wires; offers: its lines and rooms, <key> a setting's value)\n${[...named].map(([l, n]) => `${n}=[${l}]`).join(' ')}\n${ids.filter(full).map((id) => line(block(id)!)).join('\n')}\n## The other pieces, piece.<id> by trade (\`card\` one for its settings and offers, or \`find\` by what it is)\n${[...trades].sort(([a], [b]) => a.localeCompare(b)).map(([t, xs]) => `${t}: ${xs.join(' ')}`).join('\n')}`;
 }
 
 /** The board as the model is told it, short: a line a node (its name, its block, the settings that are not the block's

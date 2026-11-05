@@ -116,7 +116,7 @@ const wire: Family = {
     return item(`wire-${n}awg-${L}m`, `${n} AWG hook-up wire, ${L} m`, 'Electrical/Wiring and connectors/Wire', 'product', 'extrude', 'conductor-strand wire-insulation', 'copper strands in PVC insulation', `${d.toFixed(3)} mm copper (${A.toFixed(3)} mm²); ${(R * 1000).toFixed(1)} mΩ over ${L} m at 20 °C (ρ 1.72 × 10⁻⁸ Ω·m)`, [d + 1.2, d + 1.2, L * 1000], mm3g(A * L * 1000, RHO.copper) + mm3g(Math.PI * (((d + 1.2) / 2) ** 2 - (d / 2) ** 2) * L * 1000, 1.4)); },
 };
 // ---- aluminium extrusions by series and length ---------------------------------------------------------------------------
-const EXTRUSIONS: Record<string, { w: number; h: number; kgm: number }> = { '2020': { w: 20, h: 20, kgm: 0.5 }, '2040': { w: 20, h: 40, kgm: 0.8 }, '3030': { w: 30, h: 30, kgm: 0.9 }, '4040': { w: 40, h: 40, kgm: 1.5 } };
+export const EXTRUSIONS: Record<string, { w: number; h: number; kgm: number }> = { '2020': { w: 20, h: 20, kgm: 0.5 }, '2040': { w: 20, h: 40, kgm: 0.8 }, '3030': { w: 30, h: 30, kgm: 0.9 }, '4040': { w: 40, h: 40, kgm: 1.5 } };
 const extrusion: Family = {
   id: 'extrusion', name: 'T-slot aluminium extrusion', path: ['Hardware', 'Structural', 'Extrusions'], says: 'any series and length', params: [{ key: 'series', says: 'profile', unit: '', values: Object.keys(EXTRUSIONS), default: '2020' }, { key: 'length', says: 'length', unit: 'mm', min: 10, max: 6000, default: 500 }],
   examples: ['extrusion 2020 500', 'extrusion 2040 1000', 'extrusion 4040 300'],
@@ -228,7 +228,7 @@ const oring: Family = {
   make(p) { const d1 = Number(p.id), d2 = Number(p.cs), D = d1 + d2, v = (Math.PI ** 2 * D * d2 ** 2) / 4; return item(`oring-${d1}x${d2}-${p.matter}`, `O-ring ${d1} × ${d2} mm, ${p.matter}`, 'Mechanical/Seals/O-rings', 'product', 'mould', p.matter === 'silicone' ? 'silicone' : 'nbr', 'a ring of rubber squeezed in a groove to seal', `${d1} mm inside, ${d2} mm section; groove depth about 0.75–0.8 × section for a static seal (typical)`, [D + d2, D + d2, d2], mm3g(v, ({ nbr: 1.2, silicone: 1.15, fkm: 1.8 } as Record<string, number>)[String(p.matter)] ?? 1.2)); }, // (each rubber at its own density, typical: FKM is half again as dense as nitrile)
 };
 // ---- brushed DC motors by can size ---------------------------------------------------------------------------------------
-const DCM: Record<string, [number, number, number]> = { '130': [20, 25, 18], '180': [20, 32, 25], '280': [24, 30, 35], '370': [24, 30, 40], '385': [28, 38, 60], '540': [36, 50, 160], '550': [36, 57, 190], '775': [42, 66, 330] };
+export const DCM: Record<string, [number, number, number]> = { '130': [20, 25, 18], '180': [20, 32, 25], '280': [24, 30, 35], '370': [24, 30, 40], '385': [28, 38, 60], '540': [36, 50, 160], '550': [36, 57, 190], '775': [42, 66, 330] };
 const dcmotor: Family = {
   id: 'dcmotor', name: 'brushed DC motor', path: ['Electrical', 'Motors and actuators', 'DC motors'], says: 'any can size code (130, 280, 370, 540, 775, …) and voltage', params: [{ key: 'size', says: 'can size', unit: '', values: Object.keys(DCM), default: '130' }, { key: 'volts', says: 'voltage', unit: 'V', min: 1.5, max: 48, default: 6 }],
   examples: ['dcmotor 130 6V', 'dcmotor 540 12V', 'dcmotor 775 24V'],
@@ -236,7 +236,7 @@ const dcmotor: Family = {
   make(p) { const sz = String(p.size), [d, L, g] = DCM[sz]!; return item(`dcmotor-${sz}-${p.volts}v`, `brushed DC motor ${sz}, ${p.volts} V`, 'Electrical/Motors and actuators/DC motors', 'product', 'assemble', 'motor-can magnet-ferrite-arc*2 armature end-cap-motor carbon-brush*2 brush-spring*2 sleeve-bearing*2', 'a wound rotor in the field of ferrite magnets, its current switched by brushes on a commutator', `can about ${d} mm across, ${L} mm long, about ${g} g (typical of the ${sz} size); speed rises with volts, torque with current`, [d, d, L], g); },
 };
 // ---- hobby servos by size ---------------------------------------------------------------------------------------------
-const SERVOS: Record<string, { box: [number, number, number]; g: number; torque: string; gears: string }> = { micro: { box: [23, 12.2, 29], g: 9, torque: '1.8 kg·cm at 4.8 V (SG90)', gears: 'gear-plastic*4' }, standard: { box: [40.7, 19.7, 42.9], g: 55, torque: '9.4 kg·cm at 4.8 V (MG996R)', gears: 'gear-small*4' } };
+export const SERVOS: Record<string, { box: [number, number, number]; g: number; torque: string; gears: string }> = { micro: { box: [23, 12.2, 29], g: 9, torque: '1.8 kg·cm at 4.8 V (SG90)', gears: 'gear-plastic*4' }, standard: { box: [40.7, 19.7, 42.9], g: 55, torque: '9.4 kg·cm at 4.8 V (MG996R)', gears: 'gear-small*4' } };
 const servo: Family = {
   id: 'servo', name: 'hobby servo', path: ['Electrical', 'Motors and actuators', 'Servos'], says: 'micro (SG90 size) or standard (MG996R size)', params: [{ key: 'size', says: 'size', unit: '', values: Object.keys(SERVOS), default: 'micro' }],
   examples: ['servo micro', 'servo standard'],
