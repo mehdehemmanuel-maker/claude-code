@@ -392,7 +392,14 @@ export class Dock3D {
   fit(): void {
     const b = this.view.bounds(); if (b.isEmpty()) return;
     const c = b.getCenter(new THREE.Vector3()), r = Math.max(0.05, b.getSize(new THREE.Vector3()).length() / 2);
-    const d = r / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.05, dir = new THREE.Vector3(0.75, 0.62, 1).normalize();
+    // (the sphere round the box, in the narrower of the view's two angles (a phone stands taller than wide); then nearer,
+    // while every corner of the box stays within 85% of the view's half: the sphere is loose round a long or flat thing)
+    const half = Math.min(THREE.MathUtils.degToRad(this.camera.fov / 2), Math.atan(Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.camera.aspect)), dir = new THREE.Vector3(0.75, 0.62, 1).normalize();
+    let d = r / Math.sin(half) * 1.05; const corners = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z));
+    this.camera.near = Math.max(1e-12, d / 1e4); this.camera.far = d * 100; this.camera.updateProjectionMatrix();
+    for (let k = 0; k < 6; k++) { this.camera.position.copy(c).addScaledVector(dir, d); this.camera.lookAt(c); this.camera.updateMatrixWorld();
+      const m = Math.max(...corners.map((p) => { const q = p.clone().project(this.camera); return Math.max(Math.abs(q.x), Math.abs(q.y)); }));
+      if (!(m > 0 && Number.isFinite(m))) break; d = Math.max(r * 1.1, d * Math.min(1.3, Math.max(0.5, m / 0.85))); }
     this.controls.target.copy(c); this.camera.position.copy(c).addScaledVector(dir, d); this.camera.near = Math.max(1e-12, d / 1e4); this.camera.far = d * 100; this.camera.updateProjectionMatrix(); this.controls.update();
   }
   get canvas(): HTMLCanvasElement { return this.renderer.domElement; }

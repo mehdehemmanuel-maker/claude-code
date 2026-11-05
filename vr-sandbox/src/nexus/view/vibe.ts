@@ -447,7 +447,8 @@ const OPEN: [string, string][] = [
   ['Bolts & nuts', 'Common pieces: bolts'], ['Wire & LEDs', 'Common pieces: copper wire'], ['Matings', 'Matings: two plates bolted'],
   ['Angles & beams', 'Common pieces: angles'], ['Pipes that turn', 'Pipes that turn:'], ['Electronics', 'Electronic pieces:'], ['Mechanical', 'Mechanical pieces:'],
   ['Small builds', 'Small builds from pieces:'], ['DC motor', 'Built from pieces: a small DC motor'], ['Switch box', 'Built from pieces: a switch box'],
-  ['Starter motor', 'Nothing can overlap: a starter motor'],
+  ['Desk fan', 'A desk fan:'], ['Robot base', 'A small robot base:'], ['Quadcopter', 'A quadcopter:'], ['Pipe loop & tank', 'A pipe loop and its tank:'],
+  ['Turned pieces', 'Turned pieces:'], ['Starter motor', 'Nothing can overlap: a starter motor'],
 ];
 const ASK = [
   'Two 3 mm aluminium plates, 80 by 50 mm, bolted with four M5 bolts',
@@ -466,7 +467,7 @@ function drawChips(): void {
   const take = (d: BlockDef) => () => { if (!isPiece(d.id) && !endsOf().length) { say(`${d.name} is made on what is there: add a piece first (a plate, a box).`); return; } handPiece = d.id; drawHand(); $('sheet').classList.remove('low'); };
   if (mode === 'hand') { for (const d of stepsOn()) add('step', '⊕', d.name, d.says ?? '', take(d)); for (const d of pieces()) add('piece', '＋', d.name.replace(/^Bar of a section$/, 'Section'), d.says ?? '', take(d)); }
   else for (const q of ASK) add('ask', '✦', q, mode === 'assist' ? 'One call plans this' : 'Ask Claude to build this', () => void ask(q));
-  for (const [label, title] of OPEN) add('open', '▦', label, 'Open it now (no AI needed)', () => { const hit = starterBoards().find(([t]) => t.startsWith(title)); if (!hit) { say(`No board "${title}" in this copy of the app.`, true); return; } chat.push({ who: 'me', html: `<span class="k">▦</span> ${esc(label)}` }); say(`Opened "${hit[0]}". ${mode === 'hand' ? 'Add pieces to it below.' : 'Ask me to change it: bigger, another material, more of them.'}`); void step(hit[1]()); });
+  for (const [label, title] of OPEN) add('open', '▦', label, 'Open it now (no AI needed)', () => { const hit = starterBoards().find(([t]) => t.startsWith(title)); if (!hit) { say(`No board "${title}" in this copy of the app.`, true); return; } chat.push({ who: 'me', html: `<span class="k">▦</span> ${esc(label)}` }); say(`Opened: ${hit[0].split(':')[0]}. ${mode === 'hand' ? 'Add pieces to it below.' : 'Ask me to change it: bigger, another material, more of them.'}`); void step(hit[1]()); });
 }
 
 drawChat(); drawTok(); setMode(mode);

@@ -2713,3 +2713,11 @@ Left open, written in room.ts's header or here:
 - an interference fit in a host turned about a general axis loses its pressure.
 
 A Stack takes its blocks in the order of their nodes' names, not as wired; its text now says so.
+
+The polish after it, on the phone page at iPhone 13 size (Playwright's, not a phone): the five new boards got their own
+chips; the chat keeps to a quarter of the height; the view is fitted to the box's corners in the narrower of its two
+angles, not to the sphere round it, so a build fills the view. Every board opened with no page error (a script in the
+scratch folder, `node boards.cjs <out> "Desk fan" …`, run against `npm run app`). A fresh agent shown only the pictures
+named the fan, the robot base, the quadcopter, and the pipes and tank. It called them flat and featureless: blades as
+plain boards, a battery box as one white block, a tank with no openings where the pipes meet it, props too thin to see.
+On the turned pieces board it could not pick out the DIPs or the jack. Those are the builds' own and stay open.
