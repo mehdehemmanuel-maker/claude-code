@@ -2,7 +2,7 @@
 
 Task in hand: 06.M2 (the phone page, a chat that builds: decision 0023, `view/vibe.html`, served by `npm run app`); common pieces and builds from them by the operations (decision 0021); 01.I16 (failing on its blind clause); the critic each session (decision 0022)
 Spec in hand: spec 06, the phone (`plan/specs/06-phone/`); spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 1708162 (2026-11-03)
+Last commit the gate passed: 5b85cfd (2026-11-05)
 
 ## Next three (from the start queue in `plan/README.md`)
 

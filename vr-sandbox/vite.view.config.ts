@@ -9,16 +9,26 @@ const relay = (): Plugin => {
   const handle = (load: (id: string) => Promise<Record<string, any>>) => async (req: any, res: any, next: () => void) => {
     if (req.url !== '/api/agent' || req.method !== 'POST') return next();
     let body = ''; for await (const c of req) body += c;
-    const asked = (() => { try { return JSON.parse(body || '{}'); } catch { return {}; } })(), { request, model, effort, board, blocks, stream } = asked;
+    const asked = (() => { try { return JSON.parse(body || '{}'); } catch { return {}; } })(), { request, model, effort, board, blocks, stream, mode, check, failing } = asked;
+    // (Assist, decision 0025: one call, a plan back for the page to show, let a person change and run itself; no tool loop,
+    // no second model)
+    if (mode === 'plan') {
+      try { await load(seeds); const m = await load(agent);
+        const p = await m.agentPlan(String(request ?? ''), { model, effort, board, failing: Array.isArray(failing) ? failing.map(String) : undefined, signal: AbortSignal.timeout(90_000) });
+        res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(p)); }
+      catch (e) { res.statusCode = 500; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: (e as Error).message })); }
+      return;
+    }
     // (streamed, as the phone page asks: a line of JSON for each step as it is taken, with the board as it stands, then the
-    // run; a line every 10 s while nothing else is said, so nothing between drops a quiet wait; the page gone, the run stopped)
+    // run; a line every 10 s while nothing else is said, so nothing between drops a quiet wait; the page gone, the run stopped.
+    // On a phone (decision 0025): at most 16 steps and 120 s, and the second model's check only when asked for)
     if (stream) {
       res.setHeader('Content-Type', 'application/x-ndjson'); res.setHeader('Cache-Control', 'no-cache'); res.setHeader('X-Accel-Buffering', 'no');
       const line = (o: unknown) => { if (!res.writableEnded) res.write(`${JSON.stringify(o)}\n`); }, t0 = Date.now(), gone = new AbortController();
       res.on('close', () => { if (!res.writableEnded) gone.abort(); });
       const alive = setInterval(() => line({ alive: Math.round((Date.now() - t0) / 1000) }), 10_000);
       try { await load(seeds); const m = await load(agent);
-        const r = await m.agentBuild(String(request ?? ''), { model, effort, board, blocks, seconds: 180, steps: 40, signal: AbortSignal.any([gone.signal, AbortSignal.timeout(240_000)]),
+        const r = await m.agentBuild(String(request ?? ''), { model, effort, board, blocks, seconds: 120, steps: 16, check: check ? undefined : false, signal: AbortSignal.any([gone.signal, AbortSignal.timeout(180_000)]),
           onStep: (s: { tool: string; result: string; ms: number; failed?: true }, b: unknown) => line({ step: { tool: s.tool, result: s.result.slice(0, 400), ms: s.ms, ...(s.failed ? { failed: true } : {}) }, ...(['build', 'open', 'change'].includes(s.tool) && !s.failed ? { board: b } : {}) }),
           onSay: (text: string) => line({ say: text.slice(0, 600) }) });
         line({ done: JSON.parse(m.relayBody(r)) }); }

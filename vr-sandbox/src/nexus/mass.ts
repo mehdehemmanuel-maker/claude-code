@@ -51,7 +51,7 @@ const vol = (s: Shape): number => {
   if ('cyl' in s) { const [r, h, r2 = r] = s.cyl; return (Math.PI * h * (r * r + r * r2 + r2 * r2)) / 3; }
   if ('sphere' in s) return (4 / 3) * Math.PI * s.sphere ** 3;
   if ('cone' in s) return (Math.PI * s.cone[0] ** 2 * s.cone[1]) / 3;
-  if ('torus' in s) return 2 * Math.PI ** 2 * s.torus[0] * s.torus[1] ** 2;
+  if ('torus' in s) return Math.PI * s.torus[1] ** 2 * s.torus[0] * (s.torus[2] ?? 2 * Math.PI);
   if ('capsule' in s) return Math.PI * s.capsule[0] ** 2 * (s.capsule[1] + (4 / 3) * s.capsule[0]);
   if ('loft' in s) return loftVolume(s.loft);
   if ('tube' in s) return tubeVolume(s.tube);
@@ -66,7 +66,7 @@ const area = (s: Shape): number => {
   if ('box' in s) { const [a, b, c] = s.box; return 2 * (a * b + a * c + b * c); }
   if ('cyl' in s) { const [r, h] = s.cyl; return 2 * Math.PI * r * (r + h); }
   if ('sphere' in s) return 4 * Math.PI * s.sphere ** 2;
-  if ('torus' in s) return 4 * Math.PI ** 2 * s.torus[0] * s.torus[1];
+  if ('torus' in s) return 2 * Math.PI * s.torus[1] * s.torus[0] * (s.torus[2] ?? 2 * Math.PI);
   if ('loft' in s) return loftArea(s.loft);
   if ('tube' in s) return tubeLength(s.tube) * 2 * Math.PI * s.tube.r;
   if ('lathe' in s) return latheArea(s.lathe);

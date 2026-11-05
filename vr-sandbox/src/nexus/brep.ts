@@ -73,7 +73,7 @@ export function solidOfShape(r: Replicad, s: Shape, facets?: number): Solid {
   if ('cyl' in s) { const [a, h, a2 = a] = s.cyl, prof: [number, number][] = [[0, -h / 2], [a, -h / 2], [a2, h / 2], [0, h / 2]]; return facets ? faceted(r, prof, facets) : revolved(r, prof); }
   if ('cone' in s) return revolved(r, [[0, -s.cone[1] / 2], [s.cone[0], -s.cone[1] / 2], [0, s.cone[1] / 2]]);
   if ('sphere' in s) return r.makeSphere(s.sphere);
-  if ('torus' in s) { const [Rr, a] = s.torus; return r.revolution(r.makeFace(r.assembleWire([r.makeCircle(a, [Rr, 0, 0], [0, 1, 0])])), [0, 0, 0], [0, 0, 1]); }
+  if ('torus' in s) { const [Rr, a, arc] = s.torus; return r.revolution(r.makeFace(r.assembleWire([r.makeCircle(a, [Rr, 0, 0], [0, 1, 0])])), [0, 0, 0], [0, 0, 1], arc === undefined ? 360 : (arc * 180) / Math.PI); }
   if ('capsule' in s) { const [a, h] = s.capsule; return revolved(r, [[0, -h / 2], [a, -h / 2], [a, h / 2], [0, h / 2]]).fuse(r.makeSphere(a).translate([0, h / 2, 0])).fuse(r.makeSphere(a).translate([0, -h / 2, 0])); }
   if ('lathe' in s) return facets ? faceted(r, s.lathe, facets) : revolved(r, s.lathe);
   // (its outline's points each once: a point repeated, or the first said again at the end, is an edge of no length)

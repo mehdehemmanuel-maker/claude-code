@@ -10,7 +10,7 @@
 // refuses (a block that does not exist, a port a block lacks: said back to it, so it can correct itself), where it runs
 // out of steps or time (said, with the board as far as it got), or where the service refuses (said as it said it).
 import type Anthropic from '@anthropic-ai/sdk';
-import { block, defaultsOf, portsOf, register, type BlockDef, type PortDef, type Type } from './blocks';
+import { LIBRARY, block, defaultsOf, portsOf, register, type BlockDef, type PortDef, type Type } from './blocks';
 import { Engine, collapse, emptyBoard, groupBlock, makeBlock, placeBlock, wire } from './dataflow';
 // (navigation and the starter boards are loaded when the agent runs, not when the library does: imported at the top they
 // change the order the library's modules start in, and a worker that loads the whole library then fails to start)
@@ -53,9 +53,13 @@ const TOOLS: Anthropic.Tool[] = [
   { name: 'docs', description: `Lines of a document holding the words. Topics: ${Object.keys(DOCS).join(', ')}.`, input_schema: { type: 'object', properties: { topic: { type: 'string' }, find: { type: 'string' } }, required: ['topic', 'find'] } },
 ];
 
-/** The agent's standing instructions: docs/FOR-AI.md itself, so what it is told and what a person reads are one text. */
+/** The agent's standing instructions: docs/FOR-AI.md itself, so what it is told and what a person reads are one text; then
+ *  the cards of the blocks most builds are made of (piecesCard), so a build needs no find and no card for them. One text,
+ *  the same every call: cached, read again at a tenth of the price. */
 let guide: string | undefined;
-const guideOf = async (): Promise<string> => { if (guide) return guide; const { readFileSync } = await import(/* @vite-ignore */ 'node:fs'); return (guide = readFileSync(new URL('../../docs/FOR-AI.md', import.meta.url), 'utf8')); };
+const guideOf = async (): Promise<string> => { if (guide) return guide; const { readFileSync } = await import(/* @vite-ignore */ 'node:fs'); return (guide = `${readFileSync(new URL('../../docs/FOR-AI.md', import.meta.url), 'utf8')}\n\n${piecesCard()}`); };
+/** The model the AI in the app runs on unless more is asked: the cheapest (its node's setting lists the others). */
+export const AGENT_MODEL = 'claude-haiku-5-5';
 
 export interface AgentStep { tool: string; input: unknown; result: string; ms: number; /** the tool threw: its result is the error */ failed?: true;
   /** the result's refusals and failed nodes, each line whole: kept apart from the result, which is cut to 300 characters
@@ -152,10 +156,11 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
   /** what the model says between its tool calls, as it says it */ onSay?: (text: string) => void } = {}): Promise<AgentRun> {
   if (typeof process === 'undefined' || !process.env?.ANTHROPIC_API_KEY) throw new Error('no ANTHROPIC_API_KEY where this runs: the agent runs under Node with it set (the environment\'s secrets); a page holds no keys');
   const { default: Sdk } = await import('@anthropic-ai/sdk'), client = new Sdk({ baseURL: 'https://api.anthropic.com' }), system = await guideOf();
-  const model = o.model ?? 'claude-haiku-5-5', steps: AgentStep[] = [], t0 = Date.now(), until = t0 + 1000 * (o.seconds ?? 180);
+  const model = o.model ?? AGENT_MODEL, steps: AgentStep[] = [], t0 = Date.now(), until = t0 + 1000 * (o.seconds ?? 180);
   const start: Board = o.board ? structuredClone(o.board) : emptyBoard(request.slice(0, 60));
   let tokIn = 0, tokOut = 0, cached = 0, written = 0, stopped: string | undefined;
-  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: request }];
+  // (the board open, a line a node, before the request: "make it longer" can be a change, not a search and a new build)
+  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: [boardBrief(o.board), request].filter(Boolean).join('\n\n') }];
   const t = await toolsFor(o.board ?? emptyBoard(request.slice(0, 60)), o.blocks);
   for (let turn = 0; ; turn++) {
     if (steps.length >= (o.steps ?? 30)) { stopped = `stopped at ${steps.length} steps`; break; }
@@ -281,6 +286,121 @@ export const relayBody = (r: AgentRun): string => JSON.stringify(r);
 export async function runOf(r: Omit<AgentRun, 'nearMisses' | 'diff' | 'certificates'> & { start: Board }): Promise<AgentRun> {
   const { start, ...rest } = r;
   return { ...rest, nearMisses: nearMissesOf(r.steps, r.answer, r.board), ...(await certifiedOf(start, r.board)) };
+}
+
+// ---- the three ways to build (decision 0025): by hand, Assist (one call, a plan), Auto (agentBuild) -------------------
+// Each makes the same thing: a plan in the build or change tool's own form, run by toolsFor's own tools, so what a person
+// taps, what one cheap call writes and what the agent does are one path. The plan is the board's nodes and wires; no
+// place is in it: the operations give every place.
+
+/** What every piece and operation gives (said once in the cards, not on every line). */
+const ROOM_GIVES = 'block,thing,pieces,faces,offers,says';
+/** The cards of the blocks most builds are made of, a line each: the pieces, the operations, the bolted joint, and the
+ *  show, measure and assert nodes; their inputs (`?` optional), and settings with defaults and choices. Read from the
+ *  library, so a piece added there is here at once. */
+export function piecesCard(): string {
+  const ids = [...LIBRARY.keys()].filter((id) => /^(piece|room)\./.test(id) || ['mate.bolted', 'space.show', 'measure', 'assert'].includes(id)).sort();
+  const line = (d: BlockDef) => { const ps = portsOf(d, defaultsOf(d)), outs = ps.outputs.map((p) => p.name).join(',');
+    const sets = (d.settings ?? []).map((x) => `${x.key}=${brief(x.default, 24)}${x.choices ? ` [${x.choices.slice(0, 8).join('|')}${x.choices.length > 8 ? '|…' : ''}]` : ''}`);
+    return `${d.id}${ps.inputs.length ? `(${ps.inputs.map((p) => `${p.name}${p.optional ? '?' : ''}`).join(', ')})` : ''}${outs === ROOM_GIVES ? '' : ` → ${outs}`}${sets.length ? ` | ${sets.join('; ')}` : ''}`; };
+  return `## The cards you need most (as \`card\` gives them; each piece and operation gives ${ROOM_GIVES} unless an arrow says)\n${ids.map((id) => line(block(id)!)).join('\n')}`;
+}
+
+/** The board as the model is told it, short: a line a node (its name, its block, the settings that are not the block's
+ *  own), then its wires. Empty for an empty board. */
+export function boardBrief(b: Board | undefined, room = 1600): string {
+  const ns = b ? nodesOf(b) : []; if (!b || !ns.length) return '';
+  const lines = ns.map((n) => { const x = b.nodes[n.id]!, d = x.block ? block(x.block) : undefined, def = d ? defaultsOf(d) : {};
+    const set = Object.entries(x.set ?? {}).filter(([k, v]) => JSON.stringify(def[k]) !== JSON.stringify(v));
+    return `${n.id}: ${x.block ?? 'a group'}${set.length ? ` ${JSON.stringify(Object.fromEntries(set))}` : ''}`; });
+  const ws = edgesOf(b).filter((e) => e.out && e.in).map((e) => `${e.from}.${e.out}>${e.to}.${e.in}`);
+  const t = `The board open (${ns.length} nodes; change it by these names):\n${lines.join('\n')}${ws.length ? `\nwires: ${ws.join(' ')}` : ''}`;
+  return t.length > room ? `${t.slice(0, room)}\n… (cut)` : t;
+}
+
+/** A plan: the build or change tool's own input, and a line of what it makes. */
+export type PlanNodes = Record<string, { b: string; s?: Record<string, unknown> }>;
+export interface AgentPlan { tool: 'build' | 'change'; input: { nodes?: PlanNodes; add?: PlanNodes; set?: Record<string, Record<string, unknown>>; remove?: string[]; wires?: string[]; unwire?: string[] }; says: string }
+/** What a plan's run gave: the board after it, the tool's lines, and the lines that failed (refused, failing, not taken). */
+export interface PlanRan { board: Board; out: string; failing: string[] }
+/** Assist's one call: its plan (or why there is none), what the model wrote, and what it cost. */
+export interface PlanRun { plan?: AgentPlan; error?: string; text: string; model: string; tokens: AgentRun['tokens']; ms: number }
+
+/** The plan in a model's reply: its first JSON object (fenced or not), held to the build or change tool's form; anything
+ *  else said back as an error, never guessed at. */
+export function planOf(text: string): AgentPlan {
+  const s = text.replace(/```(?:json)?/g, ''), i = s.indexOf('{'); if (i < 0) throw new Error('no plan in the reply: it holds no JSON object');
+  // (from its first brace to the one that closes it, minding braces in strings)
+  let depth = 0, inStr = false, esc = false, j = -1;
+  for (let k = i; k < s.length; k++) { const c = s[k];
+    if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
+    if (c === '"') inStr = true; else if (c === '{') depth++; else if (c === '}' && --depth === 0) { j = k; break; } }
+  if (j < 0) throw new Error('no plan in the reply: its JSON object is not closed (the reply was cut short?)');
+  let o: Record<string, unknown>; try { o = JSON.parse(s.slice(i, j + 1)) as Record<string, unknown>; } catch (e) { throw new Error(`no plan in the reply: ${(e as Error).message}`); }
+  const tool = o.tool === 'build' || o.tool === 'change' ? o.tool : o.nodes ? 'build' : 'change';
+  const named = (v: unknown, what: string): PlanNodes | undefined => { if (v === undefined) return undefined;
+    if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error(`${what}: write them as an object, {"name": {"b": "block id", "s": {…}}}`);
+    for (const [nm, n] of Object.entries(v as Record<string, unknown>)) { if (!/^\w+$/.test(nm)) throw new Error(`${what}: the name "${nm}" (letters, digits and _ only: a wire reads it)`); if (!n || typeof (n as { b?: unknown }).b !== 'string') throw new Error(`${what}.${nm}: no block id (b)`); }
+    return v as PlanNodes; };
+  const strings = (v: unknown, what: string): string[] | undefined => { if (v === undefined) return undefined; if (!Array.isArray(v) || !v.every((x) => typeof x === 'string')) throw new Error(`${what}: a list of strings`); return v as string[]; };
+  const input: AgentPlan['input'] = {};
+  if (tool === 'build') { input.nodes = named(o.nodes, 'nodes'); if (!input.nodes || !Object.keys(input.nodes).length) throw new Error('a build with no nodes'); }
+  else { input.add = named(o.add, 'add'); if (o.set !== undefined) { if (!o.set || typeof o.set !== 'object' || Array.isArray(o.set)) throw new Error('set: {"name": {"key": value}}'); input.set = o.set as AgentPlan['input']['set']; }
+    input.remove = strings(o.remove, 'remove'); input.unwire = strings(o.unwire, 'unwire'); }
+  input.wires = strings(o.wires, 'wires');
+  for (const k of Object.keys(input) as (keyof AgentPlan['input'])[]) if (input[k] === undefined) delete input[k];
+  if (tool === 'change' && !Object.keys(input).length) throw new Error('a change that changes nothing');
+  return { tool, input, says: typeof o.says === 'string' ? o.says.slice(0, 300) : '' };
+}
+
+/** The lines of a tool's result that say something failed: a refusal (`! `), a check that fails (`FAILS`), a change not
+ *  taken, a node that failed. What Assist asks again with, and only that. */
+export const failingOf = (out: string): string[] => out.split('\n').filter((l) => /^(! |FAILS |NOT TAKEN)/.test(l) || /^\S+ (failed|error): /.test(l)).map((l) => l.slice(0, 300));
+
+/** A plan run on a board by toolsFor's own tools (the page runs it so, by hand or from Assist, and a test the same way). */
+export async function runPlan(plan: AgentPlan, board: Board, blocks?: AgentBlock[]): Promise<PlanRan> {
+  const t = await toolsFor(structuredClone(board), blocks), out = await t.doTool(plan.tool, plan.input as Record<string, unknown>);
+  return { board: t.board(), out, failing: failingOf(out) };
+}
+
+/** One step by hand: a piece (its block and settings) joined to what is there by an operation the room offers, as a plan.
+ *  On an empty board the piece alone is built; else the piece and the operation are added, the host's block and the
+ *  piece's wired into the operation (into `blocks` in that order for a stack, else the host into `host` and the piece into
+ *  the operation's other input: child, passer or sleeve). Names are the block's last word and a number not yet used. */
+export function joinPlan(board: Board, piece: { b: string; s?: Record<string, unknown> }, join?: { op: string; s?: Record<string, unknown>; host: string }): AgentPlan {
+  const taken = new Set(Object.keys(board.nodes)), name = (id: string) => { const w = id.split('.').pop()!.replace(/\W/g, ''); let k = 1; while (taken.has(`${w}${k}`)) k++; taken.add(`${w}${k}`); return `${w}${k}`; };
+  const p = name(piece.b), node = { b: piece.b, ...(piece.s && Object.keys(piece.s).length ? { s: piece.s } : {}) }, what = (block(piece.b)?.name ?? piece.b).toLowerCase();
+  if (!nodesOf(board).length || !join) return nodesOf(board).length ? { tool: 'change', input: { add: { [p]: node } }, says: `${what} added on its own` } : { tool: 'build', input: { nodes: { [p]: node } }, says: what };
+  const d = block(join.op); if (!d) throw new Error(`no operation "${join.op}"`);
+  const ins = portsOf(d, { ...defaultsOf(d), ...join.s }).inputs.map((x) => x.name), op = name(join.op);
+  const wires = ins.includes('host') ? [`${join.host}.block>${op}.host`, `${p}.block>${op}.${ins.find((x) => x !== 'host')}`] : [`${join.host}.block>${op}.${ins[0]}`, `${p}.block>${op}.${ins[0]}`];
+  return { tool: 'change', input: { add: { [p]: node, [op]: { b: join.op, ...(join.s && Object.keys(join.s).length ? { s: join.s } : {}) } }, wires }, says: `${what}, ${d.name.toLowerCase()} of ${join.host}` };
+}
+
+/** How Assist's one call is told to answer (after the guide and the cards, so it is cached with them). */
+const PLAN_RULE = `## Here: one plan, no tools
+In this call you have no tools and one reply. Reply with one JSON object and nothing else:
+\`{"tool": "build", "nodes": {…}, "wires": […], "says": "…"}\` for a new board (the board is empty, or what is asked is new), or
+\`{"tool": "change", "add": {…}, "set": {…}, "remove": […], "wires": […], "says": "…"}\` to edit the board listed, by its names.
+Nodes and wires exactly as the build tool takes them; blocks and settings from the cards above (another block only if you
+are sure of its id and inputs). \`says\`: one sentence of what it makes. Give no numbers of your own: the board, run, gives
+them. Asked again with what failed: a change that mends only those lines.`;
+
+/** What Assist's one call is sent: the board's short listing, then the request, or, asked again, only what failed. */
+export function planAsk(request: string, board?: Board, failing?: string[]): string {
+  return [boardBrief(board), failing?.length ? `Asked: ${request.slice(0, 400)}\nWhen the plan ran, these failed (mend only them, with a change):\n${failing.slice(0, 12).join('\n')}` : request].filter(Boolean).join('\n\n');
+}
+
+/** Assist (decision 0025): one call, no tool loop, no second model: the request answered by a plan in the build or change
+ *  tool's own form, for the page to show, let a person change, and run itself (runPlan). Under Node, as agentBuild. */
+export async function agentPlan(request: string, o: { model?: string; effort?: 'low' | 'medium' | 'high'; board?: Board; failing?: string[]; signal?: AbortSignal } = {}): Promise<PlanRun> {
+  if (typeof process === 'undefined' || !process.env?.ANTHROPIC_API_KEY) throw new Error('no ANTHROPIC_API_KEY where this runs: the agent runs under Node with it set (the environment\'s secrets); a page holds no keys');
+  const { default: Sdk } = await import('@anthropic-ai/sdk'), client = new Sdk({ baseURL: 'https://api.anthropic.com' }), t0 = Date.now();
+  const r = await client.messages.create({ model: o.model ?? AGENT_MODEL, max_tokens: 4000, cache_control: { type: 'ephemeral' }, system: `${await guideOf()}\n\n${PLAN_RULE}`, output_config: { effort: o.effort ?? 'low' }, messages: [{ role: 'user', content: planAsk(request, o.board, o.failing) }] }, { signal: o.signal ?? AbortSignal.timeout(60_000) });
+  const turn = turnOf(r), text = turn.ends ? turn.answer : '';
+  const tokens = { in: r.usage.input_tokens, out: r.usage.output_tokens, cached: r.usage.cache_read_input_tokens ?? 0, written: r.usage.cache_creation_input_tokens ?? 0 };
+  try { return { plan: planOf(text), text: text.slice(0, 4000), model: r.model, tokens, ms: Date.now() - t0 }; }
+  catch (e) { return { error: (e as Error).message, text: text.slice(0, 4000), model: r.model, tokens, ms: Date.now() - t0 }; }
 }
 
 const P = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });

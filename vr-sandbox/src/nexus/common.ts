@@ -3,14 +3,24 @@
 // line (a bolt's shank, a pipe's axis, a plate's holes, a board's footprint) that another passes along or slides over,
 // a room another goes into. The matings themselves are the operations: a bolt through plates and a nut over its end
 // (`boltedJoint`), a wire's stripped end through a terminal, a coupling over a pipe, an LED's leads through a board, a
-// winding over its bobbin's core, a header's pins through its body.
+// winding over its bobbin's core, a header's pins through its body; a pipe's ends in an elbow's sockets, laid as a run
+// with its straights and bends (`pipeRun`, decision 0024).
 //
 // Sizes: metric fasteners from their standards (hex bolts ISO 4017, socket screws ISO 4762, nuts ISO 4032, washers ISO
-// 7089, clearance holes ISO 273 medium); copper pipe EN 1057; solid copper conductors IEC 60228 class 1 (their
+// 7089, clearance holes ISO 273 medium); copper pipe EN 1057, its socket elbows after EN 1254-1 (their sizes typical), a
+// bent pipe's radius 3.5 × its outside diameter (an estimate); solid copper conductors IEC 60228 class 1 (their
 // diameters typical); LEDs, the tactile switch, the pin header (2.54 mm pitch) and the terminal block (5.08 mm pitch)
 // as their usual datasheets give them (typical); the rest typical, labelled so where they are made.
+//
+// The second set (decision 0021, its second round): resistors, capacitors, a TO-92 transistor, cells (18650 typical; AA
+// and AAA within IEC 60086-2), a toggle switch, a 5 × 20 mm fuse (IEC 60127-2), a JST XH header, a potentiometer; a lid
+// and what closes a box with it, an L bracket and a block bolted down to a plate made under its holes, deep-groove ball
+// bearings (ISO 15), dowel pins (ISO 8734), set screws (ISO 4026), a spur gear (its teeth from its module and count, ISO
+// 53's basic rack), a GT2 pulley, a compression spring (its rate by Shigley), a butt hinge, heat-set inserts. Each
+// says, where it is made, what it stands on and what is approximated.
 
-import { made, stack, through, onto, ring, over, boundOf, type Block, type Fit } from './room';
+import { made, stack, through, onto, ring, over, into, joint, run, boundOf, FITS, type Block, type Fit, type RunSeg, type RunTube } from './room';
+import { SPRING_WIRES, springRate } from '../engineering/springs';
 
 const mm = (x: number): number => x / 1000;
 
@@ -66,6 +76,68 @@ export function pipe(size: string, length: number): Block { const p = pipeOf(siz
 /** A straight coupling for a pipe of that size: its bore the pipe's outside and a sliding fit (0.25 mm), its wall 1.2 mm,
  *  40 mm long (typical of a solder or press coupling). */
 export function coupling(size: string): Block { const p = pipeOf(size), ri = mm(p.od / 2) + 0.00025; return made(`${size} coupling`, p.mat === 'pvc' ? 'pvc' : p.mat === 'copper' ? 'brass' : p.mat, { tube: [ri, ri + mm(1.2), mm(40)] }); }
+
+/** Socket elbows for copper pipe after EN 1254-1 (capillary, end feed), 90° and 45°, by the EN 1057 sizes: each socket's
+ *  depth (how far the pipe goes in, mm), its wall (mm) and the body's bend radius to its middle line (mm). Typical of
+ *  makers' tables, not read from the standard (not public here): labelled typical. Each socket's bore is the pipe's
+ *  outside and a sliding fit (0.25 mm, as the coupling's); the body's bore is the pipe's, so a pipe's end stops on it. */
+export const ELBOWS = {
+  'copper 15×0.7': { socket: 11, wall: 1, R: 10, status: 'typical' }, 'copper 22×0.9': { socket: 15, wall: 1.2, R: 14, status: 'typical' }, 'copper 28×0.9': { socket: 18, wall: 1.2, R: 18, status: 'typical' },
+} as const;
+export type ElbowSize = keyof typeof ELBOWS;
+/** A bent length of pipe's usual bend radius to its middle line: 3.5 × its outside diameter (an estimate, of a bending
+ *  machine's former for copper; a tighter one is set by hand, never at or under the tube's own radius). */
+export const bendRadius = (size: string): number => mm(3.5 * pipeOf(size).od);
+const SOCKET_FIT = 0.00025;
+const elbowOf = (size: string) => { const e = ELBOWS[size as ElbowSize]; if (!e) throw new Error(`no elbow for ${size} (${Object.keys(ELBOWS).join(', ')})`); return e; };
+// (an elbow's three solids: a socket, its bent body, a socket; the sockets' bore and outside)
+const elbowRings = (size: string) => { const p = pipeOf(size), e = elbowOf(size), ri = mm(p.od / 2) + SOCKET_FIT; return { ri, ro: ri + mm(e.wall), depth: mm(e.socket), R: mm(e.R), bore: mm(p.od / 2 - p.wall) }; };
+/** A socket elbow on its own (EN 1254-1, typical sizes): a socket, its body bent through 90° or 45°, a socket; laid as
+ *  a run, so nothing is placed by a number. */
+export function elbow(size: string, angle: 90 | 45 = 90): Block {
+  if (angle !== 90 && angle !== 45) throw new Error(`an elbow of 90° or 45° (${angle}°)`);
+  const k = elbowRings(size), name = `${size} elbow ${angle}°`, t = (nm: string): RunTube => ({ name: nm, mat: 'copper', ri: k.ri, ro: k.ro });
+  return run(name, [{ ...t(`${name} socket`), straight: k.depth }, { name: `${name} body`, mat: 'copper', ri: k.bore, ro: k.ro, bend: angle, R: k.R }, { ...t(`${name} socket 2`), straight: k.depth }]);
+}
+/** A bent length of pipe: the pipe bent through so many degrees round a bend radius (its usual one where none is given). */
+export function bentPipe(size: string, angle: number, R = bendRadius(size)): Block { const p = pipeOf(size); return made(`${size} bend ${Math.round(angle)}°`, p.mat, { bend: [R, mm(p.od / 2), angle, mm(p.od / 2 - p.wall)] }, p.mat === 'pvc' ? { color: 0xe8e8e4 } : {}); }
+/** A step of a pipe run: a straight so long (m), a bend of the pipe itself (degrees, its radius, which way), or a socket
+ *  elbow (90° or 45°, which way) between two straights. Which way: degrees round the heading from the run's own +x
+ *  toward its +z (0: +x, 90: +z, 180: −x, 270: −z), its frame turning with it. */
+export type PipeStep = { straight: number } | { bend: number; R?: number; toward?: number } | { elbow: 90 | 45; toward?: number };
+/** A run of pipe laid with no coordinates (Run of pipe): its straights, its bends and its elbows in order, each from
+ *  where the last one ended. An elbow's sockets go over the straights each side of it, whose ends stop on its body; a
+ *  straight is at least as long as the sockets on it. Refused, with both numbers, where a bend's radius is not above the
+ *  pipe's radius, or the path runs into itself. */
+export function pipeRun(size: string, steps: readonly PipeStep[], name = `${size} run`): Block {
+  const p = pipeOf(size), ro = mm(p.od / 2), ri = mm(p.od / 2 - p.wall), segs: RunSeg[] = [], look = p.mat === 'pvc' ? { color: 0xe8e8e4 } : {};
+  let elbows = 0, pending: (RunTube & { from: number; to: number }) | undefined;
+  steps.forEach((s, i) => {
+    if ('straight' in s) { const L = s.straight; segs.push({ name: `${size} pipe ${i + 1}`, mat: p.mat, ro, ri, ...look, straight: L, ...(pending ? { sleeves: [{ ...pending, to: Math.min(pending.to, L) }] } : {}) });
+      if (pending && L < pending.to) throw new Error(`${name}: the straight after elbow ${elbows} is ${(L * 1000).toFixed(1)} mm; its socket takes ${(pending.to * 1000).toFixed(1)} mm`); pending = undefined; return; }
+    if (pending) throw new Error(`${name}: elbow ${elbows}'s second socket takes a straight after it (step ${i + 1} is not one)`);
+    if ('bend' in s) { segs.push({ name: `${size} bend ${i + 1}`, mat: p.mat, ro, ri, ...look, bend: s.bend, R: s.R ?? bendRadius(size), ...(s.toward !== undefined ? { toward: s.toward } : {}) }); return; }
+    const k = elbowRings(size), en = `${size} elbow ${s.elbow}° ${++elbows}`, prev = segs[segs.length - 1];
+    if (!prev || !('straight' in prev)) throw new Error(`${name}: an elbow's sockets take straight pipe: a straight before elbow ${elbows} (step ${i + 1})`);
+    if (prev.straight < k.depth + (prev.sleeves?.reduce((t, v) => t + v.to - v.from, 0) ?? 0)) throw new Error(`${name}: the straight before elbow ${elbows} is ${(prev.straight * 1000).toFixed(1)} mm; its sockets take ${((k.depth + (prev.sleeves?.reduce((t, v) => t + v.to - v.from, 0) ?? 0)) * 1000).toFixed(1)} mm`);
+    segs[segs.length - 1] = { ...prev, sleeves: [...(prev.sleeves ?? []), { name: `${en} socket`, mat: 'copper', ri: k.ri, ro: k.ro, from: prev.straight - k.depth, to: prev.straight }] };
+    segs.push({ name: `${en} body`, mat: 'copper', ri: k.bore, ro: k.ro, bend: s.elbow, R: k.R, ...(s.toward !== undefined ? { toward: s.toward } : {}) });
+    pending = { name: `${en} socket 2`, mat: 'copper', ri: k.ri, ro: k.ro, from: 0, to: k.depth };
+  });
+  if (pending) throw new Error(`${name}: elbow ${elbows}'s second socket takes a straight after it`);
+  return run(name, segs);
+}
+/** A pipe run's path written out: steps by `;`, each a straight's length in mm (`200`, or `straight 200`), `bend 90`
+ *  (its radius `R 60` in mm, its way `toward +z`), or `elbow 90` / `elbow 45` (its way). Ways: +x, +z, -x, -z, or degrees. */
+export function pathOf(text: string): PipeStep[] {
+  const way = (w: string | undefined) => { if (w === undefined) return undefined; const k = { '+x': 0, '+z': 90, '-x': 180, '-z': 270, x: 0, z: 90 }[w.toLowerCase().replace('−', '-')]; const n = k ?? Number(w); if (!Number.isFinite(n)) throw new Error(`a way to turn is +x, +z, -x, -z or degrees (${w})`); return n; };
+  return text.split(';').map((t) => t.trim()).filter(Boolean).map((t): PipeStep => {
+    const m = /^(?:straight\s+)?(\d+(?:\.\d+)?)\s*(?:mm)?$/i.exec(t); if (m) return { straight: Number(m[1]) / 1000 };
+    const b = /^bend\s+(\d+(?:\.\d+)?)\s*°?(?:\s+R\s*(\d+(?:\.\d+)?))?(?:\s+toward\s+(\S+))?$/i.exec(t); if (b) { const w = way(b[3]); return { bend: Number(b[1]), ...(b[2] ? { R: Number(b[2]) / 1000 } : {}), ...(w !== undefined ? { toward: w } : {}) }; }
+    const e = /^elbow\s+(90|45)\s*°?(?:\s+toward\s+(\S+))?$/i.exec(t); if (e) { const w = way(e[2]); return { elbow: Number(e[1]) as 90 | 45, ...(w !== undefined ? { toward: w } : {}) }; }
+    throw new Error(`a step of a run is a length in mm, "bend 90 R 60 toward +z" or "elbow 90 toward -x" (${t})`);
+  });
+}
 
 /** Solid copper conductors (IEC 60228 class 1: the conductor's diameter typical) and their PVC insulation's wall
  *  (typical of IEC 60227 single cores). */
@@ -133,6 +205,7 @@ export function boltedJoint(held: Block, port: string, size: string, i = 0, head
   // second joint on the same plates is not lengthened by the first one's head and nut)
   const o = held.pieces.flatMap((p) => p.lines.filter((l) => l.port === port)).slice(i, i + 1)[0] ?? held.pieces.flatMap((p) => p.lines.filter((l) => l.port === port))[0];
   if (!o) throw new Error(`bolted joint: ${held.name} offers no hole ${port}`);
+  if (o.dir && !(Math.abs(o.dir[0]) < 1e-9 && Math.abs(o.dir[2]) < 1e-9 && o.dir[1] > 0)) throw new Error(`bolted joint: the hole ${port} is turned (not along +y): bolt what it holds first, then turn the whole (not made yet)`);
   const owner = held.pieces.find((p) => p.lines.some((l) => l.port === port))!, ceiling = boundOf(owner)[1][1];
   const under = held.pieces.map(boundOf).filter((b) => b[0][0] < o.x && o.x < b[1][0] && b[0][2] < o.z && o.z < b[1][2] && b[1][1] <= ceiling + 1e-9);
   const m = sizeOf(size), grip = ceiling - Math.min(...under.map((b) => b[0][1])), L = grip + mm(m.hw) + mm(m.m);
@@ -175,4 +248,249 @@ export function section(size: string, length: number): Block {
  *  as a room (`<name>/cavity`) for what goes in, refused with both sizes where it does not fit. */
 export const boxCase = (name: string, w: number, h: number, d: number, wall: number, floor: number, mat: string, color?: number): Block =>
   made(name, mat, { case: [w, h, d, wall, floor] }, color !== undefined ? { color } : {});
+
+// ---- the second set: electronics -------------------------------------------------------------------------------
+// (every one stands on its leads or pins, upright: room.ts's lines and round solids run along y only, so a part lying
+// across a board (an axial resistor laid flat, a TO-92's bent leads) waits for turned blocks)
+const LEAD = 0xc8ccd0;
+const lead = (name: string, d: number, L: number): Block => made(name, 'copper', { cyl: [d / 2, L] }, { color: LEAD });
+/** Parts whose pins run up through their body, in a row along x at a pitch (a header's, a TO-92's, a switch's lugs): the
+ *  body offers the row as `<name>/<row>`, and each pin is put down it from the body's top (its top at the body's). */
+function pinned(body: Block, row: string, pin: () => Block, n: number): Block {
+  let b = body; for (let i = 0; i < n; i++) b = through(b, pin(), { port: `${body.name}/${row}`, i, from: 'hi' }, 'tight');
+  return b;
+}
+const inRow = (n: number, P: number): [number, number][] => Array.from({ length: n }, (_, i) => [(i - (n - 1) / 2) * P, 0] as [number, number]);
+
+/** Axial resistors by their rating: the body's diameter D and length L, and the leads' diameter d, mm (typical of
+ *  carbon-film datasheets at their largest: 1/4 W Ø2.5 × 6.5 mm on leads Ø0.6 mm). */
+export const RESISTORS = { '1/8 W': { D: 1.8, L: 3.3, d: 0.45 }, '1/4 W': { D: 2.5, L: 6.5, d: 0.6 }, '1/2 W': { D: 3.5, L: 9.5, d: 0.6 }, '1 W': { D: 5, L: 12, d: 0.8 } } as const;
+/** An axial resistor: a lead, its body (a ceramic core under its film and lacquer) and a lead, end to end along its axis,
+ *  stood upright. Its leads (28 mm typical) go down a board's footprints. */
+export function resistor(rating: string, leads = mm(28)): Block {
+  const r = RESISTORS[rating as keyof typeof RESISTORS]; if (!r) throw new Error(`no resistor ${rating} (${Object.keys(RESISTORS).join(', ')})`);
+  const l = () => lead(`${rating} resistor lead`, mm(r.d), leads);
+  return stack(`${rating} resistor`, 1, [{ b: l() }, { b: made(`${rating} resistor body`, 'ceramic', { cyl: [mm(r.D) / 2, mm(r.L)] }, { color: 0xd8c39a }) }, { b: l() }]);
+}
+/** A radial ceramic capacitor (a dipped multilayer chip): its body drawn as its box, 5.0 wide, 5.5 high and 3.0 deep, on
+ *  two leads Ø0.5 mm at 2.54 or 5.08 mm (typical of a dipped radial MLCC's datasheet). Its leads go down a board's
+ *  footprints. */
+export function ceramicCap(pitch = 2.54, leads = mm(20)): Block {
+  if (pitch !== 2.54 && pitch !== 5.08) throw new Error('a ceramic capacitor\'s leads 2.54 or 5.08 mm apart');
+  const legs = ring('ceramic capacitor leads', lead('ceramic capacitor lead', mm(0.5), leads), 2, mm(pitch) / 2, 'clear');
+  return stack(`ceramic capacitor (${pitch} mm)`, 1, [{ b: legs }, { b: made('ceramic capacitor body', 'epoxy', { box: [mm(5), mm(5.5), mm(3)] }, { color: 0xd9a400 }) }]);
+}
+/** Radial electrolytic capacitors by their case, D × L, its leads F apart and d across, mm (the common case sizes and their
+ *  lead spacings, typical of makers' tables). */
+export const ELECTROLYTICS = { '5×11': { D: 5, L: 11, F: 2, d: 0.5 }, '6.3×11': { D: 6.3, L: 11, F: 2.5, d: 0.5 }, '8×11.5': { D: 8, L: 11.5, F: 3.5, d: 0.6 }, '10×16': { D: 10, L: 16, F: 5, d: 0.6 }, '10×20': { D: 10, L: 20, F: 5, d: 0.6 } } as const;
+/** A radial electrolytic capacitor: its aluminium can, its PVC sleeve (0.15 mm, typical) slid over it short of each end
+ *  by 0.5 mm, on its two leads. Its leads go down a board's footprints; the longer (+) is not told apart here. */
+export function electrolytic(size: string, leads = mm(20)): Block {
+  const e = ELECTROLYTICS[size as keyof typeof ELECTROLYTICS]; if (!e) throw new Error(`no electrolytic case ${size} (${Object.keys(ELECTROLYTICS).join(', ')})`);
+  const R = mm(e.D) / 2, w = mm(0.15), can = made(`${size} capacitor can`, 'al-3003', { cyl: [R - w, mm(e.L)] }, { color: 0xc0c4c8 });
+  const sleeved = over(can, `${size} capacitor can/axis`, made(`${size} capacitor sleeve`, 'pvc', { tube: [R - w, R, mm(e.L) - mm(1)] }, { color: 0x1d2b5a }), 'mid', 'touch');
+  const legs = ring(`${size} capacitor leads`, lead(`${size} capacitor lead`, mm(e.d), leads), 2, mm(e.F) / 2, 'clear');
+  return stack(`${size} electrolytic capacitor`, 1, [{ b: legs }, { b: sleeved }]);
+}
+/** A transistor in a TO-92 case (JEDEC TO-226AA): its body drawn as its box, 4.8 wide, 4.8 high and 3.7 deep (the middle
+ *  of the outline's limits; its rounded back not drawn), three leads 0.46 × 0.38 mm at 1.27 mm, 12.7 mm below it (the
+ *  outline's least), run up into it. Its leads go down a board's footprints. */
+export function to92(name = 'TO-92 transistor'): Block {
+  const A = mm(4.8), body = made(`${name} body`, 'epoxy', { box: [mm(4.8), A, mm(3.7)] }, { color: 0x1c1c1c, pattern: { name: 'leads', points: inRow(3, mm(1.27)) } });
+  return stack(name, 1, [{ b: pinned(body, 'leads', () => made(`${name} lead`, 'copper', { box: [mm(0.46), A + mm(12.7), mm(0.38)] }, { color: LEAD }), 3) }]);
+}
+/** Cells by their size, mm: an 18650 (Ø18.4, 65.0 high over its cap; typical of the common cell's datasheet, which gives
+ *  at most Ø18.5 and 65.3), AA and AAA (IEC 60086-2: LR6 Ø13.5 to 14.5, 49.2 to 50.5 high, its pip at most Ø5.5 and at
+ *  least 1.0 high; LR03 Ø9.5 to 10.5, 43.3 to 44.5 high, its pip at most Ø3.8 and at least 0.8 high; each drawn within
+ *  them). Their cans' wall 0.25 mm and floor 0.3 mm, and their wraps 0.1 mm, typical. */
+export const CELLS = {
+  '18650': { D: 18.4, H: 65, pip: 7, pipH: 0.6, wrap: 0x2e6f8e }, 'AA (LR6)': { D: 14.2, H: 49.8, pip: 5.2, pipH: 1.2, wrap: 0x2b2b2b }, 'AAA (LR03)': { D: 10.2, H: 44, pip: 3.6, pipH: 0.9, wrap: 0x2b2b2b },
+} as const;
+/** A cell: its steel can (a cup), what it holds (its wound electrodes, drawn as one solid of a cell's mean density) into
+ *  its cavity, its wrap slid over the can, and its + terminal on top. It goes into a holder's or a box's room; its ends
+ *  are its contacts. */
+export function cell(size: string): Block {
+  const c = CELLS[size as keyof typeof CELLS]; if (!c) throw new Error(`no cell ${size} (${Object.keys(CELLS).join(', ')})`);
+  const R = mm(c.D) / 2, w = mm(0.1), wall = mm(0.25), floor = mm(0.3), H = mm(c.H - c.pipH);
+  const can = made(`${size} cell can`, 'steel-low', { cup: [R - w, H, wall, floor] }, { color: 0xb8bcc2 });
+  const full = into(can, `${size} cell can/cavity`, made(`${size} cell electrodes`, 'battery', { cyl: [R - w - wall, H - floor] }, { color: 0x3a3a3a }), 'tight');
+  const wrapped = over(full, `${size} cell can/axis`, made(`${size} cell wrap`, 'pvc', { tube: [R - w, R, H - mm(1)] }, { color: c.wrap }), 'mid', 'touch');
+  return stack(`${size} cell`, 1, [{ b: wrapped }, { b: made(`${size} cell + terminal`, 'steel-low', { cyl: [mm(c.pip) / 2, mm(c.pipH)] }, { color: LEAD }) }]);
+}
+/** A miniature toggle switch, SPDT (typical of the common MTS-102): its body 13 × 10 × 8 mm, its bushing Ø6 mm (an M6
+ *  thread, not drawn) 9 mm long, its lever Ø3 mm and 11 mm long in its middle place, three lugs 1.5 × 0.5 mm at 4.7 mm
+ *  standing 4 mm below it. Its bushing goes up a panel's hole; its lugs take wires. (Its lever's two thrown places are
+ *  turned off y: not in room.ts yet.) */
+export function toggle(): Block {
+  const H = mm(10), body = made('toggle switch body', 'pbt', { box: [mm(13), H, mm(8)] }, { color: 0x1c1c1c, pattern: { name: 'lugs', points: inRow(3, mm(4.7)) } });
+  const lugs = pinned(body, 'lugs', () => made('toggle switch lug', 'brass', { box: [mm(1.5), H + mm(4), mm(0.5)] }, { color: LEAD }), 3);
+  return stack('toggle switch', 1, [{ b: lugs }, { b: made('toggle switch bushing', 'brass', { cyl: [mm(3), mm(9)] }, { color: LEAD }) }, { b: made('toggle switch lever', 'stainless-304', { cyl: [mm(1.5), mm(11)] }) }]);
+}
+/** A 5 × 20 mm glass cartridge fuse (IEC 60127-2: 20 mm over its caps, Ø5.2 mm over them): its glass Ø5.0 mm with a 0.6 mm
+ *  wall and its two caps 4.5 mm long (typical), its element (Ø0.15 mm here: its size is set by its rating) passed along
+ *  its axis from cap to cap, touching each. It goes into a fuse holder's clips by its caps. */
+export function fuse(rating = '1 A'): Block {
+  const cap = () => made('5×20 fuse cap', 'nickel-plate', { cyl: [mm(2.6), mm(4.5)] }, { color: LEAD }), L = mm(11);
+  const body = stack(`5×20 mm fuse, ${rating}`, 1, [{ b: cap() }, { b: made('5×20 fuse glass', 'glass', { tube: [mm(1.9), mm(2.5), L] }, { color: 0xdfe8ee }) }, { b: cap() }]);
+  return through(body, made('5×20 fuse element', 'copper', { cyl: [mm(0.075), L] }), { port: '5×20 fuse glass/axis', from: 'lo' }, 'tight');
+}
+/** A JST XH header, top entry (B<n>B-XH-A), as JST's XH datasheet draws it: 2.50 mm pitch, its shroud (PA66) (n − 1) × 2.5
+ *  + 4.9 mm wide, 5.75 deep and 7.0 high, each pin 0.64 mm square standing 3.4 mm below it; its walls 0.6 and its floor
+ *  1.5 mm typical. Its pins go down a board's footprints and take the XHP plug's contacts in its shroud. */
+export function jstXH(pins: number): Block {
+  if (!(Number.isInteger(pins) && pins >= 2 && pins <= 16)) throw new Error('a JST XH header of 2 to 16 pins');
+  const P = mm(2.5), H = mm(7), name = `JST XH ${pins}-pin housing`;
+  const shroud = made(name, 'nylon', { case: [(pins - 1) * P + mm(4.9), H, mm(5.75), mm(0.6), mm(1.5)] }, { color: 0xf2efe6, pattern: { name: 'pins', points: inRow(pins, P) } });
+  return stack(`JST XH ${pins}-pin header`, 1, [{ b: pinned(shroud, 'pins', () => made('JST XH pin', 'brass', { box: [mm(0.64), H + mm(3.4), mm(0.64)] }, { color: LEAD }), pins) }]);
+}
+/** A 16 mm rotary potentiometer (typical of the common 16 mm board-mounting pot): its body Ø16 × 7 mm, its bushing Ø7 mm
+ *  (an M7 × 0.75 thread, not drawn) 7 mm long, its shaft Ø6 × 15 mm turning on its wiper's joint, three terminals 1 ×
+ *  0.3 mm at 5 mm standing 5 mm below it. Its bushing goes up a panel's hole, a knob over its shaft. */
+export function pot(): Block {
+  const H = mm(7), body = made('16 mm pot body', 'steel-low', { cyl: [mm(8), H] }, { color: 0x9a9da2, pattern: { name: 'terminals', points: inRow(3, mm(5)) } });
+  const terms = pinned(body, 'terminals', () => made('16 mm pot terminal', 'brass', { box: [mm(1), H + mm(5), mm(0.3)] }, { color: LEAD }), 3);
+  return stack('16 mm potentiometer', 1, [{ b: terms }, { b: made('16 mm pot bushing', 'brass', { cyl: [mm(3.5), H] }, { color: LEAD }) }, { b: made('16 mm pot shaft', 'al-6061', { cyl: [mm(3), mm(15)] }, { joint: joint('wiper', { turn: true }) }) }]);
+}
+
+// ---- the second set: mechanical --------------------------------------------------------------------------------
+/** A lid made for a box (a hollow box, or one already filled): a plate its outside width and depth, `t` thick, onto its
+ *  top (Onto a face). It rests on the box's walls, or on what stands highest in it, and closes its cavity. */
+export function closed(box: Block, t = mm(2), mat = 'abs'): Block {
+  const c = box.pieces[0]?.color;
+  return onto(box, '+y', made(`${box.name} lid`, mat, { box: [box.hi[0] - box.lo[0], t, box.hi[2] - box.lo[2]] }, c !== undefined ? { color: c } : {}), 'touch');
+}
+/** An L bracket: its upright and its foot, legs `a` by `a`, `t` thick and `L` long, its foot's holes in a row along it
+ *  (ISO 273 medium clearance for a bolt of that size), offered as `<name> foot/holes`. Drawn as its two legs touching at
+ *  the bend (a bent bracket is one piece; its bend's radius not drawn); its upright's holes need lines across it, and
+ *  room.ts's lines run along y only. */
+export function bracket(name = 'L bracket', a = mm(40), t = mm(4), L = mm(40), size = 'M5', holes = 2, mat = 'steel-low'): Block {
+  if (!(Number.isInteger(holes) && holes >= 1 && holes <= 6)) throw new Error('a bracket with 1 to 6 holes in its foot');
+  if (!(t < a / 2)) throw new Error(`a bracket's legs (${a * 1000} mm) more than twice its thickness (${t * 1000} mm)`);
+  const m = sizeOf(size), pts = Array.from({ length: holes }, (_, i) => [0, (i - (holes - 1) / 2) * (L / holes)] as [number, number]);
+  return stack(name, 0, [{ b: made(`${name} upright`, mat, { box: [t, a, L] }) }, { b: plate(`${name} foot`, a - t, t, L, mat, pts, mm(m.clear)) }], undefined, true);
+}
+/** What offers holes (a bracket's foot, a plate) bolted down to a plate made under it: the plate's holes the reverse of its
+ *  pattern (each under one of its holes, ISO 273 medium clearance), the two stacked, each hole bolted (Bolted joint). */
+export function boltedDown(held: Block, port: string, w: number, t: number, d: number, mat = 'steel-low', size = 'M5', head: 'hex' | 'socket' = 'hex'): Block {
+  const ls = held.pieces.flatMap((p) => p.lines.filter((l) => l.port === port)); if (!ls.length) throw new Error(`bolted down: the ${held.name} offers no holes ${port}`);
+  const cx = (held.lo[0] + held.hi[0]) / 2, cz = (held.lo[2] + held.hi[2]) / 2;
+  let b = stack(`${held.name}, bolted down`, 1, [{ b: plate(`${held.name} base plate`, w, t, d, mat, ls.map((l) => [l.x - cx, l.z - cz] as [number, number]), mm(sizeOf(size).clear)) }, { b: held }]);
+  for (let i = 0; i < ls.length; i++) b = boltedJoint(b, port, size, i, head);
+  return b;
+}
+/** Deep-groove ball bearings: bore d, outside D and width B by ISO 15 (608 and the 6000s, dimension series 10), mm; their
+ *  balls, how many and how big, typical (an estimate here, not read from one maker's table). */
+export const BEARINGS = {
+  '608': { d: 8, D: 22, B: 7, n: 7, Dw: 3.969 }, '6000': { d: 10, D: 26, B: 8, n: 7, Dw: 4.762 }, '6001': { d: 12, D: 28, B: 8, n: 8, Dw: 4.762 },
+  '6002': { d: 15, D: 32, B: 9, n: 9, Dw: 4.762 }, '6003': { d: 17, D: 35, B: 10, n: 10, Dw: 4.762 }, '6004': { d: 20, D: 42, B: 12, n: 9, Dw: 6.35 },
+} as const;
+/** A deep-groove ball bearing: its inner ring, its cage slid over it at the middle of its width, its outer ring slid over
+ *  all, and each ball put through its pocket in the cage (a sliding fit), the balls on their pitch circle ((d + D) / 2)
+ *  touching both rings. Approximated so: each ball drawn as its bounding cylinder (room.ts has no sphere yet), the rings'
+ *  raceway grooves not drawn (each ring's face toward the balls at the pitch less, or more, half a ball and the pocket's
+ *  fit), the cage drawn as a solid ring with its pockets. Its inner ring's bore takes a shaft (Through a line); its outer
+ *  ring goes into a housing's bore. */
+export function bearing(size: string): Block {
+  const q = BEARINGS[size as keyof typeof BEARINGS]; if (!q) throw new Error(`no bearing ${size} (${Object.keys(BEARINGS).join(', ')})`);
+  const R = mm(q.d + q.D) / 4, r = mm(q.Dw) / 2, g = FITS.slide.gap, ri = R - r - g, ro = R + r + g, steel = 0xb8bcc2;
+  const inner = made(`${size} inner ring`, 'steel-chrome', { tube: [mm(q.d) / 2, ri, mm(q.B)] }, { color: steel });
+  const cage = made(`${size} cage`, 'steel-low', { tube: [ri, ro, 2 * r] }, { color: 0x8a7550, pattern: { name: 'pockets', circle: { n: q.n, r: R } } });
+  let b = over(over(inner, `${size} inner ring/axis`, cage, 'mid', 'touch'), `${size} inner ring/axis`, made(`${size} outer ring`, 'steel-chrome', { tube: [ro, mm(q.D) / 2, mm(q.B)] }, { color: steel }), 'mid', 'touch');
+  for (let i = 0; i < q.n; i++) b = through(b, made(`${size} ball`, 'steel-chrome', { cyl: [r, 2 * r] }, { color: 0xd8dce0 }), { port: `${size} cage/pockets`, i, from: 'lo' }, 'slide');
+  return stack(`${size} bearing`, 1, [{ b }]);
+}
+/** Dowel pins (ISO 8734: hardened steel, ground to m6) by their nominal diameters, mm. */
+export const DOWELS = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 16, 20] as const;
+/** A dowel pin, ISO 8734, its diameter (mm) and length: its chamfered and rounded ends not drawn. It goes through two
+ *  parts' reamed holes, locating one on the other (Through a line, fit H7/m6: an interference, carried as a pressure). */
+export function dowel(d: number, length: number): Block {
+  if (!(DOWELS as readonly number[]).includes(d)) throw new Error(`no ISO 8734 dowel of Ø${d} mm (${DOWELS.join(', ')})`);
+  return made(`Ø${d} × ${Math.round(length * 1000)} dowel pin`, 'steel-tool', { cyl: [mm(d) / 2, length] }, { color: 0x9ea2a8 });
+}
+/** Hex socket set screws, flat point (ISO 4026): the socket's width across flats s (as ISO 4026 gives it) and depth t
+ *  (typical), mm. */
+export const SET_SCREWS = { M3: { s: 1.5, t: 1.2 }, M4: { s: 2, t: 1.5 }, M5: { s: 2.5, t: 2 }, M6: { s: 3, t: 2 }, M8: { s: 4, t: 3 } } as const;
+/** A set screw, ISO 4026: its body and its socketed end (the socket drawn round, as wide as its hexagon's corners; the
+ *  thread and the flat point's chamfer not drawn), as two solids of one screw. It goes down a tapped hole in a hub
+ *  (Through a line, from above), its point on the shaft. */
+export function setScrew(size: string, length: number): Block {
+  const q = SET_SCREWS[size as keyof typeof SET_SCREWS]; if (!q) throw new Error(`no ISO 4026 set screw ${size} (${Object.keys(SET_SCREWS).join(', ')})`);
+  const m = sizeOf(size); if (!(length > mm(q.t))) throw new Error(`a ${size} set screw longer than its socket (${q.t} mm)`);
+  return stack(`${size}×${Math.round(length * 1000)} set screw`, 1, [{ b: made(`${size} set screw`, 'steel-alloy', { cyl: [mm(m.d) / 2, length - mm(q.t)] }, { color: 0x2a2b2e }) },
+    { b: made(`${size} set screw socket end`, 'steel-alloy', { tube: [mm(q.s) / Math.sqrt(3), mm(m.d) / 2, mm(q.t)] }, { color: 0x2a2b2e }) }]);
+}
+/** A closed outline with a round bore taken out of it, as one outline (the bore joined to it by a cut of no width at the
+ *  first point: inside it by the even-odd rule, and drawn so), mm in, m out. */
+function bored(outline: [number, number][], bore: number): [number, number][] {
+  const a0 = Math.atan2(outline[0]![1], outline[0]![0]), K = 32, b = Array.from({ length: K }, (_, k) => { const a = a0 - (2 * Math.PI * k) / K; return [bore * Math.cos(a), bore * Math.sin(a)] as [number, number]; });
+  return [...outline, outline[0]!, ...b, b[0]!].map(([x, y]) => [mm(x), mm(y)] as [number, number]);
+}
+const circle = (R: number, n = 48): [number, number][] => Array.from({ length: n }, (_, k) => [R * Math.cos((2 * Math.PI * k) / n), R * Math.sin((2 * Math.PI * k) / n)] as [number, number]);
+const inv = (a: number) => Math.tan(a) - a;
+/** A spur gear by its module (mm), its teeth and its face width, its bore through it: its profile a section drawn along
+ *  its width (z), so it stands on edge. Each tooth by ISO 53's basic rack (20° pressure angle, addendum m, dedendum 1.25
+ *  m): its flanks involutes of its base circle up to its tip, radial below the base circle, its root a chord (the root's
+ *  fillet not drawn: approximated so). It meshes with a gear of its module, their axes m(z₁ + z₂)/2 apart: meshing is
+ *  not an operation yet (two stacked side by side touch at their tips). */
+export function gear(module: number, teeth: number, width: number, bore: number, mat = 'steel-alloy'): Block {
+  if (!(Number.isInteger(teeth) && teeth >= 12 && teeth <= 100)) throw new Error('a spur gear of 12 to 100 teeth');
+  const m = module, z = teeth, PA = (20 * Math.PI) / 180, r = (m * z) / 2, rb = r * Math.cos(PA), ra = r + m, rf = r - 1.25 * m, B = bore * 1000;
+  if (!(m > 0 && B > 0 && B / 2 < rf - m)) throw new Error(`a gear's bore (${B} mm) inside its root circle less a module (Ø${(2 * (rf - m)).toFixed(2)} mm)`);
+  const psi = (rho: number) => Math.PI / (2 * z) + inv(PA) - (rho > rb ? inv(Math.acos(rb / rho)) : 0), at = (rho: number, a: number): [number, number] => [rho * Math.cos(a), rho * Math.sin(a)];
+  const lo = Math.max(rb, rf), radii = [...(rb > rf ? [rf] : []), ...Array.from({ length: 5 }, (_, k) => lo + (k / 4) * (ra - lo))], pts: [number, number][] = [];
+  for (let k = 0; k < z; k++) { const th = (2 * Math.PI * k) / z; pts.push(at(rf, th - Math.PI / z)); for (const rho of radii) pts.push(at(rho, th - psi(rho))); for (const rho of [...radii].reverse()) pts.push(at(rho, th + psi(rho))); }
+  return made(`m${m} z${z} spur gear`, mat, { section: { pts: bored(pts, B / 2), L: width } });
+}
+/** A GT2 timing pulley (2 mm pitch) by its teeth, for a 6 mm belt: its pitch diameter z × 2 / π, its outside 0.508 mm less
+ *  (twice GT2's 0.254 mm pitch line offset); its grooves approximated (each a U 1.11 mm wide and 0.75 mm deep, its
+ *  bottom GT2's 0.555 mm radius); its teeth 7 mm wide between two flanges 1 mm thick, a hub 7 mm long, the flanges and the
+ *  hub 3.3 mm over its outside (typical), its bore through all, all along its axis (z); an M3 × 4 set screw (ISO 4026)
+ *  down its hub to the bore (its tapped hole through the hub). A belt goes round its teeth; a shaft along its bore needs
+ *  a line along z (not in room.ts yet). */
+export function gt2(teeth: number, bore = mm(5)): Block {
+  if (!(Number.isInteger(teeth) && teeth % 2 === 0 && teeth >= 12 && teeth <= 80)) throw new Error('a GT2 pulley of an even count of teeth, 12 to 80');
+  const z = teeth, R = (z * 2) / Math.PI / 2 - 0.254, rho = 0.555, Rc = R - 0.75 + rho, B = bore * 1000, Rf = R + 1.65, name = `GT2 ${z}T pulley`;
+  if (!(B / 2 < R - 1.5)) throw new Error(`a ${name}'s bore (${B} mm) within its teeth's roots less 0.75 mm`);
+  const pts: [number, number][] = [], d = Math.asin(rho / R);
+  for (let k = 0; k < z; k++) { const th = (2 * Math.PI * (k + 0.5)) / z, u = [Math.cos(th), Math.sin(th)] as const, v = [-Math.sin(th), Math.cos(th)] as const;
+    pts.push([R * Math.cos(th - d), R * Math.sin(th - d)]);
+    for (const f of [270, 225, 180, 135, 90]) { const a = (f * Math.PI) / 180; pts.push([Rc * u[0] + rho * (Math.cos(a) * u[0] + Math.sin(a) * v[0]), Rc * u[1] + rho * (Math.cos(a) * u[1] + Math.sin(a) * v[1])]); }
+    pts.push([R * Math.cos(th + d), R * Math.sin(th + d)]); }
+  const disc = (part: string, L: number, o: Parameters<typeof made>[3] = {}) => made(`${name} ${part}`, 'al-6061', { section: { pts: bored(circle(Rf), B / 2), L } }, o);
+  const hub = disc('hub', mm(7), { pattern: { name: 'set screw', points: [[0, 0]], hole: mm(2.5) / 2 } });
+  const body = stack(name, 2, [{ b: hub }, { b: disc('flange', mm(1)) }, { b: made(`${name} teeth`, 'al-6061', { section: { pts: bored(pts, B / 2), L: mm(7) } }) }, { b: disc('flange', mm(1)) }]);
+  return through(body, setScrew('M3', mm(4)), { port: `${name} hub/set screw`, from: 'hi' }, 'tight');
+}
+/** A compression spring of round wire by its wire's diameter, outside diameter and free length (m) and its active coils:
+ *  two more coils at its ends, its pitch even throughout (its ends, closed and ground in most, drawn open). Its rate by
+ *  Shigley's k = d⁴G / 8D³Nₐ (engineering/springs.ts) for its wire. It slides over a rod or into a bore (Over a shaft,
+ *  Into a room). */
+export function spring(d: number, OD: number, L0: number, active: number, wire = 'music-wire-a228'): { block: Block; rate: number } {
+  const w = SPRING_WIRES[wire]; if (!w) throw new Error(`no spring wire ${wire} (${Object.keys(SPRING_WIRES).join(', ')})`);
+  if (!(active >= 1 && d > 0 && OD > 2 * d)) throw new Error('a spring of one active coil or more, its outside more than twice its wire');
+  const D = OD - d, total = active + 2, pitch = (L0 - d) / total;
+  if (!(pitch > d)) throw new Error(`no room to compress: ${total} coils of ${d * 1000} mm wire in ${L0 * 1000} mm stand solid (its pitch ${(pitch * 1000).toFixed(2)} mm)`);
+  return { block: made(`spring ${+(d * 1000).toFixed(2)} × ${+(OD * 1000).toFixed(2)} × ${+(L0 * 1000).toFixed(2)} mm`, 'steel-spring', { coil: [D / 2, d, total, pitch, 1] }, { color: 0x8a8c90 }), rate: springRate({ d, D, Na: active, L0, wire: w }) };
+}
+/** A butt hinge (typical of a 50 mm steel hinge): its knuckles Ø6 mm, each its share of its height, stacked along its axis,
+ *  its pin Ø3 mm through them all (their bores a sliding fit over it), its two leaves 22 mm wide and 1.5 mm thick against
+ *  the knuckles on each side, opened flat. A leaf and its knuckles are one rolled piece in a hinge; here they touch. Its
+ *  leaves' screw holes need lines across them, and its leaves' turn about the pin (off their own middles) a turned block:
+ *  neither in room.ts yet. */
+export function hinge(H = mm(50), knuckles = 3): Block {
+  if (!(Number.isInteger(knuckles) && knuckles >= 2 && knuckles <= 7)) throw new Error('a hinge of 2 to 7 knuckles');
+  const ks = stack('hinge knuckles', 1, Array.from({ length: knuckles }, (_, i) => ({ b: made(`hinge knuckle ${i + 1}`, 'steel-low', { tube: [mm(1.5) + FITS.slide.gap, mm(3), H / knuckles] }) })));
+  const pin = through(ks, made('hinge pin', 'steel-low', { cyl: [mm(1.5), H] }), { port: 'hinge knuckle 1/axis', from: 'lo' }, 'slide');
+  const leaf = () => made('hinge leaf', 'steel-low', { box: [mm(22), H, mm(1.5)] });
+  return stack(`butt hinge ${Math.round(H * 1000)} mm`, 1, [{ b: onto(onto(pin, '+x', leaf(), 'touch'), '-x', leaf(), 'touch') }]);
+}
+/** Heat-set threaded inserts (brass) by thread: length, outside (its knurl's crest), the hole they are pressed into and
+ *  their bore (the thread's tap drill: the thread not drawn), mm (typical of the common heat-set inserts). */
+export const INSERTS = { M2: { L: 4, OD: 3.6, hole: 3.2, bore: 1.6 }, M3: { L: 5.7, OD: 4.6, hole: 4, bore: 2.5 }, M4: { L: 8.1, OD: 6.3, hole: 5.6, bore: 3.3 }, M5: { L: 9.5, OD: 7.1, hole: 6.4, bore: 4.2 } } as const;
+/** A heat-set insert: pressed hot down a plastic part's hole of its size (Through a line from above, tight: its knurl
+ *  melts into the plastic round it), a screw then down its bore. */
+export function insert(size: string): Block {
+  const q = INSERTS[size as keyof typeof INSERTS]; if (!q) throw new Error(`no heat-set insert ${size} (${Object.keys(INSERTS).join(', ')})`);
+  return made(`${size} heat-set insert`, 'brass', { tube: [mm(q.bore) / 2, mm(q.OD) / 2, mm(q.L)] });
+}
 

@@ -18,7 +18,7 @@ import { DENSITY, } from './mass';
 export type V3 = [number, number, number];
 export type Shape =
   | { box: V3 } | { cyl: [r: number, h: number, r2?: number] } | { sphere: number } | { cone: [r: number, h: number] }
-  | { torus: [R: number, r: number] } | { capsule: [r: number, h: number] }
+  /** a ring round z: R to the middle of its tube, r the tube's; or an arc of it from +x toward +y, `arc` radians (a bend) */ | { torus: [R: number, r: number, arc?: number] } | { capsule: [r: number, h: number] }
   /** a body through cross-sections along x (src/nexus/form.ts) */ | { loft: Loft }
   /** a round tube along a path, bent round at its corners */ | { tube: Tube }
   /** a profile of [radius, height] spun about y */ | { lathe: Lathe }

@@ -65,6 +65,29 @@
     #go { width: 46px; height: 46px; border-radius: 50%; padding: 0; display: grid; place-items: center; flex: none; }
     #go svg { width: 20px; height: 20px; }
     #go[disabled] { opacity: .5; }
+    /* the three ways to build (decision 0025): by hand, Assist (one call, a plan), Auto (the agent) */
+    #modes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 2px 12px 6px; flex: none; }
+    #modes .seg { display: flex; background: #00000040; border: 1px solid var(--line); border-radius: 12px; padding: 2px; }
+    #modes .seg button { border: 0; background: none; border-radius: 10px; padding: 5px 9px; font-size: 13px; color: var(--dim); white-space: nowrap; }
+    #modes .seg button.on { background: linear-gradient(135deg, #1f6fb2, #6b3fc4); color: var(--text); }
+    #modes label { font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 4px; }
+    #modes label input { margin: 0; }
+    #tok { margin-left: auto; font-size: 11px; color: var(--dim); background: none; border: 0; padding: 2px 0; text-align: right; line-height: 1.2; }
+    .msg .tok { margin-top: 4px; font-size: 11px; color: var(--dim); }
+    .panel { margin: 0 12px 8px; border: 1px solid var(--line); border-radius: 14px; background: #00000038; padding: 8px 10px; display: none; flex-direction: column; gap: 6px; max-height: 34dvh; overflow-y: auto; flex: none; }
+    .panel.on { display: flex; }
+    .panel h4 { margin: 0; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+    .panel h4 span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .panel .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+    .panel .f { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--dim); min-width: 0; }
+    .panel .f input, .panel .f select { font: inherit; font-size: 14px; color: var(--text); background: #ffffff0d; border: 1px solid var(--line); border-radius: 8px; padding: 5px 6px; min-width: 0; width: 100%; }
+    .panel .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .panel .row button { padding: 6px 12px; font-size: 13px; }
+    .panel .pn { border-top: 1px solid var(--line); padding-top: 6px; }
+    .panel .pn b { font-size: 13px; } .panel .pn i { font-style: normal; color: var(--dim); font-size: 12px; }
+    .panel .wires { font-size: 11px; color: var(--dim); word-break: break-all; }
+    .panel .why { font-size: 12px; color: var(--bad); white-space: pre-wrap; }
+    .chip.piece { border-color: #69f0ae55; }
     /* the board, as a list, when asked for */
     #board { position: absolute; z-index: 8; inset: 0; background: #0b0f17; display: none; flex-direction: column; padding: calc(env(safe-area-inset-top) + 10px) 14px calc(env(safe-area-inset-bottom) + 10px); }
     #board.on { display: flex; }
@@ -88,16 +111,21 @@
     <div id="top">
       <div class="logo"><svg viewBox="0 0 32 32"><defs><linearGradient id="lg" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#5ad1ff"/><stop offset="1" stop-color="#b98cff"/></linearGradient></defs><path d="M16 2 29 9.5v13L16 30 3 22.5v-13Z" fill="none" stroke="url(#lg)" stroke-width="2.4"/><path d="M10 21V11l12 10V11" fill="none" stroke="url(#lg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Nexus</div>
       <div id="title"></div>
+      <button id="undo" title="Undo the last step" aria-label="Undo">↶</button>
+      <button id="fresh" title="Start again: an empty board and a new chat" aria-label="New">＋</button>
       <button id="fit" title="See it all">Fit</button>
       <button id="cut" title="Cut it open: across x, then z, then y, then whole again">Cut</button>
       <button id="showBoard" title="The nodes it is built from">Nodes</button>
     </div>
     <div id="stat"></div>
     <div id="picked"></div>
-    <div id="empty"><div><h1>Say it. See it built.</h1>Describe a part or a small build: Claude builds it from real pieces (bolts, plates, wire, LEDs, boxes, pipes) with the nodes, and it appears here. Or tap a piece below.</div></div>
+    <div id="empty"><div><h1>Say it. See it built.</h1>Build by hand from real pieces (bolts, plates, wire, LEDs, boxes, pipes), let one cheap call plan it for you to change (Assist), or say it and Claude builds it (Auto).</div></div>
     <section id="sheet">
       <button id="grab" aria-label="Show or hide the chat"></button>
       <div id="msgs"></div>
+      <div id="modes"><div class="seg" role="tablist"><button data-mode="hand" title="By hand: pieces and the operations that join them, no AI, nothing sent">✋ By hand</button><button data-mode="assist" title="Assist: one cheap call writes a plan you can change, then the page builds it">✦ Assist</button><button data-mode="auto" title="Auto: Claude builds it, step by step">⚡ Auto</button></div><label id="checkL" title="A second model reads the answer against the steps (more tokens)"><input type="checkbox" id="check" />check</label><button id="tok" title="Tokens used from this browser (tap to reset)"></button></div>
+      <div id="hand" class="panel"></div>
+      <div id="plan" class="panel"></div>
       <div id="chips"></div>
       <div id="ask"><textarea id="q" rows="1" placeholder="Describe what to build…" enterkeyhint="send"></textarea><button id="go" class="hot" aria-label="Build it"><svg viewBox="0 0 24 24"><path d="M3 11.5 21 3l-8.5 18-2-7.5Z" fill="currentColor"/></svg></button></div>
     </section>

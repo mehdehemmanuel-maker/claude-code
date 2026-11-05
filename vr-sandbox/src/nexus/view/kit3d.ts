@@ -331,7 +331,7 @@ export function geometry(s: Shape, mat: string | undefined, make?: 'pressed', fa
   if ('cyl' in s) { const [r, h, r2 = r] = s.cyl; return filletCyl(r2, h, r, f, drawn ? roundSegments(Math.max(r, r2)) : 24); }
   if ('sphere' in s) return new THREE.SphereGeometry(s.sphere, divisions(18, 6), divisions(12, 4));
   if ('cone' in s) return new THREE.ConeGeometry(s.cone[0], s.cone[1], divisions(16, 6));
-  if ('torus' in s) return new THREE.TorusGeometry(s.torus[0], s.torus[1], divisions(12, 4), divisions(28, 8));
+  if ('torus' in s) { const arc = s.torus[2] ?? 2 * Math.PI; return new THREE.TorusGeometry(s.torus[0], s.torus[1], divisions(12, 4), Math.max(4, Math.round((divisions(28, 8) * arc) / (2 * Math.PI)) + 2), arc); }
   if ('capsule' in s) return new THREE.CapsuleGeometry(s.capsule[0], s.capsule[1], 4, 12);
   return null;
 }

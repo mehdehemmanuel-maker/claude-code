@@ -23,9 +23,9 @@ const RUN_PINS: [string, string, string, string][] = [
   ['src/nexus/view/nodes.ts', '      const r = await res.json()', 'renderAll();', '98c38ebfaba4eed8'],
 ];
 /** The relay's handler, its whole text pinned (the test "an open andon stops the line…" says why). */
-const RELAY_PIN = '50351022748b6f54';
+const RELAY_PIN = '2a25a6e9b1357859';
 /** agentBuild's whole text, pinned (the test "an open andon stops the line…" says why). */
-const AGENT_PIN = '2d20938a16f8da28';
+const AGENT_PIN = '9f99c5210a3a349e';
 /** The most laws the kernel may still leave undecided (erf and integrals: not in it yet). */
 const UNDECIDED_MOST = 3;
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
@@ -51,13 +51,15 @@ import { NEMA_FACE } from '../../src/nexus/families';
 import type { Part, V3 } from '../../src/nexus/kits';
 import type { Assembly } from '../../src/nexus/assembly';
 import { Engine, Memo, digest, emptyBoard, placeBlock, wire, type Env } from '../../src/nexus/dataflow';
-import { nodesOf } from '../../src/nexus/boards';
+import { edgesOf, nodesOf } from '../../src/nexus/boards';
 import { starterBoards } from '../../src/nexus/starters';
 import { APP, fieldOf, search } from '../../src/nexus/navigate';
 import { builtOf } from '../../src/nexus/evidence';
 import { parseUnit } from '../../src/ganglia/units';
 import { run } from '../../src/nexus/view/code-worker';
 import { builtPieces, stockProblems } from '../../src/nexus/stock';
+import { turn as roomTurn, insideOf, boundOf as roomBound, endsOf, stack as roomStack, made as roomMade, over as roomOver, through as roomThrough, type Block as RoomBlock } from '../../src/nexus/room';
+import { boltedJoint as cpBolted, plate as cpPlate, pipe as cpPipe, coupling as cpCoupling, pipeRun, section as cpSection } from '../../src/nexus/common';
 
 // a board's code blocks run here as the page's worker runs them
 const env: Env = { code: async (lang, code, inputs) => (await run({ id: 0, lang: lang as 'js', code, facts: {}, input: '', vars: inputs })).value };
@@ -403,6 +405,10 @@ describe('every domain, in one pass', () => {
     expect(relay.slice(relay.indexOf(callLine), relay.indexOf('res.end(m.relayBody(r));') + 24), 'the relay sends the run as agentBuild made it').toBe(`${callLine}\n      res.setHeader('Content-Type', 'application/json'); res.end(m.relayBody(r));`);
     // (and streamed, as the phone page asks (decision 0023): its steps as they come, short, then the whole run as relayBody makes it)
     expect(relay, 'the stream ends with the whole run').toContain('line({ done: JSON.parse(m.relayBody(r)) });');
+    // (on a phone (decision 0025): the second model's check only when the page asks for it, and Assist's one call sent back
+    // whole as agentPlan made it)
+    expect(relay, 'the check only when asked').toContain('check: check ? undefined : false');
+    expect(relay, "Assist's plan, whole").toMatch(/const p = await m\.agentPlan\(String\(request \?\? ''\), \{ model, effort, board, failing: [^\n]*\n\s*res\.setHeader\('Content-Type', 'application\/json'\); res\.end\(JSON\.stringify\(p\)\);/);
     // (the relay sends the page all of the run: its near misses, diff and certificates)
     const sent = JSON.parse(relayBody(run)) as AgentRun; expect(sent.nearMisses, 'every near miss sent whole: its step, tool, what, kind and response').toEqual(run.nearMisses);
     expect(sent, 'and the whole run as it was made (its certificates and diff too)').toEqual(JSON.parse(JSON.stringify(run))); expect(sent.nearMisses.length).toBe(4); expect(sent).toHaveProperty('diff'); expect(sent).toHaveProperty('certificates');
@@ -1113,6 +1119,57 @@ describe('every domain, in one pass', () => {
     expect((await t.doTool('build', { nodes: [{ b: 'in.number' }] })).split('\n').filter((l) => l.startsWith('!')), 'as a list: one refusal').toEqual(['! nodes: write them as an object, {"name": {"b": "block id", "s": {…}}}']);
     const guide = readFileSync(join(root, 'docs/FOR-AI.md'), 'utf8'); expect(guide, 'FOR-AI\'s rule: things built from the common pieces and the operations, never by a typed position, and the nodes that set places by number never used').toMatch(/never by a typed position[^]*`room\.over`[^]*`room\.through`[^]*Never use `place`[^]*`assert`/);
   }, 120_000);
+  // (the three ways to build (decision 0025), through the AI's real tools and no model (C8): Assist's reply read by planOf
+  // as the model writes it (prose, a fence, the JSON) and run by runPlan as the page runs it; what is wrong in a reply said,
+  // never guessed; by hand, a piece joined by an operation the room offers, step on step; asked again, only what failed;
+  // and the cards and the board's listing sent with the guide, short)
+  it('the three ways to build: a plan read, run by the tools, joined by hand, asked again with only what failed', async () => {
+    const { planOf, runPlan, joinPlan, failingOf, planAsk, boardBrief, piecesCard } = await import('../../src/nexus/agent');
+    // (the fixed request, as a model would answer it: two plates stacked, four M5 bolts down the top one's holes)
+    const reply = 'Here is the plan.\n```json\n{"tool": "build", "nodes": {"bot": {"b": "piece.plate", "s": {"name": "bottom plate", "w": 80, "t": 3, "d": 50, "holes": "-30,-15; 30,-15; -30,15; 30,15", "hole": 5.5}}, "top": {"b": "piece.plate", "s": {"name": "top plate", "w": 80, "t": 3, "d": 50, "holes": "-30,-15; 30,-15; -30,15; 30,15", "hole": 5.5}}, "st": {"b": "room.stack", "s": {"axis": "y"}}, "j0": {"b": "mate.bolted", "s": {"line": "top plate/holes", "which": 0, "size": "M5"}}, "j1": {"b": "mate.bolted", "s": {"line": "top plate/holes", "which": 1, "size": "M5"}}, "j2": {"b": "mate.bolted", "s": {"line": "top plate/holes", "which": 2, "size": "M5"}}, "j3": {"b": "mate.bolted", "s": {"line": "top plate/holes", "which": 3, "size": "M5"}}, "m": {"b": "measure"}}, "wires": ["bot.block>st.blocks", "top.block>st.blocks", "st.block>j0.held", "j0.block>j1.held", "j1.block>j2.held", "j2.block>j3.held", "j3.thing>m.thing"], "says": "Two 3 mm aluminium plates bolted with four M5 bolts {at the corners}"}\n```';
+    const p = planOf(reply);
+    expect([p.tool, Object.keys(p.input.nodes!).length, p.input.wires!.length, p.says], 'read whole, a brace in its words minded').toEqual(['build', 8, 7, 'Two 3 mm aluminium plates bolted with four M5 bolts {at the corners}']);
+    const ran = await runPlan(p, emptyBoard('asked'));
+    expect(ran.failing, 'run by the tools: nothing refused, nothing failing').toEqual([]);
+    const e = new Engine(ran.board); await e.run();
+    const pieces = e.state.get('j3')?.out?.pieces as number; console.log(`Assist's plan for the fixed request, run: ${nodesOf(ran.board).length} nodes, ${pieces} pieces, ${String(e.state.get('m')?.out?.mass)} kg`);
+    expect(pieces, 'two plates and four joints, each a shank, a head, a washer and a nut').toBe(2 + 4 * 4);
+    // (what a reply gets wrong, said back, never guessed at)
+    expect(() => planOf('I would use two plates.'), 'no JSON').toThrow(/no plan in the reply: it holds no JSON/);
+    expect(() => planOf('{"tool": "build", "nodes": {"a": {"b": "piece.bolt"}'), 'cut short').toThrow(/not closed/);
+    expect(() => planOf('{"tool": "build", "nodes": [{"b": "piece.bolt"}]}'), 'nodes as a list').toThrow(/write them as an object/);
+    expect(() => planOf('{"tool": "build", "nodes": {"a b": {"b": "piece.bolt"}}}'), 'a name a wire cannot read').toThrow(/letters, digits and _/);
+    expect(() => planOf('{"tool": "change"}'), 'a change of nothing').toThrow(/changes nothing/);
+    expect(planOf('{"add": {"n": {"b": "piece.nut"}}, "wires": []}').tool, 'no tool named: a change, from its add').toBe('change');
+    // (a plan whose block does not exist runs, refused by the tools, and only those lines are asked again)
+    const bad = await runPlan(planOf('{"tool": "change", "add": {"x": {"b": "piece.nosuch"}}, "set": {"top": {"nosetting": 1}}}'), ran.board);
+    expect(bad.failing.map((l) => l.slice(0, 40)), 'the refusals').toEqual(['! top: no setting or input nosetting (it', '! x: no block "piece.nosuch"']);
+    const again = planAsk('Two plates bolted', bad.board, bad.failing);
+    expect(again, 'asked again: the board listed, then only what failed').toMatch(/^The board open \(8 nodes; change it by these names\):\nbot: piece\.plate [^]*\nAsked: Two plates bolted\nWhen the plan ran, these failed \(mend only them, with a change\):\n! top: no setting or input nosetting[^\n]*\n! x: no block "piece\.nosuch"$/);
+    expect(failingOf('a ok\nFAILS a: no\nNOT TAKEN: it breaks\nb failed: x\nc ok'), 'every kind of failing line').toEqual(['FAILS a: no', 'NOT TAKEN: it breaks', 'b failed: x']);
+    // (by hand: a plate alone, then a bolt down its first hole, then a nut over the bolt's shank, each a step on the last)
+    const h1 = await runPlan(joinPlan(emptyBoard('hand'), { b: 'piece.plate', s: { name: 'plate' } }), emptyBoard('hand'));
+    const e1 = new Engine(h1.board); await e1.run(); expect(e1.state.get('plate1')?.out?.offers, 'the plate offers its holes').toContain('plate/holes');
+    const h2p = joinPlan(h1.board, { b: 'piece.bolt', s: { size: 'M8', length: 20 } }, { op: 'room.through', s: { line: 'plate/holes', which: 0 }, host: 'plate1' });
+    expect(h2p.input, 'the piece and the operation, and their wires').toEqual({ add: { bolt1: { b: 'piece.bolt', s: { size: 'M8', length: 20 } }, through1: { b: 'room.through', s: { line: 'plate/holes', which: 0 } } }, wires: ['plate1.block>through1.host', 'bolt1.block>through1.passer'] });
+    const h2 = await runPlan(h2p, h1.board); expect(h2.failing, 'the bolt through the hole').toEqual([]);
+    const e2 = new Engine(h2.board); await e2.run(); const shank = (e2.state.get('through1')?.out?.offers as string[]).find((o) => /shank\/axis$/.test(o));
+    expect(shank, 'the bolt offers its shank').toBeTruthy();
+    // (the operation's own default fit, a slide, has no room for a nut's bore of the thread's size: refused with both
+    // sizes, said back to the person; a touch, as the bolted joint slides its nut, fits)
+    const slid = await runPlan(joinPlan(h2.board, { b: 'piece.nut', s: { size: 'M8' } }, { op: 'room.over', s: { line: shank, where: 'lo' }, host: 'through1' }), h2.board);
+    expect(slid.failing, 'refused with both sizes').toEqual([`over1 failed: no room over ${shank}: the M8 nut's bore is 8.00 mm across; it needs 8.50 mm`]);
+    const h3 = await runPlan(joinPlan(h2.board, { b: 'piece.nut', s: { size: 'M8' } }, { op: 'room.over', s: { line: shank, where: 'hi', fit: 'touch' }, host: 'through1' }), h2.board);
+    expect(h3.failing, 'the nut over the shank').toEqual([]);
+    const e3 = new Engine(h3.board); await e3.run(); expect(e3.state.get('over1')?.out?.pieces, 'the plate, the bolt\'s shank and head, the nut').toBe(4);
+    const h4 = await runPlan(joinPlan(h3.board, { b: 'piece.washer' }, { op: 'room.stack', s: { axis: 'x' }, host: 'over1' }), h3.board);
+    expect([h4.failing, edgesOf(h4.board).filter((w) => w.to === 'stack1').map((w) => w.from)], 'stacked beside: the host first, then the piece').toEqual([[], ['over1', 'washer1']]);
+    // (the board as the model is told it, and the cards sent with the guide: short, and every piece in them)
+    expect(boardBrief(h2.board), 'a line a node, settings not the default, the wires').toBe('The board open (3 nodes; change it by these names):\nplate1: piece.plate\nbolt1: piece.bolt {"length":20}\nthrough1: room.through {"line":"plate/holes"}\nwires: plate1.block>through1.host bolt1.block>through1.passer');
+    const cards = piecesCard(); for (const id of [...LIBRARY.keys()].filter((k) => /^(piece|room)\./.test(k))) expect(cards, `the cards hold ${id}`).toMatch(new RegExp(`^${id.replace('.', '\\.')}\\b`, 'm'));
+    console.log(`the cards sent with the guide: ${cards.length} characters; the guide ${readFileSync(join(root, 'docs/FOR-AI.md'), 'utf8').length}`);
+    expect(cards.length, 'the cards, short').toBeLessThan(6000);
+  }, 120_000);
   // (ISO 286 classes as limits (spec 01, I17): H, h and JS from the IT grade alone, other letters from ISO 286-2's
   // fundamental deviations; each of the evaluation set's waiting cases' limits as the app now works them out, offset and
   // width (a width alone let a wrong offset through: I15's evaluator); and the fit two make)
@@ -1129,6 +1186,42 @@ describe('every domain, in one pass', () => {
       expect((limitsOf(cls, size) as Refusal).why, `${cls} at ${size} mm: refused, never guessed`).toMatch(why);
     // (a deviation table with k's lower deviation 3 breaks case 6's shaft: the offset is held, not only the width)
     expect(lim(25, 'k5', DEVIATION.map((d) => (d.cls === 'k' ? { ...d, lower: 3 } : d))), 'a k row planted wrong').not.toEqual(e(6).shaft_um);
+  });
+  // (turned blocks, bends and runs (decision 0024): a rigid turn keeps a block valid, so at any angle about any axis no
+  // point is inside two of its pieces, each piece's points lie in its bound and the block's bound holds them (points sampled
+  // in and round each piece's bound); a coupling along a turned pipe's line and a pin through a turned plate's hole keep
+  // apart the same way; a run's segments meet end to end, each one's end at the next one's start, read from the solids
+  // alone; a bend radius not above the pipe's, and a path that runs into itself, are refused; the starter board runs)
+  it('a turned block keeps every pair of its pieces apart at every angle; a run\'s segments meet end to end', async () => {
+    const sample = (b: RoomBlock, n: number) => { let shared = 0, outOwn = 0, outBlock = 0, inside = 0;
+      for (const p of b.pieces) { const [lo, hi] = roomBound(p), g = [0, 1, 2].map((k) => (hi[k]! - lo[k]!) * 0.15);
+        for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) for (let k = 0; k < n; k++) {
+          const q = [i, j, k].map((t, a) => lo[a]! - g[a]! + ((t + 0.5) / n) * (hi[a]! - lo[a]! + 2 * g[a]!)) as [number, number, number];
+          if (!insideOf(p, ...q)) continue; inside++;
+          if (q.some((v, a) => v < lo[a]! || v > hi[a]!)) outOwn++; if (q.some((v, a) => v < b.lo[a]! || v > b.hi[a]!)) outBlock++;
+          if (b.pieces.filter((r) => insideOf(r, ...q)).length > 1) shared++; } }
+      return { shared, outOwn, outBlock, inside: inside > 0 }; };
+    const plates = roomStack('two plates', 1, [{ b: cpPlate('bottom plate', 0.08, 0.005, 0.05, 'steel-low', [[-0.025, 0], [0.025, 0]], 0.009) }, { b: cpPlate('top plate', 0.08, 0.005, 0.05, 'al-6061', [[-0.025, 0], [0.025, 0]], 0.009) }]);
+    const joint = cpBolted(plates, 'top plate/holes', 'M8'), run = pipeRun('copper 15×0.7', [{ straight: 0.06 }, { bend: 90 }, { straight: 0.05 }, { elbow: 90, toward: 90 }, { straight: 0.04 }, { bend: 45, toward: 180 }, { straight: 0.03 }]);
+    for (const [what, b] of [['a bolted joint', joint], ['a pipe run with an elbow', run], ['a bar of a section', cpSection('steel angle 50×50×5 (EN 10056)', 0.08)]] as const)
+      for (const axis of [0, 1, 2] as const) for (const deg of [0, 17, 30, 90, 123, 200]) expect(sample(roomTurn(b, axis, deg), 9), `${what} turned ${deg}° about ${'xyz'[axis]}`).toEqual({ shared: 0, outOwn: 0, outBlock: 0, inside: true });
+    // (along a turned line: a coupling over a pipe laid across, a pin through a tilted plate's hole)
+    const across = roomTurn(cpPipe('copper 15×0.7', 0.2), 2, 90), coupled = roomOver(across, 'copper 15×0.7 pipe/axis', cpCoupling('copper 15×0.7'), 'hi');
+    expect([coupled.pieces.length, coupled.faces.length, roomBound(coupled.pieces[1]!).map((v) => +(v[0] * 1000).toFixed(2))], 'the coupling over the pipe\'s end, along x').toEqual([2, 1, [-100, -60]]);
+    const pinned = roomThrough(roomTurn(cpPlate('plate', 0.1, 0.008, 0.06, 'steel-low', [[0, 0]], 0.009), 0, 30), roomMade('pin', 'steel-alloy', { cyl: [0.004, 0.03] }), { port: 'plate/holes', from: 'lo' }, 'slide');
+    for (const [what, b] of [['the coupling on the turned pipe', coupled], ['the pin through the tilted plate', pinned]] as const) expect(sample(b, 14), what).toEqual({ shared: 0, outOwn: 0, outBlock: 0, inside: true });
+    // (the pipe laid across, stacked on a plate: it touches the plate along a line, its whole length, and that face is written)
+    const laid = roomStack('a pipe on a plate', 1, [{ b: cpPlate('base', 0.25, 0.005, 0.05, 'steel-low') }, { b: across }]);
+    expect(laid.faces.map((f) => [f.patch, +((f.length ?? 0) * 1000).toFixed(1)]), 'a line face along the pipe').toEqual([['line', 200]]);
+    // (its segments end to end: each one's end at the next one's start, heading the same way)
+    const line = run.pieces.filter((p) => !/socket/.test(p.name)); expect(line.length, 'the pipe and the elbow\'s body: seven segments').toBe(7);
+    for (let i = 0; i + 1 < line.length; i++) { const a = endsOf(line[i]!.solid.base), b = endsOf(line[i + 1]!.solid.base);
+      expect(Math.hypot(a.end[0] - b.start[0], a.end[1] - b.start[1], a.end[2] - b.start[2]), `${line[i]!.name}'s end at ${line[i + 1]!.name}'s start`).toBeLessThan(1e-9);
+      expect(a.endDir[0] * b.startDir[0] + a.endDir[1] * b.startDir[1] + a.endDir[2] * b.startDir[2], 'heading the same way').toBeGreaterThan(1 - 1e-9); }
+    expect(() => pipeRun('copper 15×0.7', [{ straight: 0.05 }, { bend: 90, R: 0.007 }]), 'a bend radius not above the pipe\'s').toThrow(/not above its tube's outside radius/);
+    expect(() => pipeRun('copper 15×0.7', [0, 1, 2, 3, 4].flatMap(() => [{ straight: 0.03 }, { bend: 90, R: 0.02 }])), 'a path round a square and on over its start').toThrow(/runs into itself/);
+    const [, make] = starterBoards().find(([t]) => t.startsWith('Pipes that turn'))!, board = make(), e = new Engine(board, env); await e.run();
+    expect([...e.state].filter(([, s]) => s.status === 'failed').map(([id, s]) => `${id}: ${s.error}`), 'the starter board runs').toEqual([]);
   });
   // (the negative as rows (spec 01, I17): one general path reads every kind of seat from data. The code that makes,
   // measures and cuts a negative names no kind of seat and tests no row by name; a row given at run time is answered by it;

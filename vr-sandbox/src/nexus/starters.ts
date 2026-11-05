@@ -664,6 +664,84 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'boxed', 'says', 'said', 'value');
     return b;
   }],
+  ['Pipes that turn: a copper run with bends and an elbow, a plate turned 30° about x, a pipe laid across with its coupling', () => {
+    // (the run laid from its steps alone, each from where the last one ended: a straight, a bend of the pipe itself, a
+    // straight into an elbow's socket, out of its other socket, a bend back; the plate and the pipe made upright and then
+    // turned whole, so nothing in them moves against anything else; the coupling slid along the turned pipe's own line)
+    const b = emptyBoard('Pipes that turn: bends, an elbow, turned parts');
+    placeBlock(b, 'piece.run', 0, 0, { size: 'copper 15×0.7', path: '200; bend 90; 150; elbow 90 toward +z; 120; bend 45 toward -x; 100' }, 'run'); b.nodes.run!.label = 'A copper run: bends and an elbow';
+    placeBlock(b, 'piece.plate', 0, 0, { name: 'plate', mat: 'al-6061', w: 120, t: 6, d: 80, holes: '-40,0; 40,0', hole: 9 }, 'pl'); b.nodes.pl!.label = 'An aluminium plate';
+    placeBlock(b, 'room.turn', 0, 0, { axis: 'x', degrees: 30 }, 'tilt'); b.nodes.tilt!.label = 'Turned 30° about x'; wire(b, 'pl', 'block', 'tilt', 'block');
+    placeBlock(b, 'piece.pipe', 0, 0, { size: 'copper 22×0.9', length: 200 }, 'pp'); b.nodes.pp!.label = 'Copper pipe 22 mm';
+    placeBlock(b, 'room.turn', 0, 0, { axis: 'z', degrees: 90 }, 'across'); b.nodes.across!.label = 'Turned to lie across (90° about z)'; wire(b, 'pp', 'block', 'across', 'block');
+    placeBlock(b, 'piece.coupling', 0, 0, { size: 'copper 22×0.9' }, 'cp'); b.nodes.cp!.label = 'Its coupling';
+    placeBlock(b, 'room.over', 0, 0, { line: 'copper 22×0.9 pipe/axis', where: 'hi', fit: 'slide' }, 'coupled'); b.nodes.coupled!.label = 'The coupling along the turned pipe'; wire(b, 'across', 'block', 'coupled', 'host'); wire(b, 'cp', 'block', 'coupled', 'sleeve');
+    placeBlock(b, 'piece.elbow', 0, 0, { size: 'copper 15×0.7', angle: '45' }, 'el'); b.nodes.el!.label = 'A 45° elbow on its own';
+    placeBlock(b, 'room.stack', 0, 0, { name: 'pipes that turn', axis: 'x', fit: 'clear', level: 'on the ground' }, 'row'); for (const id of ['run', 'tilt', 'coupled', 'el']) wire(b, id, 'block', 'row', 'blocks');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'row', 'thing', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'row', 'says', 'said', 'value');
+    return b;
+  }],
+  // (the second set of common pieces (common.ts, decision 0021), each by its standard or datasheet, laid in a row by Stack
+  // along x on the ground, a clear fit apart)
+  ['Electronic pieces: a resistor, two capacitors, a transistor, cells, a toggle switch, a fuse, a JST connector and a potentiometer', () => {
+    const b = emptyBoard('Electronic pieces'), row: string[] = [];
+    const add = (id: string, block: string, set: Record<string, unknown>, label: string) => { placeBlock(b, block, 0, 0, set, id); b.nodes[id]!.label = label; row.push(id); };
+    add('rs', 'piece.resistor', { rating: '1/4 W', leads: 28 }, 'Resistor, 1/4 W');
+    add('cc', 'piece.capacitor.ceramic', { pitch: '2.54', leads: 20 }, 'Ceramic capacitor, 2.54 mm');
+    add('ec', 'piece.capacitor.electrolytic', { size: '8×11.5', leads: 20 }, 'Electrolytic capacitor, 8 × 11.5');
+    add('tr', 'piece.transistor', { name: '2N3904' }, 'Transistor, TO-92');
+    add('c1', 'piece.cell', { size: '18650' }, '18650 cell');
+    add('c2', 'piece.cell', { size: 'AA (LR6)' }, 'AA cell (IEC 60086-2)');
+    add('c3', 'piece.cell', { size: 'AAA (LR03)' }, 'AAA cell');
+    add('sw', 'piece.toggle', {}, 'Toggle switch');
+    add('fu', 'piece.fuse', { rating: '1 A' }, 'Glass fuse 5 × 20 (IEC 60127-2)');
+    add('js', 'piece.jst', { pins: 3 }, 'JST XH, 3 pins');
+    add('pt', 'piece.pot', {}, 'Potentiometer, 16 mm');
+    placeBlock(b, 'room.stack', 0, 0, { name: 'electronics', axis: 'x', fit: 'clear', level: 'on the ground' }, 'row'); for (const id of row) wire(b, id, 'block', 'row', 'blocks');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'row', 'thing', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'row', 'says', 'said', 'value');
+    return b;
+  }],
+  ['Mechanical pieces: bearings, a gear, a pulley, an L bracket, a dowel, a set screw, a spring, a hinge and an insert', () => {
+    const b = emptyBoard('Mechanical pieces: bearings, gears, brackets'), row: string[] = [];
+    const add = (id: string, block: string, set: Record<string, unknown>, label: string) => { placeBlock(b, block, 0, 0, set, id); b.nodes[id]!.label = label; row.push(id); };
+    add('b1', 'piece.bearing', { size: '608' }, 'Ball bearing 608 (ISO 15)');
+    add('b2', 'piece.bearing', { size: '6004' }, 'Ball bearing 6004');
+    add('gr', 'piece.gear', { module: '1', teeth: 20, width: 8, bore: 5 }, 'Spur gear, module 1, 20 teeth');
+    add('pl', 'piece.pulley', { teeth: 20, bore: 5 }, 'GT2 pulley, 20 teeth');
+    add('br', 'piece.bracket', { name: 'L bracket', a: 40, t: 4, L: 40, size: 'M5', holes: 2 }, 'L bracket 40 × 40 × 4');
+    add('dw', 'piece.dowel', { d: '6', length: 20 }, 'Dowel pin 6 × 20 (ISO 8734)');
+    add('ss', 'piece.setscrew', { size: 'M5', length: 8 }, 'Set screw M5 × 8 (ISO 4026)');
+    add('sp', 'piece.spring', { d: 1, OD: 10, L0: 30, active: 8 }, 'Compression spring 1 × 10 × 30');
+    add('hg', 'piece.hinge', { H: 50, knuckles: 3 }, 'Butt hinge 50 mm');
+    add('in', 'piece.insert', { size: 'M3' }, 'Heat-set insert M3');
+    placeBlock(b, 'room.stack', 0, 0, { name: 'bearings, gears, brackets', axis: 'x', fit: 'clear', level: 'on the ground' }, 'row'); for (const id of row) wire(b, id, 'block', 'row', 'blocks');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'row', 'thing', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'row', 'says', 'said', 'value');
+    return b;
+  }],
+  ['Small builds from pieces: two 18650 cells boxed under a lid, a 608 bearing on its shaft, an L bracket bolted down', () => {
+    // (two cells side by side into a box's cavity (refused if they did not fit), its lid made for it onto its top; a
+    // shaft along the bearing's inner ring; the bracket's foot bolted to a plate drilled under its holes. Nothing placed
+    // by a number)
+    const b = emptyBoard('Small builds from pieces: cells boxed, a bearing on its shaft, a bracket bolted down');
+    const put = (id: string, block: string, set: Record<string, unknown>, label: string) => { placeBlock(b, block, 0, 0, set, id); b.nodes[id]!.label = label; };
+    put('c1', 'piece.cell', { size: '18650' }, '18650 cell'); put('c2', 'piece.cell', { size: '18650' }, 'And another');
+    put('pair', 'room.stack', { name: 'two cells', axis: 'x', fit: 'clear' }, 'Side by side'); wire(b, 'c1', 'block', 'pair', 'blocks'); wire(b, 'c2', 'block', 'pair', 'blocks');
+    put('box', 'piece.case', { name: 'cell box', mat: 'abs', w: 45, h: 70, d: 25, wall: 2, floor: 2 }, 'Cell box (ABS)');
+    put('boxed', 'room.into', { room: 'cell box/cavity', fit: 'clear' }, 'The cells into the box'); wire(b, 'box', 'block', 'boxed', 'host'); wire(b, 'pair', 'block', 'boxed', 'child');
+    put('lid', 'mate.lid', { t: 2, mat: 'abs' }, 'Its lid on top'); wire(b, 'boxed', 'block', 'lid', 'box');
+    put('brg', 'piece.bearing', { size: '608' }, 'Ball bearing 608');
+    put('shaft', 'room.make', { name: 'shaft', shape: 'rod', mat: 'steel-alloy', a: 4, b: 30 }, 'Shaft, 8 mm');
+    put('onshaft', 'room.through', { line: '608 inner ring/axis', which: 0, from: 'below', fit: 'tight' }, 'The shaft through its inner ring'); wire(b, 'brg', 'block', 'onshaft', 'host'); wire(b, 'shaft', 'block', 'onshaft', 'passer');
+    put('br', 'piece.bracket', { name: 'L bracket', a: 40, t: 4, L: 40, size: 'M5', holes: 2 }, 'L bracket');
+    put('down', 'mate.plate', { line: 'L bracket foot/holes', w: 80, t: 5, d: 60, mat: 'steel-low', size: 'M5', head: 'hex' }, 'Bolted down to a plate'); wire(b, 'br', 'block', 'down', 'held');
+    put('row', 'room.stack', { name: 'three builds', axis: 'x', fit: 'clear', level: 'on the ground' }, 'Side by side'); for (const id of ['lid', 'onshaft', 'down']) wire(b, id, 'block', 'row', 'blocks');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'row', 'thing', 'show', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'row', 'says', 'said', 'value');
+    return b;
+  }],
   ] as [string, Make][]);
   return boards.map(([n, f]) => [n, () => tidy(f())] as [string, Make]);
 }

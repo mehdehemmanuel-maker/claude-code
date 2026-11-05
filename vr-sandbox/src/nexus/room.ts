@@ -1,7 +1,7 @@
 // The space where two solids cannot be written into one place (decision 0021): nothing checks for overlap, because no
 // operation here can write one. A place is never an input: a Block is made only by the operations here, and every place
-// is an output. (The nodes Make a solid, Stack, Around, Into a room, Onto a face, Ring of copies and Through a line in
-// blocks.ts run these; `partOfBlock` draws a block as the app's parts.)
+// is an output. (The nodes Make a solid, Stack, Around, Into a room, Onto a face, Ring of copies, Through a line, Over a
+// shaft and Turn in blocks.ts run these, and the pieces of common.ts; `partOfBlock` draws a block as the app's parts.)
 //
 //   I(B): at every pose of B's joints, B's solids are pairwise interior-disjoint and each lies in its bound; B's rooms
 //         are free of B's solids; every two pieces that touch have a face in B's record.
@@ -16,6 +16,12 @@
 //   into     a block into a room a host offers (a cup's cavity): its swept bound plus the fit within the room, or
 //            "no room" with both numbers. A room is used once. onto is into the space beyond a face of a bound.
 //   ring     n copies round an axis, each in its own wedge, or "no room" with both numbers.
+//   turn     a whole block turned rigidly about its bound's middle by any angle about any axis (decision 0024): a rigid
+//            turn of a valid block is valid. Each solid then carries its frame, each line its direction, and every test
+//            here reads them: the inside test exactly, the bounds and the reach from a line as supersets.
+//   run      a tube laid as segments (straights, sleeves round them, bends) each from where the last ended in the last
+//            one's frame: each lies between its start's plane and its end's, so two that follow one another meet only
+//            on their shared plane; two that do not are kept apart by (3). A bend radius not above the tube's is refused.
 //
 // The comparisons the operations make (none decides whether two solids may share a point; construction does):
 //   (1) each size's sign and finiteness, as it is written;
@@ -24,9 +30,14 @@
 //       rooms it closes, and whether a bought or moving solid is in its way (refused by name);
 //   (4) face patches: where an operation lays two pieces against each other, their footprints on that plane or round
 //       that line are sampled, to write the patch's size. Nothing is refused by it.
-// Prototype limits: round solids and lines along y only; slides along +y and turns about y only; no turned blocks and
-// no rooms on a moving host; a ring of turning copies is refused; face patches are sampled (a 64-cell grid, so a few per
-// cent), and a face written before a later cut keeps its first area. Known ways past it, found by a red team on
+// Prototype limits: a solid is made upright and turned only with its whole block (no two pieces put together at an angle
+// within one operation); a turned box's and a bend's bound is the box round its own box turned, so what is stacked on one
+// keeps more room than it needs; through and over along a turned line are done in the line's own frame, and refuse a
+// turned or bent passer or sleeve and any piece on a joint; joints (slides along +y, turns about y) stay upright, a block
+// with one is not turned, a bolted joint on a turned hole is refused; a turned block's rooms are closed unless the turn
+// is about y; a bend is at most a half turn, and offers no line; no rooms on a moving host; a ring of turning copies is
+// refused; face patches are sampled (a 64-cell grid, so a few per cent), a turned piece laid on a plane touches it along
+// an edge and no face is written for it, and a face written before a later cut keeps its first area. Known ways past it, found by a red team on
 // 2026-11-02 and not yet closed: a room on a moving host, a bought host on a joint, the 1e-12 m tolerance at very small
 // sizes, rounding at 1e20 m, and data changed after it is checked (docs/REALITY.md).
 import type { Cut, Part, Shape } from './kits';
@@ -34,7 +45,10 @@ import type { Cut, Part, Shape } from './kits';
 export type P3 = readonly [number, number, number];
 type V3 = [number, number, number];
 export type Axis = 0 | 1 | 2;
-export type Prim =
+/** A turn: a 3×3 rotation, row by row, from a solid's own axes to the room's (none: its own axes are the room's). */
+export type M3 = readonly [number, number, number, number, number, number, number, number, number];
+/** A solid's shape in its own frame about c, turned by `frame` about c (a block turned, a segment of a run). */
+export type Prim = Turned & (
   // (a box; or a case, its walls and floor round a box-shaped cavity open at the top (`tray`); or a bar of a section, its
   // profile in x and y drawn along z (`sect`, about its bound's middle): an angle, a channel, an I-beam. Everything that
   // measures room reads each as its box, a superset)
@@ -46,10 +60,17 @@ export type Prim =
   // wire, its region the tube from R − d/2 to R + d/2: a winding)
   | { readonly k: 'hex'; readonly c: P3; readonly af: number; readonly r: number; readonly h: number; readonly ri?: number }
   | { readonly k: 'dome'; readonly c: P3; readonly r: number; readonly h: number }
-  | { readonly k: 'coil'; readonly c: P3; readonly R: number; readonly d: number; readonly turns: number; readonly pitch: number; readonly layers: number; readonly r: number; readonly ri: number; readonly h: number };
+  | { readonly k: 'coil'; readonly c: P3; readonly R: number; readonly d: number; readonly turns: number; readonly pitch: number; readonly layers: number; readonly r: number; readonly ri: number; readonly h: number }
+  // (a bend: a tube bent round its own z axis, its middle line from (R, 0, 0) about the centre it is bent round, heading
+  // +y and turning toward −x through `a` (radians, at most a half turn), ro and ri its tube's outside and bore about that
+  // line; c its bound's middle. Its region exactly: the points whose angle round z is within (0, a) and whose distance
+  // from the middle line is between ri and ro)
+  | { readonly k: 'bend'; readonly c: P3; readonly R: number; readonly ro: number; readonly ri?: number; readonly a: number });
+type Turned = { readonly frame?: M3 };
 /** A solid: its base less the union of what was taken out of it. */
 export interface Solid { readonly base: Prim; readonly minus: readonly Prim[] }
-export interface Line { readonly port: string; readonly x: number; readonly z: number; readonly slot: number; readonly opening?: number }
+/** A line a piece offers: along +y through (x, z); or, turned, through (x, y, z) along `dir`. */
+export interface Line { readonly port: string; readonly x: number; readonly z: number; readonly slot: number; readonly opening?: number; readonly y?: number; readonly dir?: P3 }
 export interface JointRef { readonly name: string; readonly slide?: number; readonly turn?: true }
 export interface Piece { readonly name: string; readonly mat: string; readonly color?: number; readonly solid: Solid; readonly joint?: JointRef; readonly axis?: readonly [number, number]; readonly bought?: true; readonly lines: readonly Line[] }
 export interface Face {
@@ -86,14 +107,68 @@ const ELASTIC: Record<string, { E: number; nu: number }> = { 'steel-low': { E: 2
 const MEDIUM = 'air'; // the surroundings' medium where nothing else is said (the default record)
 
 const add = (a: P3, b: P3): V3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
-export const primBox = (p: Prim): [V3, V3] => p.k === 'box' ? [[p.c[0] - p.size[0] / 2, p.c[1] - p.size[1] / 2, p.c[2] - p.size[2] / 2], [p.c[0] + p.size[0] / 2, p.c[1] + p.size[1] / 2, p.c[2] + p.size[2] / 2]]
-  : [[p.c[0] - p.r, p.c[1] - p.h / 2, p.c[2] - p.r], [p.c[0] + p.r, p.c[1] + p.h / 2, p.c[2] + p.r]];
+const sub = (a: P3, b: P3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+// ---- turns: a solid's frame, a block turned rigidly, a line's own frame ---------------------------------------------
+const I3: M3 = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+const mv = (m: M3, v: P3): V3 => [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]];
+const mtv = (m: M3, v: P3): V3 => [m[0] * v[0] + m[3] * v[1] + m[6] * v[2], m[1] * v[0] + m[4] * v[1] + m[7] * v[2], m[2] * v[0] + m[5] * v[1] + m[8] * v[2]];
+const mul = (a: M3, b: M3): M3 => [0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => a[i * 3]! * b[j]! + a[i * 3 + 1]! * b[3 + j]! + a[i * 3 + 2]! * b[6 + j]!)) as unknown as M3;
+const tr = (m: M3): M3 => [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]];
+// (a turn whose every entry is within 1e-14 of −1, 0 or 1 is a quarter turn's, written exactly; the identity is none)
+const snap = (m: M3): M3 | undefined => { if (!m.every((x) => Math.abs(x - Math.round(x)) < 1e-14)) return m; const q = m.map((x) => Math.round(x) + 0) as unknown as M3; return q.every((x, i) => x === I3[i]) ? undefined : q; };
+// (a direction: entries within 1e-14 of 0 or ±1 written exactly)
+const snapDir = (v: P3): V3 => v.map((x) => (Math.abs(x) < 1e-14 ? 0 : Math.abs(Math.abs(x) - 1) < 1e-14 ? Math.sign(x) : x)) as V3;
+const rodrigues = (u: P3, c: number, s: number): M3 => { const [x, y, z] = u, t = 1 - c; return [t * x * x + c, t * x * y - s * z, t * x * z + s * y, t * x * y + s * z, t * y * y + c, t * y * z - s * x, t * x * z - s * y, t * y * z + s * x, t * z * z + c]; };
+/** A turn by so many degrees about x, y or z (or any axis), right-handed; a quarter turn's written exactly. */
+export function turnOf(axis: Axis | P3, deg: number): M3 {
+  if (!Number.isFinite(deg)) throw new Error(`a turn is finite (${deg}°)`);
+  const u: V3 = typeof axis === 'number' ? (() => { const n: V3 = [0, 0, 0]; n[axis] = 1; return n; })() : (() => { const n = Math.hypot(axis[0], axis[1], axis[2]); if (!(n > 0 && Number.isFinite(n))) throw new Error('a turn about an axis of some length'); return [axis[0] / n, axis[1] / n, axis[2] / n] as V3; })();
+  const q = ((deg % 360) + 360) % 360, quarter = [1, 0, -1, 0][q / 90];
+  const c = Number.isInteger(q / 90) ? quarter! : Math.cos((q * Math.PI) / 180), s = Number.isInteger(q / 90) ? [0, 1, 0, -1][q / 90]! : Math.sin((q * Math.PI) / 180);
+  return rodrigues(u, c, s);
+}
+// (the least turn taking a direction onto +y: a line's own frame)
+const toY = (d: P3): M3 => { const n = Math.hypot(d[0], d[1], d[2]), x = d[0] / n, y = d[1] / n, z = d[2] / n; if (y > 1 - 1e-15) return I3; if (y < -1 + 1e-15) return [1, 0, 0, 0, -1, 0, 0, 0, -1];
+  const k = Math.hypot(x, z); return rodrigues([-z / k, 0, x / k], y, k); };
+/** A turn as the app's Euler angles (x, then y, then z, as three.js reads `rot`). */
+const eulerOf = (m: M3): V3 => { const y = Math.asin(Math.max(-1, Math.min(1, m[2]))); return Math.abs(m[2]) < 0.9999999 ? [Math.atan2(-m[5], m[8]), y, Math.atan2(-m[1], m[0])] : [Math.atan2(m[7], m[4]), y, 0]; };
+/** A point in a solid's own frame, about its c. */
+const local = (p: Prim, x: number, y: number, z: number): V3 => { const d: V3 = [x - p.c[0], y - p.c[1], z - p.c[2]]; return p.frame ? mtv(p.frame, d) : d; };
+// (a round solid whose own axis is along ±y: its formulas round a line along y hold as they are)
+const upright = (p: Prim): boolean => !p.frame || (Math.abs(p.frame[1]) < 1e-12 && Math.abs(p.frame[7]) < 1e-12);
+// (a line along +y as it is: its x and z are where it runs)
+const alongY = (l: Line): boolean => !l.dir || (Math.abs(l.dir[0]) < 1e-9 && Math.abs(l.dir[2]) < 1e-9 && l.dir[1] > 0);
+const roundish = (p: Prim): p is Extract<Prim, { r: number }> => p.k !== 'box' && p.k !== 'bend';
+/** A bend's bound in its own frame, about the centre it is bent round. */
+const bendBox = (R: number, ro: number, a: number): [V3, V3] => {
+  const pts: [number, number][] = [];
+  for (const rr of [R - ro, R + ro]) for (const t of [0, a]) pts.push([rr * Math.cos(t), rr * Math.sin(t)]);
+  if (a >= Math.PI / 2) pts.push([0, R + ro]); if (a >= Math.PI) pts.push([-(R + ro), 0]);
+  return [[Math.min(...pts.map((q) => q[0])), Math.min(...pts.map((q) => q[1])), -ro], [Math.max(...pts.map((q) => q[0])), Math.max(...pts.map((q) => q[1])), ro]];
+};
+const MIDS = new WeakMap<object, V3>();
+/** Where a bend's bound's middle is from the centre it is bent round, in its own frame. */
+const bendMid = (p: { readonly R: number; readonly ro: number; readonly a: number }): V3 => { const was = MIDS.get(p); if (was) return was; const [lo, hi] = bendBox(p.R, p.ro, p.a), m: V3 = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, 0]; MIDS.set(p, m); return m; };
+/** Half a solid's own box (a superset of it), in its own frame. */
+const halfOf = (p: Prim): V3 => { if (p.k === 'box') return [p.size[0] / 2, p.size[1] / 2, p.size[2] / 2]; if (p.k === 'bend') { const [lo, hi] = bendBox(p.R, p.ro, p.a); return [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, p.ro]; } return [p.r, p.h / 2, p.r]; };
+/** The box round a solid: a turned round one's exactly (its axis u: |u_k| h/2 + r √(1 − u_k²)), a turned box's or
+ *  bend's the box round its own box turned (a superset). */
+export const primBox = (p: Prim): [V3, V3] => {
+  const f = p.frame, e = halfOf(p);
+  const w = !f ? e : roundish(p) ? [0, 1, 2].map((k) => Math.abs(f[k * 3 + 1]!) * (p.h / 2) + p.r * Math.sqrt(Math.max(0, 1 - f[k * 3 + 1]! ** 2)))
+    : [0, 1, 2].map((k) => Math.abs(f[k * 3]!) * e[0] + Math.abs(f[k * 3 + 1]!) * e[1] + Math.abs(f[k * 3 + 2]!) * e[2]);
+  return [[p.c[0] - w[0]!, p.c[1] - w[1]!, p.c[2] - w[2]!], [p.c[0] + w[0]!, p.c[1] + w[1]!, p.c[2] + w[2]!]];
+};
+// (the eight corners of a solid's own box, where they are)
+const corners = (p: Prim): V3[] => { const e = halfOf(p); return [-1, 1].flatMap((a) => [-1, 1].flatMap((b) => [-1, 1].map((c) => add(p.c, p.frame ? mv(p.frame, [a * e[0], b * e[1], c * e[2]]) : [a * e[0], b * e[1], c * e[2]])))); };
 const shiftPrim = (p: Prim, d: P3): Prim => ({ ...p, c: add(p.c, d) }) as Prim;
 const inPrim = (p: Prim, x: number, y: number, z: number): boolean => {
-  const dx = x - p.c[0], dy = y - p.c[1], dz = z - p.c[2];
+  const [dx, dy, dz] = local(p, x, y, z);
   if (p.k === 'box') { if (!(Math.abs(dx) < p.size[0] / 2 && Math.abs(dy) < p.size[1] / 2 && Math.abs(dz) < p.size[2] / 2)) return false;
     if (p.tray && Math.abs(dx) < p.size[0] / 2 - p.tray.wall && Math.abs(dz) < p.size[2] / 2 - p.tray.wall && dy > -p.size[1] / 2 + p.tray.floor) return false;
     return !p.sect || inPolygon(dx, dy, p.sect); }
+  if (p.k === 'bend') { const m = bendMid(p), u = dx + m[0], v = dy + m[1], phi = Math.atan2(v, u); if (!(phi > 0 && phi < p.a)) return false;
+    const q = Math.hypot(Math.hypot(u, v) - p.R, dz); return q < p.ro && (p.ri === undefined || q > p.ri); }
   const rho = Math.hypot(dx, dz); if (!(rho < p.r && Math.abs(dy) < p.h / 2)) return false;
   if (p.k === 'cyl') return p.ri === undefined || rho > p.ri;
   if (p.k === 'coil') return rho > p.ri;
@@ -106,16 +181,22 @@ const inPolygon = (x: number, y: number, pts: readonly (readonly [number, number
 const inSolid = (s: Solid, x: number, y: number, z: number) => inPrim(s.base, x, y, z) && !s.minus.some((m) => inPrim(m, x, y, z));
 const lift = (p: Piece, t: number) => (p.joint?.slide ? t * p.joint.slide : 0);
 const inPiece = (p: Piece, x: number, y: number, z: number, t = 0) => inSolid(p.solid, x, y - lift(p, t), z);
-/** The farthest a prim reaches from a line along y at (x, z). */
+/** Whether a point is inside a piece (at rest): the one inside test, every solid's frame honoured. */
+export const insideOf = (p: Piece, x: number, y: number, z: number): boolean => inPiece(p, x, y, z);
+/** The farthest a prim reaches from a line along y at (x, z): an upright round one exactly; a turned round one at most
+ *  its axis's farther end's distance and its radius; a box or a bend its own box's farthest corner (supersets). */
 const reach = (p: Prim, x: number, z: number): number => {
-  const d = Math.hypot(p.c[0] - x, p.c[2] - z); if (p.k !== 'box') return d + p.r;
-  return Math.max(...[-1, 1].flatMap((sx) => [-1, 1].map((sz) => Math.hypot(p.c[0] + (sx * p.size[0]) / 2 - x, p.c[2] + (sz * p.size[2]) / 2 - z))));
+  if (roundish(p)) { if (upright(p)) return Math.hypot(p.c[0] - x, p.c[2] - z) + p.r;
+    const ux = (p.frame![1] * p.h) / 2, uz = (p.frame![7] * p.h) / 2; return Math.max(Math.hypot(p.c[0] + ux - x, p.c[2] + uz - z), Math.hypot(p.c[0] - ux - x, p.c[2] - uz - z)) + p.r; }
+  return Math.max(...corners(p).map((q) => Math.hypot(q[0] - x, q[2] - z)));
 };
 /** All a piece takes over its joint's range: a slide extends it along +y; a turn about its own line is itself if it is
- *  round about it, else the cylinder its farthest point sweeps. A superset at every pose. */
+ *  round about it, else the cylinder its farthest point sweeps. A superset at every pose. (A turned or bent piece on a
+ *  joint is not made: refused where it would be.) */
 const sweepOf = (p: Piece): Prim => {
-  const b = p.solid.base, j = p.joint;
-  if (j?.slide) return b.k === 'box' ? { k: 'box', c: [b.c[0], b.c[1] + j.slide / 2, b.c[2]], size: [b.size[0], b.size[1] + j.slide, b.size[2]] }
+  const b = p.solid.base, j = p.joint; if (!j) return b;
+  if (b.frame || b.k === 'bend') throw new Error(`the ${p.name} is turned or bent and on a joint (${j.name}): not made yet`);
+  if (j.slide) return b.k === 'box' ? { k: 'box', c: [b.c[0], b.c[1] + j.slide / 2, b.c[2]], size: [b.size[0], b.size[1] + j.slide, b.size[2]] }
     : b.k === 'cyl' ? { ...b, c: [b.c[0], b.c[1] + j.slide / 2, b.c[2]], h: b.h + j.slide } : { k: 'cyl', c: [b.c[0], b.c[1] + j.slide / 2, b.c[2]], r: b.r, h: b.h + j.slide };
   if (j?.turn) { const [ax, az] = p.axis!; if (b.k !== 'box' && Math.hypot(b.c[0] - ax, b.c[2] - az) < 1e-12) return b; return { k: 'cyl', c: [ax, b.c[1], az], r: reach(b, ax, az), h: b.k === 'box' ? b.size[1] : b.h }; }
   return b;
@@ -143,11 +224,19 @@ function planePatch(p: Piece, q: Piece, axis: Axis, c: number, gap: number, tp =
   return linePatch(p, q, axis, c, gap, tp);
 }
 function linePatch(p: Piece, q: Piece, axis: Axis, c: number, gap: number, tp: number): { area: number; length: number; at: V3 } {
-  const none = { area: 0, length: 0, at: [0, 0, 0] as V3 }; if (axis === 1) return none;
+  const none = { area: 0, length: 0, at: [0, 0, 0] as V3 };
+  // (a turned round one lying along the plane: its extreme line on it, sampled along its axis against the other across)
+  for (const [r, s, across, sg] of [[p, q, c + gap + EPS, 1], [q, p, c - EPS, -1]] as const) {
+    const b = r.solid.base; if (!roundish(b) || upright(b) || Math.abs(b.frame![axis * 3 + 1]!) > 1e-9 || Math.abs(b.c[axis] + sg * b.r - (sg > 0 ? c : c + gap)) > 1e-9) continue;
+    const u = [b.frame![1]!, b.frame![4]!, b.frame![7]!]; let n = 0; const mid: V3 = [0, 0, 0];
+    for (let a = 0; a < N; a++) { const t = -b.h / 2 + ((a + 0.5) * b.h) / N, o: V3 = [b.c[0] + t * u[0]!, b.c[1] + t * u[1]!, b.c[2] + t * u[2]!]; o[axis] = across; if (inPiece(s, o[0], o[1], o[2], s === p ? tp : 0)) { n++; mid[0] += o[0]; mid[1] += o[1]; mid[2] += o[2]; } }
+    if (n) { const at: V3 = [mid[0] / n, mid[1] / n, mid[2] / n]; at[axis] = c + gap / 2; return { area: 0, length: (n * b.h) / N, at }; }
+  }
+  if (axis === 1) return none;
   const w = axis === 0 ? 2 : 0, y0 = Math.max(boundOf(p)[0][1], boundOf(q)[0][1]), y1 = Math.min(boundOf(p)[1][1], boundOf(q)[1][1]); if (!(y0 < y1)) return none;
   // (the round one's extreme line on the plane, tried against the other just across it)
   for (const [r, s, across] of [[p, q, c + gap + EPS], [q, p, c - EPS]] as const) {
-    const b = r.solid.base; if (b.k === 'box') continue;
+    const b = r.solid.base; if (!roundish(b) || !upright(b)) continue;
     const ext = r === p ? b.c[axis] + b.r : b.c[axis] - b.r; if (Math.abs(ext - (r === p ? c : c + gap)) > 1e-9) continue;
     let n = 0; for (let a = 0; a < N; a++) { const o: V3 = [0, y0 + ((a + 0.5) * (y1 - y0)) / N, 0]; o[w] = b.c[w]; o[axis] = across; if (inPiece(s, o[0], o[1], o[2], s === p ? tp : 0)) n++; }
     if (n) { const at: V3 = [0, (y0 + y1) / 2, 0]; at[w] = b.c[w]; at[axis] = c + gap / 2; return { area: 0, length: (n * (y1 - y0)) / N, at }; }
@@ -171,7 +260,7 @@ function planeFaces(ps: Piece[], low: number[], high: number[], axis: Axis, by: 
 /** A piece's side against the round surface at radius R about a line along y (a hole's wall, a cavity's wall). */
 function roundFace(p: Piece, x: number, z: number, R: number, y0: number, y1: number, inward: boolean): { area: number; length: number; at: V3 } {
   const b = p.solid.base, lo = Math.max(y0, primBox(b)[0][1]), hi = Math.min(y1, primBox(b)[1][1]); if (!(lo < hi)) return { area: 0, length: 0, at: [0, 0, 0] };
-  if (b.k !== 'box') { const d = Math.hypot(b.c[0] - x, b.c[2] - z);
+  if (roundish(b) && upright(b)) { const d = Math.hypot(b.c[0] - x, b.c[2] - z);
     if (d < 1e-12 && Math.abs(b.r - R) < 1e-9) return { area: 2 * Math.PI * R * (hi - lo), length: 0, at: [x, (lo + hi) / 2, z] };
     if (d > 1e-12 && Math.abs(d + b.r - R) < 1e-9) { const ux = (b.c[0] - x) / d, uz = (b.c[2] - z) / d; return { area: 0, length: hi - lo, at: [x + ux * R, (lo + hi) / 2, z + uz * R] }; } }
   // (sampled round the line, in y between the solid's own breaks (its ends, its cuts), so a thin end is not missed)
@@ -205,19 +294,55 @@ export class Block {
     const out = new Block(name, freeze(lo), freeze(hi), freeze(pieces), freeze(faces), freeze(rooms)); Object.freeze(out); return out;
   }
   static #shift(b: Block, d: P3): { pieces: Piece[]; faces: Face[]; rooms: RoomOf[] } {
-    return { pieces: b.pieces.map((p) => ({ ...p, solid: { base: shiftPrim(p.solid.base, d), minus: p.solid.minus.map((m) => shiftPrim(m, d)) }, lines: p.lines.map((l) => ({ ...l, x: l.x + d[0], z: l.z + d[2] })), ...(p.axis ? { axis: [p.axis[0] + d[0], p.axis[1] + d[2]] as const } : {}) })),
+    return { pieces: b.pieces.map((p) => ({ ...p, solid: { base: shiftPrim(p.solid.base, d), minus: p.solid.minus.map((m) => shiftPrim(m, d)) }, lines: p.lines.map((l) => ({ ...l, x: l.x + d[0], z: l.z + d[2], ...(l.y !== undefined ? { y: l.y + d[1] } : {}) })), ...(p.axis ? { axis: [p.axis[0] + d[0], p.axis[1] + d[2]] as const } : {}) })),
       faces: b.faces.map((f) => ({ ...f, at: add(f.at, d) })), rooms: b.rooms.map((r) => ({ ...r, c: add(r.c, d) })) };
+  }
+  static #mid(b: Block): V3 { return [(b.lo[0] + b.hi[0]) / 2, (b.lo[1] + b.hi[1]) / 2, (b.lo[2] + b.hi[2]) / 2]; }
+  /** A block turned rigidly by R about M: every solid's middle and frame, every line's point and direction, every face's
+   *  place and normal. Its rooms kept (round ones turned with it) only where R keeps y; otherwise closed. */
+  static #turned(b: Block, R: M3, M: P3, keepRooms: boolean): Block {
+    const pt = (q: P3): V3 => add(M, mv(R, sub(q, M)));
+    const prim = (m: Prim): Prim => { const f = snap(m.frame ? mul(R, m.frame) : R), o: Record<string, unknown> = { ...m, c: pt(m.c) }; if (f) o.frame = f; else delete o.frame; return o as unknown as Prim; };
+    const line = (l: Line, c: P3): Line => { const q = pt([l.x, l.y ?? c[1], l.z]), d = snapDir(mv(R, l.dir ?? [0, 1, 0])), o: Record<string, unknown> = { ...l, x: q[0], z: q[2] };
+      if (d[0] === 0 && d[2] === 0 && d[1] === 1) { delete o.y; delete o.dir; } else { o.y = q[1]; o.dir = d; } return o as unknown as Line; };
+    const pieces = b.pieces.map((p): Piece => ({ ...p, solid: { base: prim(p.solid.base), minus: p.solid.minus.map(prim) }, lines: p.lines.map((l) => line(l, p.solid.base.c)) }));
+    const faces = b.faces.map((f): Face => ({ ...f, at: pt(f.at), normal: snapDir(mv(R, f.normal)) }));
+    // (a turn about y keeps a round room round y; a box room only under a quarter turn, its width and depth swapped or not)
+    const keepsY = Math.abs(R[1]) < 1e-14 && Math.abs(R[7]) < 1e-14 && Math.abs(R[4] - 1) < 1e-14, quarter = R.every((x) => Math.abs(x - Math.round(x)) < 1e-14);
+    const rooms = !keepRooms || !keepsY ? [] : b.rooms.flatMap((r): RoomOf[] => (!r.size ? [{ ...r, c: pt(r.c) }] : quarter ? [{ ...r, c: pt(r.c), size: Math.abs(R[0]) < 0.5 ? [r.size[1], r.size[0]] : r.size }] : []));
+    return Block.#seal(b.name, pieces, faces, rooms);
+  }
+
+  /** A whole block turned rigidly about its bound's middle, by so many degrees about x, y or z (or any axis given as a
+   *  direction), right-handed. A rigid turn of a valid block is valid: nothing it does can write an overlap, and nothing
+   *  placed is an input. Its solids carry their frames, its lines their directions; its rooms are kept under a turn about
+   *  y and closed under any other. A block with a piece on a joint is refused (not made yet). */
+  static turn(b: Block, axis: Axis | P3, degrees: number, name = b.name): Block {
+    Block.#is(b); const R = turnOf(axis, degrees);
+    const j = b.pieces.find((p) => p.joint); if (j) throw new Error(`turn: the ${j.name} is on a joint (${j.joint!.name}): a block with a joint is not turned yet; turn what it goes on, then put it there`);
+    const t = Block.#turned(b, R, Block.#mid(b), true); return name === b.name ? t : Block.#seal(name, [...t.pieces], [...t.faces], [...t.rooms]);
+  }
+  /** An operation along a turned line, done in that line's own frame: the host turned so the line runs along +y, the
+   *  operation done, and all of it turned back. Neither may have a piece on a joint, nor the passer a turned or bent
+   *  piece; the host's rooms are kept, save those what was added meets. */
+  static #inFrame(b: Block, d: P3, what: string, added: Block, op: (h: Block) => Block): Block {
+    for (const p of [...b.pieces, ...added.pieces]) if (p.joint) throw new Error(`${what}: the line is turned and the ${p.name} is on a joint (${p.joint.name}): joints on turned pieces are not made yet`);
+    const R = toY(d), M = Block.#mid(b), back = Block.#turned(op(Block.#turned(b, R, M, false)), tr(R), M, false), nb = back.pieces.slice(b.pieces.length).map(boundOf);
+    return Block.#seal(back.name, [...back.pieces], [...back.faces], b.rooms.filter((r) => !nb.some((q) => meets(q, primBox({ k: 'cyl', c: r.c, r: r.r, h: r.h })))));
   }
 
   /** One solid at the origin: a box, a rod, a tube or a cup (open at +y, its cavity offered as a room). Its lines: a round
    *  piece's axis, and a pattern's (a circle about its axis, or points), each with the slot it offers: as far as its edge,
    *  its bore and half its neighbour. Holes of a bought piece's pattern are its openings. */
-  static made(name: string, mat: string, s: { box: [number, number, number] } | { cyl: [number, number] } | { tube: [number, number, number] } | { cup: [number, number, number, number] } | { hex: [number, number] | [number, number, number] } | { dome: [number] } | { coil: [number, number, number, number] | [number, number, number, number, number] } | { case: [number, number, number, number, number] } | { section: { pts: [number, number][]; L: number } },
+  static made(name: string, mat: string, s: { box: [number, number, number] } | { cyl: [number, number] } | { tube: [number, number, number] } | { cup: [number, number, number, number] } | { hex: [number, number] | [number, number, number] } | { dome: [number] } | { coil: [number, number, number, number] | [number, number, number, number, number] } | { case: [number, number, number, number, number] } | { section: { pts: [number, number][]; L: number } } | { bend: [number, number, number] | [number, number, number, number] },
     o: { joint?: Joint; bought?: boolean; color?: number; pattern?: { name: string; circle?: { n: number; r: number; phase?: number }; points?: [number, number][]; hole?: number } } = {}): Block {
     // (a section's outline, its own bound's middle at the origin)
     const sx = 'section' in s ? s.section.pts.map((q) => q[0]) : [], sy = 'section' in s ? s.section.pts.map((q) => q[1]) : [];
     if ('section' in s && (s.section.pts.length < 3 || !s.section.pts.every((q) => q.every(Number.isFinite)))) throw new Error(`${name}: a section of three points or more, each finite`);
-    const xs = 'box' in s ? s.box : 'cyl' in s ? s.cyl : 'tube' in s ? s.tube : 'cup' in s ? s.cup : 'hex' in s ? s.hex : 'dome' in s ? s.dome : 'case' in s ? s.case : 'section' in s ? [Math.max(...sx) - Math.min(...sx), Math.max(...sy) - Math.min(...sy), s.section.L] : s.coil; sizes(name, xs);
+    const xs = 'box' in s ? s.box : 'cyl' in s ? s.cyl : 'tube' in s ? s.tube : 'cup' in s ? s.cup : 'hex' in s ? s.hex : 'dome' in s ? s.dome : 'case' in s ? s.case : 'section' in s ? [Math.max(...sx) - Math.min(...sx), Math.max(...sy) - Math.min(...sy), s.section.L] : 'bend' in s ? s.bend : s.coil; sizes(name, xs);
+    // (a bend: its bend radius to its middle line, its outside radius, its angle in degrees, its bore's radius if hollow)
+    if ('bend' in s && !(s.bend[1] < s.bend[0] && s.bend[2] <= 180 && (s.bend[3] === undefined || s.bend[3] < s.bend[1]))) throw new Error(`${name}: a bend's radius above its tube's outside radius, its angle at most 180°, its bore within its outside (${s.bend.map((v) => +v.toPrecision(6)).join(', ')})`);
+    if ('bend' in s && (o.pattern || o.joint)) throw new Error(`${name}: a bend offers no pattern and goes on no joint (not made yet)`);
     if ('case' in s && !(2 * s.case[3] < s.case[0] && 2 * s.case[3] < s.case[2] && s.case[4] < s.case[1])) throw new Error(`${name}: its walls within its width and depth, its floor within its height`);
     if ('hex' in s && s.hex[2] !== undefined && !(s.hex[2] < s.hex[0] / 2)) throw new Error(`${name}: a bore within its flats (${s.hex[2]} ≥ ${s.hex[0] / 2})`);
     if ('coil' in s && !(s.coil[1] < s.coil[0] && s.coil[3] >= s.coil[1])) throw new Error(`${name}: a coil's wire within its radius and its pitch at least its wire (no turn through the next)`);
@@ -228,20 +353,21 @@ export class Block {
       : 'hex' in s ? { k: 'hex', c: [0, 0, 0], af: s.hex[0], r: s.hex[0] / Math.sqrt(3), h: s.hex[1], ...(s.hex[2] !== undefined ? { ri: s.hex[2] } : {}) } : 'dome' in s ? { k: 'dome', c: [0, 0, 0], r: s.dome[0], h: s.dome[0] }
       : 'coil' in s ? { k: 'coil', c: [0, 0, 0], R: s.coil[0], d: s.coil[1], turns: s.coil[2], pitch: s.coil[3], layers: s.coil[4] ?? 1, r: s.coil[0] + s.coil[1] / 2 + ((s.coil[4] ?? 1) - 1) * s.coil[1], ri: s.coil[0] - s.coil[1] / 2, h: s.coil[2] * s.coil[3] + s.coil[1] }
       : 'case' in s ? { k: 'box', c: [0, 0, 0], size: [s.case[0], s.case[1], s.case[2]], tray: { wall: s.case[3], floor: s.case[4] } }
+      : 'bend' in s ? (() => { const sh = { R: s.bend[0], ro: s.bend[1], a: (s.bend[2] * Math.PI) / 180, ...(s.bend[3] !== undefined ? { ri: s.bend[3] } : {}) }; return { k: 'bend' as const, c: [0, 0, 0] as P3, ...sh }; })()
       : 'section' in s ? { k: 'box', c: [0, 0, 0], size: [xs[0]!, xs[1]!, s.section.L], sect: s.section.pts.map(([x, y]) => [x - (Math.max(...sx) + Math.min(...sx)) / 2, y - (Math.max(...sy) + Math.min(...sy)) / 2] as [number, number]) }
       : { k: 'cup', c: [0, 0, 0], r: s.cup[0], h: s.cup[1], wall: s.cup[2], ends: s.cup[3], open: true };
     const lines: Line[] = [], minus: Prim[] = [];
-    if (base.k !== 'box') lines.push({ port: `${name}/axis`, x: 0, z: 0, slot: base.r });
+    if (roundish(base)) lines.push({ port: `${name}/axis`, x: 0, z: 0, slot: base.r });
     const pat = o.pattern; if (pat) {
       const pts: [number, number][] = pat.circle ? Array.from({ length: pat.circle.n }, (_, i) => { const a = (pat.circle!.phase ?? 0) + (2 * Math.PI * i) / pat.circle!.n; return [pat.circle!.r * Math.cos(a), pat.circle!.r * Math.sin(a)]; }) : (pat.points ?? []);
       if (pat.circle) sizes(`${name}/${pat.name}`, [pat.circle.n, pat.circle.r]); for (const q of pts) if (!q.every(Number.isFinite)) throw new Error(`${name}/${pat.name}: a point is finite`);
       pts.forEach((q, i) => {
-        const edge = base.k === 'box' ? Math.min(base.size[0] / 2 - Math.abs(q[0]), base.size[2] / 2 - Math.abs(q[1])) : base.r - Math.hypot(q[0], q[1]) - (base.k === 'cup' ? 0 : 0);
+        const edge = base.k === 'box' ? Math.min(base.size[0] / 2 - Math.abs(q[0]), base.size[2] / 2 - Math.abs(q[1])) : base.k === 'bend' ? 0 : base.r - Math.hypot(q[0], q[1]);
         const bore = base.k === 'cyl' && base.ri !== undefined ? Math.hypot(q[0], q[1]) - base.ri : Infinity;
         const near = Math.min(Infinity, ...pts.filter((_, k) => k !== i).map((w) => Math.hypot(w[0] - q[0], w[1] - q[1]) / 2)), slot = Math.min(edge, bore, near);
         if (!(slot > 0)) throw new Error(`${name}/${pat.name} ${i}: the pattern lies outside the piece (its slot ${(slot * 1000).toFixed(2)} mm)`);
         if (pat.hole !== undefined) { sizes(`${name}/${pat.name} hole`, [pat.hole]); if (!(pat.hole < slot)) throw new Error(`${name}/${pat.name}: a hole of ${pat.hole * 1000} mm needs a slot of more; it has ${(slot * 1000).toFixed(2)} mm`);
-          minus.push({ k: 'cyl', c: [q[0], 0, q[1]], r: pat.hole, h: (base.k === 'box' ? base.size[1] : base.h) + 2e-9 }); }
+          minus.push({ k: 'cyl', c: [q[0], 0, q[1]], r: pat.hole, h: (base.k === 'box' ? base.size[1] : base.k === 'bend' ? 0 : base.h) + 2e-9 }); }
         lines.push({ port: `${name}/${pat.name}`, x: q[0], z: q[1], slot, ...(pat.hole !== undefined ? { opening: pat.hole } : {}) });
       });
     }
@@ -259,7 +385,9 @@ export class Block {
       Block.#is(it.b); if (it.fit !== undefined && !(it.fit in FITS)) throw new Error(`${name}: a fit by name (${String(it.fit)})`);
       const line = align ? it.b.pieces.flatMap((p) => p.lines.filter((l) => l.port === align)) : [], mid = it.b.lo.map((v, k) => (v + it.b.hi[k]!) / 2);
       // (centred across, or, laid in a row along x or z with `level`, each standing on the ground: its bottom at y = 0)
-      const across = line.length ? [line[0]!.x, mid[1]!, line[0]!.z] : mid, d0 = [0, 1, 2].map((k) => (k === axis ? 0 : level && k === 1 && axis !== 1 ? -it.b.lo[1] : -across[k]!)) as V3;
+      // (on a turned line: only one along the stack's axis, centred on its point)
+      const l0 = line[0]; if (l0 && !alongY(l0) && !(Math.abs(Math.abs(l0.dir![axis]) - 1) < 1e-9)) throw new Error(`${name}: the line ${align} is turned across the stack's axis: align on a line along it`);
+      const across = l0 ? (alongY(l0) ? [l0.x, mid[1]!, l0.z] : [l0.x, l0.y!, l0.z]) : mid, d0 = [0, 1, 2].map((k) => (k === axis ? 0 : level && k === 1 && axis !== 1 ? -it.b.lo[1] : -across[k]!)) as V3;
       let s = Block.#shift(it.b, d0);
       if (i > 0) {
         // (it comes to rest on what is in its path: the pieces before it whose bounds overlap its own across the stack's
@@ -322,25 +450,29 @@ export class Block {
     const offers = b.pieces.flatMap((p, k) => p.lines.filter((l) => l.port === on.port).map((l) => ({ p, k, l })));
     if (new Set(offers.map((o) => o.k)).size > 1) throw new Error(`through: ${new Set(offers.map((o) => o.k)).size} pieces offer ${on.port}: name them apart`);
     const o = offers[on.i ?? 0]; if (!o) throw new Error(`through: ${b.name} offers no line ${on.port}${on.i !== undefined ? ` ${on.i}` : ''}`);
+    const bent = passer.pieces.find((q) => q.solid.base.frame || q.solid.base.k === 'bend'); if (bent) throw new Error(`through: the ${bent.name} is turned or bent: a passer goes along its line as it was made, straight; pass it, then turn the whole`);
+    // (a turned line: in its own frame, where it runs along +y; lo and hi its own ends, against and along its direction)
+    if (!alongY(o.l)) return Block.#inFrame(b, o.l.dir!, 'through', passer, (h) => Block.through(h, passer, on, fit));
     const g = gapOf(fit), hb = primBox(o.p.solid.base), y0 = on.from === 'lo' ? hb[0][1] : hb[1][1];
     const pc = [(passer.lo[0] + passer.hi[0]) / 2, (passer.lo[2] + passer.hi[2]) / 2], P = Block.#shift(passer, [o.l.x - pc[0]!, on.from === 'lo' ? y0 - passer.lo[1] : y0 - passer.hi[1], o.l.z - pc[1]!]);
     const rho = Math.max(...P.pieces.map((q) => reach(sweepOf(q), o.l.x, o.l.z)));
     if (rho + g > o.l.slot + 1e-12) throw new Error(`no room on ${on.port}: the ${passer.name} needs ${((rho + g) * 1000).toFixed(2)} mm from the line; the line offers ${(o.l.slot * 1000).toFixed(2)} mm`);
     const pb = P.pieces.map(boundOf), all: [V3, V3] = [[0, 1, 2].map((k) => Math.min(...pb.map((x) => x[0][k]!))) as V3, [0, 1, 2].map((k) => Math.max(...pb.map((x) => x[1][k]!))) as V3];
-    const grow = (m: Prim): Prim => (m.k === 'box' ? { ...m, size: [m.size[0] + 2 * g, m.size[1], m.size[2] + 2 * g] } : { k: 'cyl', c: m.c, r: m.r + g, h: m.h, ...((m.k === 'cyl' || m.k === 'coil' || m.k === 'hex') && m.ri !== undefined ? { ri: Math.max(0, m.ri - g) } : {}) });
+    const grow = (m: Prim): Prim => (m.k === 'box' ? { ...m, size: [m.size[0] + 2 * g, m.size[1], m.size[2] + 2 * g] } : m.k === 'bend' ? { ...m, ro: m.ro + g, ...(m.ri !== undefined ? { ri: Math.max(0, m.ri - g) } : {}) }
+      : { k: 'cyl', c: m.c, r: m.r + g, h: m.h, ...((m.k === 'cyl' || m.k === 'coil' || m.k === 'hex') && m.ri !== undefined ? { ri: Math.max(0, m.ri - g) } : {}), ...(m.frame ? { frame: m.frame } : {}) });
     const onLine = (ax: readonly [number, number]) => Math.hypot(ax[0] - o.l.x, ax[1] - o.l.z) < 1e-12;
     const cutFor = (q: Piece, s: Piece): Prim => {
       if (coMove(q, s) || (!q.joint && !s.joint)) return q.solid.base;
       if (q.joint && s.joint) throw new Error(`through: the ${q.name} and the ${s.name} move on two joints (${q.joint.name}, ${s.joint.name}): refused`);
       const m = (q.joint ?? s.joint)!, mover = q.joint ? q : s;
-      if (m.turn) { if (!onLine(mover.axis!)) throw new Error(`through: the ${mover.name} turns about another line than ${on.port}: refused`); const B = q.solid.base; return B.k !== 'box' && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-12 ? B : { k: 'cyl', c: [o.l.x, B.c[1], o.l.z], r: reach(B, o.l.x, o.l.z), h: B.k === 'box' ? B.size[1] : B.h }; }
+      if (m.turn) { if (!onLine(mover.axis!)) throw new Error(`through: the ${mover.name} turns about another line than ${on.port}: refused`); const B = q.solid.base; if (B.k === 'bend') throw new Error(`through: the ${q.name} is bent and on a joint: not made yet`); return B.k !== 'box' && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-12 ? B : { k: 'cyl', c: [o.l.x, B.c[1], o.l.z], r: reach(B, o.l.x, o.l.z), h: B.k === 'box' ? B.size[1] : B.h }; }
       // (a slide along the line: the passer's room swept along it, up when the passer slides, down when the host does)
       return q.joint ? sweepOf(q) : (() => { const sw = sweepOf({ ...q, joint: m }), dy = -m.slide!; return shiftPrim(sw, [0, dy, 0]); })();
     };
     const pieces = b.pieces.map((s): Piece => {
       if (!meets(boundOf(s), all)) return s;
       const hit = P.pieces.filter((q, k) => meets(boundOf(s), pb[k]!)); if (!hit.length) return s;
-      if (s.bought) { const op = s.lines.find((l) => l.opening !== undefined && Math.hypot(l.x - o.l.x, l.z - o.l.z) < 1e-12);
+      if (s.bought) { const op = s.lines.find((l) => l.opening !== undefined && alongY(l) && Math.hypot(l.x - o.l.x, l.z - o.l.z) < 1e-12);
         const need = Math.max(...hit.map((q) => reach(sweepOf(q), o.l.x, o.l.z))) + g;
         if (!op) throw new Error(`through: the ${s.name} is bought and lies in the way off its openings: refused (never cut)`);
         if (need > op.opening! + 1e-12) throw new Error(`no room in the ${s.name}'s opening: the ${passer.name} needs ${(need * 1000).toFixed(2)} mm; it opens ${(op.opening! * 1000).toFixed(2)} mm`);
@@ -353,9 +485,9 @@ export class Block {
       pieces.forEach((s, j) => {
         if (!meets(boundOf(s), [[qb[0][0] - g - 1e-9, qb[0][1], qb[0][2] - g - 1e-9], [qb[1][0] + g + 1e-9, qb[1][1], qb[1][2] + g + 1e-9]])) return;
         // (its side against the hole's wall, where the solid it crosses has material round it)
-        const B = q.solid.base, w = B.k !== 'box' ? roundFace(s, B.c[0], B.c[2], B.r + g, qb[0][1], qb[1][1], false) : boxSide(s, q, g);
+        const B = q.solid.base; if (B.k === 'bend') return; const w = B.k !== 'box' ? roundFace(s, B.c[0], B.c[2], B.r + g, qb[0][1], qb[1][1], false) : boxSide(s, q, g);
         // (or, through a bore it already has, across the gap the bore leaves)
-        const SB = s.solid.base, bore = SB.k === 'cyl' && SB.ri !== undefined && B.k !== 'box' && Math.hypot(SB.c[0] - B.c[0], SB.c[2] - B.c[2]) < 1e-12 && SB.ri > B.r + g ? SB.ri - B.r : 0;
+        const SB = s.solid.base, bore = SB.k === 'cyl' && upright(SB) && SB.ri !== undefined && B.k !== 'box' && Math.hypot(SB.c[0] - B.c[0], SB.c[2] - B.c[2]) < 1e-12 && SB.ri > B.r + g ? SB.ri - B.r : 0;
         // (only where nothing else stands in that bore between them)
         const between = bore > 0 && pieces.some((t, m) => m !== j && meets(boundOf(t), primBox({ k: 'cyl', c: B.c, r: (SB as { ri: number }).ri, h: (B as { h: number }).h })));
         if (bore && !between && !(w.area > 0 || w.length > 0)) { const sb = primBox(s.solid.base), lo = Math.max(sb[0][1], qb[0][1]), hi = Math.min(sb[1][1], qb[1][1]);
@@ -415,6 +547,9 @@ export class Block {
     Block.#is(host); Block.#is(sleeve); if (!(fit in FITS)) throw new Error(`over: a fit by name`);
     const offers = host.pieces.flatMap((p, k) => p.lines.filter((l) => l.port === port).map((l) => ({ p, k, l })));
     const o = offers[0]; if (!o) throw new Error(`over: ${host.name} offers no line ${port}`);
+    const bent = sleeve.pieces.find((q) => q.solid.base.frame); if (bent) throw new Error(`over: the ${bent.name} is turned: a sleeve goes over its line as it was made; slide it on, then turn the whole`);
+    // (a turned line: in its own frame, where it runs along +y; lo and hi its own ends)
+    if (!alongY(o.l)) return Block.#inFrame(host, o.l.dir!, 'over', sleeve, (h) => Block.over(h, port, sleeve, where, fit));
     const g = gapOf(fit), cx = (sleeve.lo[0] + sleeve.hi[0]) / 2, cz = (sleeve.lo[2] + sleeve.hi[2]) / 2;
     // (its bore: the least, over its pieces, of what each leaves free round its axis; each centred on it)
     let bore = Infinity;
@@ -428,7 +563,7 @@ export class Block {
     // (a round piece on the same line that fits within the bore with the gap (the shaft a core sits on) passes inside it;
     // any other piece of the host is tried by its bound against the sleeve's)
     for (const q of host.pieces) { if (q === o.p) continue; const qs = sweepOf(q);
-      if (qs.k !== 'box' && !q.joint && Math.hypot(qs.c[0] - o.l.x, qs.c[2] - o.l.z) < 1e-12 && qs.r + g <= bore + 1e-12) continue;
+      if (roundish(qs) && upright(qs) && !q.joint && Math.hypot(qs.c[0] - o.l.x, qs.c[2] - o.l.z) < 1e-12 && qs.r + g <= bore + 1e-12) continue;
       const qb = boundOf(q); const hit = S.pieces.find((x) => meets(qb, boundOf(x))); if (hit) throw new Error(`no room over ${port}: the ${sleeve.name} would meet the ${q.name}`); }
     const n = host.pieces.length, faces: Face[] = [...host.faces, ...S.faces.map((f) => ({ ...f, a: f.a + n, b: f.b + n }))], rs = need - g;
     S.pieces.forEach((q, i) => { const qb = primBox(q.solid.base), lo = Math.max(qb[0][1], sb[0][1]), hi = Math.min(qb[1][1], sb[1][1]);
@@ -445,9 +580,77 @@ export class Block {
     for (let i = 0; i < n; i++) { const a = (2 * Math.PI * i) / n, s = Block.#shift(b, [R * Math.cos(a) - cx, 0, R * Math.sin(a) - cz]), k = pieces.length; pieces.push(...s.pieces.map((p) => (p.joint ? { ...p, joint: p.joint } : p))); faces.push(...s.faces.map((f) => ({ ...f, a: f.a + k, b: f.b + k }))); }
     return Block.#seal(name, pieces, faces);
   }
+
+  /** A run of tube laid with no coordinates: segments in order, each starting where the last one ended, in the last
+   *  one's frame (its heading, and its own x and z, which turn with it): a straight so long, or a bend through so many
+   *  degrees (more than 0, at most 180) round a bend radius, toward the frame's +x (`toward` 0), +z (90), −x (180) or −z
+   *  (270), or any angle between. Two bends toward +x turn the same way; +x then −x make an offset. A straight may carry
+   *  a sleeve round it (a fitting's socket) from one length along it to another, its bore at least the tube's outside.
+   *  Each segment lies between its start's plane and its end's (a bend of at most a half turn too), so two that follow
+   *  one another meet only on the plane they share; two that do not are kept apart by their bounds (comparison (3)):
+   *  where those meet, the path runs into itself and it is refused with both. A bend radius not above its tube's outside
+   *  radius is refused (the tube would cross itself). Faces: each pair of rings that meet end to end, and round each
+   *  sleeve. Each straight offers its axis (`<its name>/axis`, a turned line), for a coupling to slide over. */
+  static run(name: string, segs: readonly RunSeg[]): Block {
+    if (!segs.length) throw new Error(`${name}: a run of one segment or more`);
+    let F: M3 = I3, S: V3 = [0, 0, 0], last: { k: number; ri: number; ro: number }[] = [];
+    const pieces: Piece[] = [], faces: Face[] = [], groups: number[][] = [];
+    segs.forEach((s, i) => {
+      const tag = `${name}, segment ${i + 1} (${s.name})`, ri = s.ri ?? 0, g: number[] = [], here: { k: number; ri: number; ro: number }[] = [], next: { k: number; ri: number; ro: number }[] = [];
+      sizes(tag, [s.ro, ...(s.ri !== undefined ? [s.ri] : [])]); if (!(ri < s.ro)) throw new Error(`${tag}: a bore within its outside (${(ri * 1000).toFixed(2)} ≥ ${(s.ro * 1000).toFixed(2)} mm)`);
+      const put = (pr: Prim, t: RunTube, lines: Line[] = []) => { pieces.push({ name: t.name, mat: t.mat, ...(t.color !== undefined ? { color: t.color } : {}), solid: { base: pr, minus: [] }, lines }); g.push(pieces.length - 1); return pieces.length - 1; };
+      const fr = snap(F), heading = mv(F, [0, 1, 0]), hollow = s.ri !== undefined ? { ri: s.ri } : {};
+      if ('straight' in s) {
+        const L = s.straight; sizes(tag, [L]); const c = add(S, mv(F, [0, L / 2, 0])), d = snapDir(heading);
+        const axis: Line = d[0] === 0 && d[2] === 0 && d[1] === 1 ? { port: `${s.name}/axis`, x: c[0], z: c[2], slot: s.ro } : { port: `${s.name}/axis`, x: c[0], y: c[1], z: c[2], slot: s.ro, dir: d };
+        const k = put({ k: 'cyl', c, r: s.ro, h: L, ...hollow, ...(fr ? { frame: fr } : {}) }, s, [axis]);
+        here.push({ k, ri, ro: s.ro }); next.push({ k, ri, ro: s.ro });
+        // (its sleeves, in order along it, none over another)
+        const vs = [...(s.sleeves ?? [])].sort((a, b) => a.from - b.from); vs.forEach((v, n) => { if (n && v.from < vs[n - 1]!.to - 1e-12) throw new Error(`${tag}: its sleeves ${vs[n - 1]!.name} and ${v.name} would lie one over the other`); });
+        for (const v of vs) { const vt = `${tag}, its sleeve ${v.name}`; sizes(vt, [v.ro, ...(v.ri !== undefined ? [v.ri] : [])]);
+          if (!(v.from >= 0 && v.to <= L + 1e-12 && v.to > v.from)) throw new Error(`${vt}: from ${(v.from * 1000).toFixed(2)} to ${(v.to * 1000).toFixed(2)} mm, within its straight's ${(L * 1000).toFixed(2)} mm`);
+          if (!(v.ri !== undefined && v.ri + 1e-12 >= s.ro && v.ri < v.ro)) throw new Error(`no room round ${tag}: its sleeve's bore is ${((v.ri ?? 0) * 2000).toFixed(2)} mm across; it needs ${(s.ro * 2000).toFixed(2)} mm`);
+          const vc = add(S, mv(F, [0, (v.from + v.to) / 2, 0])), q = put({ k: 'cyl', c: vc, r: v.ro, ri: v.ri, h: v.to - v.from, ...(fr ? { frame: fr } : {}) }, v), gap = Math.max(0, v.ri - s.ro);
+          faces.push({ a: k, b: q, kind: gap > 1e-12 ? 'gap' : 'contact', patch: 'area', area: 2 * Math.PI * s.ro * (v.to - v.from), at: vc, normal: snapDir(mv(F, [1, 0, 0])), gap, ...(gap > 1e-12 ? { medium: MEDIUM } : {}), by: `${v.name} round ${s.name}` });
+          if (v.from < 1e-12) here.push({ k: q, ri: v.ri, ro: v.ro }); if (v.to > L - 1e-12) next.push({ k: q, ri: v.ri, ro: v.ro }); }
+        S = add(S, mv(F, [0, L, 0]));
+      } else {
+        if (!(Number.isFinite(s.bend) && s.bend > 0 && s.bend <= 180)) throw new Error(`${tag}: a bend of more than 0° and at most 180° (${s.bend}°)`);
+        sizes(tag, [s.R]); if (!(s.R > s.ro)) throw new Error(`${tag}: its bend radius ${(s.R * 1000).toFixed(2)} mm is not above its tube's outside radius ${(s.ro * 1000).toFixed(2)} mm: the tube would cross itself`);
+        // (its own frame G: the run's turned about its heading so the bend's −x is toward where it turns; the centre it is
+        // bent round a bend radius from where it starts; the frame after it turned with it about that centre's axis)
+        const roll = turnOf(1, 180 - (s.toward ?? 0)), G = mul(F, roll), a = (s.bend * Math.PI) / 180, sh = { R: s.R, ro: s.ro, a, ...hollow };
+        const O = sub(S, mv(G, [s.R, 0, 0])), Rz = turnOf(2, s.bend), gf = snap(G), k = put({ k: 'bend', c: add(O, mv(G, bendMid(sh))), ...sh, ...(gf ? { frame: gf } : {}) }, s);
+        here.push({ k, ri, ro: s.ro }); next.push({ k, ri, ro: s.ro });
+        S = add(O, mv(G, [s.R * Rz[0], s.R * Rz[3], 0])); F = mul(mul(G, Rz), tr(roll));
+      }
+      // (where it meets the last: each ring there against each of its own that starts there, their overlap)
+      for (const p of last) for (const q of here) { const lo = Math.max(p.ri, q.ri), hi = Math.min(p.ro, q.ro);
+        if (hi > lo + 1e-12) faces.push({ a: p.k, b: q.k, kind: 'contact', patch: 'area', area: Math.PI * (hi * hi - lo * lo), at: startOf(pieces[q.k]!.solid.base), normal: snapDir(heading), gap: 0, by: `${name}: end to end` }); }
+      groups.push(g); last = next;
+    });
+    // (two segments that do not follow one another: their bounds may not meet)
+    const bound = (g: number[]): [V3, V3] => { const bs = g.map((k) => boundOf(pieces[k]!)); return [[0, 1, 2].map((k) => Math.min(...bs.map((b) => b[0][k]!))) as V3, [0, 1, 2].map((k) => Math.max(...bs.map((b) => b[1][k]!))) as V3]; };
+    const bs = groups.map(bound), mmOf = (b: [V3, V3]) => `x ${(b[0][0] * 1000).toFixed(1)}…${(b[1][0] * 1000).toFixed(1)}, y ${(b[0][1] * 1000).toFixed(1)}…${(b[1][1] * 1000).toFixed(1)}, z ${(b[0][2] * 1000).toFixed(1)}…${(b[1][2] * 1000).toFixed(1)} mm`;
+    for (let i = 0; i < bs.length; i++) for (let j = i + 2; j < bs.length; j++) if (meets(bs[i]!, bs[j]!))
+      throw new Error(`${name}: segments ${i + 1} (${segs[i]!.name}) and ${j + 1} (${segs[j]!.name}) do not follow one another and their bounds meet (${mmOf(bs[i]!)} against ${mmOf(bs[j]!)}): the path runs into itself`);
+    return Block.#seal(name, pieces, faces);
+  }
 }
+/** A tube a run lays: its name, material, outside radius and bore (none: solid). */
+export interface RunTube { readonly name: string; readonly mat: string; readonly ro: number; readonly ri?: number; readonly color?: number }
+/** A segment of a run: a straight (and a sleeve round it), or a bend. */
+export type RunSeg = RunTube & ({ readonly straight: number; readonly sleeves?: readonly (RunTube & { readonly from: number; readonly to: number })[] } | { readonly bend: number; readonly R: number; readonly toward?: number });
+/** Where a straight's or a bend's middle line starts and ends, and its heading at each: read from the solid alone. */
+export function endsOf(p: Prim): { start: V3; end: V3; startDir: V3; endDir: V3 } {
+  const f = p.frame ?? I3;
+  if (p.k === 'cyl') return { start: sub(p.c, mv(f, [0, p.h / 2, 0])), end: add(p.c, mv(f, [0, p.h / 2, 0])), startDir: mv(f, [0, 1, 0]), endDir: mv(f, [0, 1, 0]) };
+  if (p.k === 'bend') { const O = sub(p.c, mv(f, bendMid(p))); return { start: add(O, mv(f, [p.R, 0, 0])), end: add(O, mv(f, [p.R * Math.cos(p.a), p.R * Math.sin(p.a), 0])), startDir: mv(f, [0, 1, 0]), endDir: mv(f, [-Math.sin(p.a), Math.cos(p.a), 0]) }; }
+  throw new Error(`a ${p.k} has no middle line`);
+}
+const startOf = (p: Prim): V3 => endsOf(p).start;
 // (the least distance from a line along y to a prim's outside)
-const outsideNear = (b: Prim, x: number, z: number): number => b.k === 'box' ? Math.min(b.size[0] / 2 - Math.abs(x - b.c[0]), b.size[2] / 2 - Math.abs(z - b.c[2])) : b.r - Math.hypot(x - b.c[0], z - b.c[2]);
+const outsideNear = (b: Prim, x: number, z: number): number => b.k === 'bend' || b.frame ? 0 : b.k === 'box' ? Math.min(b.size[0] / 2 - Math.abs(x - b.c[0]), b.size[2] / 2 - Math.abs(z - b.c[2])) : b.r - Math.hypot(x - b.c[0], z - b.c[2]);
 // (a box passer's four sides against the solid it crosses, offset by the gap)
 function boxSide(s: Piece, q: Piece, g: number): { area: number; length: number; at: V3 } {
   const B = q.solid.base as Extract<Prim, { k: 'box' }>, sb = primBox(s.solid.base), qb = primBox(B), y0 = Math.max(sb[0][1], qb[0][1]), y1 = Math.min(sb[1][1], qb[1][1]); if (!(y0 < y1)) return { area: 0, length: 0, at: [0, 0, 0] };
@@ -456,7 +659,7 @@ function boxSide(s: Piece, q: Piece, g: number): { area: number; length: number;
     for (let a = 0; a < M; a++) for (let k = 0; k < M; k++) { const o: V3 = [0, y0 + ((k + 0.5) * (y1 - y0)) / M, 0]; o[ax] = B.c[ax] + sg * (B.size[ax] / 2 + g + EPS); o[w] = B.c[w] - L / 2 + ((a + 0.5) * L) / M; tot++; if (inPiece(s, ...o)) n++; } }
   return n ? { area: (n / tot) * 2 * (B.size[0] + B.size[2]) * (y1 - y0), length: 0, at: [B.c[0], (y0 + y1) / 2, B.c[2]] } : { area: 0, length: 0, at: [0, 0, 0] };
 }
-export const made = Block.made, stack = Block.stack, around = Block.around, through = Block.through, into = Block.into, onto = Block.onto, ring = Block.ring, over = Block.over;
+export const made = Block.made, stack = Block.stack, around = Block.around, through = Block.through, into = Block.into, onto = Block.onto, ring = Block.ring, over = Block.over, turn = Block.turn, run = Block.run;
 
 // ---- a block as the app draws it --------------------------------------------------------------------------------
 const LOOK: Record<string, number> = { 'steel-low': 0x8a8c90, 'steel-alloy': 0x6e7175, copper: 0xb87333, brass: 0xc9a54a, 'al-6061': 0xc4c8cc, 'al-6063': 0xc8ccd0, 'al-a380': 0xb8bcc0, abs: 0xc9ccd1, 'stainless-304': 0xb8bcc2, fr4: 0x1f6b3a, pvc: 0x2a2a2a, nylon: 0xe8e4d8, glass: 0xdfe8ee, pc: 0xf2f2f0, epoxy: 0xf4f4f0, pom: 0x1c1c1c, ndfeb: 0x4a4d52 };
@@ -473,14 +676,17 @@ const helix = (R: number, turns: number, pitch: number, H: number): [number, num
  *  faces counted in what it says. Never edited back: a block is changed only by the operations. */
 export function partOfBlock(b: Block): Part {
   const parts = b.pieces.map((p): Part => {
-    const B = p.solid.base, cuts: Cut[] = [];
+    // (a turned piece drawn in its own frame, turned; a bend about the centre it is bent round, as a ring's arc is drawn;
+    // each cut in the piece's own frame)
+    const B = p.solid.base, cuts: Cut[] = [], f = B.frame, own = (v: P3): V3 => (f ? mtv(f, v) : [v[0], v[1], v[2]]);
+    const origin: V3 = B.k === 'bend' ? sub(B.c, f ? mv(f, bendMid(B)) : bendMid(B)) : [B.c[0], B.c[1], B.c[2]], turned = f ? { rot: eulerOf(f) } : {};
     if ((B.k === 'cyl' || B.k === 'hex') && B.ri !== undefined) cuts.push({ r: B.ri, depth: B.h, at: [0, B.h / 2, 0], dir: [0, -1, 0] });
     for (const m of p.solid.minus) {
-      const h = m.k === 'box' ? m.size[1] : m.h, at: V3 = [m.c[0] - B.c[0], m.c[1] - B.c[1] + h / 2, m.c[2] - B.c[2]];
-      if (m.k === 'box') { const [w, , d] = m.size; cuts.push({ r: Math.hypot(w, d) / 2, depth: h, at, dir: [0, -1, 0], u: [1, 0, 0], sect: [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]] }); }
+      if (m.k === 'bend') continue; const h = m.k === 'box' ? m.size[1] : m.h, mf = m.frame ?? I3, at = own(sub(add(m.c, mv(mf, [0, h / 2, 0])), origin)), dir = own(mv(mf, [0, -1, 0]));
+      if (m.k === 'box') { const [w, , d] = m.size; cuts.push({ r: Math.hypot(w, d) / 2, depth: h, at, dir, u: own(mv(mf, [1, 0, 0])), sect: [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]] }); }
       // (a ring a sleeve took out of a shaft's skin is not drawn: a cut is drawn as a whole hole, and the ring is thinner
       // than its fit's gap; the solid as the operations hold it has it)
-      else if (!((m.k === 'cyl' || m.k === 'coil' || m.k === 'hex') && m.ri !== undefined && m.ri > 0)) cuts.push({ r: m.r, depth: h, at, dir: [0, -1, 0] });
+      else if (!((m.k === 'cyl' || m.k === 'coil' || m.k === 'hex') && m.ri !== undefined && m.ri > 0)) cuts.push({ r: m.r, depth: h, at, dir });
     }
     const look = { mat: p.mat, ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}) };
     // (a case: its floor and four walls, each where the case's own shape has it; a coil of several layers: a helix each)
@@ -488,12 +694,12 @@ export function partOfBlock(b: Block): Part {
       const walls: Part[] = [{ name: `${p.name} floor`, shape: { box: [w, f, d] }, at: [0, -half(h) + half(f), 0], ...look },
         { name: `${p.name} wall`, shape: { box: [t, h - f, d] }, at: [-half(w) + half(t), half(f), 0], ...look }, { name: `${p.name} wall`, shape: { box: [t, h - f, d] }, at: [half(w) - half(t), half(f), 0], ...look },
         { name: `${p.name} wall`, shape: { box: [w - 2 * t, h - f, t] }, at: [0, half(f), -half(d) + half(t)], ...look }, { name: `${p.name} wall`, shape: { box: [w - 2 * t, h - f, t] }, at: [0, half(f), half(d) - half(t)], ...look }];
-      return { name: p.name, item: p.name, one: true, at: [B.c[0], B.c[1], B.c[2]], parts: walls, ...look }; }
-    if (B.k === 'coil' && B.layers > 1) return { name: p.name, item: p.name, one: true, at: [B.c[0], B.c[1], B.c[2]], ...look,
+      return { name: p.name, item: p.name, one: true, at: origin, ...turned, parts: walls, ...look }; }
+    if (B.k === 'coil' && B.layers > 1) return { name: p.name, item: p.name, one: true, at: origin, ...turned, ...look,
       parts: Array.from({ length: B.layers }, (_, k) => ({ name: `${p.name} layer ${k + 1}`, shape: { tube: { r: B.d / 2, pts: helix(B.R + k * B.d, B.turns, B.pitch, B.h - B.d) } }, at: [0, 0, 0] as [number, number, number], ...look })) };
     const shape: Shape = B.k === 'box' ? (B.sect ? { prism: { pts: B.sect.map(([x, y]) => [x, y] as [number, number]), L: B.size[2] } } : { box: [B.size[0], B.size[1], B.size[2]] }) : B.k === 'cyl' || B.k === 'hex' ? { cyl: [B.r, B.h] } : B.k === 'dome' ? { lathe: domeProfile(B.r) }
-      : B.k === 'coil' ? { tube: { r: B.d / 2, pts: helix(B.R, B.turns, B.pitch, B.h - B.d) } } : { lathe: cupProfile(B) };
-    return { name: p.name, item: p.name, shape, at: [B.c[0], B.c[1], B.c[2]], mat: p.mat, ...(B.k === 'hex' ? { facets: 6 } : {}), ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}), ...(cuts.length ? { cuts } : {}) };
+      : B.k === 'coil' ? { tube: { r: B.d / 2, pts: helix(B.R, B.turns, B.pitch, B.h - B.d) } } : B.k === 'bend' ? { torus: [B.R, B.ro, B.a] } : { lathe: cupProfile(B) };
+    return { name: p.name, item: p.name, shape, at: origin, ...turned, mat: p.mat, ...(B.k === 'hex' ? { facets: 6 } : {}), ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}), ...(cuts.length ? { cuts } : {}) };
   });
   return { name: b.name, parts, says: `${b.pieces.length} pieces, each placed by the operations; ${b.faces.length} faces where they meet` };
 }
