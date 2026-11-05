@@ -2,7 +2,7 @@
 
 Task in hand: 06.M2 (the library the AI builds a lot from, decision 0026: foundations, tables filled, assemblies and search, bootstrap); the phone page (decisions 0023, 0025, `npm run app`)
 Spec in hand: spec 06, the phone (`plan/specs/06-phone/`); spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: bc82a9f (2026-11-05)
+Last commit the gate passed: c6df16c (2026-11-05)
 
 ## Next three (from the start queue in `plan/README.md`)
 
