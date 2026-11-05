@@ -484,7 +484,7 @@ const HEATSETS: PartFamily<Heat> = {
   says: 'A brass heat-set insert by its maker\'s own row (McMaster-Carr, Hilitchi, AE-SamZhihui): drawn as a sleeve at its knurl\'s crest, its bore the thread\'s size (its knurl and thread not drawn). Pressed hot down a plastic part\'s hole (Through a line, tight); a screw then goes down its bore',
   rows: HEATSET, size: 'M3-0.5-Standard McMaster-Carr', source: 'each maker\'s row as bd_warehouse gives it (copied here)',
   cannot: (q, size) => (dOf(size) < q.s ? null : `its row leaves no wall round an ${dOf(size)} mm thread (${q.s} mm outside)`),
-  recipe: (q, size) => made(`${size.split('-')[0]} heat-set insert ${q.m} mm`, 'brass', { tube: [mm(dOf(size)) / 2, mm(q.s) / 2, mm(q.m)] }),
+  recipe: (q, size) => made(`${size.split('-')[0]} heat-set insert ${q.m} mm`, 'brass', { tube: [mm(dOf(size)) / 2, mm(q.s) / 2, mm(q.m)] }, { tapped: true }),
   expect: (q, size) => ({ bound: [mm(q.s), mm(q.m), mm(q.s)], mass: annulus(mm(q.s), mm(dOf(size))) * mm(q.m) * rho('brass'), tol: 0.01, massTol: 0.02, says: 'its crest by its length; nominal mass, the sleeve at its crest' }),
   tests: [T(1, { offers: ['M3 heat-set insert 5.7 mm/axis'] })],
 };

@@ -24,7 +24,7 @@
 // equal tee (its branch joined into its run's side by Branch); the L bracket's upright and the hinge's leaves made flat
 // with their holes and turned up, and a block bolted to a wall plate by holes that run across it.
 
-import { made, stack, through, onto, ring, over, into, joint, run, turn, branch, boundOf, FITS, type Block, type Fit, type P3, type RunSeg, type RunTube } from './room';
+import { made, stack, through, onto, ring, over, into, joint, run, turn, branch, boundOf, namedIn, noted, FITS, type Block, type Fit, type P3, type RunSeg, type RunTube } from './room';
 import { SPRING_WIRES, springRate } from '../engineering/springs';
 import { ISO_METRIC } from './parts/bdw';
 import { BEARINGS as BEARING_SIZES, IPE, ballsOf } from './families';
@@ -216,22 +216,27 @@ export function terminal(poles: number): Block {
 
 /** A bolted joint: the bolt's shank down a hole of what it holds (from above), its head on top of it on that hole, and a
  *  washer and a nut slid over the shank's end below it. The shank is as long as the grip, the washer and the nut. */
-export function boltedJoint(held: Block, port: string, size: string, i = 0, head: 'hex' | 'socket' = 'hex', fit: Fit = 'slide'): Block {
+export function boltedJoint(held: Block, port0: string, size: string, i = 0, head: 'hex' | 'socket' = 'hex', fit: Fit = 'slide'): Block {
+  // (a name given almost right: the holes it plainly means, said back as a note (decision 0026, step 4))
+  const nm = namedIn(held, port0, 'line', 'bolted joint'), port = nm.port, notes = nm.note ? [nm.note] : [];
+  // (holes of one name in two pieces or more, stacked: the bolt goes down the top one's, through all under it, said back)
+  const owners = held.pieces.map((p, k) => ({ p, k })).filter(({ p }) => p.lines.some((l) => l.port === port)), top = owners.reduce((a, x) => (a && boundOf(a.p)[1][1] >= boundOf(x.p)[1][1] ? a : x), owners[0]);
+  if (owners.length > 1) notes.push(`bolted joint: ${owners.length} pieces offer ${port}: down the top one's (the ${top!.p.name}, piece ${top!.k + 1}), through all under it`);
   // (its grip: from the top of the piece whose hole it goes down to the bottom of the lowest piece under that hole, so a
   // second joint on the same plates is not lengthened by the first one's head and nut)
-  const o = held.pieces.flatMap((p) => p.lines.filter((l) => l.port === port)).slice(i, i + 1)[0] ?? held.pieces.flatMap((p) => p.lines.filter((l) => l.port === port))[0];
+  const lines = top ? top.p.lines.filter((l) => l.port === port) : [], o = lines.slice(i, i + 1)[0] ?? lines[0];
   if (!o) throw new Error(`bolted joint: ${held.name} offers no hole ${port}`);
   if (o.dir && !(Math.abs(o.dir[0]) < 1e-9 && Math.abs(o.dir[2]) < 1e-9 && o.dir[1] > 0)) throw new Error(`bolted joint: the hole ${port} is turned (not along +y): bolt what it holds first, then turn the whole (not made yet)`);
-  const owner = held.pieces.find((p) => p.lines.some((l) => l.port === port))!, ceiling = boundOf(owner)[1][1];
+  const owner = top!.p, ceiling = boundOf(owner)[1][1];
   const under = held.pieces.map(boundOf).filter((b) => b[0][0] < o.x && o.x < b[1][0] && b[0][2] < o.z && o.z < b[1][2] && b[1][1] <= ceiling + 1e-9);
   const m = sizeOf(size, 'hw', 'm'), grip = ceiling - Math.min(...under.map((b) => b[0][1])), L = grip + mm(m.hw) + mm(m.m);
   // (each joint's pieces named apart, so a second joint's washer and nut find its own shank: "M8 shank 2")
   const k = 1 + held.pieces.filter((p) => p.name.startsWith(`${size} shank`)).length, tag = k > 1 ? ` ${k}` : '';
   const shank = made(`${size} shank${tag}`, 'steel-alloy', { cyl: [mm(m.d) / 2, L] }, { color: 0x5c5f63 });
-  const top = head === 'hex' ? (() => { const h = sizeOf(size, 's', 'k'); return made(`${size} head${tag}`, 'steel-alloy', { hex: [mm(h.s), mm(h.k)] }, { color: 0x5c5f63 }); })() : (() => { const h = sizeOf(size, 'dk', 'ks'); return made(`${size} head${tag}`, 'steel-alloy', { cyl: [mm(h.dk) / 2, mm(h.ks)] }, { color: 0x2a2b2e }); })();
-  const passed = through(held, shank, { port, i, from: 'hi' }, fit);
-  const headed = onto(passed, '+y', top, 'touch', `${size} shank${tag}/axis`);
-  return over(headed, `${size} shank${tag}/axis`, stack(`${size} washer and nut`, 1, [{ b: nut(size) }, { b: washer(size) }]), 'lo', 'touch');
+  const cap = head === 'hex' ? (() => { const h = sizeOf(size, 's', 'k'); return made(`${size} head${tag}`, 'steel-alloy', { hex: [mm(h.s), mm(h.k)] }, { color: 0x5c5f63 }); })() : (() => { const h = sizeOf(size, 'dk', 'ks'); return made(`${size} head${tag}`, 'steel-alloy', { cyl: [mm(h.dk) / 2, mm(h.ks)] }, { color: 0x2a2b2e }); })();
+  const passed = through(held, shank, { port, i, from: 'hi', ...(owners.length > 1 ? { k: top!.k } : {}) }, fit);
+  const headed = onto(passed, '+y', cap, 'touch', `${size} shank${tag}/axis`);
+  return noted(over(headed, `${size} shank${tag}/axis`, stack(`${size} washer and nut`, 1, [{ b: nut(size) }, { b: washer(size) }]), 'lo', 'touch'), notes.join('; '));
 }
 
 /** A coil of wire on its own (air-cored, or to slide over a core): its mean radius, its wire, its turns close-wound, its
@@ -397,8 +402,10 @@ export function bracket(name = 'L bracket', a = mm(40), t = mm(4), L = mm(40), s
  *  Holes that run across (a bracket's upright's, along x or z): the whole turned so they run up, the plate made against
  *  the face they come out of, bolted, and turned back (decision 0024): a wall plate. Refused where the piece with the
  *  holes is not on the outside there, or the holes run at an angle. */
-export function boltedDown(held: Block, port: string, w: number, t: number, d: number, mat = 'steel-low', size = 'M5', head: 'hex' | 'socket' = 'hex'): Block {
-  const ls = held.pieces.flatMap((p) => p.lines.filter((l) => l.port === port)); if (!ls.length) throw new Error(`bolted down: the ${held.name} offers no holes ${port}`);
+export function boltedDown(held: Block, port0: string, w: number, t: number, d: number, mat = 'steel-low', size = 'M5', head: 'hex' | 'socket' = 'hex'): Block {
+  // (a name given almost right: the holes it plainly means, said back as a note (decision 0026, step 4))
+  const nm = namedIn(held, port0, 'line', 'bolted down'); if (nm.port !== port0) return noted(boltedDown(held, nm.port, w, t, d, mat, size, head), nm.note);
+  const port = port0, ls = held.pieces.flatMap((p) => p.lines.filter((l) => l.port === port)); if (!ls.length) throw new Error(`bolted down: the ${held.name} offers no holes ${port}`);
   const dir = ls[0]!.dir;
   if (dir && !(Math.abs(dir[0]) < 1e-9 && Math.abs(dir[2]) < 1e-9 && dir[1] > 0)) {
     const ax = dir.findIndex((v) => Math.abs(Math.abs(v) - 1) < 1e-9); if (ax < 0) throw new Error(`bolted down: the ${held.name}'s holes ${port} run at an angle, not along x, y or z: not made yet`);
@@ -472,7 +479,9 @@ export function gear(module: number, teeth: number, width: number, bore: number,
   const psi = (rho: number) => Math.PI / (2 * z) + inv(PA) - (rho > rb ? inv(Math.acos(rb / rho)) : 0), at = (rho: number, a: number): [number, number] => [rho * Math.cos(a), rho * Math.sin(a)];
   const lo = Math.max(rb, rf), radii = [...(rb > rf ? [rf] : []), ...Array.from({ length: 5 }, (_, k) => lo + (k / 4) * (ra - lo))], pts: [number, number][] = [];
   for (let k = 0; k < z; k++) { const th = (2 * Math.PI * k) / z; pts.push(at(rf, th - Math.PI / z)); for (const rho of radii) pts.push(at(rho, th - psi(rho))); for (const rho of [...radii].reverse()) pts.push(at(rho, th + psi(rho))); }
-  return made(`m${m} z${z} spur gear`, mat, { section: { pts: bored(pts, B / 2), L: width } });
+  // (its bore a pilot, opened to its shaft by what goes along its axis (Through a line), as far as its root circle less a
+  // module, the rim it keeps)
+  return made(`m${m} z${z} spur gear`, mat, { section: { pts: bored(pts, B / 2), L: width } }, { boreTo: mm(rf - m) });
 }
 /** A GT2 timing pulley (2 mm pitch) by its teeth, for a 6 mm belt: its pitch diameter z × 2 / π, its outside 0.508 mm less
  *  (twice GT2's 0.254 mm pitch line offset); its grooves approximated (each a U 1.11 mm wide and 0.75 mm deep, its
@@ -531,7 +540,9 @@ export const INSERTS = { M2: { L: 4, OD: 3.6, hole: 3.2, bore: 1.6 }, M3: { L: 5
  *  melts into the plastic round it), a screw then down its bore. */
 export function insert(size: string): Block {
   const q = INSERTS[size as keyof typeof INSERTS]; if (!q) throw new Error(`no heat-set insert ${size} (${Object.keys(INSERTS).join(', ')})`);
-  return made(`${size} heat-set insert`, 'brass', { tube: [mm(q.bore) / 2, mm(q.OD) / 2, mm(q.L)] });
+  // (its bore drawn at the thread's size, as a nut's is (its tap drill, `bore`, is where its thread's crests reach), so a
+  // screw of its size goes on by its thread: tapped)
+  return made(`${size} heat-set insert`, 'brass', { tube: [mm(Number(size.slice(1))) / 2, mm(q.OD) / 2, mm(q.L)] }, { tapped: true });
 }
 
 // ---- the third set: pieces made upright and turned (decision 0024) ----------------------------------------------------

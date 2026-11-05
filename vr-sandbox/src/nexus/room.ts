@@ -86,7 +86,7 @@ export interface Solid { readonly base: Prim; readonly minus: readonly Prim[] }
 /** A line a piece offers: along +y through (x, z); or, turned, through (x, y, z) along `dir`. */
 export interface Line { readonly port: string; readonly x: number; readonly z: number; readonly slot: number; readonly opening?: number; readonly y?: number; readonly dir?: P3 }
 export interface JointRef { readonly name: string; readonly slide?: number; readonly turn?: true }
-export interface Piece { readonly name: string; readonly mat: string; readonly color?: number; readonly solid: Solid; readonly joint?: JointRef; readonly axis?: readonly [number, number]; readonly bought?: true; readonly lines: readonly Line[] }
+export interface Piece { readonly name: string; readonly mat: string; readonly color?: number; readonly solid: Solid; readonly joint?: JointRef; readonly axis?: readonly [number, number]; readonly bought?: true; readonly tapped?: true; readonly lines: readonly Line[] }
 export interface Face {
   readonly a: number; readonly b: number; readonly kind: 'contact' | 'gap'; readonly patch: 'area' | 'line'; readonly area: number; readonly length?: number;
   readonly at: P3; readonly normal: P3; readonly gap: number; readonly medium?: string; readonly gate?: string; readonly interference?: { readonly um: number; readonly pressure?: number; readonly src: string }; readonly by: string;
@@ -159,8 +159,66 @@ const roundish = (p: Prim): p is Extract<Prim, { r: number }> => p.k !== 'box' &
 const evenRound = (p: Prim): p is Extract<Prim, { r: number }> => roundish(p) && p.k !== 'sphere' && p.k !== 'lathe';
 /** What a round solid leaves free round its own axis (its bore), if anything. */
 const boreOf = (b: Prim): number | undefined => ((b.k === 'cyl' || b.k === 'coil' || b.k === 'hex' || b.k === 'sphere' || b.k === 'lathe') && b.ri !== undefined ? b.ri : undefined);
+/** The radius round a line along y at (x, z) that a solid leaves free: a round one about it its bore (none: nothing); a
+ *  round one beside it as far as its side; any other as far as its box's nearest side (a subset of what is free). */
+const freeRound = (b: Prim, x: number, z: number): number => {
+  if (roundish(b) && upright(b)) { const d = Math.hypot(b.c[0] - x, b.c[2] - z), ri = boreOf(b);
+    if (d < 1e-12) return ri ?? 0; if (ri !== undefined && d + 1e-12 < ri) return ri - d; return Math.max(0, d - b.r); }
+  const [lo, hi] = primBox(b), dx = Math.max(lo[0] - x, 0, x - hi[0]), dz = Math.max(lo[2] - z, 0, z - hi[2]); return Math.hypot(dx, dz);
+};
 /** The lines and rooms a block offers, for a refusal that names them. */
 const offered = (b: { readonly pieces: readonly Piece[]; readonly rooms?: readonly RoomOf[] }, rooms = false): string => { const xs = [...new Set(rooms ? (b.rooms ?? []).map((r) => r.name) : b.pieces.flatMap((p) => p.lines.map((l) => l.port)))].sort(); return xs.length ? xs.join(', ') : 'none'; };
+// (a name given almost right, read as the one it plainly means (decision 0026, step 4): its kind the word after the last
+// '/', one or many alike (hole, holes); its owner what comes before, sharing a word with the one offered when a word of
+// either is the other's or is in the other run together ("motorplate" and "motor plate"))
+const kindOf = (port: string): string => { const k = port.slice(port.lastIndexOf('/') + 1).trim().toLowerCase(); return k.length > 3 && k.endsWith('s') ? k.slice(0, -1) : k; };
+const ownerOf = (port: string): string => (port.includes('/') ? port.slice(0, port.lastIndexOf('/')) : '');
+const STOP = new Set(['the', 'of', 'and', 'in', 'its', 'on', 'to', 'for', 'with']);
+const wordsOf = (s: string): string[] => s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 2 && !STOP.has(w));
+const sharesWord = (a: string, b: string): boolean => { const x = wordsOf(a), y = wordsOf(b), xs = x.join(''), ys = y.join('');
+  return x.some((w) => y.includes(w)) || y.some((w) => w.length >= 4 && xs.includes(w)) || x.some((w) => w.length >= 4 && ys.includes(w)); };
+// (a kind named for what is on the line, read as its axis where no line of the kind named is offered)
+const AXIS_WORDS = new Set(['shank', 'shaft', 'axle', 'spindle', 'core', 'centre', 'center', 'rod', 'bore']);
+/** What a name given for a line (or a room) a block offers means: the name itself where offered; else the one of its kind
+ *  whose owner shares a word with the name's, else the one of its kind at all; a line named for what is on it (shank,
+ *  shaft, axle) its axis where no line of that kind is offered; a room any room where it offers one alone (cavity ~ the
+ *  one room). Two or more that fit: every one of them, never a pick between them. */
+function meant(b: { readonly pieces: readonly Piece[]; readonly rooms?: readonly RoomOf[] }, port: string, what: 'line' | 'room', loose = true): { port: string; why?: string } | { many: string[] } | undefined {
+  const all = [...new Set(what === 'room' ? (b.rooms ?? []).map((r) => r.name) : b.pieces.flatMap((p) => p.lines.map((l) => l.port)))];
+  if (all.includes(port)) return { port };
+  const owner = ownerOf(port), of = (k: string, word: string): { port: string; why?: string } | { many: string[] } | undefined => {
+    const same = all.filter((x) => kindOf(x) === k), near = owner ? same.filter((x) => sharesWord(owner, ownerOf(x))) : [];
+    if (near.length === 1) return { port: near[0]!, why: `the one ${word} it offers whose name shares a word with it` };
+    if (near.length > 1) return { many: near.sort() };
+    if (same.length === 1) return { port: same[0]!, why: `the one ${word} it offers` };
+    if (same.length > 1) return { many: same.sort() };
+    return undefined; };
+  const k = kindOf(port), r = of(k, `${port.slice(port.lastIndexOf('/') + 1).trim()} ${what}`);
+  if (r || !loose) return r;
+  if (what === 'line' && AXIS_WORDS.has(k)) return of('axi', 'axis');
+  if (what === 'room' && all.length === 1) return { port: all[0]!, why: 'the one room it offers' };
+  if (what === 'room' && all.length > 1) return { many: all.sort() };
+  return undefined;
+}
+// (what an operation took for a name given almost right, said back by the node that ran it: a note, not a failure)
+const NOTES = new WeakMap<object, string>();
+/** The note an operation left on the block it made: which line or room it took for a name given almost right. */
+export const noteOf = (b: object): string | undefined => NOTES.get(b);
+/** A block with a note said back by the node that made it. */
+export const noted = <T extends object>(b: T, note?: string): T => { if (note) NOTES.set(b, NOTES.has(b) ? `${NOTES.get(b)}; ${note}` : note); return b; };
+/** The line (or room) a block offers by a name given, or the one the name plainly means with a note saying so (`meant`);
+ *  where two or more fit, refused with them listed (the fix first: a refusal is read cut short); where the name is a
+ *  room's and a line was asked (or the other), refused with the fix; where none fits, the name as given (the operation
+ *  then refuses as it did, with what it offers). */
+export function namedIn(b: { readonly name: string; readonly pieces: readonly Piece[]; readonly rooms?: readonly RoomOf[] }, port: string, what: 'line' | 'room', op: string): { port: string; note?: string } {
+  const m = meant(b, port.trim(), what);
+  if (m && 'many' in m) throw new Error(`${op}: no ${what} '${port}'; name one: ${m.many.map((x) => `'${x}'`).join(' or ')}`);
+  if (m) return { port: m.port, ...(m.why ? { note: `${op} took '${m.port}' for '${port}' (${m.why})` } : {}) };
+  const other = meant(b, port.trim(), what === 'line' ? 'room' : 'line', false), hit = other && 'port' in other ? other.port : undefined;
+  if (hit && what === 'line') throw new Error(`${op}: '${port}' is a room, not a line: put a block in it by room.into; to pass its wall, make it by room.make with holes on a face`);
+  if (hit) throw new Error(`${op}: '${port}' is no room; '${hit}' is a line it offers: a block goes along it by room.through (or over it by room.over)`);
+  return { port };
+}
 /** A bend's bound in its own frame, about the centre it is bent round. */
 const bendBox = (R: number, ro: number, a: number): [V3, V3] => {
   const pts: [number, number][] = [];
@@ -411,7 +469,9 @@ export class Block {
     // (a section's line along its length, through its outline's own origin (a gear's or a pulley's centre, in its bore),
     // its slot the distance from there to the outline)
     if (base.k === 'box' && base.sect && 'section' in s) { const ox = -(Math.max(...sx) + Math.min(...sx)) / 2, oy = -(Math.max(...sy) + Math.min(...sy)) / 2, P = base.sect;
-      const slot = Math.min(...P.map((q, i) => segDist(ox, oy, q, P[(i + 1) % P.length]!))); if (slot > 1e-9) lines.push({ port: `${name}/axis`, x: ox, y: oy, z: 0, slot, dir: [0, 0, 1] }); }
+      const s0 = Math.min(...P.map((q, i) => segDist(ox, oy, q, P[(i + 1) % P.length]!)));
+      if (o.boreTo !== undefined && !(Number.isFinite(o.boreTo) && o.boreTo > 0)) throw new Error(`${name}: the bore it may be opened to is finite and above zero (${o.boreTo})`);
+      const slot = o.boreTo !== undefined ? Math.max(s0, o.boreTo) : s0; if (slot > 1e-9) lines.push({ port: `${name}/axis`, x: ox, y: oy, z: 0, slot, dir: [0, 0, 1] }); }
     // (its patterns: the one asked, and any more (decision 0026: a motor plate's screw holes and its pilot's hole, a block's
     // bore and its tapped holes), each named apart, each its own lines)
     for (const pat of [...(o.pattern ? [o.pattern] : []), ...(o.patterns ?? [])]) {
@@ -453,7 +513,7 @@ export class Block {
         });
       }
     }
-    const piece: Piece = { name, mat, ...(o.color !== undefined ? { color: o.color } : {}), solid: { base, minus }, lines, ...(o.joint ? { joint: o.joint, ...(o.joint.turn ? { axis: [0, 0] as const } : {}) } : {}), ...(o.bought ? { bought: true as const } : {}) };
+    const piece: Piece = { name, mat, ...(o.color !== undefined ? { color: o.color } : {}), solid: { base, minus }, lines, ...(o.joint ? { joint: o.joint, ...(o.joint.turn ? { axis: [0, 0] as const } : {}) } : {}), ...(o.bought ? { bought: true as const } : {}), ...(o.tapped ? { tapped: true as const } : {}) };
     const rooms: RoomOf[] = base.k === 'cup' ? [{ name: `${name}/cavity`, c: [0, (base.ends) / 2, 0], r: base.r - base.wall, h: base.h - base.ends, open: true }]
       : base.k === 'box' && base.tray ? [{ name: `${name}/cavity`, c: [0, base.tray.floor / 2, 0], r: Math.hypot(base.size[0] - 2 * base.tray.wall, base.size[2] - 2 * base.tray.wall) / 2, h: base.size[1] - base.tray.floor, open: true, size: [base.size[0] - 2 * base.tray.wall, base.size[2] - 2 * base.tray.wall] }] : [];
     return Block.#seal(name, [piece], [], rooms);
@@ -527,10 +587,13 @@ export class Block {
    *  each passer piece swept over its motion relative to that solid and grown by the fit's gap. A bought solid is not
    *  cut: the passer goes through it only on one of its openings, no wider than the opening. A motion between the passer
    *  and a solid it crosses may only slide along the line or turn about it (the cut round about it); any other is refused. */
-  static through(b: Block, passer: Block, on: { port: string; i?: number; from: 'lo' | 'hi' }, fit: Fit = 'tight'): Block {
+  static through(b: Block, passer: Block, on: { port: string; i?: number; from: 'lo' | 'hi'; k?: number }, fit: Fit = 'tight'): Block {
     Block.#is(b); Block.#is(passer); if (!(fit in FITS)) throw new Error(`through: a fit by name`);
-    const offers = b.pieces.flatMap((p, k) => p.lines.filter((l) => l.port === on.port).map((l) => ({ p, k, l })));
-    if (new Set(offers.map((o) => o.k)).size > 1) throw new Error(`through: ${new Set(offers.map((o) => o.k)).size} pieces offer ${on.port}: name them apart`);
+    // (a name given almost right: the line it plainly means, said back as a note; `k` the one piece of several offering it)
+    const nm = namedIn(b, on.port, 'line', 'through'); if (nm.port !== on.port) return noted(Block.through(b, passer, { ...on, port: nm.port }, fit), nm.note);
+    const offers = b.pieces.flatMap((p, k) => p.lines.filter((l) => l.port === on.port && (on.k === undefined || k === on.k)).map((l) => ({ p, k, l })));
+    const ks = [...new Set(offers.map((o) => o.k))];
+    if (ks.length > 1) throw new Error(`through: ${ks.length} pieces offer ${on.port}: name them apart by a name setting on each, or bolt them by mate.bolted (down the top one's hole)`);
     const o = offers[on.i ?? 0]; if (!o) throw new Error(`through: ${b.name} offers no line ${on.port}${on.i !== undefined ? ` ${on.i}` : ''}${offers.length ? ` (it has ${offers.length} of them: 0 to ${offers.length - 1})` : ` (it offers ${offered(b)})`}`);
     const bent = passer.pieces.find((q) => q.solid.base.frame || q.solid.base.k === 'bend'); if (bent) throw new Error(`through: the ${bent.name} is turned or bent: a passer goes along its line as it was made, straight; pass it, then turn the whole`);
     // (a turned line: in its own frame, where it runs along +y; lo and hi its own ends, against and along its direction)
@@ -605,6 +668,7 @@ export class Block {
    *  it, standing on its floor on its axis; else "no room" with both numbers. The room is then used. */
   static into(host: Block, port: string, child: Block, fit: Fit = 'clear'): Block {
     Block.#is(host); Block.#is(child); if (!(fit in FITS)) throw new Error(`into: a fit by name`);
+    const nm = namedIn(host, port, 'room', 'into'); if (nm.port !== port) return noted(Block.into(host, nm.port, child, fit), nm.note);
     const r = host.rooms.find((x) => x.name === port); if (!r) throw new Error(`into: ${host.name} offers no room ${port} (it has ${host.rooms.map((x) => x.name).join(', ') || 'none'})`);
     const g = gapOf(fit), cx = (child.lo[0] + child.hi[0]) / 2, cz = (child.lo[2] + child.hi[2]) / 2, rho = Math.max(...child.pieces.map((p) => reach(sweepOf(p), cx, cz))), tall = child.hi[1] - child.lo[1];
     if (r.size) { const cw = child.hi[0] - child.lo[0] + 2 * g, cd = child.hi[2] - child.lo[2] + 2 * g;
@@ -636,32 +700,43 @@ export class Block {
    *  face round the bore. */
   static over(host: Block, port: string, sleeve: Block, where: 'lo' | 'hi' | 'mid' | { readonly from: 'lo' | 'hi'; readonly along: number } = 'mid', fit: Fit = 'slide'): Block {
     Block.#is(host); Block.#is(sleeve); if (!(fit in FITS)) throw new Error(`over: a fit by name`);
+    const nm = namedIn(host, port, 'line', 'over'); if (nm.port !== port) return noted(Block.over(host, nm.port, sleeve, where, fit), nm.note);
     const offers = host.pieces.flatMap((p, k) => p.lines.filter((l) => l.port === port).map((l) => ({ p, k, l })));
     const o = offers[0]; if (!o) throw new Error(`over: ${host.name} offers no line ${port} (it offers ${offered(host)})`);
     const bent = sleeve.pieces.find((q) => q.solid.base.frame); if (bent) throw new Error(`over: the ${bent.name} is turned: a sleeve goes over its line as it was made; slide it on, then turn the whole`);
     // (a turned line: in its own frame, where it runs along +y; lo and hi its own ends)
     if (!alongY(o.l)) return Block.#inFrame(host, o.l.dir!, 'over', sleeve, (h) => Block.over(h, port, sleeve, where, fit));
-    const g = gapOf(fit), cx = (sleeve.lo[0] + sleeve.hi[0]) / 2, cz = (sleeve.lo[2] + sleeve.hi[2]) / 2;
-    // (its bore: the least, over its pieces, of what each leaves free round its axis; each centred on it)
-    let bore = Infinity;
-    for (const q of sleeve.pieces) { const b = q.solid.base, inner = boreOf(b);
-      if (b.k === 'box' || inner === undefined) throw new Error(`over: the ${q.name} has no bore to slide on with`);
-      if (Math.hypot(b.c[0] - cx, b.c[2] - cz) > 1e-12) throw new Error(`over: the ${q.name} is not round about the sleeve's axis`); bore = Math.min(bore, inner); }
-    const need = reach(sweepOf(o.p), o.l.x, o.l.z) + g;
-    if (bore + 1e-12 < need) throw new Error(`no room over ${port}: the ${sleeve.name}'s bore is ${(bore * 2000).toFixed(2)} mm across; it needs ${(need * 2000).toFixed(2)} mm`);
+    const g = gapOf(fit), cx = (sleeve.lo[0] + sleeve.hi[0]) / 2, cz = (sleeve.lo[2] + sleeve.hi[2]) / 2, rs = reach(sweepOf(o.p), o.l.x, o.l.z);
+    // (its bore: the least, over its pieces, of the room each leaves free round the sleeve's axis: one round about the axis
+    // its own bore; one off it (a bearing's balls and cage between its rings) as far as its nearest side; one on the axis
+    // with none, nothing. A tapped piece of the shank's own size goes on by its thread (ISO 965's fit), no gap drawn)
+    const free = sleeve.pieces.map((q) => freeRound(q.solid.base, cx, cz));
+    sleeve.pieces.forEach((q, i) => { if (!(free[i]! > 1e-12)) throw new Error(`over: the ${q.name} has no bore to slide on with`); });
+    const threaded = (i: number) => !!sleeve.pieces[i]!.tapped && Math.abs(free[i]! - rs) < 1e-9;
+    const bore = Math.min(...free), k0 = free.findIndex((f, i) => f + 1e-12 < rs + (threaded(i) ? 0 : g)), ge = free.every((f, i) => f > bore + 1e-9 || threaded(i)) ? 0 : g, need = rs + g;
+    if (k0 >= 0) throw new Error(`no room over ${port}: the ${sleeve.name}'s bore is ${(free[k0]! * 2000).toFixed(2)} mm across; it needs ${(need * 2000).toFixed(2)} mm`);
     const sb = primBox(o.p.solid.base), H = sleeve.hi[1] - sleeve.lo[1], d = typeof where === 'object' ? where.along : 0, end = typeof where === 'object' ? where.from : where;
     if (typeof where === 'object') { if (!(Number.isFinite(d) && d >= 0)) throw new Error(`over: a distance along ${port} is finite and never below zero (${d} m)`); if (where.from !== 'lo' && where.from !== 'hi') throw new Error(`over: a distance from lo or hi (${String(where.from)})`);
       if (d + H > sb[1][1] - sb[0][1] + 1e-12) throw new Error(`no room over ${port}: the ${sleeve.name} ${(d * 1000).toFixed(2)} mm from its ${where.from} end needs ${((d + H) * 1000).toFixed(2)} mm of it; the ${o.p.name} is ${((sb[1][1] - sb[0][1]) * 1000).toFixed(2)} mm long`); }
     const y0 = end === 'lo' ? sb[0][1] + d : end === 'hi' ? sb[1][1] - H - d : (sb[0][1] + sb[1][1]) / 2 - H / 2;
-    const S = Block.#shift(sleeve, [o.l.x - cx, y0 - sleeve.lo[1], o.l.z - cz]);
     // (a round piece on the same line that fits within the bore with the gap (the shaft a core sits on) passes inside it;
     // any other piece of the host is tried by its bound against the sleeve's)
-    for (const q of host.pieces) { if (q === o.p) continue; const qs = sweepOf(q);
-      if (roundish(qs) && upright(qs) && !q.joint && Math.hypot(qs.c[0] - o.l.x, qs.c[2] - o.l.z) < 1e-12 && qs.r + g <= bore + 1e-12) continue;
-      const qb = boundOf(q); const hit = S.pieces.find((x) => meets(qb, boundOf(x))); if (hit) throw new Error(`no room over ${port}: the ${sleeve.name} would meet the ${q.name}`); }
-    const n = host.pieces.length, faces: Face[] = [...host.faces, ...S.faces.map((f) => ({ ...f, a: f.a + n, b: f.b + n }))], rs = need - g;
+    const inBore = (q: Piece) => { const qs = sweepOf(q); return roundish(qs) && upright(qs) && !q.joint && Math.hypot(qs.c[0] - o.l.x, qs.c[2] - o.l.z) < 1e-12 && qs.r + ge <= bore + 1e-12; };
+    const others = host.pieces.filter((q) => q !== o.p && !inBore(q));
+    const at = (y: number) => Block.#shift(sleeve, [o.l.x - cx, y - sleeve.lo[1], o.l.z - cz]), hitOf = (S: { pieces: Piece[] }) => { for (const q of others) { const qb = boundOf(q); if (S.pieces.some((x) => meets(qb, boundOf(x)))) return q; } return undefined; };
+    let S = at(y0), hit = hitOf(S);
+    // (where that is in the way (a washer already slid on, the can a motor's shaft comes out of), slid along the line to the
+    // nearest stretch that is free: on past what was slid on before it, each after the last, or out past the line's free
+    // end, as a person slides it on; still on the line by half its length or the piece's, whichever is less)
+    if (hit) { const L = sb[1][1] - sb[0][1], grip = Math.min(H, L) / 2 - 1e-12, cand = new Set<number>();
+      for (const q of others) { const qb = boundOf(q); cand.add(qb[1][1]); cand.add(qb[0][1] - H); }
+      const best = [...cand].filter((y) => Math.min(y + H, sb[1][1]) - Math.max(y, sb[0][1]) >= grip).sort((u, v) => Math.abs(u - y0) - Math.abs(v - y0)).find((y) => !hitOf(at(y)));
+      if (best === undefined) throw new Error(`no room over ${port}: the ${sleeve.name} would meet the ${hit.name}`);
+      S = at(best); hit = undefined; }
+    const n = host.pieces.length, faces: Face[] = [...host.faces, ...S.faces.map((f) => ({ ...f, a: f.a + n, b: f.b + n }))];
     S.pieces.forEach((q, i) => { const qb = primBox(q.solid.base), lo = Math.max(qb[0][1], sb[0][1]), hi = Math.min(qb[1][1], sb[1][1]);
-      if (hi > lo) faces.push({ a: o.k, b: n + i, kind: g > 0 ? 'gap' : 'contact', patch: 'area', area: 2 * Math.PI * rs * (hi - lo), at: [o.l.x, (lo + hi) / 2, o.l.z], normal: [1, 0, 0], gap: g, ...(g > 0 ? { medium: MEDIUM } : {}), by: `${sleeve.name} over ${port}` }); });
+      // (a face only for a piece round about the line: a bearing's inner ring on the shaft, not its balls beside it)
+      const B = q.solid.base; if (hi > lo && roundish(B) && upright(B) && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-9) faces.push({ a: o.k, b: n + i, kind: ge > 0 ? 'gap' : 'contact', patch: 'area', area: 2 * Math.PI * rs * (hi - lo), at: [o.l.x, (lo + hi) / 2, o.l.z], normal: [1, 0, 0], gap: ge, ...(ge > 0 ? { medium: MEDIUM } : {}), by: `${sleeve.name} over ${port}` }); });
     return Block.#seal(host.name, [...host.pieces, ...S.pieces], faces, [...host.rooms]);
   }
   /** n copies round the y axis at radius R, each in its own wedge: refused, with both numbers, where a copy and its gap
@@ -745,6 +820,7 @@ export class Block {
    *  (comparison (3)). A face where they meet, its area the ring's (its projection). (decision 0024) */
   static branch(host: Block, port: string, b: Block, toward = 0): Block {
     Block.#is(host); Block.#is(b); if (!Number.isFinite(toward)) throw new Error(`branch: a way round it in degrees (${toward})`);
+    const nm = namedIn(host, port, 'line', 'branch'); if (nm.port !== port) return noted(Block.branch(host, nm.port, b, toward), nm.note);
     const k = host.pieces.findIndex((p) => p.lines.some((l) => l.port === port)), o = host.pieces[k]; if (!o) throw new Error(`branch: ${host.name} offers no line ${port} (it offers ${offered(host)})`);
     const A = o.solid.base, B0 = b.pieces[0]?.solid.base;
     if (A.k !== 'cyl' || A.ri === undefined || o.joint) throw new Error(`branch: the ${o.name} is not a hollow straight, off any joint`);
@@ -782,7 +858,13 @@ const FACES: readonly FaceName[] = ['+x', '-x', '+y', '-y', '+z', '-z'];
 /** What `made` is asked besides its shape: a joint, bought, a colour, and a pattern of holes and lines (a circle about
  *  its middle or points; on a face, through or so deep, plain, counterbored [radius, depth] or countersunk to a radius at
  *  the face, 90°). */
-export interface MadeOpts { joint?: Joint; bought?: boolean; color?: number; pattern?: Pattern; patterns?: Pattern[] }
+export interface MadeOpts { joint?: Joint; bought?: boolean; color?: number; pattern?: Pattern; patterns?: Pattern[];
+  /** a section's bore that may be opened to this radius by what goes along its axis (a gear bought with a pilot bore,
+   *  bored to its shaft by Through a line): its axis's slot, never less than the bore it has */
+  boreTo?: number;
+  /** its bore is tapped (a heat-set insert's): a shank of its own size goes into it on the thread, the thread's own fit
+   *  (ISO 965), so no fit's gap is drawn round it */
+  tapped?: boolean }
 /** A pattern of holes or lines: a circle about its middle or points; on a face, through or so deep, plain, counterbored
  *  [radius, depth] or countersunk to a radius at the face, 90°. */
 export interface Pattern { name: string; circle?: { n: number; r: number; phase?: number }; points?: [number, number][]; hole?: number; face?: FaceName; depth?: number; sink?: { cbore: [number, number] } | { csink: number } }

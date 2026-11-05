@@ -138,7 +138,7 @@ function builtText(): string {
   const now = new Date().toISOString(), built: Record<string, string> = {}, unfound: string[] = [];
   for (const id of [...LIBRARY.keys()].sort()) {
     const key = id.startsWith('law.') ? id.slice(4) : id, inBook = id.startsWith('law.');
-    const written = (k: string, book: boolean) => lines.find((l) => (!book || l.file.includes('/book/')) && (l.text.includes(`id: '${k}'`) || l.text.includes(`id: "${k}"`) || l.text.includes(`save('${k}'`)));
+    const written = (k: string, book: boolean) => lines.find((l) => (!book || l.file.includes('/book/')) && (l.text.includes(`id: '${k}'`) || l.text.includes(`id: "${k}"`) || l.text.includes(`save('${k}'`) || (l.text.includes('save(') && l.text.includes(`'${k}'`))));
     // (made in a loop: the line that makes it, its id a template on its prefix)
     const prefix = id.slice(0, id.lastIndexOf('.') + 1), looped = () => lines.find((l) => l.text.includes(`id: \`${prefix}\${`) || l.text.includes(`save(\`${prefix}\${`));
     const hit = (inBook ? written(key, true) : undefined) ?? written(id, false) ?? (prefix ? looped() : undefined);

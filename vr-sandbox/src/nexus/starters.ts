@@ -766,9 +766,8 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     const put = (id: string, block: string, set: Record<string, unknown>, label: string) => { placeBlock(b, block, 0, 0, set, id); b.nodes[id]!.label = label; };
     put('c1', 'piece.cell', { size: '18650' }, '18650 cell'); put('c2', 'piece.cell', { size: '18650' }, 'And another');
     put('pair', 'room.stack', { name: 'two cells', axis: 'x', fit: 'clear' }, 'Side by side'); wire(b, 'c1', 'block', 'pair', 'blocks'); wire(b, 'c2', 'block', 'pair', 'blocks');
-    put('box', 'piece.case', { name: 'cell box', mat: 'abs', w: 45, h: 70, d: 25, wall: 2, floor: 2 }, 'Cell box (ABS)');
-    put('boxed', 'room.into', { room: 'cell box/cavity', fit: 'clear' }, 'The cells into the box'); wire(b, 'box', 'block', 'boxed', 'host'); wire(b, 'pair', 'block', 'boxed', 'child');
-    put('lid', 'mate.lid', { t: 2, mat: 'abs' }, 'Its lid on top'); wire(b, 'boxed', 'block', 'lid', 'box');
+    // (the box, the cells into its cavity and its lid on: one library block, Into a box, its lid on (seeds.ts))
+    put('lid', 'seed.boxed', { name: 'cell box', mat: 'abs', w: 45, h: 70, d: 25, wall: 2 }, 'Into a cell box (ABS), its lid on top'); wire(b, 'pair', 'block', 'lid', 'inside');
     put('brg', 'piece.bearing', { size: '608' }, 'Ball bearing 608');
     put('shaft', 'room.make', { name: 'shaft', shape: 'rod', mat: 'steel-alloy', a: 4, b: 30 }, 'Shaft, 8 mm');
     put('onshaft', 'room.through', { line: '608 inner ring/axis', which: 0, from: 'below', fit: 'tight' }, 'The shaft through its inner ring'); wire(b, 'brg', 'block', 'onshaft', 'host'); wire(b, 'shaft', 'block', 'onshaft', 'passer');

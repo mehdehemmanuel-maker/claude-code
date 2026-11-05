@@ -2,7 +2,7 @@
 
 Task in hand: 06.M2 (the library the AI builds a lot from, decision 0026: foundations, tables filled, assemblies and search, bootstrap); the phone page (decisions 0023, 0025, `npm run app`)
 Spec in hand: spec 06, the phone (`plan/specs/06-phone/`); spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 8cab483 (2026-11-05)
+Last commit the gate passed: ecc7f1d (2026-11-05)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -35,4 +35,4 @@ Last commit the gate passed: 8cab483 (2026-11-05)
 - Hosting is proposed (decision 0011), to confirm at phase 3. The Pages copy (main only, after Settings → Pages) has no relay, so no Claude.
 
 ## Pipeline notes (the loop breaker reads these: a line "pipeline: <task>: <answer>" resets its count)
-pipeline: 01.I16: yes, a small one: three runs failed on PROGRESS.md itself (its last gated commit four behind after commits that only recorded the user's words, then a line too many), a line kept by hand that falls behind; the efficiency agent being designed is to flag a gate failing twice on the same bookkeeping
+pipeline: 06.M2: yes, a small one: three runs failed on bookkeeping after merging parallel builders (the last gated commit named before the fold, new folded blocks dated only on the second docs pass); one script to merge, fold, date twice and gate, in that order, would do it

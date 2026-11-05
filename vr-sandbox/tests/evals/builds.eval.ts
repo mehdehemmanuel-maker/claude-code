@@ -1,6 +1,6 @@
 // The AI on things to build (decision 0026, step 4: the bootstrap): forty requests across the library, each scored with
-// no model. A request is right when its board runs with every node ok, uses a block of each kind it names (its id, or a
-// piece of its build by that name), and gives one
+// no model. A request is right when its board runs with every node ok, uses a block of each kind it names (its id, on the
+// board or inside a folded block on it, or a piece of its build by that name), and gives one
 // thing (its pieces joined by the faces the operations wrote, one group) of at least so many pieces. Assist (one call, a
 // plan; asked once more with only the lines that failed) by default; `EVAL_MODE=auto` runs the tool loop instead.
 // Run: `npm run eval:builds` (needs ANTHROPIC_API_KEY; costs real tokens); `EVAL_ONLY=5` the first five; `EVAL_PICK=7`
@@ -11,6 +11,7 @@ import { writeFileSync } from 'node:fs';
 import '../../src/nexus/seeds';
 import { agentBuild, agentPlan, runPlan, type AgentPlan } from '../../src/nexus/agent';
 import { Engine, emptyBoard } from '../../src/nexus/dataflow';
+import { block } from '../../src/nexus/blocks';
 import { nodesOf, type Board } from '../../src/nexus/boards';
 
 /** What a request asks for: the kinds of block its board must use (each a pattern on block ids), and its least pieces. */
@@ -71,7 +72,9 @@ export function score(board: Board, e: Engine, w: Want): string | null {
   const blocks = ns.map((n) => e.state.get(n.id)?.out?.block as RoomLike | undefined).filter((b): b is RoomLike => !!b?.pieces);
   if (!blocks.length) return 'no block made';
   const big = blocks.reduce((a, b) => (b.pieces.length > a.pieces.length ? b : a)), g = groups(big);
-  const used = [...ns.map((n) => board.nodes[n.id]?.block ?? ''), ...big.pieces.map((p) => p.name)], miss = w.uses.filter((u) => !used.some((b) => u.test(b)));
+  // (a folded block (a seed, a saved block) uses the kinds its own board holds: they count, read down to the bottom)
+  const inner = (b: Board | undefined, seen = new Set<string>()): string[] => Object.values(b?.nodes ?? {}).flatMap((n) => { const id = n.block ?? ''; if (!id || seen.has(id)) return [id]; seen.add(id); return [id, ...inner(n.inner ?? block(id)?.graph, seen)]; });
+  const used = [...inner(board), ...big.pieces.map((p) => p.name)], miss = w.uses.filter((u) => !used.some((b) => u.test(b)));
   if (miss.length) return `no ${miss.map(String).join(', ')} on the board (it used ${[...new Set(used)].join(', ').slice(0, 160)})`;
   if (big.pieces.length < w.pieces) return `its build has ${big.pieces.length} pieces, fewer than ${w.pieces}`;
   return g === 1 ? null : `its build falls in ${g} groups, not one thing`;

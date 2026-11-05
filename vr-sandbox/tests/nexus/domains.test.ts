@@ -128,6 +128,47 @@ describe('every domain, in one pass', () => {
   // (a number goes along a wire only into its own kind of quantity (spec 10, T11; faults D1 to D3): a turn is a cycle, so
   // 60 rpm is 1 Hz, not 2π; an energy is not a torque though both are N·m; an absorbed dose is not a dose equivalent; a
   // level in dB goes only into dB; a temperature is not a temperature difference, so 10 °C of rise is 10 K, not 283.15)
+  // (decision 0026, step 4: a line or room named almost right is taken where the name plainly means one, said back as a
+  // note in what the node says, never a failure; where two or more fit, refused with just them listed; where the name is
+  // a room's and a line was asked (or the other), the fix said. Each case is a name the AI gave in the evaluation)
+  it('a line or room named almost right is the one it plainly means, said back; two that fit are listed, never picked', async () => {
+    const { runPlan } = await import('../../src/nexus/agent');
+    const ran = async (nodes: Record<string, { b: string; s?: Record<string, unknown> }>, wires: string[]) => { const r = await runPlan({ tool: 'build', input: { nodes, wires }, says: 'asked' }, emptyBoard('asked')), e = new Engine(r.board); await e.run(); return { r, out: (id: string) => (e.state.get(id)?.out ?? {}) as Record<string, unknown> }; };
+    const tube = (a: number, b: number, c: number) => ({ b: 'room.make', s: { name: 'sleeve', shape: 'tube', a, b, c } });
+    // (the plate under a NEMA 17 stepper as "motorplate/holes"; an Uno's holes as "PCB/holes"; a lead screw's line as "T8
+    // shank/axis"; a stepper's shaft as "shaft/axis"; a fan's holes as "fan/holes")
+    const plate = await ran({ mp: { b: 'piece.motorplate' }, st: { b: 'piece.stepper', s: { size: '17' } }, on: { b: 'room.onto', s: { face: '+y' } }, bolt: { b: 'mate.plate', s: { line: 'motorplate/holes', size: 'M3' } } }, ['mp.block>on.host', 'st.block>on.child', 'on.block>bolt.held']);
+    expect(plate.r.failing, 'the motor plate bolted down by its holes').toEqual([]);
+    expect(plate.out('bolt').note).toBe("bolted down took 'NEMA 17 motor plate/holes' for 'motorplate/holes' (the one holes line it offers whose name shares a word with it)");
+    expect(plate.out('bolt').says, 'said in what it says').toMatch(/; note: bolted down took 'NEMA 17 motor plate\/holes'/);
+    const uno = await ran({ dev: { b: 'piece.devboard' }, mp: { b: 'mate.plate', s: { line: 'PCB/holes', size: 'M2.5', w: 100, d: 70 } } }, ['dev.block>mp.held']);
+    expect([uno.r.failing, uno.out('mp').note], 'the Uno by its PCB\'s holes').toEqual([[], "bolted down took 'Arduino Uno R3 PCB/holes' for 'PCB/holes' (the one holes line it offers whose name shares a word with it)"]);
+    const lead = await ran({ lead: { b: 'piece.leadscrew', s: { size: 'T8 lead 2' } }, sl: tube(5, 8, 10), on: { b: 'room.over', s: { line: 'T8 shank/axis' } } }, ['lead.block>on.host', 'sl.block>on.sleeve']);
+    expect([lead.r.failing, lead.out('on').note], 'the lead screw\'s one axis').toEqual([[], "over took 'T8 lead 2 lead screw/axis' for 'T8 shank/axis' (the one axis line it offers whose name shares a word with it)"]);
+    const shaft = await ran({ st: { b: 'piece.stepper', s: { size: '17' } }, sl: tube(3, 6, 5), on: { b: 'room.over', s: { line: 'shaft/axis', where: 'hi' } } }, ['st.block>on.host', 'sl.block>on.sleeve']);
+    expect([shaft.r.failing, shaft.out('on').note], 'the stepper\'s shaft, not its pilot').toEqual([[], "over took 'NEMA 17 shaft/axis' for 'shaft/axis' (the one axis line it offers whose name shares a word with it)"]);
+    const fan = await ran({ fan: { b: 'piece.fan', s: { size: '80×25' } }, pin: { b: 'room.make', s: { name: 'pin', shape: 'rod', a: 1.5, b: 40 } }, th: { b: 'room.through', s: { line: 'fan/holes' } } }, ['fan.block>th.host', 'pin.block>th.passer']);
+    expect([fan.r.failing, fan.out('th').note], 'the fan\'s frame\'s holes').toEqual([[], "through took '80×25 fan frame/holes' for 'fan/holes' (the one holes line it offers whose name shares a word with it)"]);
+    // (two flanges of one name stacked: a bolt goes down the top one's hole, said; Through a line says how to name them apart)
+    const fl = { bot: { b: 'piece.flange', s: { size: 'DN50', type: 'PN6' } }, gas: { b: 'piece.flangegasket' }, top: { b: 'piece.flange', s: { size: 'DN50', type: 'PN6' } }, st: { b: 'room.stack', s: { order: 'bot,gas,top' } } }, fw = ['bot.block>st.blocks', 'gas.block>st.blocks', 'top.block>st.blocks'];
+    const flanged = await ran({ ...fl, j: { b: 'mate.bolted', s: { line: 'DN50 PN6 plate flange/holes', size: 'M12' } } }, [...fw, 'st.block>j.held']);
+    expect([flanged.r.failing, flanged.out('j').note], 'the bolt down the top flange').toEqual([[], "bolted joint: 2 pieces offer DN50 PN6 plate flange/holes: down the top one's (the DN50 PN6 plate flange, piece 3), through all under it"]);
+    const apart = await ran({ ...fl, pin: { b: 'room.make', s: { name: 'pin', shape: 'rod', a: 5, b: 60 } }, th: { b: 'room.through', s: { line: 'DN50 PN6 plate flange/holes' } } }, [...fw, 'st.block>th.host', 'pin.block>th.passer']);
+    expect(apart.r.failing[0], 'how to name them apart').toBe("th failed: through: 2 pieces offer DN50 PN6 plate flange/holes: name them apart by a name setting on each, or bolt them by mate.bolted (down the top one's hole)");
+    // (two or more that fit: refused, just them listed, never a pick)
+    const two = await ran({ pb1: { b: 'piece.pillowblock' }, pu: { b: 'piece.pulley' }, pb2: { b: 'piece.pillowblock' }, st: { b: 'room.stack', s: { axis: 'x', order: 'pb1,pu,pb2' } }, sh: { b: 'piece.shaft', s: { size: '8' } }, th: { b: 'room.through', s: { line: 'shaft/axis' } } }, ['pb1.block>st.blocks', 'pu.block>st.blocks', 'pb2.block>st.blocks', 'st.block>th.host', 'sh.block>th.passer']);
+    expect(two.r.failing[0], 'every axis it offers, named').toMatch(/^th failed: through: no line 'shaft\/axis'; name one: 'GT2 20T pulley flange\/axis' or 'GT2 20T pulley hub\/axis' or /);
+    const valve = await ran({ v: { b: 'piece.ballvalve' }, pin: { b: 'room.make', s: { name: 'pin', shape: 'rod', a: 1, b: 10 } }, th: { b: 'room.through', s: { line: 'valve/axis' } } }, ['v.block>th.host', 'pin.block>th.passer']);
+    expect(valve.r.failing[0], 'a valve\'s body or its stem').toBe("th failed: through: no line 'valve/axis'; name one: 'G1/2 ball valve body/axis' or 'G1/2 ball valve stem/axis'");
+    // (a room asked of a line, and a line of a room: the fix said)
+    const slot = await ran({ ext: { b: 'piece.extrusion', s: { size: '2020 T-slot' } }, tn: { b: 'piece.tnut', s: { size: '20 M5' } }, in: { b: 'room.into', s: { room: '2020 extrusion/slot' } } }, ['ext.block>in.host', 'tn.block>in.child']);
+    expect(slot.r.failing[0], 'a slot is a line').toBe("in failed: into: '2020 extrusion/slot' is no room; '2020 T-slot extrusion/slots' is a line it offers: a block goes along it by room.through (or over it by room.over)");
+    const tank = await ran({ tank: { b: 'piece.case', s: { name: 'tank' } }, pin: { b: 'room.make', s: { name: 'pin', shape: 'rod', a: 5, b: 50 } }, th: { b: 'room.through', s: { line: 'tank/cavity' } } }, ['tank.block>th.host', 'pin.block>th.passer']);
+    expect(tank.r.failing[0], 'a cavity is a room').toBe("th failed: through: 'tank/cavity' is a room, not a line: put a block in it by room.into; to pass its wall, make it by room.make with holes on a face");
+    // (a room named almost right: the one room it offers)
+    const boxed = await ran({ box: { b: 'piece.case', s: { name: 'project box' } }, cell: { b: 'piece.cell' }, in: { b: 'room.into', s: { room: 'box/inside' } } }, ['box.block>in.host', 'cell.block>in.child']);
+    expect([boxed.r.failing, boxed.out('in').note], 'the one room').toEqual([[], "into took 'project box/cavity' for 'box/inside' (the one room it offers)"]);
+  }, 120_000);
   it('a value goes along a wire only into its own kind, converted rightly', () => {
     const near = (a: number, b: number) => Math.abs(a - b) <= 1e-12 * Math.max(1, Math.abs(b));
     for (const [v, from, to, want] of [[60, 'rpm', 'Hz', 1], [1, 'Hz', 'rpm', 60], [1, 'Hz', 'rad/s', 2 * Math.PI], [60, 'rpm', 'rad/s', 2 * Math.PI], [2 * Math.PI, 'rad/s', 'Hz', 1],
@@ -1233,13 +1274,44 @@ describe('every domain, in one pass', () => {
   // failure (a thing wired into a stack's blocks, refused only when it ran) refused with the fix; an output that is not
   // there refused with those that are; a name on the board already and a second wire into an input that takes one refused,
   // not silently replaced; a node left waiting counted as failing; a stack's order said by its setting)
+  // (decision 0026, step 4: Assist's one call is sent the full cards of the pieces its request names, found by the
+  // build-first search over its words and by the plain words the library names otherwise (2x4, coupler, Raspberry Pi,
+  // wall plugs), the size asked marked among the choices; short, as they are not cached; asked again after a change not
+  // taken, it is told the board is as it was and a change must keep what runs; the guide says to make one thing)
+  it('Assist is sent the cards of the pieces its request names, and asked again to keep what runs', async () => {
+    const { planRequest, namedCards, planOf, runPlan } = await import('../../src/nexus/agent');
+    const CASES: [string, string[]][] = [
+      ['A timber frame: two 2x4 studs nailed to a bottom plate', ['piece.lumber', 'piece.nail']],
+      ['Two 8 mm shafts joined end to end by a shaft coupler', ['piece.shaft', 'piece.coupler']],
+      ['A Raspberry Pi 4 bolted to a plate with a 40 mm fan above it', ['piece.devboard', 'piece.fan']],
+      ['A wall shelf: a board on two angle brackets screwed into wall plugs', ['piece.wallplug']],
+    ];
+    for (const [req, ids] of CASES) {
+      const said = String((await planRequest(req)).messages[0]!.content), named = await namedCards(req);
+      expect(said.startsWith(named) && named.startsWith('Cards of the pieces your request names'), `${req}: the cards before the request`).toBe(true);
+      for (const id of ids) expect(said, `${req}: the card of ${id}, its settings and offers`).toMatch(new RegExp(`^${id.replace('.', '\\.')}: [^\\n]* \\| set [^\\n]*\\| offers `, 'm'));
+      expect(named.length, `${req}: short (not cached)`).toBeLessThanOrEqual(1500);
+      console.log(`named cards for "${req}": ${named.split('\n').length - 1} cards, ${named.length} characters`);
+    }
+    const pi = (await namedCards(CASES[2]![0])).split('\n').find((l) => l.startsWith('piece.devboard: '))!;
+    expect(pi, 'the Pi 4 among the dev board\'s choices, marked as asked').toMatch(/\[[^\]]*\|Raspberry Pi 4 Model B\|[^\]]*\] \(asked: Raspberry Pi 4 Model B\)/);
+    expect(await namedCards('A coupling on a copper pipe'), 'a pipe coupling is not a shaft coupler').not.toMatch(/^piece\.coupler: /m);
+    // (asked again after a change not taken: the board as it was, and what a change must keep)
+    const board = (await runPlan(planOf('{"tool": "build", "nodes": {"p": {"b": "piece.plate"}}}'), emptyBoard('asked'))).board;
+    const again = String((await planRequest(CASES[2]![0], { board, failing: ['NOT TAKEN: it breaks what held (p); the board is as it was.'] })).messages[0]!.content);
+    expect(again, 'the board, then what a change must keep').toMatch(/The board open \(1 nodes[^]*NOT TAKEN[^]*\nThe board above is as it was: a change is taken only if every node that runs on it still runs/);
+    expect(readFileSync(join(root, 'docs/FOR-AI.md'), 'utf8'), 'the guide: one thing, a named piece, a size from the choices').toMatch(/One thing, never parts side by side[^]*only the last shown[^]*`piece\.lumber`[^]*one of its card's choices/);
+  }, 60_000);
   it('the AI\'s plans are checked as they are made, and every refusal says the fix', async () => {
     const { planOf, runPlan, failingOf, stepOf: stepOf2, nearMissesOf: nm } = await import('../../src/nexus/agent');
     expect(fitsPorts({ name: 'thing', type: 'assembly' }, { name: 'blocks', type: 'block', many: true }).ok, 'a thing is not a block').toBe(false);
     expect(fitsPorts({ name: 'block', type: 'block' }, { name: 'blocks', type: 'block', many: true }).ok, 'a block is').toBe(true);
     const x = await runPlan(planOf('{"tool": "build", "nodes": {"a": {"b": "piece.plate"}, "x": {"b": "piece.bolt"}, "st": {"b": "room.stack"}}, "wires": ["a.block>st.blocks", "x.thing>st.blocks", "a.mass>st.blocks"]}'), emptyBoard('asked'));
-    expect(x.failing.slice(0, 2), 'refused with the fix, not run').toEqual(['! wire x.thing>st.blocks: st.blocks takes a block: wire x.block, not x.thing', '! wire a.mass>st.blocks: a (piece.plate) has no output mass: it gives block, thing, pieces, faces, offers, says']);
-    expect(edgesOf(x.board).filter((w) => w.to === 'st').map((w) => w.from), 'only the good wire made').toEqual(['a']);
+    // (a thing where a block goes, from a node that gives a block, is wired as it plainly means and said (decision 0026, step
+    // 4: Assist asked again only to swap it, then failed on its unwire); an output not there is refused with the fix)
+    expect(x.failing.slice(0, 1), 'refused with the fix, not run').toEqual(['! wire a.mass>st.blocks: a (piece.plate) has no output mass: it gives block, thing, pieces, faces, offers, says']);
+    expect(x.out.split('\n').filter((l) => l.startsWith('note ')), 'the swap said').toEqual(['note x.thing>st.blocks wired as x.block>st.blocks (st.blocks takes a block)']);
+    expect(edgesOf(x.board).filter((w) => w.to === 'st').map((w) => `${w.from}.${w.out}`), 'the good wire and the plain one made').toEqual(['a.block', 'x.block']);
     // (a name already on the board, and a second wire into an input that takes one: refused, the board as it was)
     const y = await runPlan(planOf('{"tool": "change", "add": {"a": {"b": "piece.nut"}}, "wires": ["x.block>a.held"]}'), x.board);
     expect(y.failing[0], 'the name kept').toMatch(/^! a: a node of that name is on the board already \(piece\.plate\)/); expect(y.board.nodes.a!.block).toBe('piece.plate');
@@ -1650,6 +1722,36 @@ describe('every domain, in one pass', () => {
   // (nothing checks for overlap (decision 0021, the user, 2026-11-02): where a place is still written by hand is counted
   // instead, builder by builder, and no count may rise; a builder moved onto the operations that cannot write an overlap
   // counts 0. `node scripts/by-hand.mjs` lists them; `--write` keeps the counts once they fall)
+  // (decision 0026, step 4: what the AI's plans repeat folded into blocks (seeds.ts): bolted at two and at four holes of a
+  // line, into a box with its lid on, a board on four standoffs on a plate. Each placed with two settings gives two
+  // builds, each the very build of the same pieces wired inline, every node ok; the cells boxed on a starter board by one)
+  it('the repeats folded: each block at two settings is its pieces wired inline', async () => {
+    const ran = async (b: Board) => { const e = new Engine(b, env, new Memo()); await e.run(); expect([...e.state].filter(([, s]) => s.status !== 'ok').map(([id, s]) => `${id}: ${s.error}`), `every node of ${b.title} runs`).toEqual([]); return e; };
+    const on = (b: Board) => (id: string, blk: string, set: Record<string, unknown>, ...ws: [string, string, string][]) => { placeBlock(b, blk, 0, 0, set, id); for (const [f, o, i] of ws) wire(b, f, o, id, i); };
+    // (what each block works on, the same pieces in both boards: two plates stacked, two cells side by side, a dev board)
+    const held = (b: Board) => { const p = on(b); for (const id of ['p1', 'p2']) p(id, 'piece.plate', { name: id === 'p1' ? 'bottom plate' : 'top plate', w: 100, t: 5, d: 100, holes: '-30,-30; 30,-30; -30,30; 30,30', hole: 9 }); p('st', 'room.stack', { axis: 'y', fit: 'touch' }, ['p1', 'block', 'blocks'], ['p2', 'block', 'blocks']); return 'st'; };
+    const cells = (b: Board) => { const p = on(b); p('c', 'piece.cell', { size: '18650' }); p('pr', 'room.stack', { axis: 'x', fit: 'clear' }, ['c', 'block', 'blocks'], ['c', 'block', 'blocks']); return 'pr'; };
+    const dev = (b: Board) => { on(b)('dv', 'piece.devboard', {}); return 'dv'; };
+    type Case = { id: string; feed: (b: Board) => string; input: string; sets: Record<string, unknown>[]; inline: (b: Board, s: Record<string, unknown>, from: string) => string };
+    const bolted = (n: number): Case['inline'] => (b, s, from) => { const p = on(b); for (let k = 0; k < n; k++) p(`j${k}`, 'mate.bolted', { line: s.line, which: k, size: s.size, head: s.head }, [k ? `j${k - 1}` : from, 'block', 'held']); return `j${n - 1}`; };
+    const cases: Case[] = [
+      { id: 'seed.bolted-two', feed: held, input: 'held', sets: [{ line: 'top plate/holes', size: 'M8', head: 'hex' }, { line: 'top plate/holes', size: 'M6', head: 'socket' }], inline: bolted(2) },
+      { id: 'seed.bolted-four', feed: held, input: 'held', sets: [{ line: 'top plate/holes', size: 'M8', head: 'hex' }, { line: 'top plate/holes', size: 'M5', head: 'socket' }], inline: bolted(4) },
+      { id: 'seed.boxed', feed: cells, input: 'inside', sets: [{ name: 'cell box', mat: 'abs', w: 45, h: 70, d: 25, wall: 2, fit: 'clear' }, { name: 'pack', mat: 'pc', w: 50, h: 80, d: 30, wall: 3, fit: 'slide' }],
+        inline: (b, s, from) => { const p = on(b); p('box', 'piece.case', { name: s.name, mat: s.mat, w: s.w, h: s.h, d: s.d, wall: s.wall, floor: s.wall }); p('boxed', 'room.into', { fit: s.fit }, ['box', 'block', 'host'], [from, 'block', 'child']); p('lid', 'mate.lid', { t: s.wall, mat: s.mat }, ['boxed', 'block', 'box']); return 'lid'; } },
+      { id: 'seed.standoffs', feed: dev, input: 'board', sets: [{ w: 80, d: 60, t: 3, mat: 'acrylic', holes: '-25,-15; 25,-15; -25,15; 25,15', length: 10 }, { w: 100, d: 70, t: 4, mat: 'al-6061', holes: '-35,-20; 35,-20; -35,20; 35,20', length: 15 }],
+        inline: (b, s, from) => { const p = on(b); p('plate', 'piece.plate', { name: 'standoff plate', mat: s.mat, w: s.w, t: s.t, d: s.d, holes: s.holes, hole: 3.2 }); for (let k = 0; k < 4; k++) { p(`so${k}`, 'piece.standoff', { length: s.length }); p(`t${k}`, 'room.through', { line: 'standoff plate/holes', which: k }, [k ? `t${k - 1}` : 'plate', 'block', 'host'], [`so${k}`, 'block', 'passer']); } p('seat', 'room.onto', { face: '+y', fit: 'touch' }, ['t3', 'block', 'host'], [from, 'block', 'child']); return 'seat'; } },
+    ];
+    for (const c of cases) {
+      const placed = emptyBoard(`${c.id} twice`), from = c.feed(placed); c.sets.forEach((s, k) => { placeBlock(placed, c.id, 0, 0, s, `f${k}`); wire(placed, from, 'block', `f${k}`, c.input); });
+      const pe = await ran(placed), got = c.sets.map((_, k) => digest(pe.state.get(`f${k}`)!.out!.block));
+      expect(got[0] === got[1], `${c.id}: two settings, two builds`).toBe(false);
+      for (const [k, s] of c.sets.entries()) { const ib = emptyBoard(`${c.id} inline`), end = c.inline(ib, s, c.feed(ib)), ie = await ran(ib);
+        expect(got[k] === digest(ie.state.get(end)!.out!.block), `${c.id} at ${JSON.stringify(s)}: the inline build's`).toBe(true); }
+    }
+    const small = [...new Map(starterBoards())].find(([t]) => t.startsWith('Small builds from pieces'))![1](), se = await ran(small);
+    expect([nodesOf(small).filter((x) => small.nodes[x.id]!.block === 'seed.boxed').length, (se.state.get('lid')!.out!.block as { pieces: unknown[] }).pieces.length], 'the cells boxed on the small builds board by the block').toEqual([1, 10]);
+  }, 120_000);
   it('places written by hand only fall', () => {
     const now = byHand(), was = JSON.parse(readFileSync(LIMITS, 'utf8')) as Record<string, number>;
     expect(Object.entries(now).filter(([f, n]) => n > (was[f] ?? 0)).map(([f, n]) => `${f}: ${was[f] ?? 0} → ${n}`), 'a place written by hand where there were fewer').toEqual([]);
@@ -2016,6 +2118,38 @@ describe('every domain, in one pass', () => {
     expect(Math.abs(vol(partOfBlock(wheel)) / (Math.PI * (0.04 ** 2 - 0.005 ** 2) * 0.02) - 1), 'the wheel weighed as its outline turned').toBeLessThan(1e-9);
     expect(Math.abs(massOf(partOfBlock(ball).parts![0]!) / ((4 / 3) * Math.PI * 0.01 ** 3 * 7850) - 1), 'the ball weighed whole').toBeLessThan(1e-2);
   });
+  it('pieces put together as a person would (decision 0026 step 4, fits): a gear bored to its shaft, a screw into an insert, nuts and washers stacked, a wheel on a gear motor, a bearing over a shaft', async () => {
+    const { runPlan } = await import('../../src/nexus/agent');
+    const run = async (nodes: Record<string, { b: string; s?: Record<string, unknown> }>, wires: string[]) => { const r = await runPlan({ tool: 'build', input: { nodes, wires }, says: '' }, emptyBoard('fits')); const e = new Engine(r.board); await e.run(); return { failing: r.failing, e }; };
+    // (a gear's pilot bore (5 mm) opened to its 8 mm shaft by the shaft along its axis, as far as its root circle less a module)
+    const gear = await run({ gear: { b: 'piece.gear' }, shaft: { b: 'piece.shaft' }, gon: { b: 'room.through', s: { line: 'm1 z20 spur gear/axis', from: 'below', fit: 'clear' } }, collar: { b: 'piece.collar' }, held: { b: 'room.over', s: { line: 'Ø8 shaft/axis', where: 'hi', fit: 'touch' } }, show: { b: 'space.show' } },
+      ['gear.block>gon.host', 'shaft.block>gon.passer', 'gon.block>held.host', 'collar.block>held.sleeve', 'held.thing>show.thing']);
+    expect(gear.failing, 'a gear on an 8 mm shaft, held by a collar').toEqual([]);
+    expect(cpGear(1, 20, 0.008, 0.005).pieces[0]!.lines[0]!.slot, 'm1 z20: r 10 less 1.25 m less m').toBeCloseTo(0.00775, 6);
+    // (a screw through a plate, a heat-set insert over its shank: the insert's bore tapped at the thread's size, so the
+    // screw goes in by its thread whatever fit was asked; a plain nut with a slide fit is still refused, below)
+    const ins = await run({ pl: { b: 'piece.plate', s: { name: 'plate', t: 5 } }, scr: { b: 'piece.bolt', s: { size: 'M4', length: 20 } }, thru: { b: 'room.through', s: { line: 'plate/holes', which: 0 } }, ins: { b: 'piece.heatset', s: { size: 'M4-0.7-Standard McMaster-Carr' } }, on: { b: 'room.over', s: { line: 'M4 shank/axis', where: 'mid', fit: 'clear' } }, show: { b: 'space.show' } },
+      ['pl.block>thru.host', 'scr.block>thru.passer', 'thru.block>on.host', 'ins.block>on.sleeve', 'on.thing>show.thing']);
+    expect(ins.failing, 'a screw into an insert').toEqual([]);
+    const tapped = ins.e.state.get('on')?.out?.block as { faces: { by: string; gap: number }[] };
+    expect(tapped.faces.filter((f) => /over M4 shank/.test(f.by)).map((f) => f.gap), 'on its thread: no gap drawn').toEqual([0]);
+    // (a threaded rod through two plates, a washer then a nut over each end: each slid on past the last)
+    const rod = await run({ bot: { b: 'piece.plate', s: { name: 'bottom plate', t: 3 } }, top: { b: 'piece.plate', s: { name: 'top plate', t: 3 } }, st: { b: 'room.stack', s: { axis: 'y', order: 'bot,top' } }, rod: { b: 'piece.bolt', s: { size: 'M8', length: 140 } }, thru: { b: 'room.through', s: { line: 'bottom plate/holes', which: 0, from: 'below', fit: 'clear' } },
+      wlo: { b: 'piece.washer', s: { size: 'M8' } }, olo: { b: 'room.over', s: { line: 'M8 shank/axis', where: 'lo', fit: 'touch' } }, nlo: { b: 'piece.nut', s: { size: 'M8' } }, olo2: { b: 'room.over', s: { line: 'M8 shank/axis', where: 'lo', fit: 'touch' } },
+      whi: { b: 'piece.washer', s: { size: 'M8' } }, ohi: { b: 'room.over', s: { line: 'M8 shank/axis', where: 'hi', fit: 'touch' } }, nhi: { b: 'piece.nut', s: { size: 'M8' } }, ohi2: { b: 'room.over', s: { line: 'M8 shank/axis', where: 'hi', fit: 'touch' } }, show: { b: 'space.show' } },
+      ['bot.block>st.blocks', 'top.block>st.blocks', 'st.block>thru.host', 'rod.block>thru.passer', 'thru.block>olo.host', 'wlo.block>olo.sleeve', 'olo.block>olo2.host', 'nlo.block>olo2.sleeve', 'olo2.block>ohi.host', 'whi.block>ohi.sleeve', 'ohi.block>ohi2.host', 'nhi.block>ohi2.sleeve', 'ohi2.thing>show.thing']);
+    expect(rod.failing, 'a nut and a washer over each end').toEqual([]);
+    const ys = (rod.e.state.get('ohi2')?.out?.block as { pieces: { name: string; solid: { base: { c: number[] } } }[] }).pieces.filter((p) => /M8 (nut|washer)/.test(p.name)).map((p) => p.solid.base.c[1]!);
+    expect(new Set(ys.map((y) => y.toFixed(6))).size, 'four places, none on another').toBe(4);
+    // (a wheel on an N20's shaft: its hub longer than the shaft, so it stands on the gearbox, out past the shaft's free end)
+    const wheel = await run({ motor: { b: 'piece.gearmotor' }, wheel: { b: 'piece.wheel' }, fit: { b: 'room.over', s: { line: 'N20 gear motor shaft/axis', where: 'hi', fit: 'slide' } }, show: { b: 'space.show' } }, ['motor.block>fit.host', 'wheel.block>fit.sleeve', 'fit.thing>show.thing']);
+    expect(wheel.failing, 'a wheel on a gear motor').toEqual([]);
+    // (a 608 over an 8 mm rod: its balls beside the axis leave its inner ring's bore; a face for each piece round about the
+    // shaft (its rings and cage, as before), none for a ball)
+    const brg = await run({ shaft: { b: 'room.make', s: { name: 'shaft', shape: 'rod', a: 4, b: 50 } }, brg: { b: 'piece.bearing', s: { size: '608' } }, on: { b: 'room.over', s: { line: 'shaft/axis', where: 'mid', fit: 'touch' } }, show: { b: 'space.show' } }, ['shaft.block>on.host', 'brg.block>on.sleeve', 'on.thing>show.thing']);
+    expect(brg.failing, 'a bearing over a shaft').toEqual([]);
+    expect((brg.e.state.get('on')?.out?.block as { faces: { by: string }[] }).faces.filter((f) => /608.* over shaft/.test(f.by)).length, 'its rings and cage, not its balls').toBe(3);
+  }, 60000);
   it('holes on any face: a pipe into a tank\'s side wall, a pin across a shaft, a counterbore; a gear on a shaft along its length', () => {
     const tank = roomMade('tank', 'abs', { case: [0.1, 0.08, 0.1, 0.004, 0.004] }, { pattern: { name: 'entry', points: [[0.02, 0]], hole: 0.008, face: '+x', depth: 0.004 } });
     expect(tank.pieces[0]!.lines.map((l) => [l.port, l.dir, l.y]), 'the entry offered along the wall\'s normal, inward').toEqual([['tank/entry', [-1, 0, 0], 0.02]]);

@@ -2821,3 +2821,46 @@ end, 20 pieces; a steel post bolted through a block, 19 pieces. Left open, for t
   - `mate.lid` makes a lid with no holes;
   - room.make takes no colour;
   - no picture of any rebuilt board was looked at.
+
+## 2026-11-05: decision 0026, step 4: the bootstrap, the AI on forty things to build (rough, by four agents and a critic, merged here)
+
+Forty requests, each scored with no model (`tests/evals/builds.eval.ts`, `npm run eval:builds`: every node ok, the kinds
+asked used, one thing of at least so many pieces). Assist, Claude Haiku 5.5 at low effort, asked once more with what failed:
+- **Before step 3** (8cab483): 11 of 40 right. 1 call in 72 read the cache, and 492,297 tokens were written to it.
+  50,784 tokens in and out per right build, cache reads apart.
+- **After step 3** (ecc7f1d): 14 of 40, 7,780 tokens a right build. 450,978 tokens read from the cache, 34,165 written.
+- **After step 4's four agents** (972cf17): 20 of 40, 8,037 tokens a right build. 417,660 read from the cache, 34,805
+  written.
+
+What step 4 changed, each from a class of what failed:
+- **Line names.** An operation now takes the one offered line or room that a name plainly means and says so (the motor
+  plate's, the Pi's, the fan's and the lead screw's holes and axes). It refuses with the candidates listed where two fit.
+  It says the fix where the kind is wrong: a tank's cavity is a room, an extrusion's slot is a line.
+- **Cards for the request.** Assist is sent the cards of the pieces its request names, up to 8 and 1,500 characters, by
+  search and plain-word synonyms (2x4 to lumber, plywood to sheet, coupler, Raspberry Pi to devboard).
+- **Fits.** A gear is bored to its shaft. A screw goes into a tapped insert by its thread. A nut and a washer each slide to
+  the next free stretch of a rod. A wheel's hub sits clear of a gear motor's can. A bearing's balls no longer refuse it a
+  shaft.
+- **Repeats.** What the plans repeat was counted over 80 plans: joints chained on one line 13, a box with what goes in
+  and its lid 8. These were folded into `seed.bolted-two`, `seed.bolted-four`, `seed.boxed` and `seed.standoffs`.
+- **After that run,** from its plans:
+  - a block wired where a thing goes, from a node that gives a thing, is wired as plainly meant (four requests had asked
+    again only to swap it, then failed on unwiring a wire never made);
+  - an unwire of nothing is a note;
+  - a name given to a piece that takes none labels its node (it had failed two builds).
+  These are not yet measured by a run.
+
+**The critic,** report-only, took pictures of the 19 operation-built boards and 16 new pieces and gave 30 of them to a
+blind vision model:
+- **Recognised:** the beam, the wall, the wheel, the extrusion and the quadcopter.
+- **Worst first:**
+  - the bolt-from-its-load board drew nothing;
+  - the pendulum's stand vanished once it ran;
+  - a countersunk screw sat upside down in a countersunk hole;
+  - two boards drew the same things several times over;
+  - the fan had no blades;
+  - every room-made piece with no colour was drawn white whatever its material;
+  - the controls cart was one solid box;
+  - no L corner of extrusion could be built.
+
+Those are being mended in the next commit.

@@ -110,6 +110,60 @@ function packOfTwo(): void {
     { gloss: 'Two cells boxed with a lid, as one node of a few settings', discipline: 'mechanical.design.cad', role: 'geometry operation', codes: [{ scheme: 'MSC2020', code: '68U07', label: 'Computer science aspects of computer-aided design' }] });
 }
 
+// ---- what the AI's builds repeat (decision 0026, step 4: the bootstrap) -------------------------------------------------
+// (counted over the 80 plans of the forty build requests, before and after step 3, settings aside: joints chained on one
+// line of holes (mate.bolted or mate.plate, held into held) in 13, two or four of them; a box with what goes into it and
+// its lid in 8 and three starter boards; copies passed through a plate's holes (standoffs) in 3, of 6 chained throughs.
+// Each folded into one block of the settings that matter, its inputs the blocks it works on)
+
+/** Bolted at n holes of one line: n bolted joints in a chain, the first on the first hole. */
+function boltedAt(n: 2 | 4): void {
+  const s = new Seed(`Bolted at ${n} holes`), js = Array.from({ length: n }, (_, k) => `j${k}`), all = (key: string) => js.map((j) => `${j}.${key}`).join('; ');
+  const held = s.input('held', 'block', '', 'what it holds (plates stacked, a part on a plate)');
+  s.input('line', 'text', 'top plate/holes', 'the holes (a port, as "top plate/holes"): the first ' + n + ' of them', undefined, '', all('line'));
+  s.input('size', 'text', 'M6', 'the bolts\' size', undefined, '', all('size'));
+  s.input('head', 'text', 'hex', 'their heads', undefined, '', all('head'));
+  js.forEach((j, k) => { s.n('mate.bolted', { line: 'top plate/holes', which: k, size: 'M6', head: 'hex' }, k ? `And hole ${k}` : 'Bolted through the first hole', j); s.w(k ? js[k - 1]! : held, k ? 'block' : 'value', j, 'held'); });
+  const last = js[n - 1]!;
+  s.output('block', 'block', last, 'block'); s.output('thing', 'assembly', last, 'thing'); s.output('says', 'text', last, 'says');
+  s.save(n === 2 ? 'seed.bolted-two' : 'seed.bolted-four', `Bolted at ${n} holes`, `What it holds bolted through the first ${n} holes of one line (plates stacked: "top plate/holes"), a bolt down each from above, its head on top, a washer and nut below: ${n} bolted joints in a chain as one node. Its settings: the line, the bolts' size and their heads. It gives the block bolted, for the next operation`, ['mechanical', 'manufacturing'],
+    { gloss: `Plates bolted at ${n} holes, as one node`, discipline: 'mechanical.design.cad', role: 'geometry operation', codes: [{ scheme: 'MSC2020', code: '68U07', label: 'Computer science aspects of computer-aided design' }] });
+}
+
+/** What goes into a hollow box, and its lid on. */
+function boxed(): void {
+  const s = new Seed('Into a box, its lid on');
+  const inside = s.input('inside', 'block', '', 'what goes into the box (cells stacked, a board, a switch)');
+  s.input('name', 'text', 'box', 'the box\'s name (its cavity is "<name>/cavity")', undefined, '', 'box.name');
+  s.input('mat', 'text', 'abs', 'box and lid, their material', undefined, '', 'box.mat; lid.mat');
+  s.input('w', 'number', 100, 'the box\'s width, mm', undefined, '', 'box.w'); s.input('h', 'number', 40, 'its height, mm', undefined, '', 'box.h'); s.input('d', 'number', 60, 'its depth, mm', undefined, '', 'box.d');
+  s.input('wall', 'number', 2, 'its walls, floor and lid, mm', undefined, '', 'box.wall; box.floor; lid.t');
+  s.input('fit', 'text', 'clear', 'what goes in, its fit', undefined, '', 'boxed.fit');
+  s.n('piece.case', { name: 'box', mat: 'abs', w: 100, h: 40, d: 60, wall: 2, floor: 2 }, 'The box', 'box');
+  s.n('room.into', { fit: 'clear' }, 'What goes in, into its cavity', 'boxed'); s.w('box', 'block', 'boxed', 'host'); s.w(inside, 'value', 'boxed', 'child');
+  s.n('mate.lid', { t: 2, mat: 'abs' }, 'Its lid on', 'lid'); s.w('boxed', 'block', 'lid', 'box');
+  s.output('block', 'block', 'lid', 'block'); s.output('open', 'block', 'boxed', 'block'); s.output('thing', 'assembly', 'lid', 'thing'); s.output('says', 'text', 'lid', 'says');
+  s.save('seed.boxed', 'Into a box, its lid on', 'What goes in (cells side by side, a board, a switch and a fuse stacked) into a hollow box\'s cavity, and a lid made for it on top: a box, Into a room and Close with a lid as one node. Its settings: the box\'s name, material, width, height, depth and walls (walls, floor and lid), in mm, and the fit; refused with both sizes if what goes in does not fit. It gives the box closed, and the box open (filled, its lid not on)', ['mechanical', 'electrical', 'everyday'],
+    { gloss: 'A box filled and closed, as one node', discipline: 'mechanical.design.cad', role: 'geometry operation', codes: [{ scheme: 'MSC2020', code: '68U07', label: 'Computer science aspects of computer-aided design' }] });
+}
+
+/** A board on four standoffs on a plate: one standoff made, passed down the plate's four holes, the board on top. */
+function onStandoffs(): void {
+  const s = new Seed('On four standoffs on a plate');
+  const board = s.input('board', 'block', '', 'what stands on the standoffs (a dev board, a PCB)');
+  s.input('w', 'number', 80, 'the plate\'s width, mm', undefined, '', 'plate.w'); s.input('d', 'number', 60, 'its depth, mm', undefined, '', 'plate.d'); s.input('t', 'number', 3, 'its thickness, mm', undefined, '', 'plate.t');
+  s.input('mat', 'text', 'acrylic', 'its material', undefined, '', 'plate.mat');
+  s.input('holes', 'text', '-25,-15; 25,-15; -25,15; 25,15', 'its four holes\' centres, mm from its middle across and deep ("x,z; ...")', undefined, '', 'plate.holes');
+  s.input('length', 'number', 10, 'the standoffs\' length, mm', undefined, '', 'so.length');
+  s.n('piece.plate', { name: 'standoff plate', mat: 'acrylic', w: 80, t: 3, d: 60, holes: '-25,-15; 25,-15; -25,15; 25,15', hole: 3.2 }, 'The plate, four M3 clearance holes', 'plate');
+  s.n('piece.standoff', { length: 10 }, 'A standoff (one made, used four times)', 'so');
+  ['t0', 't1', 't2', 't3'].forEach((t, k) => { s.n('room.through', { line: 'standoff plate/holes', which: k }, `A standoff down hole ${k}`, t); s.w(k ? `t${k - 1}` : 'plate', 'block', t, 'host'); s.w('so', 'block', t, 'passer'); });
+  s.n('room.onto', { face: '+y', fit: 'touch' }, 'The board on top', 'seat'); s.w('t3', 'block', 'seat', 'host'); s.w(board, 'value', 'seat', 'child');
+  s.output('block', 'block', 'seat', 'block'); s.output('plate', 'block', 't3', 'block'); s.output('thing', 'assembly', 'seat', 'thing'); s.output('says', 'text', 'seat', 'says');
+  s.save('seed.standoffs', 'On four standoffs on a plate', 'A board held off a plate on four M3 standoffs: the plate ("standoff plate") with four clearance holes, a standoff down each, the board on top. Its settings: the plate\'s width, depth, thickness and material, its four holes\' centres, and the standoffs\' length, in mm. It gives the board on its standoffs, and the plate with its standoffs alone (plate)', ['electrical', 'mechanical'],
+    { gloss: 'A board on four standoffs on a plate, as one node', discipline: 'mechanical.design.cad', role: 'geometry operation', codes: [{ scheme: 'MSC2020', code: '68U07', label: 'Computer science aspects of computer-aided design' }] });
+}
+
 /** Every seed, in the order each needs the ones before it. */
 let made = false;
 export function makeSeeds(): void {
@@ -117,5 +171,8 @@ export function makeSeeds(): void {
   springChecked();
   motorDC();
   packOfTwo();
+  boltedAt(2); boltedAt(4);
+  boxed();
+  onStandoffs();
 }
 makeSeeds();

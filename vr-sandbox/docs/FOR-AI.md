@@ -73,6 +73,9 @@ M64, 608, '1/2 steel 40'); a size the standard lacks is refused with the sizes i
 holes on any face (`face`, `depth`, `sink`); gears and pulleys go on a shaft by `room.through` along their `<name>/axis`;
 fan blades and spokes by `room.ring` with `out=yes`; a part at a distance along a shaft by `room.over` with `where` lo or
 hi and `along`; any hose, cable or tube by `room.run`.
+One thing, never parts side by side: every piece joined by an operation into one block (each operation's `block` into the
+next), and only the last shown. A named piece before a box made to look like it (timber `piece.lumber`, a panel
+`piece.sheet`, a shaft coupler `piece.coupler`), its `size` one of its card's choices as written (`Raspberry Pi 4 Model B`).
 Show the last `thing` with `space.show`. Hold what matters with `assert`, a measured output wired in (a mass from
 `measure`). Replies start with `FAILS` lines (an assertion, a joint, a paste refused): say those first.
 

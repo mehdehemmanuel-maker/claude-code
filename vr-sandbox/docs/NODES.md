@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 717 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 721 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -40,11 +40,11 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 6 | typical values or an estimate, said so |
 | simplified | 39 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 188 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 192 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 679 tested here (their own tests: that they do what they say, not that the world does); 28 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 679 tested here (their own tests: that they do what they say, not that the world does); 32 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 128 of 717 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 128 of 721 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (15)
 
@@ -66,7 +66,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
 - **ZenRows: read a web page** (`api.zenrows`): A web page fetched through ZenRows (ZENROWS_API_KEY under Node): its scripts run where asked, its words back as Markdown or its HTML as it is. *given, untested*
 
-## 2 · Make: shapes, parts, things (41)
+## 2 · Make: shapes, parts, things (45)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
@@ -74,6 +74,8 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Battery pack** (`battery.pack`): Cells in a pack: so many groups in series, each so many cells in parallel standing in staggered rows, a busbar over each group, the groups in modules, the modules in a tray. *hypothetical, tested here, before the update*
 - **Body** (`body`): A human body from its measured segments, not drawn by eye: laid out from its height by Drillis and Contini's proportions, its sixteen segments each the share of its mass de Leva measured (men and women apart), shaped … *estimated, tested here*
 - **Bolt circle** (`pattern.circle`): A bolt circle as one record: its count, its radius, its turn and its thread, the points round it; every part wired from it reads the same one, never a copy (R15) *hypothetical, tested here*
+- **Bolted at 2 holes** (`seed.bolted-two`): What it holds bolted through the first 2 holes of one line (plates stacked: "top plate/holes"), a bolt down each from above, its head on top, a washer and nut below: 2 bolted joints in a chain as one node. *hypothetical, untested*
+- **Bolted at 4 holes** (`seed.bolted-four`): What it holds bolted through the first 4 holes of one line (plates stacked: "top plate/holes"), a bolt down each from above, its head on top, a washer and nut below: 4 bolted joints in a chain as one node. *hypothetical, untested*
 - **Box** (`shape.box`): A block: width (x), height (y), depth (z) *hypothetical, tested here, before the update*
 - **Branch into a side** (`room.branch`): A branch (a run whose first piece is a hollow straight) joined square into the middle of a hollow straight its host offers by a line, toward that straight's +x, +z, -x or -z (or degrees): the straight's wall opened by … *derived, tested here*
 - **Coil spring, made and loaded** (`seed.spring-checked`): A helical compression spring made from its wire and coils (the coil maker) and put under its working stroke (Spring under load): its mass, its rate, and its least factor of safety, wire stress and coil bind among them. *hypothetical, untested*
@@ -86,12 +88,14 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Floor plan** (`plan.rooms`): A house's rooms laid out from its plan: rows of rooms split by "/", rooms in a row by ",", each "type W x D" in metres ("bedroom 4x4, bathroom 2.5x3 / kitchen 4x3.5, living 5x3.5"); or a plan by name. *hypothetical, tested here, before the update*
 - **Gemini: draw from words** (`api.gemini.draw`): Words sent to Gemini's image models (GEMINI_API_KEY under Node), a picture back; the image quota is the key's, and where it is spent the service says so *hypothetical, untested*
 - **Higgsfield: pictures and video** (`api.higgsfield`): A request to one of Higgsfield's models (its path, as its docs name it: higgsfield-ai/soul/v2/standard for pictures, a video model's for video), its words and any pictures' addresses, sent with HIGGSFIELD_KEY_ID and … *hypothetical, untested*
+- **Into a box, its lid on** (`seed.boxed`): What goes in (cells side by side, a board, a switch and a fuse stacked) into a hollow box's cavity, and a lid made for it on top: a box, Into a room and Close with a lid as one node. *hypothetical, untested*
 - **Into a room** (`room.into`): A block put into a room its host offers (a cup's cavity): standing on its floor on its axis, within it with the fit's gap, and the room then used. *derived, tested here*
 - **Joints solved together** (`joints.solve`): Every joint wired in, solved together by least squares (Levenberg–Marquardt): each part's pose found so that all hold, or as near as they let it; each joint's residual in mm and degrees, the parts turned end for end … *derived, tested here*
 - **Lithium cell** (`battery.cell`): A cylindrical lithium-ion cell by its format (18650, 21700, 4680): can, sleeve, its jelly roll wound turn by turn (cathode, anode, separator), insulators, cap with its vent disc and gasket *specified, tested here, before the update*
 - **Loop round a block** (`path.loop`): A path round a rectangle, in its lane (inset from the road's middle), driven with the block on the right as traffic keeps right; and where it must stop: before each crossing it meets, every so many metres *hypothetical, tested here, before the update*
 - **Made whole (the attention-to-detail pass and its critic)** (`make.whole`): A thing taken through the make pipeline (make/pipeline.ts): its conditions, its details by rule (welds, screws, finishes; on a road vehicle its mirrors and number plates), and its critic, again until nothing more is … *derived, untested*
 - **Make a solid** (`room.make`): One solid at the origin, sizes a to e in mm: box (a w, b h, c d), rod (a r, b h), tube (a bore r, b r, c h), cup (a r, b h, c wall, d floor), hex (a flats, b h, c bore r), dome (a r), sphere (a r, c bore r), cone (a r … *hypothetical, tested here*
+- **On four standoffs on a plate** (`seed.standoffs`): A board held off a plate on four M3 standoffs: the plate ("standoff plate") with four clearance holes, a standoff down each, the board on top. *hypothetical, untested*
 - **Onto a face** (`room.onto`): A block put against a face of another (its top, its side), in the space beyond that face, centred on it, with the fit's gap: beside it, never in it *derived, tested here*
 - **Over a shaft** (`room.over`): A sleeve (a washer, a nut, a coupling, a coil, a bobbin, a wheel) slid over a line its host offers (a shank, a pipe, a core): its bore round what is on the line with the fit's gap, at the line's piece's low end, high … *derived, tested here*
 - **Pack of two cells** (`seed.pack-two`): Two cells side by side in a hollow ABS box, its lid on: the pack upright, and laid flat. *hypothetical, untested*
