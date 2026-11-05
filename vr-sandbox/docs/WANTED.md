@@ -485,3 +485,6 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   past its time is cut and noted, never waited on; rough the whole first, polish at the end; three ways to build on the
   phone page: by hand, with the AI proposing and the person taking it, and by the AI alone; the in-app AI's tokens
   measured and kept low; more nodes for the AI to build with; pipe bends and elbows; any part turned to any angle)
+- 2026-11-05: "Okay populate the library and make it so the ai can easily build a lot of things but first research and
+  report to me a plan before starting" (many more pieces and assemblies in the library, and the AI able to build a wide
+  range of things from them with little effort; researched first, the plan reported and agreed before any building)
