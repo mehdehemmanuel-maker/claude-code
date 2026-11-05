@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries, toCreasedNormals } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { FINISH_MAKE, edgeRadius, surfaceOf } from '../finish';
-import { resolveLook, type Graphic, type Look } from '../appearance';
+import { materialColour, resolveLook, type Graphic, type Look } from '../appearance';
 import type { Cut, Part, Shape, V3 } from '../kits';
 import { detail, divisions } from '../lod';
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg';
@@ -413,7 +413,7 @@ export function leafMaterial(p: Part, over: { color?: number; mat?: string; fini
 function leafMaterialMade(p: Part, over: { color?: number; mat?: string; finish?: string; look?: Look }): THREE.MeshStandardMaterial {
   // ground is shaded by its height, which its vertices carry
   if (p.shape && 'ground' in p.shape) { const c = over.color ?? p.color ?? 0x5d8a3a, k = String(c); return groundMats.get(k) ?? groundMats.set(k, new THREE.MeshStandardMaterial({ color: c, vertexColors: true, roughness: 0.95 })).get(k)!; }
-  const m = matFor(over.color ?? p.color ?? 0x999999, over.mat ?? p.mat, !!p.glow, over.finish ?? p.finish, p.wear, !!p.shape && ('lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape), over.look ?? p.look);
+  const m = matFor(over.color ?? p.color ?? materialColour(over.mat ?? p.mat) ?? 0x999999, over.mat ?? p.mat, !!p.glow, over.finish ?? p.finish, p.wear, !!p.shape && ('lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape), over.look ?? p.look);
   // (a drilled piece drawn from both sides: its holes are cut by booleans, which leave points lying on other triangles'
   // edges, and between those the backdrop showed through as dotted lines across a plate (the I16 blind check's readers saw
   // them); seen through such a crack now is the piece's own far face, lit alike. A solid's back faces are otherwise behind
@@ -511,7 +511,7 @@ export function kitView(root: Part, o: { maxLights?: number } = {}): KitView {
       if ('stars' in p.shape) { const gx = galaxy(p.shape.stars); g.add(gx.obj); turners.push(gx.turn); }
       else if ('field' in p.shape) g.add(land(p.shape.field));
       else if ('heap' in p.shape) g.add(heap(p.shape.heap));
-      else { const geo = cut && p.pitch && 'lathe' in p.shape ? threadedLathe(p.shape.lathe, p.pitch) : geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.look?.wear) surfaceShape(geo); if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(p.cuts?.length ? drill(geo, p.cuts, JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts])) : geo, printedMats(p, matFor(p.color ?? 0x999999, p.mat, (!!p.light && !('surf' in p.shape)) || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape, p.look))); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
+      else { const geo = cut && p.pitch && 'lathe' in p.shape ? threadedLathe(p.shape.lathe, p.pitch) : geometry(p.shape, p.mat, p.make, p.facets); if (geo) { if (p.look?.wear) surfaceShape(geo); if (p.base) { const h = 'cyl' in p.shape ? p.shape.cyl[1] : 'cone' in p.shape ? p.shape.cone[1] : 'capsule' in p.shape ? p.shape.capsule[1] : 'box' in p.shape ? p.shape.box[1] : 0; geo.translate(0, h / 2, 0); } const m = new THREE.Mesh(p.cuts?.length ? drill(geo, p.cuts, JSON.stringify([p.shape, p.mat, p.make, p.facets, p.base, p.cuts])) : geo, printedMats(p, matFor(p.color ?? materialColour(p.mat) ?? 0x999999, p.mat, (!!p.light && !('surf' in p.shape)) || !!p.glow, p.finish, p.wear, 'lathe' in p.shape || 'loft' in p.shape || 'surf' in p.shape, p.look))); m.castShadow = true; m.receiveShadow = true; m.name = p.name; m.userData.part = p; g.add(m); } }
     }
     else if (p.item && !p.parts?.length) {
       // a part that is an item of the inventory and has no shape of its own: drawn as that item looks, at its size (not

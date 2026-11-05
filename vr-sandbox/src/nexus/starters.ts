@@ -34,11 +34,13 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     put('cells', 'room.stack', { name: 'six cells', axis: 'z', fit: 'touch' }, 'Six side by side, their walls the partitions'); for (let k = 0; k < 6; k++) wire(b, 'room1', 'block', 'cells', 'blocks');
     put('case', 'room.make', { name: 'battery case', shape: 'case', mat: 'pp', a: 174.6, b: 195.4, c: 230.2, d: 2.5, e: 2.5 }, 'The case (polypropylene), 230 × 175 mm, its cavity a room');
     put('cased', 'room.into', { fit: 'touch' }, 'The cells into the case'); wire(b, 'case', 'block', 'cased', 'host'); wire(b, 'cells', 'block', 'cased', 'child');
-    put('lid', 'room.make', { name: 'lid', shape: 'box', mat: 'pp', a: 174.6, b: 12, c: 230.2 }, 'Its lid (polypropylene)');
-    put('post', 'room.make', { name: 'terminal post', shape: 'cone', mat: 'lead', a: 9.75, b: 8.75, c: 20 }, 'A post, tapered (typical: 19.5 mm across at its foot, 17.5 at its top)');
-    put('posts0', 'room.ring', { name: 'posts', n: 2, R: 90, fit: 'clear' }, 'Two of them'); wire(b, 'post', 'block', 'posts0', 'block');
-    put('posts', 'room.turn', { axis: 'y', degrees: 90 }, 'Along its length'); wire(b, 'posts0', 'block', 'posts', 'block');
-    put('all', 'room.stack', { name: '12 V battery, group 35 (built here)', axis: 'y', fit: 'touch', order: 'cased, lid, posts' }, 'The case, its lid on, the posts on top'); for (const x of ['cased', 'lid', 'posts']) wire(b, x, 'block', 'all', 'blocks');
+    // (the lid's two post holes along one long edge, as a group 35's posts stand: their centres 28 mm in from that edge and
+    // 25 mm in from each end, typical)
+    put('lid', 'room.make', { name: 'lid', shape: 'box', mat: 'pp', a: 174.6, b: 12, c: 230.2, points: '-59.3,-90.1; -59.3,90.1', hole: 10.35 }, 'Its lid (polypropylene), a post hole at each end of one long edge');
+    put('post', 'room.make', { name: 'terminal post', shape: 'cone', mat: 'lead', a: 10.35, b: 8.75, c: 32 }, 'A post, tapered (typical: 19.5 mm across where it leaves the lid, 17.5 at its top, 20 mm out), its foot down in the lid');
+    put('post1', 'room.through', { line: 'lid/holes', which: 0, from: 'below', fit: 'tight' }, 'A post up through the lid\'s first hole'); wire(b, 'lid', 'block', 'post1', 'host'); wire(b, 'post', 'block', 'post1', 'passer');
+    put('posts', 'room.through', { line: 'lid/holes', which: 1, from: 'below', fit: 'tight' }, 'And the other'); wire(b, 'post1', 'block', 'posts', 'host'); wire(b, 'post', 'block', 'posts', 'passer');
+    put('all', 'room.stack', { name: '12 V battery, group 35 (built here)', axis: 'y', fit: 'touch', order: 'cased, posts' }, 'The case, its lid on with its posts'); for (const x of ['cased', 'posts']) wire(b, x, 'block', 'all', 'blocks');
     // (each step's part on the board itself, turning: the plate, the plate in its separator, the cell)
     for (const [k, from, label] of [['v1', 'pos', 'A positive plate'], ['v2', 'sep', 'In its separator'], ['v3', 'cell', 'A cell, its plates strapped']] as [string, string, string][]) { placeBlock(b, 'view.3d', 0, 0, { explode: 0 }, k); b.nodes[k]!.label = label; wire(b, from, 'thing', k, 'part'); }
     // (shown whole: what a person opening it should see is a battery. To look inside, put a Take apart node on what it makes)
@@ -237,13 +239,29 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     // from where the yard put it, and each press makes the row again one crate longer
     const b = emptyBoard('Controls');
     const put = (id: string, block: string, set: Record<string, unknown>, label?: string) => { placeBlock(b, block, 0, 0, set, id); if (label) b.nodes[id]!.label = label; };
-    put('cart', 'room.make', { name: 'cart', shape: 'box', mat: 'abs', a: 800, b: 400, c: 1200 }, 'The cart');
-    put('crateBox', 'room.make', { name: 'crate', shape: 'box', mat: 'abs', a: 500, b: 500, c: 500 }, 'A crate');
+    // (the cart as the physics cart is made: a deck (18 mm plywood, wood veneer at 680 kg/m³, typical) on four 125 mm wheels, each over an
+    // end of its 10 mm axle (the wheel's bore; its running clearance not drawn), the axles laid across and a frame rod between them, end to end, the
+    // deck stacked on them. Sizes typical of a flatbed yard cart, estimates)
+    put('cdeck', 'room.make', { name: 'cart', shape: 'box', mat: 'wood-veneer', a: 800, b: 18, c: 1200 }, 'The cart\'s deck, 800 × 1200 mm, 18 mm plywood');
+    put('cwheel', 'piece.wheel', { size: '125' }, 'A wheel, 125 mm (one made, used four times)');
+    for (const [ax, name] of [['r', 'rear axle'], ['f', 'front axle']] as const) {
+      put(`c${ax}a`, 'room.make', { name, shape: 'rod', mat: 'steel-low', a: 5, b: 800 }, `The ${name}, 10 mm, 800 mm long`);
+      put(`c${ax}1`, 'room.over', { line: `${name}/axis`, where: 'lo', fit: 'touch' }, 'A wheel over one end'); wire(b, `c${ax}a`, 'block', `c${ax}1`, 'host'); wire(b, 'cwheel', 'block', `c${ax}1`, 'sleeve');
+      put(`c${ax}2`, 'room.over', { line: `${name}/axis`, where: 'hi', fit: 'touch' }, 'And over the other'); wire(b, `c${ax}1`, 'block', `c${ax}2`, 'host'); wire(b, 'cwheel', 'block', `c${ax}2`, 'sleeve');
+      put(`c${ax}t`, 'room.turn', { axis: 'z', degrees: 90 }, 'Laid across'); wire(b, `c${ax}2`, 'block', `c${ax}t`, 'block');
+    }
+    put('cframe', 'room.make', { name: 'frame', shape: 'rod', mat: 'steel-low', a: 10, b: 850 }, 'Frame rod between the axles, 20 mm');
+    put('cframeT', 'room.turn', { axis: 'x', degrees: 90 }, 'Laid along'); wire(b, 'cframe', 'block', 'cframeT', 'block');
+    put('cgear', 'room.stack', { name: 'running gear', axis: 'z', fit: 'clear', order: 'crt, cframeT, cft' }, 'Rear axle, frame, front axle, end to end'); for (const x of ['crt', 'cframeT', 'cft']) wire(b, x, 'block', 'cgear', 'blocks');
+    put('cart', 'room.stack', { name: 'cart', axis: 'y', fit: 'touch', order: 'cgear, cdeck' }, 'The cart: its deck on its running gear'); wire(b, 'cgear', 'block', 'cart', 'blocks'); wire(b, 'cdeck', 'block', 'cart', 'blocks');
+    // (a crate: a hollow polypropylene box, 4 mm walls (typical of a stacking crate), its lid on, its button on the lid)
+    put('crateBox', 'piece.case', { name: 'crate', mat: 'pp', w: 500, h: 500, d: 500, wall: 4, floor: 4 }, 'A crate, hollow (polypropylene, 4 mm walls)');
+    put('crateLid', 'mate.lid', { t: 4, mat: 'pp' }, 'Its lid on'); wire(b, 'crateBox', 'block', 'crateLid', 'box');
     put('cap', 'room.make', { name: 'button: Add a crate', shape: 'rod', mat: 'abs', a: 40, b: 20 }, 'Its button\'s cap');
-    put('crate', 'room.onto', { face: '+y', fit: 'touch' }, 'The button on the crate'); wire(b, 'crateBox', 'block', 'crate', 'host'); wire(b, 'cap', 'block', 'crate', 'child');
+    put('crate', 'room.onto', { face: '+y', fit: 'touch' }, 'The button on the crate\'s lid'); wire(b, 'crateLid', 'block', 'crate', 'host'); wire(b, 'cap', 'block', 'crate', 'child');
     put('add', 'control.button', { name: 'Add a crate', key: 'E', colour: 'green', face: 'top' }, 'Add a crate (button)'); wire(b, 'crate', 'block', 'add', 'block');
     put('yard', 'room.stack', { name: 'the yard', axis: 'z', fit: 'clear', level: 'on the ground', order: 'cart, add' }, 'The cart beside the row, on the ground'); wire(b, 'cart', 'block', 'yard', 'blocks'); wire(b, 'add', 'row', 'yard', 'blocks');
-    put('drive', 'control.stick', { name: 'Drive', speed: 3, mode: 'steer', piece: 'cart' }, 'Drive (stick)'); wire(b, 'yard', 'thing', 'drive', 'thing');
+    put('drive', 'control.stick', { name: 'Drive', speed: 3, mode: 'steer', piece: 'cart, rear axle, front axle, frame, 125 mm wheel hub, 125 mm wheel tyre' }, 'Drive (stick)'); wire(b, 'yard', 'thing', 'drive', 'thing');
     put('show', 'space.show', {}); wire(b, 'drive', 'driven', 'show', 'thing');
     return tidy(b);
   }],
@@ -281,15 +299,21 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'mixture', 0, 0, { phases: 'al-6061 1', arrangement: 'open foam', porosity: 0.9 }, 'foam'); b.nodes.foam!.label = 'Aluminium foam, 10 % dense';
     placeBlock(b, 'view.table', 0, 0, {}, 'foamt'); wire(b, 'foam', 'properties', 'foamt', 'rows');
     // the laminate as a part: a 1 m bar of it beside one of steel (each made by the operations, 20 mm square), each
-    // coloured and satin, each pushed 10 N sideways at its top
+    // coloured and satin, each pushed 10 N sideways at its top, each seen bent on the board; in the space the two stand
+    // side by side on the ground, laid by the room's stack (one thing shown, not two on one spot)
+    let last: [string, string] = ['bars', 'thing'];
+    placeBlock(b, 'room.stack', 0, 0, { name: 'two bars', axis: 'x', fit: 'clear', level: 'on the ground', order: 'lam, stl' }, 'bars'); b.nodes.bars!.label = 'The two bars side by side';
     for (const [id, mat, colour] of [['lam', 'cfrp-ud-60', '#2b2b2e'], ['stl', 'steel-low', '#7a8088']] as const) {
-      placeBlock(b, 'room.make', 0, 0, { name: `${mat} bar`, shape: 'box', mat, a: 20, b: 1000, c: 20 }, id);
+      placeBlock(b, 'room.make', 0, 0, { name: `${mat} bar`, shape: 'box', mat, a: 20, b: 1000, c: 20 }, id); wire(b, id, 'block', 'bars', 'blocks');
       placeBlock(b, 'variant', 0, 0, { color: colour, finish: 'satin' }, `${id}p`); wire(b, id, 'thing', `${id}p`, 'thing');
       placeBlock(b, 'bend', 0, 0, { load: 10, dir: '+x', slices: 16 }, `${id}b`); wire(b, `${id}p`, 'variant', `${id}b`, 'thing');
       placeBlock(b, 'view.show', 0, 0, {}, `${id}s`); wire(b, `${id}b`, 'says', `${id}s`, 'value');
-      placeBlock(b, 'space.show', 0, 0, {}, `${id}v`); wire(b, `${id}b`, 'seen', `${id}v`, 'thing');
+      placeBlock(b, 'view.3d', 0, 0, {}, `${id}v`); wire(b, `${id}b`, 'seen', `${id}v`, 'part');
+      placeBlock(b, 'variant', 0, 0, { path: `^${mat} bar$`, color: colour, finish: 'satin' }, `${id}c`); wire(b, last[0], last[1], `${id}c`, 'thing'); last = [`${id}c`, 'variant'];
     }
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, last[0], last[1], 'show', 'thing');
     b.nodes.lamb!.label = 'The laminate bar, 10 N sideways'; b.nodes.stlb!.label = 'The steel bar, 10 N sideways';
+    b.nodes.lamv!.label = 'The laminate bar, seen bent'; b.nodes.stlv!.label = 'The steel bar, seen bent';
     return tidy(b);
   }],
   ['What it is made of, and what it carries: a copper and an aluminium rod side by side under a steel block, opened down to its elements, weighed and balanced, and as a path for heat, current and force', () => {
@@ -319,11 +343,11 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'bend', 0, 0, { load: 100, dir: '+x', at: 'steel block', held: 'the lowest pieces' }, 'bent'); b.nodes.bent!.label = 'Pushed sideways at the block, 100 N (the copper rod yields at about 176)'; wire(b, 'all', 'thing', 'bent', 'thing');
     placeBlock(b, 'bend', 0, 0, { load: 0, warmed: 50, held: 'the lowest pieces', at: 'steel block' }, 'warm'); b.nodes.warm!.label = 'Warmed 50 K: copper and aluminium grow apart under the block'; wire(b, 'all', 'thing', 'warm', 'thing');
     placeBlock(b, 'view.show', 0, 0, {}, 'warmsays'); b.nodes.warmsays!.label = 'What warming does'; wire(b, 'warm', 'says', 'warmsays', 'value');
-    placeBlock(b, 'space.show', 0, 0, {}, 'bentshow'); b.nodes.bentshow!.label = 'Seen bent: movements exaggerated, red moves most'; wire(b, 'bent', 'seen', 'bentshow', 'thing');
+    placeBlock(b, 'view.3d', 0, 0, {}, 'bentshow'); b.nodes.bentshow!.label = 'Seen bent: movements exaggerated, red moves most'; wire(b, 'bent', 'seen', 'bentshow', 'part');
     placeBlock(b, 'thermal', 0, 0, { hot: '', heated: 'steel block', power: 5 }, 'therm'); b.nodes.therm!.label = '5 W into the block, cooled by the air: how hot each piece gets'; wire(b, 'all', 'thing', 'therm', 'thing');
     placeBlock(b, 'view.table', 0, 0, {}, 'thermt'); b.nodes.thermt!.label = 'Each piece, steady'; wire(b, 'therm', 'pieces', 'thermt', 'rows');
-    placeBlock(b, 'space.show', 0, 0, {}, 'thermshow'); b.nodes.thermshow!.label = 'Seen: the block 5 W warm, the rods carrying it down'; wire(b, 'therm', 'seen', 'thermshow', 'thing');
-    placeBlock(b, 'space.show', 0, 0, {}, 'hot'); b.nodes.hot!.label = 'Seen: hot red at the block, cold blue at the rods\' feet'; wire(b, 'heat', 'seen', 'hot', 'thing');
+    placeBlock(b, 'view.3d', 0, 0, {}, 'thermshow'); b.nodes.thermshow!.label = 'Seen: the block 5 W warm, the rods carrying it down'; wire(b, 'therm', 'seen', 'thermshow', 'part');
+    placeBlock(b, 'view.3d', 0, 0, {}, 'hot'); b.nodes.hot!.label = 'Seen: hot red at the block, cold blue at the rods\' feet'; wire(b, 'heat', 'seen', 'hot', 'part');
     placeBlock(b, 'view.table', 0, 0, {}, 'contacts'); b.nodes.contacts!.label = 'What touches what, read from the geometry'; wire(b, 'touch', 'edges', 'contacts', 'rows');
     return b;
   }],
@@ -347,7 +371,7 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     return b;
   }],
   ['Physics: a cart on two motor-driven wheels', () => {
-    // an aluminium deck 1 × 0.5 m on four rubber wheels 200 mm across, each slid over the end of its axle (two 20 mm steel
+    // an aluminium deck 1 × 0.5 m (a 10 mm plate, typical) on four rubber wheels 200 mm across, each slid over the end of its axle (two 20 mm steel
     // axles and a frame rod between them, laid end to end, the deck stacked on them): every piece placed by the operations.
     // Each wheel turns on its axle by a hinge on the wheel's own line; the axles and the frame are held to the deck (hinges
     // that may not turn). The rear two wheels are each turned by a maxon RE 40 (24 V) through its 12:1 gearhead, from their
@@ -356,7 +380,7 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     // driver would limit it: not yet modelled)
     const b = emptyBoard('A cart on motor-driven wheels');
     const put = (id: string, block: string, set: Record<string, unknown>, label?: string) => { placeBlock(b, block, 0, 0, set, id); if (label) b.nodes[id]!.label = label; };
-    put('deck', 'room.make', { name: 'chassis', shape: 'box', mat: 'al-6061', a: 1000, b: 60, c: 500 }, 'Deck, 1000 × 500 × 60 mm');
+    put('deck', 'room.make', { name: 'chassis', shape: 'box', mat: 'al-6061', a: 1000, b: 10, c: 500 }, 'Deck, 1000 × 500 mm, a 10 mm aluminium plate (typical)');
     put('wheel', 'room.make', { name: 'wheel', shape: 'tube', mat: 'rubber', a: 10.5, b: 100, c: 50 }, 'Wheel, 200 mm across, its bore on the axle');
     for (const [ax, name] of [['r', 'rear axle'], ['f', 'front axle']] as const) {
       put(`${ax}a`, 'room.make', { name, shape: 'rod', mat: 'steel-low', a: 10, b: 700 }, `The ${name}, 20 mm, 700 mm long`);
@@ -417,6 +441,10 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     const m = placeBlock(b, 'view.show', 0, 0, { unit: 'g' }, 'm'); b.nodes.m!.label = 'Its mass'; wire(b, ms, 'mass', m, 'value');
     const br = placeBlock(b, 'piece.bearing', 0, 0, { size: '6205' }, 'br'); b.nodes.br!.label = 'A bearing beside it (6205)';
     const v2 = placeBlock(b, 'view.3d', 0, 0, { explode: 1 }, 'v4'); b.nodes.v4!.label = 'The bearing, taken apart'; wire(b, br, 'thing', v2, 'part');
+    // (what the space draws: the bolt and the bearing side by side on the ground, laid by the room's stack)
+    const both = placeBlock(b, 'room.stack', 0, 0, { name: 'a bolt and a bearing', axis: 'x', fit: 'clear', level: 'on the ground', order: 'part, br' }, 'both'); b.nodes.both!.label = 'The bolt and the bearing side by side';
+    wire(b, part, 'block', both, 'blocks'); wire(b, br, 'block', both, 'blocks');
+    const sh = placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, both, 'thing', sh, 'thing');
     return b;
   }],
   ['Cantilever: how far it bends, for every length', () => {
@@ -819,25 +847,24 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
   ['A small robot base: a motor on each side driving its wheel, a battery pack, a caster at its front, all common pieces', () => {
     // (the motor of the motor board with its shaft, its tabs and a wheel (an ABS disc, a rubber tyre slid over it) pressed
     // over its shaft's end: made once, and turned a quarter about z each way, so the two shafts run across; the two back
-    // to back; a 2 mm FR-4 board for a chassis on their cans; a standoff and a PTFE glide down a hole at its front, to the
-    // wheels' ground; two 18650 cells into a box, its lid on, laid flat on the board. Sizes typical of a small two-wheeled
-    // kit, estimates)
+    // to back; a 30 mm plate castor (piece.castor) in front of them, both on the ground; a 2 mm FR-4 board for a chassis
+    // on the motors' cans and the castor's plate alike (the wheels 74 mm across so the cans' tops stand as high as the
+    // castor's 49 mm (its box, typical): 49 less the can's 12 mm radius, twice); two 18650 cells into a box, its lid on,
+    // laid flat on the board. Sizes typical of a small two-wheeled kit, estimates)
     const b = emptyBoard('A small robot base');
     const put = (id: string, block: string, set: Record<string, unknown>, label: string) => { placeBlock(b, block, 0, 0, set, id); b.nodes[id]!.label = label; };
     put('mmotor', 'seed.motor-dc', { R: 10.5, L: 12, shaft: 36 }, 'The small DC motor, its shaft 36 mm, its tabs at its foot');
-    put('mrim', 'room.make', { name: 'wheel', shape: 'tube', mat: 'abs', a: 1, b: 16, c: 10 }, 'Wheel (ABS), its bore the shaft\'s');
-    put('mtyre', 'room.make', { name: 'tyre', shape: 'tube', mat: 'nr', a: 16, b: 21, c: 10 }, 'Tyre (rubber), 42 mm across');
+    put('mrim', 'room.make', { name: 'wheel', shape: 'tube', mat: 'abs', a: 1, b: 30, c: 10 }, 'Wheel (ABS), its bore the shaft\'s');
+    put('mtyre', 'room.make', { name: 'tyre', shape: 'tube', mat: 'nr', a: 30, b: 37, c: 10 }, 'Tyre (rubber), 74 mm across');
     put('mwheel', 'room.over', { line: 'wheel/axis', where: 'mid', fit: 'touch' }, 'The tyre over the wheel'); wire(b, 'mrim', 'block', 'mwheel', 'host'); wire(b, 'mtyre', 'block', 'mwheel', 'sleeve');
     put('mdriven', 'room.over', { line: 'shaft/axis', where: 'hi', fit: 'tight' }, 'The wheel pressed over the shaft\'s end'); wire(b, 'mmotor', 'motor', 'mdriven', 'host'); wire(b, 'mwheel', 'block', 'mdriven', 'sleeve');
     put('lside', 'room.turn', { axis: 'z', degrees: 90 }, 'Turned 90° about z: on its side, its wheel to the left'); wire(b, 'mdriven', 'block', 'lside', 'block');
     put('rside', 'room.turn', { axis: 'z', degrees: -90 }, 'And −90°: its wheel to the right'); wire(b, 'mdriven', 'block', 'rside', 'block');
     put('drive', 'room.stack', { name: 'drive', axis: 'x', fit: 'clear' }, 'The two back to back'); wire(b, 'lside', 'block', 'drive', 'blocks'); wire(b, 'rside', 'block', 'drive', 'blocks');
-    put('plate', 'piece.plate', { name: 'chassis board', mat: 'fr4', w: 56, t: 2, d: 110, holes: '0,45', hole: 0 }, 'A chassis board (FR-4, 2 mm), a footprint at its front');
-    put('chassis', 'room.onto', { face: '+y', fit: 'touch' }, 'The board on the motors, between the wheels'); wire(b, 'drive', 'block', 'chassis', 'host'); wire(b, 'plate', 'block', 'chassis', 'child');
-    put('glide', 'room.make', { name: 'caster glide', shape: 'rod', mat: 'ptfe', a: 5, b: 5 }, 'Glide (PTFE)');
-    put('so', 'piece.standoff', { length: 30 }, 'Standoff M3 × 30');
-    put('caster', 'room.stack', { name: 'caster', axis: 'y', fit: 'touch' }, 'The glide under the standoff'); wire(b, 'glide', 'block', 'caster', 'blocks'); wire(b, 'so', 'block', 'caster', 'blocks');
-    put('legged', 'room.through', { line: 'chassis board/holes', which: 0, from: 'above', fit: 'tight' }, 'Down the board\'s front hole, to the ground the wheels stand on'); wire(b, 'chassis', 'block', 'legged', 'host'); wire(b, 'caster', 'block', 'legged', 'passer');
+    put('castor', 'piece.castor', { size: '30' }, 'A castor, 30 mm (its wheel, fork, swivel and plate)');
+    put('under', 'room.stack', { name: 'running gear', axis: 'z', fit: 'clear', level: 'on the ground', order: 'castor, drive' }, 'The castor in front of the motors, both on the ground'); wire(b, 'castor', 'block', 'under', 'blocks'); wire(b, 'drive', 'block', 'under', 'blocks');
+    put('plate', 'piece.plate', { name: 'chassis board', mat: 'fr4', w: 56, t: 2, d: 130, holes: '', hole: 0 }, 'A chassis board (FR-4, 2 mm)');
+    put('legged', 'room.onto', { face: '+y', fit: 'touch' }, 'The board on the motors and the castor, between the wheels'); wire(b, 'under', 'block', 'legged', 'host'); wire(b, 'plate', 'block', 'legged', 'child');
     put('pack', 'seed.pack-two', { cell: '18650', w: 45, h: 70, d: 25, wall: 2 }, 'Two 18650 cells boxed, its lid on, laid flat');
     put('robot', 'room.onto', { face: '+y', fit: 'touch' }, 'The pack on the board'); wire(b, 'legged', 'block', 'robot', 'host'); wire(b, 'pack', 'flat', 'robot', 'child');
     placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'robot', 'thing', 'show', 'thing');

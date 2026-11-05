@@ -288,6 +288,8 @@ const meets = (a: [V3, V3], b: [V3, V3]) => [0, 1, 2].every((k) => a[0][k]! < b[
 const coMove = (p: Piece, q: Piece) => !!p.joint && p.joint === q.joint && (!p.joint.turn || (Math.abs(p.axis![0] - q.axis![0]) < 1e-12 && Math.abs(p.axis![1] - q.axis![1]) < 1e-12));
 const freeze = <T>(o: T): T => { if (o && typeof o === 'object' && !Object.isFrozen(o)) { Object.freeze(o); for (const v of Object.values(o as object)) freeze(v); } return o; };
 const EPS = 1e-7, N = 64;
+/** Passers turned end over end by Through itself, to keep them the way up they were made along a line that runs down (never one handed in). */
+const FLIPPED = new WeakSet<object>();
 
 // ---- faces: where an operation lays two pieces against each other, the patch its footprints share there --------------
 const other = (axis: Axis): [Axis, Axis] => (axis === 0 ? [1, 2] : axis === 1 ? [0, 2] : [0, 1]);
@@ -519,9 +521,12 @@ export class Block {
     return Block.#seal(name, [piece], [], rooms);
   }
 
-  /** Blocks end to end along an axis, centred across it (or on a port's line): each next one past the last one's movers'
-   *  sweeps (save what moves with it) and the fit's gap. Faces where they meet; a slide that closes a gap, a gated face. */
-  static stack(name: string, axis: Axis, items: { b: Block; fit?: Fit }[], align?: string, level = false): Block {
+  /** Blocks end to end along an axis, centred across it (or on a port's line), or, `end` lo or hi, their bounds flush at
+   *  that end across it (each block's low (or high) side across the axis level with the first one's: two extrusions in an
+   *  L, a bracket at a beam's end, never a T): each next one past the last one's movers' sweeps (save what moves with it)
+   *  and the fit's gap. Faces where they meet; a slide that closes a gap, a gated face. */
+  static stack(name: string, axis: Axis, items: { b: Block; fit?: Fit }[], align?: string, level = false, end: End = 'mid'): Block {
+    if (end !== 'lo' && end !== 'hi' && end !== 'mid') throw new Error(`${name}: at an end is lo, hi or mid (${String(end)})`);
     const pieces: Piece[] = [], faces: Face[] = [], rooms: RoomOf[] = []; let prev: number[] = [];
     for (const [i, it] of items.entries()) {
       Block.#is(it.b); if (it.fit !== undefined && !(it.fit in FITS)) throw new Error(`${name}: a fit by name (${String(it.fit)})`);
@@ -529,7 +534,7 @@ export class Block {
       // (centred across, or, laid in a row along x or z with `level`, each standing on the ground: its bottom at y = 0)
       // (on a turned line: only one along the stack's axis, centred on its point)
       const l0 = line[0]; if (l0 && !alongY(l0) && !(Math.abs(Math.abs(l0.dir![axis]) - 1) < 1e-9)) throw new Error(`${name}: the line ${align} is turned across the stack's axis: align on a line along it`);
-      const across = l0 ? (alongY(l0) ? [l0.x, mid[1]!, l0.z] : [l0.x, l0.y!, l0.z]) : mid, d0 = [0, 1, 2].map((k) => (k === axis ? 0 : level && k === 1 && axis !== 1 ? -it.b.lo[1] : -across[k]!)) as V3;
+      const across = l0 ? (alongY(l0) ? [l0.x, mid[1]!, l0.z] : [l0.x, l0.y!, l0.z]) : end === 'lo' ? it.b.lo : end === 'hi' ? it.b.hi : mid, d0 = [0, 1, 2].map((k) => (k === axis ? 0 : level && k === 1 && axis !== 1 ? -it.b.lo[1] : -across[k]!)) as V3;
       let s = Block.#shift(it.b, d0);
       if (i > 0) {
         // (it comes to rest on what is in its path: the pieces before it whose bounds overlap its own across the stack's
@@ -551,12 +556,19 @@ export class Block {
   }
 
   /** A host made round a child: its cavity the child's swept bound, enclosed by a cylinder about y, and the fit's gap;
-   *  its wall and ends its own; open at +y if asked (its top then level with the child's). Faces round the cavity. */
+   *  its wall and ends its own; open at +y if asked (its top then level with the child's); a bore that runs through the
+   *  child along its axis kept open through its ends. Faces round the cavity. */
   static around(name: string, mat: string, child: Block, wall: number, ends: number, fit: Fit = 'clear', open = false): Block {
     Block.#is(child); sizes(name, [wall, ends]); if (!(fit in FITS)) throw new Error(`${name}: a fit by name`);
     const g = gapOf(fit), cx = (child.lo[0] + child.hi[0]) / 2, cz = (child.lo[2] + child.hi[2]) / 2, rc = Math.max(...child.pieces.map((p) => reach(sweepOf(p), cx, cz))) + g;
     const y0 = child.lo[1] - g - ends, y1 = open ? child.hi[1] : child.hi[1] + g + ends, h = y1 - y0;
-    const host: Piece = { name, mat, solid: { base: { k: 'cup', c: [cx, (y0 + y1) / 2, cz], r: rc + wall, h, wall, ends, open }, minus: [] }, lines: [{ port: `${name}/axis`, x: cx, z: cz, slot: rc + wall }] };
+    // (a bore that runs through the child along its axis (a piezo ring's, a bearing's, a coil's) is kept open through the
+    // host's ends, as a moulded sensor's bolt hole is: what every child piece leaves free round the axis, cut through both
+    // ends; taking material from the host alone, it cannot put one piece in another (the critic, 2026-11-05: Around closed
+    // a knock sensor's bore))
+    const bore = Math.min(...child.pieces.map((p) => freeRound(sweepOf(p), cx, cz))), keep = bore > 1e-9 && child.pieces.some((p) => { const s = sweepOf(p);
+      return roundish(s) && upright(s) && Math.hypot(s.c[0] - cx, s.c[2] - cz) < 1e-12 && boreOf(s) !== undefined; });
+    const host: Piece = { name, mat, solid: { base: { k: 'cup', c: [cx, (y0 + y1) / 2, cz], r: rc + wall, h, wall, ends, open }, minus: keep ? [{ k: 'cyl', c: [cx, (y0 + y1) / 2, cz], r: bore, h: h + 2e-9 }] : [] }, lines: [{ port: `${name}/axis`, x: cx, z: cz, slot: rc + wall }] };
     const pieces = [host, ...child.pieces], faces: Face[] = child.faces.map((f) => ({ ...f, a: f.a + 1, b: f.b + 1 })), kind = g > 0 ? 'gap' : 'contact';
     child.pieces.forEach((p, i) => {
       const w = roundFace(p, cx, cz, rc - g, child.lo[1], child.hi[1], true);
@@ -593,11 +605,18 @@ export class Block {
     const nm = namedIn(b, on.port, 'line', 'through'); if (nm.port !== on.port) return noted(Block.through(b, passer, { ...on, port: nm.port }, fit), nm.note);
     const offers = b.pieces.flatMap((p, k) => p.lines.filter((l) => l.port === on.port && (on.k === undefined || k === on.k)).map((l) => ({ p, k, l })));
     const ks = [...new Set(offers.map((o) => o.k))];
-    if (ks.length > 1) throw new Error(`through: ${ks.length} pieces offer ${on.port}: name them apart by a name setting on each, or bolt them by mate.bolted (down the top one's hole)`);
+    if (ks.length > 1) throw new Error(`through: ${ks.length} pieces offer ${on.port}: bolt them by mate.bolted (down the top one's hole), or tell them apart where they are made (a piece made by room.make or piece.plate takes a name; a piece of a table is named by its size)`);
     const o = offers[on.i ?? 0]; if (!o) throw new Error(`through: ${b.name} offers no line ${on.port}${on.i !== undefined ? ` ${on.i}` : ''}${offers.length ? ` (it has ${offers.length} of them: 0 to ${offers.length - 1})` : ` (it offers ${offered(b)})`}`);
-    const bent = passer.pieces.find((q) => q.solid.base.frame || q.solid.base.k === 'bend'); if (bent) throw new Error(`through: the ${bent.name} is turned or bent: a passer goes along its line as it was made, straight; pass it, then turn the whole`);
-    // (a turned line: in its own frame, where it runs along +y; lo and hi its own ends, against and along its direction)
-    if (!alongY(o.l)) return Block.#inFrame(b, o.l.dir!, 'through', passer, (h) => Block.through(h, passer, on, fit));
+    const bent = !FLIPPED.has(passer) && passer.pieces.find((q) => q.solid.base.frame || q.solid.base.k === 'bend'); if (bent) throw new Error(`through: the ${bent.name} is turned or bent: a passer goes along its line as it was made, straight; pass it, then turn the whole`);
+    // (a turned line: in its own frame, where it runs along +y; lo and hi its own ends, against and along its direction.
+    // A line that runs down into its piece (a hole into a top face: countersunk, counterbored or blind) has its frame upside
+    // down: there lo and hi are read as they stand (above is above) and the passer is kept the way up it was made, so a
+    // screw's head stays toward the side it comes from and its cone goes in the countersink (the critic, 2026-11-05: a
+    // countersunk screw came out upside down, its head in a pocket cut in the plate's underside))
+    if (!alongY(o.l)) { const d = o.l.dir!;
+      if (d[1] < -1e-9) { const up = Block.#turned(passer, turnOf(0, 180), Block.#mid(passer), false); FLIPPED.add(up);
+        return Block.#inFrame(b, d, 'through', passer, (h) => Block.through(h, up, { ...on, from: on.from === 'lo' ? 'hi' : 'lo' }, fit)); }
+      return Block.#inFrame(b, d, 'through', passer, (h) => Block.through(h, passer, on, fit)); }
     const g = gapOf(fit), hb = primBox(o.p.solid.base), y0 = on.from === 'lo' ? hb[0][1] : hb[1][1];
     const pc = [(passer.lo[0] + passer.hi[0]) / 2, (passer.lo[2] + passer.hi[2]) / 2], P = Block.#shift(passer, [o.l.x - pc[0]!, on.from === 'lo' ? y0 - passer.lo[1] : y0 - passer.hi[1], o.l.z - pc[1]!]);
     const rho = Math.max(...P.pieces.map((q) => reach(sweepOf(q), o.l.x, o.l.z)));
@@ -605,7 +624,10 @@ export class Block {
     const pb = P.pieces.map(boundOf), all: [V3, V3] = [[0, 1, 2].map((k) => Math.min(...pb.map((x) => x[0][k]!))) as V3, [0, 1, 2].map((k) => Math.max(...pb.map((x) => x[1][k]!))) as V3];
     // (a box passer's cut is its whole box grown by the gap: a case's cavity and a section's outline are dropped, so the
     // cut holds the gap all round them too (a red team, 2026-11-05: a case kept its wall, a section no gap))
+    // (a solid turned profile, a countersunk screw's cone head, takes its own outline grown by the gap, not the cylinder of its
+    // widest radius, so its cone sits in a countersink and does not bore a counterbore round it (the critic, 2026-11-05))
     const grow = (m: Prim): Prim => (m.k === 'box' ? { k: 'box', c: m.c, size: [m.size[0] + 2 * g, m.size[1], m.size[2] + 2 * g], ...(m.frame ? { frame: m.frame } : {}) } : m.k === 'bend' ? { ...m, ro: m.ro + g, ...(m.ri !== undefined ? { ri: Math.max(0, m.ri - g) } : {}) }
+      : m.k === 'lathe' && m.ri === undefined ? { ...m, pts: m.pts.map((q) => [q[0] > 1e-12 ? q[0] + g : 0, q[1]] as const), r: m.r + g }
       : { k: 'cyl', c: m.c, r: m.r + g, h: m.h, ...((m.k === 'cyl' || m.k === 'coil' || m.k === 'hex') && m.ri !== undefined ? { ri: Math.max(0, m.ri - g) } : {}), ...(m.frame ? { frame: m.frame } : {}) });
     const onLine = (ax: readonly [number, number]) => Math.hypot(ax[0] - o.l.x, ax[1] - o.l.z) < 1e-12;
     const cutFor = (q: Piece, s: Piece): Prim => {
@@ -688,9 +710,10 @@ export class Block {
     faces.push(...Block.#plane(pieces, holder, C.pieces.map((_, i) => n + i), 1, floor, g, `${child.name} on ${port}'s floor`, true));
     return Block.#seal(host.name, pieces, faces, host.rooms.filter((x) => x !== r).concat(C.rooms.map((x) => ({ ...x, open: x.open && r.open }))));
   }
-  /** onto: into the space beyond a face of a block's bound, on a line it offers there (or its middle). */
-  static onto(host: Block, face: '+x' | '-x' | '+y' | '-y' | '+z' | '-z', child: Block, fit: Fit = 'touch', at?: string): Block {
-    const axis = ('xyz'.indexOf(face[1]!)) as Axis; return face[0] === '+' ? Block.stack(host.name, axis, [{ b: host }, { b: child, fit }], at) : Block.stack(host.name, axis, [{ b: child }, { b: host, fit }], at);
+  /** onto: into the space beyond a face of a block's bound, on a line it offers there (or its middle, or, `end` lo or
+   *  hi, flush with that face's low or high corner across it: a corner bracket at an extrusion's end). */
+  static onto(host: Block, face: '+x' | '-x' | '+y' | '-y' | '+z' | '-z', child: Block, fit: Fit = 'touch', at?: string, end: End = 'mid'): Block {
+    const axis = ('xyz'.indexOf(face[1]!)) as Axis; return face[0] === '+' ? Block.stack(host.name, axis, [{ b: host }, { b: child, fit }], at, false, end) : Block.stack(host.name, axis, [{ b: child }, { b: host, fit }], at, false, end);
   }
   /** A sleeve (a washer, a nut, a tube, a coil, a bobbin) slid over a line a host offers (a shaft's axis, a bolt's
    *  shank): every piece of the sleeve is round about its own axis with a bore, and that bore is at least what is on the
@@ -854,6 +877,8 @@ export type Shape0 = { box: [number, number, number] } | { cyl: [number, number]
   | { sphere: [number] | [number, number] } | { cone: [number, number, number] | [number, number, number, number] } | { lathe: { pts: [number, number][]; bore?: number } };
 /** A face of a piece's own box a pattern goes into. */
 export type FaceName = '+x' | '-x' | '+y' | '-y' | '+z' | '-z';
+/** Where across a stack its blocks meet: centred, or flush at their low or high ends. */
+export type End = 'lo' | 'hi' | 'mid';
 const FACES: readonly FaceName[] = ['+x', '-x', '+y', '-y', '+z', '-z'];
 /** What `made` is asked besides its shape: a joint, bought, a colour, and a pattern of holes and lines (a circle about
  *  its middle or points; on a face, through or so deep, plain, counterbored [radius, depth] or countersunk to a radius at

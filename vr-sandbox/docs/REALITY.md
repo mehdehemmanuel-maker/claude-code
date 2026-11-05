@@ -2864,3 +2864,45 @@ blind vision model:
   - no L corner of extrusion could be built.
 
 Those are being mended in the next commit.
+
+## 2026-11-05: decision 0026, step 4b: what the critic saw, mended (rough, by four agents, cherry-picked here)
+
+Each fix was checked by a new picture, taken by the critic's own script against a viewer built apart, and looked at by the
+agent that made it. The numbers are read off those pictures' gauges and pixels, or held by the tests
+(`npx vitest run tests/nexus/domains.test.ts -t "a countersunk screw sits head up|the boards the critic saw broken|the pieces the critic saw"`).
+- **Looks.**
+  - A piece with no colour takes its material's: oak blocks #ad8155 where they were #999999, rubber wheels #1f1f20.
+  - A small scene is never drawn as stand-in boxes: the frame governor no longer coarsens a scene of fewer than 2,000
+    pieces. Three boards went from 1 to 3 boxes each to none.
+  - The view's tone mapping is Khronos PBR Neutral at exposure 1, so a brick face reads #9b472d against its own
+    0x9c4a32; it read #c56d54 under ACES at 1.3. Copper and gold keep their colour.
+  - Fit looks from the corner that hides the fewest pieces.
+- **Room operations.**
+  - A countersunk screw through a countersunk hole sits head up, its cone in the countersink: head at y 0.2 to 3 mm
+    where it was −3 to −0.2.
+  - Around keeps a bore that runs through its child open.
+  - Stack and Onto take an end (mid, the default; lo; hi), so two 2020 extrusions make an L (z 0 to 200 and 0 to 20) and
+    a bracket goes at an end.
+  - The flange's holes were checked through: a ray down one meets nothing.
+- **Boards.**
+  - The bolt-from-its-load board shows its bolt and bearing.
+  - Let it go's moved output keeps the pieces held fixed, so the pendulum's stand stays.
+  - The made-of and materials boards each show one thing.
+  - The controls cart is a plywood deck on four wheels with a hollow crate, 21.62 kg shown.
+  - The robot base stands on a castor.
+  - The battery's posts sit along one long edge.
+  - The physics cart's deck is a 10 mm plate, 25.8 kg; it settles at 0.998 of its motors' no-load speed.
+- **Pieces.**
+  - The fan has six thin pitched blades, a ring of copies round its hub (80x25: 39.13 g drawn).
+  - The castor has two fork legs and an axle.
+  - The Pi's connectors are hollow shells open at the board's edge.
+  - The mass gauge says "an envelope: not its real mass" where a node gives one.
+  - The servo has a toothed spline and a lead stub.
+  - The ball valve's lever runs one way from a nut on its stem.
+  - The motor block has an end bell.
+- **Left open:**
+  - polished metals still read alike;
+  - a through cut whose depth equals its piece's thickness leaves a skin on the far face when drawn;
+  - a G1 or larger ball valve is two groups;
+  - the fan's struts are a floor with windows, because spokes need a floorless room;
+  - no blind check of the new pictures.

@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { bentAt, boundsOfAll, cellPick, fieldAt, flatten, isAssembly, leavesOf, levelColour, matrixOf, effective, type Assembly, type Bend, type Field, type Override } from '../assembly';
 import type { Part } from '../kits';
 import { leafGeometry, leafMaterial, surfaceShape } from './kit3d';
+import { materialColour } from '../appearance';
 
 const fieldDrawn = new WeakMap<Field | Bend, THREE.BufferGeometry>(), refinedOf = new WeakMap<THREE.BufferGeometry, { p: number[]; n: number[]; u: number[] }>();
 let fieldMat: THREE.MeshStandardMaterial | null = null;
@@ -57,7 +58,7 @@ const fieldMaterial = () => (fieldMat ??= new THREE.MeshStandardMaterial({ verte
 export interface Shown { key: string; thing: Part | Assembly }
 export interface ViewStats { instances: number; draws: number; boxes: number; hidden: number; ms: number; /** things drawn as their stand-ins */ standins: number; /** groups left out because they are out of view */ culled: number; /** how much coarser than its best the view is drawing, to keep its time */ coarse: number }
 
-const PIECE_PX = 2.5, OPEN_PX = 10, BOX_PX = 4, ERR_PX = 1.5, BUDGET = 250_000;
+const PIECE_PX = 2.5, OPEN_PX = 10, BOX_PX = 4, ERR_PX = 1.5, BUDGET = 250_000, FEW_PIECES = 2000;
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
 /** Each box's sphere, worked out once. */
 const spheres = new WeakMap<THREE.Box3, THREE.Sphere>();
@@ -83,9 +84,9 @@ function colourOf(t: Part | Assembly): number {
   // view it fills (its size squared), so a street of lawns reads green, not the grey of its first road
   if (isAssembly(t)) {
     const p = proxyOf(t); let r = 0, g = 0, b = 0, w = 0;
-    for (const q of p.pieces) { const col = q.over.color ?? q.part.color ?? 0x8a929c, k = q.size * q.size; r += ((col >> 16) & 255) * k; g += ((col >> 8) & 255) * k; b += (col & 255) * k; w += k; }
+    for (const q of p.pieces) { const col = q.over.color ?? q.part.color ?? materialColour(q.part.mat) ?? 0x8a929c, k = q.size * q.size; r += ((col >> 16) & 255) * k; g += ((col >> 8) & 255) * k; b += (col & 255) * k; w += k; }
     if (w > 0) c = (Math.round(r / w) << 16) | (Math.round(g / w) << 8) | Math.round(b / w);
-  } else { const l = leavesOf(t)[0]; if (l) c = l.part.color ?? c; }
+  } else { const l = leavesOf(t)[0]; if (l) c = l.part.color ?? materialColour(l.part.mat) ?? c; }
   colourKept.set(t, c); return c;
 }
 
@@ -185,6 +186,13 @@ export class SpaceView {
 
   /** The things to draw now. */
   show(things: Shown[]): void { this.shown = things; this.dirty = true; }
+  /** Each piece shown, its box in the space's frame: up to `most` of them, or none where there are more (a fit that
+   *  weighs what hides what is for a few pieces, not a city). */
+  pieceBoxes(most = 400): THREE.Box3[] {
+    const out: THREE.Box3[] = []; let over = false;
+    for (const s of this.shown) { if (isAssembly(s.thing) && s.thing.tiled) return []; flatten(s.thing, (f) => { const b = boundsOfAll(f.leaf); if (!b.isEmpty()) out.push(b.clone().applyMatrix4(f.m)); if (out.length > most) { over = true; return false; } return true; }); if (over) return []; }
+    return out;
+  }
   /** The box round everything shown, in the space's frame. */
   bounds(): THREE.Box3 { const b = new THREE.Box3(); for (const s of this.shown) { const c = boundsOfAll(s.thing); if (!c.isEmpty()) b.union(c); } return b; }
 
@@ -329,8 +337,12 @@ export class SpaceView {
     const ms = performance.now() - t0; this.reach = cut;
     // the governor: the slower of choosing and drawing (a slow GPU coarsens the view as a slow CPU does); a change of it
     // asks for another build, so it settles while the view stands still
-    const slow = Math.max(ms, this.drawMs * 1.5), was = this.coarse;
-    this.coarse = slow > 30 || count > this.budget * 0.9 ? Math.min(16, this.coarse * Math.min(4, Math.max(1.3, slow / 30))) : slow < 18 && count < this.budget * 0.7 ? Math.max(1, this.coarse / 1.15) : this.coarse;
+    // (a few pieces are never coarsened: what such a frame costs is its own fixed work, its shadows and its pixels, not how
+    // many pieces it draws, so drawing them as boxes saves nothing and shows a ball tower's near blocks as plain boxes (the
+    // critic, 2026-11-05: '2 far away, shown as plain boxes' on a 600 mm scene, the view coarsened 16 times by a slow
+    // software GPU). FEW_PIECES is a choice; under a quarter of it the view goes back toward its best)
+    const slow = Math.max(ms, this.drawMs * 1.5), was = this.coarse, few = count < FEW_PIECES;
+    this.coarse = (slow > 30 && !few) || count > this.budget * 0.9 ? Math.min(16, this.coarse * Math.min(4, Math.max(1.3, slow / 30))) : (slow < 18 && count < this.budget * 0.7) || count < FEW_PIECES / 4 ? Math.max(1, this.coarse / 1.15) : this.coarse;
     if (Math.abs(this.coarse - was) > 1e-9) this.dirty = true;
     if (count > 1000) this.budget = Math.round(Math.max(20_000, Math.min(BUDGET, 0.8 * this.budget + 0.2 * (40 / Math.max(1e-6, ms / count)))));
     this.stats = { instances: count, draws: batches.size, boxes, hidden, ms, standins: stand, coarse: this.coarse, culled };

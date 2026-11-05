@@ -22,7 +22,7 @@
 //   packages: TO-220AB, DO-35, DO-41, DO-201AD (JEDEC outlines), HC-49 crystals, buzzers, SRD relays (Songle), tactile
 //     and micro switches (Omron), breadboards and perfboards: typical where so labelled.
 
-import { made, stack, through, onto, over, turn, type Block } from '../room';
+import { made, stack, through, onto, over, turn, into, ring, type Block } from '../room';
 import { densityKg } from '../mass';
 import { jstXH } from '../common';
 import type { PartFamily } from './maker';
@@ -50,14 +50,26 @@ function seat(b: Block, port: string, i: number, part: Block, joint: string, t: 
   return onto(through1, '+y', stack(part.name, 1, [{ b: made(joint, 'solder', { cyl: [mm(0.5), 0.1 / 1000] }, { color: SOLDER }) }, { b: part }]), 'touch', `${joint}/axis`);
 }
 /** What stands on a board: an outline box (x, height, z, mm), a female header (pins along x, rows along z; 8.5 mm,
- *  its sockets Ø1.0 cut), or a male header (its 2.5 mm body, its pins offered as lines, not drawn). */
+ *  its sockets Ø1.0 cut), or a male header (its 2.5 mm body and its pins, 0.64 mm square, standing 6 mm above it: typical
+ *  of 2.54 mm headers). A connector (a USB, Ethernet, HDMI or DC jack, an audio jack) is its shell, hollow (0.3 mm of
+ *  steel, 0.8 mm of plastic, typical), open toward the board's nearest edge; its tongue and contacts inside not drawn. */
 export interface Feat { name: string; xy: [number, number]; box?: [number, number, number]; socket?: [number, number]; header?: [number, number]; mat?: string; color?: number }
-const featSize = (f: Feat): [number, number, number] => (f.box ? f.box : f.socket ? [f.socket[0] * P, 8.5, f.socket[1] * P] : [f.header![0] * P, 2.5, f.header![1] * P]);
-function featBody(board: string, f: Feat): Block {
+const featSize = (f: Feat): [number, number, number] => (f.box ? f.box : f.socket ? [f.socket[0] * P, 8.5, f.socket[1] * P] : [f.header![0] * P, 2.5 + 6.0, f.header![1] * P]);
+const CONNECTOR = /USB|Ethernet|HDMI|jack/i, HEADER_PIN = 0xd8b24a;
+function featBody(board: string, f: Feat, L: number, W: number): Block {
   const name = `${board} ${f.name}`, [w, h, d] = featSize(f);
   if (f.socket) return made(name, 'nylon', { box: bound(w, h, d) }, { color: BLACK, pattern: { name: 'pins', points: grid(f.socket[0], f.socket[1]), hole: mm(0.5) } });
-  if (f.header) return made(name, 'nylon', { box: bound(w, h, d) }, { color: BLACK, pattern: { name: 'pins', points: grid(f.header[0], f.header[1]) } });
-  return made(name, f.mat ?? 'steel-low', { box: bound(w, h, d) }, f.color !== undefined ? { color: f.color } : {});
+  if (f.header) { const n = f.header[0] * f.header[1];
+    let b = made(name, 'nylon', { box: bound(w, 2.5, d) }, { color: BLACK, pattern: { name: 'pins', points: grid(f.header[0], f.header[1]) } });
+    for (let i = 0; i < n; i++) b = through(b, made(`${name} pin`, 'brass', { box: bound(0.64, h, 0.64) }, { color: HEADER_PIN }), { port: `${name}/pins`, i, from: 'lo' }, 'tight');
+    return b; }
+  const look = f.color !== undefined ? { color: f.color } : {}, mat = f.mat ?? 'steel-low';
+  if (!CONNECTOR.test(f.name)) return made(name, mat, { box: bound(w, h, d) }, look);
+  // (its shell made open at +y, then turned so its opening faces the edge it is nearest: along x a quarter about z, along
+  // the board's width a quarter about x)
+  const [x, y] = f.xy, edge = Math.min(x, L - x, y, W - y), t = mat === 'abs' ? 0.8 : 0.3;
+  if (edge === x || edge === L - x) return turn(made(name, mat, { case: [mm(h), mm(w), mm(d), mm(t), mm(t)] }, look), 2, edge === x ? 90 : -90);
+  return turn(made(name, mat, { case: [mm(w), mm(d), mm(h), mm(t), mm(t)] }, look), 0, edge === y ? 90 : -90);
 }
 /** A board with what stands on it: its PCB (FR-4) with its pattern of points, from its drawing's corner (x along its
  *  length, y up its width, mm): its mounting holes first, then its pins' footprints, then each part's footprint, where
@@ -67,7 +79,7 @@ function boardOf(name: string, r: BoardRow): Block {
   const on = ([x, y]: [number, number]): [number, number] => [mm(x - r.L / 2), mm(r.W / 2 - y)];
   const pts = [...r.holes, ...(r.pins ?? []), ...r.feats.map((f) => f.xy)].map(on), port = `${name} PCB/holes`, k0 = r.holes.length + (r.pins?.length ?? 0);
   let b = made(`${name} PCB`, 'fr4', { box: bound(r.L, r.t, r.W) }, { color: r.color, pattern: { name: 'holes', points: pts } });
-  r.feats.forEach((f, k) => { b = seat(b, port, k0 + k, featBody(name, f), `${name} ${f.name} joint`, r.t); });
+  r.feats.forEach((f, k) => { b = seat(b, port, k0 + k, featBody(name, f, r.L, r.W), `${name} ${f.name} joint`, r.t); });
   return stack(name, 1, [{ b }]);
 }
 /** A board's bound from its row: its PCB, and every part at its footprint, over its overhang and its pad. */
@@ -76,7 +88,7 @@ function boardBound(r: BoardRow): [number, number, number] {
   for (const f of r.feats) { const [w, fh, d] = featSize(f); x0 = Math.min(x0, f.xy[0] - w / 2); x1 = Math.max(x1, f.xy[0] + w / 2); y0 = Math.min(y0, f.xy[1] - d / 2); y1 = Math.max(y1, f.xy[1] + d / 2); h = Math.max(h, r.t + 0.1 + fh); }
   return bound(x1 - x0, h, y1 - y0);
 }
-const ENV_BOARD = 'its PCB is true to its drawing (outline, thickness, mounting holes and pins at their places); the parts on it are their outline boxes at their footprints (an USB jack or a socket as a solid box), so its drawn mass is not the board\'s';
+const ENV_BOARD = 'its PCB is true to its drawing (outline, thickness, mounting holes and pins at their places); the parts on it are their outlines at their footprints (a chip or a module a solid box, a connector its hollow shell, open at the board\'s edge, with nothing inside it), so its drawn mass is not the board\'s';
 
 // ---- development boards ---------------------------------------------------------------------------------------------
 const USB_B: [number, number, number] = [16.0, 10.9, 12.0], DC_JACK: [number, number, number] = [14.2, 11.0, 9.0], USB_A2: [number, number, number] = [17.5, 16.0, 13.2], RJ45_PI: [number, number, number] = [21.0, 13.5, 16.0];
@@ -120,7 +132,7 @@ const DEVBOARD: PartFamily<BoardRow> = {
   envelope: ENV_BOARD,
   recipe: (r, size) => boardOf(size, r),
   expect: (r, size) => ({ bound: boardBound(r), ...(r.mass !== undefined ? { mass: r.mass / 1000 } : {}), tol: 0.01, says: `its PCB and its parts at their places (${portsSaid(r)})${r.mass !== undefined ? `; ${size} weighs ${r.mass} g` : ''}` }),
-  tests: [{ inputs: {}, outputs: { pieces: 25 } }],
+  tests: [{ inputs: {}, outputs: { pieces: 31 } }],
 };
 
 // ---- displays: a module's PCB and its glass, its pins and holes -----------------------------------------------------
@@ -273,22 +285,33 @@ export const FANS: Record<string, Fan> = {
   '50×15': { W: 50, D: 15, s: 40.0, hole: 3.4, src: FAN_SRC }, '60×15': { W: 60, D: 15, s: 50.0, hole: 3.4, src: FAN_SRC }, '60×25': { W: 60, D: 25, s: 50.0, hole: 3.4, src: FAN_SRC }, '70×15': { W: 70, D: 15, s: 60.0, hole: 4.3, src: FAN_SRC },
   '80×25': { W: 80, D: 25, s: 71.5, hole: 4.3, src: FAN_SRC }, '92×25': { W: 92, D: 25, s: 82.5, hole: 4.3, src: FAN_SRC }, '120×25': { W: 120, D: 25, s: 105.0, hole: 4.3, src: FAN_SRC }, '140×25': { W: 140, D: 25, s: 124.5, hole: 4.3, src: FAN_SRC },
 };
-// (its frame's section: its square, a cut in to its bore, round its bore and back out: one outline, read by even-odd)
-const fanSection = (W: number, r: number): [number, number][] => { const n = 48, h = W / 2;
-  return [[-h, -h], [h, -h], [h, h], [-h, h], [-h, 0], ...Array.from({ length: n + 1 }, (_, k) => { const a = Math.PI + (2 * Math.PI * k) / n; return [r * Math.cos(a), -r * Math.sin(a)] as [number, number]; })]; };
+// (a fan's blades, pitch and struts, typical, estimates: six blades (makers run five to nine; an even count keeps the ring
+// of copies centred on its hub), pitched 35° about their length, about 1.2 % of the side thick; the frame's two square
+// flanges each about an eighth of its depth; eight round windows in the venturi's floor for its struts)
+const FAN_BLADES = 6, FAN_PITCH = 35, FAN_WINDOWS = 8;
 const FANF: PartFamily<Fan> = {
-  id: 'piece.fan', name: 'Axial fan', gloss: 'An axial fan by its frame (25 to 140 mm): its frame with its four holes, its back struts, its hub and blades', domains: ['electrical', 'mechanical', 'thermal'],
-  says: 'An axial fan by its frame size (side × depth, mm), its air along z: its frame (PBT) round its bore with its four mounting holes on their standard spacing along z (`<size> fan frame/holes`, a screw down each), the plate of its struts behind (its four windows cut), its hub and blades through its bore on its axis (`<size> fan frame/axis`), the hub standing on the struts. Approximated: its blades drawn as the ring they sweep, its struts as a plate with four round windows',
-  rows: FANS, size: '40×10', source: 'typical of makers\' datasheets (the hole spacings 40 mm 32, 60 mm 50, 80 mm 71.5, 120 mm 105)',
-  recipe: (f, size) => { const W = mm(f.W), sp = mm(Math.max(1.5, f.D * 0.1)), Df = mm(f.D) - sp, r = 0.475 * W, a = mm(f.s) / 2, hub = 0.21 * W;
-    const frame = made(`${size} fan frame`, 'pbt', { section: { pts: fanSection(W, r), L: Df } }, { color: BLACK, pattern: { name: 'holes', points: [[-a, -a], [a, -a], [a, a], [-a, a]], face: '+z', hole: mm(f.hole / 2) } });
-    // (the struts' plate made flat with its four windows along y, stood up across the air's path by a quarter turn about x)
-    const Rw = (hub + r) / 2, back = made(`${size} fan struts`, 'pbt', { box: [W, sp, W] }, { color: BLACK, pattern: { name: 'windows', circle: { n: 4, r: Rw, phase: Math.PI / 4 }, hole: Math.min(((r - hub) / 2) * 0.85, Rw * 0.6) } });
-    const body = stack(`${size} fan`, 2, [{ b: frame }, { b: turn(back, 0, 90) }]);
-    const slot = r * Math.cos(Math.PI / 48), rotor = over(made(`${size} fan hub`, 'pbt', { cyl: [hub, Df] }, { color: BLACK }), `${size} fan hub/axis`, made(`${size} fan blades`, 'pbt', { tube: [hub, slot - mm(0.6), Df * 0.7] }, { color: 0x303030 }), 'mid', 'touch');
-    return through(body, rotor, { port: `${size} fan frame/axis`, from: 'lo' }, 'slide'); },
+  id: 'piece.fan', name: 'Axial fan', gloss: 'An axial fan by its frame (25 to 140 mm): its square flanges with their four holes, its round venturi, its hub and six pitched blades', domains: ['electrical', 'mechanical', 'thermal'],
+  says: 'An axial fan by its frame size (side × depth, mm), its air along z: its frame as two square PBT flanges (the front one\'s four mounting holes on their standard spacing, `<size> fan frame/holes`, a screw down each; the back one\'s `<size> fan back frame/mounting holes`) with the round venturi between them, its floor at the back with eight windows (its struts), six thin blades pitched 35° as a ring of copies turned to face out (room.ring), into the venturi, and its hub passed along the venturi\'s axis, cut round each blade\'s root. Approximated: the struts are the venturi\'s floor with round windows (the operations offer no floorless room yet), the blades flat, not twisted',
+  rows: FANS, size: '40×10', source: 'typical of makers\' datasheets (the hole spacings 40 mm 32, 60 mm 50, 80 mm 71.5, 120 mm 105); blades, pitch and flanges typical (an estimate)',
+  recipe: (f, size) => { const W = mm(f.W), D = mm(f.D), r = 0.475 * W, a = mm(f.s) / 2, hubR = 0.21 * W, n = `${size} fan`, g = 0.00025;
+    const tf = mm(Math.max(1.2, 0.12 * f.D)), fl = mm(Math.max(0.8, 0.08 * f.D)), Hc = D - 2 * tf;
+    const corners: [number, number][] = [[-a, -a], [a, -a], [a, a], [-a, a]], flange = (name: string, holes: string) => made(name, 'pbt', { box: [W, tf, W] }, { color: BLACK, patterns: [{ name: holes, points: corners, hole: mm(f.hole / 2) }, { name: 'bore', points: [[0, 0]], hole: r }] });
+    // (the venturi: a cup round the bore, its floor the struts, its eight windows between the hub and the wall)
+    const Rw = (hubR + r) / 2, hw = 0.9 * Math.min((r - hubR) / 2, Rw * Math.sin(Math.PI / FAN_WINDOWS));
+    const venturi = made(`${n} venturi`, 'pbt', { cup: [W / 2, Hc, W / 2 - r, fl] }, { color: BLACK, pattern: { name: 'windows', circle: { n: FAN_WINDOWS, r: Rw, phase: Math.PI / FAN_WINDOWS }, hole: hw } });
+    // (a blade: from just inside the hub to near the bore, as wide as its wedge of the ring and the venturi's depth allow;
+    // pitched about its own length, then six of it round the axis, each turned to face out)
+    const th = Math.max(mm(0.6), 0.012 * W), p = (FAN_PITCH * Math.PI) / 180, r0 = 0.2 * W, r1 = r - g - 0.02 * W, R = (r0 + r1) / 2, Lb = r1 - r0;
+    const wedge = R * Math.sin(Math.PI / FAN_BLADES) - g / 2 - mm(0.05), across = 2 * Math.sqrt(Math.max(0, wedge * wedge - (Lb / 2) ** 2)), deep = Hc - fl - g - mm(0.2);
+    const chord = Math.min((across - th * Math.sin(p)) / Math.cos(p), (deep - th * Math.cos(p)) / Math.sin(p));
+    const blade = turn(made(`${n} blade`, 'pbt', { box: [Lb, th, chord] }, { color: 0x303030 }), 0, FAN_PITCH);
+    const bladed = into(venturi, `${n} venturi/cavity`, ring(`${n} blades`, blade, FAN_BLADES, R, 'slide', true), 'slide');
+    // (the hub along the venturi's axis, its whole depth: the floor bored for it, each blade's root cut round it)
+    const rotor = through(bladed, made(`${n} hub`, 'pbt', { cyl: [hubR, Hc] }, { color: BLACK }), { port: `${n} venturi/axis`, from: 'lo' }, 'tight');
+    // (the flanges, back and front, the venturi between; the whole stood with its air along z)
+    return turn(stack(n, 1, [{ b: flange(`${n} back frame`, 'mounting holes') }, { b: rotor }, { b: flange(`${n} frame`, 'holes') }]), 0, 90); },
   expect: (f) => ({ bound: bound(f.W, f.W, f.D), tol: 0.01, says: 'its frame\'s side by its depth' }),
-  tests: [{ inputs: {}, outputs: { pieces: 4 } }],
+  tests: [{ inputs: {}, outputs: { pieces: 10 } }],
 };
 
 // ---- packages: TO-220, axial diodes, crystals, buzzers --------------------------------------------------------------

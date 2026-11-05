@@ -16,6 +16,7 @@ import { runBlock } from '../dataflow';
 import { show, type PortDef } from '../blocks';
 import { boundsOfAll, isAssembly, isPart, leavesOf, massOfAll, matrixOf, placedCount, type Assembly } from '../assembly';
 import type { Part } from '../kits';
+import { massGauge } from '../parts/maker';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -88,8 +89,12 @@ function metrics(): void {
   // (fault D27, the engine board's "36/36 all working" while two of its asserts failed))
   const fails = Object.keys(nodes).filter((id) => wall.outputsOf(id)?.holds === false).length;
   const shared = placed ? 1 - distinct / placed : 0;
+  // (a piece drawn as its envelope (its outline, not what is inside it: a dev board's connectors as shells, a servo's case
+  // solid) weighs as that outline, not as the thing: the gauge says so (the critic, 2026-11-05: a Pi 4 at 111.7 g, its row
+  // 46 g, said as its mass))
+  const gauge = massGauge(Object.keys(nodes).map((id) => wall.outputsOf(id)?.says), things.length > 0);
   $('gauges').innerHTML = [
-    ring(null, '#ff6e40', mass ? show(mass, 'kg') : '—', 'Mass', things.length ? 'of all that is shown' : 'nothing shown'),
+    ring(null, '#ff6e40', mass ? show(mass, 'kg') : '—', gauge.label, gauge.sub),
     ring(shared, '#ffd740', placed ? `${shared > 0.99 ? (Math.floor(shared * 1000) / 10).toFixed(1) : (shared * 100).toFixed(0)}%` : '—', 'Shared', `${placed.toLocaleString()} pieces, ${distinct.toLocaleString()} made`),
     ring(Math.min(1, r.ms / 16.7), r.ms > 16.7 ? '#ff5252' : '#69f0ae', `${r.ms.toFixed(r.ms < 10 ? 1 : 0)} ms`, 'Last run', 'a frame is 16.7 ms'),
     ring(total ? (total - failed - waiting) / total : null, failed || fails ? '#ff5252' : '#40c4ff', total ? `${total - failed - waiting}/${total}` : '—', 'Nodes', [failed ? `${failed} failed` : '', fails ? `${fails} check${fails > 1 ? 's' : ''} fail` : '', !failed && !fails && waiting ? `${waiting} waiting` : ''].filter(Boolean).join(', ') || 'all working'),

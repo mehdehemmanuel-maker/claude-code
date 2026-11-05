@@ -6,6 +6,31 @@
 // so one look on an assembly gives a steel bolt and an aluminium bracket each its own colour.
 
 import { filmColour, metalColour } from './colour';
+import { MATERIALS as HANDBOOK } from '../data/materials';
+import { MATTER, type Family } from './matter';
+
+// ---- a piece's own colour, from its material, when it is given none ---------------------------------------------------
+/** The families whose handbook stand-in looks like them (a rubber unsaid as natural rubber, a steel as the steel the
+ *  handbook holds, a wood unsaid as birch): their stand-in's colour is theirs. A polymer's stand-in is a clear acrylic,
+ *  chosen for its strength, not its look: none taken from it. */
+const LOOKS_LIKE_ITS_STAND_IN = new Set<Family>(['steel', 'stainless steel', 'cast iron', 'aluminium', 'copper alloy', 'wood', 'wood product', 'elastomer', 'concrete and mortar']);
+const ownColours = new Map<string, number | null>();
+const meanColour = (cs: number[]): number => [16, 8, 0].reduce((h, s) => h | (Math.round(cs.reduce((t, c) => t + ((c >> s) & 255), 0) / cs.length) << s), 0);
+/** A material's own colour (sRGB hex) as the handbook keeps it (data/materials.ts), for a piece that is given none: the
+ *  entry of that very material (`polymer.abs` for abs, `wood.red-oak` for red-oak), or the grade the material table
+ *  (matter.ts) says it is; a material named only by its kind takes the mean of the handbook's members of that kind (oak:
+ *  its red and its white oak); one held only by a stand-in, the stand-in's colour where its family looks like it (natural
+ *  rubber's for a rubber unsaid). Undefined where none is kept (polypropylene, PBT: no entry and no stand-in that looks like
+ *  them): the renderer's own neutral grey then, never a colour made up. */
+export function materialColour(mat: string | undefined): number | undefined {
+  if (!mat) return undefined; const was = ownColours.get(mat); if (was !== undefined) return was ?? undefined;
+  const row = MATTER[mat], byId = (id?: string) => (id ? HANDBOOK.find((m) => m.id === id) : undefined);
+  const own = HANDBOOK.find((m) => m.id.slice(m.id.indexOf('.') + 1) === mat) ?? (row?.same ? byId(row.handbook) : undefined);
+  const kin = own ? [] : HANDBOOK.filter((m) => m.id.endsWith(`-${mat}`));
+  const stand = row && LOOKS_LIKE_ITS_STAND_IN.has(row.family) ? byId(row.handbook) : undefined;
+  const c = own ? own.color : kin.length ? meanColour(kin.map((m) => m.color)) : stand?.color;
+  ownColours.set(mat, c ?? null); return c;
+}
 
 /** A coating over the part. */
 export interface Coat {

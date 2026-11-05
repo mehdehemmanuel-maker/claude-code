@@ -45,6 +45,14 @@ export const offersOf = (b: Block): string[] => [...new Set([...b.pieces.flatMap
 export const pieceOut = (b: Block, envelope?: string) => ({ block: b, thing: partOfBlock(b), pieces: b.pieces.length, faces: b.faces.length, offers: offersOf(b),
   says: `${b.name}: ${b.pieces.length} piece${b.pieces.length === 1 ? '' : 's'}, ${b.faces.length} face${b.faces.length === 1 ? '' : 's'} where they meet; every place given by the operations${envelope ? `; an envelope: ${envelope}` : ''}` });
 
+/** The mass gauge's words for what is shown, from what the board's nodes say: where one says it gives an envelope (as
+ *  pieceOut writes it), the mass is the outline's as drawn, not the thing's, and the gauge says so (the critic,
+ *  2026-11-05: a Raspberry Pi 4 shown at 111.7 g, its row 46 g, as its mass). */
+export function massGauge(says: readonly unknown[], shown: boolean): { label: string; sub: string } {
+  if (!shown) return { label: 'Mass', sub: 'nothing shown' };
+  return says.some((s) => /an envelope/.test(String(s ?? ''))) ? { label: 'Mass, as drawn', sub: 'an envelope: not its real mass' } : { label: 'Mass', sub: 'of all that is shown' };
+}
+
 /** Every family made by the maker, by its node's id. */
 export const PART_FAMILIES = new Map<string, AnyFamily>();
 const sizesSaid = (rows: Record<string, unknown>) => { const k = Object.keys(rows); return k.length > 1 ? `${k[0]} to ${k[k.length - 1]} (${k.length} sizes)` : k.join(''); };

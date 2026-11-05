@@ -63,7 +63,7 @@ function motorDC(): void {
   // (the small DC motor (a 20 mm can, its sizes typical), every piece made and put together by the operations: the rotor's
   // core with its coil slid over it in two layers, its commutator stacked under it, a ring of magnets slid over the rotor
   // with an air gap, the can made round all of it; then the shaft passed along the can's axis (the can's ends and the core
-  // bored for it as it passes) and two terminal tabs against its foot. Its ids are the board's own (a Stack lists its wires
+  // bored for it as it passes), an end bell against its foot and two terminal tabs against the bell. Its ids are the board's own (a Stack lists its wires
   // by their sources' ids: 'comm' before 'wound', the commutator under the core). Three of its settings are its own: the
   // magnets' outer radius (the can is made round them), the rotor's length (the can's follows) and the shaft's length.
   // It offers the can with all inside (a build that passes a shaft of its own through more than the can) and the motor
@@ -84,9 +84,11 @@ function motorDC(): void {
   s.n('room.through', { line: 'motor can/axis', which: 0, from: 'below', fit: 'slide' }, 'The shaft along its axis', 'shafted'); s.w('can', 'block', 'shafted', 'host'); s.w('shaft', 'block', 'shafted', 'passer');
   s.n('room.make', { name: 'terminal tab', shape: 'box', mat: 'brass', a: 2, b: 4, c: 0.4 }, 'Terminal tab (brass)', 'tab');
   s.n('room.ring', { name: 'terminals', n: 2, R: 5, fit: 'clear' }, 'Two of them', 'tabs'); s.w('tab', 'block', 'tabs', 'block');
-  s.n('room.onto', { face: '-y', fit: 'touch' }, 'Against its foot', 'motor'); s.w('shafted', 'block', 'motor', 'host'); s.w('tabs', 'block', 'motor', 'child');
+  s.n('room.make', { name: 'end bell', shape: 'rod', mat: 'nylon', a: 9, b: 3 }, 'End bell (nylon), 18 mm across, 3 mm (typical)', 'bell');
+  s.n('room.onto', { face: '-y', fit: 'touch' }, 'The end bell against its foot', 'belled'); s.w('shafted', 'block', 'belled', 'host'); s.w('bell', 'block', 'belled', 'child');
+  s.n('room.onto', { face: '-y', fit: 'touch' }, 'Against its end bell', 'motor'); s.w('belled', 'block', 'motor', 'host'); s.w('tabs', 'block', 'motor', 'child');
   s.output('can', 'block', 'can', 'block'); s.output('motor', 'block', 'motor', 'block'); s.output('thing', 'assembly', 'motor', 'thing'); s.output('says', 'text', 'motor', 'says');
-  s.save('seed.motor-dc', 'Small DC motor', 'A small brushed DC motor put together by the operations (sizes typical of a 20 mm can): its wound rotor and commutator, a ring of magnets round them, the can made round all, the shaft along its axis and two terminal tabs at its foot. Its settings: the magnets\' outer radius R (the can is made round them), the rotor\'s length L (the can\'s follows) and the shaft\'s length, in mm. It gives the can with all inside (its line motor can/axis, for a shaft of the build\'s own) and the motor with its shaft and tabs (shaft/axis)', ['mechanical', 'electrical'],
+  s.save('seed.motor-dc', 'Small DC motor', 'A small brushed DC motor put together by the operations (sizes typical of a 20 mm can): its wound rotor and commutator, a ring of magnets round them, the can made round all, the shaft along its axis, a nylon end bell at its foot and two terminal tabs out of the bell. Its settings: the magnets\' outer radius R (the can is made round them), the rotor\'s length L (the can\'s follows) and the shaft\'s length, in mm. It gives the can with all inside (its line motor can/axis, for a shaft of the build\'s own) and the motor with its shaft and tabs (shaft/axis)', ['mechanical', 'electrical'],
     { gloss: 'A small DC motor, its can and its shaft, as one node of a few settings', discipline: 'mechanical.design.cad', role: 'geometry operation', codes: [{ scheme: 'MSC2020', code: '68U07', label: 'Computer science aspects of computer-aided design' }] });
 }
 

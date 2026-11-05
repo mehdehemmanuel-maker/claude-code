@@ -235,20 +235,25 @@ const valveBody = (d: number, rh: number, rm: number, e: number, Lb: number, rb:
 type VRow = GRow;
 const V_MAT: Record<string, string> = { brass: 'brass', stainless: 'stainless-304' };
 // (a ball valve's body, its sizes worked from its thread by ratios read off makers' drawings: an estimate)
-const ballOf = (g: VRow) => { const d = g.d, Lb = 2.6 * d + 2, rh = g.D / 2, rm = 0.85 * d, rb = 0.36 * d; return { pts: valveBody(d, rh, rm, g.e, Lb, rb), Lb: mm(Lb), rm: mm(Math.max(rm, rh)), rs: mm(Math.max(2.5, 0.15 * d)), hs: mm(0.6 * d + 8), ll: mm(4 * d + 20), tl: mm(Math.max(3, 0.12 * d)), wl: mm(Math.max(10, 0.6 * d)) }; };
+const ballOf = (g: VRow) => { const d = g.d, Lb = 2.6 * d + 2, rh = g.D / 2, rm = 0.85 * d, rb = 0.36 * d; return { pts: valveBody(d, rh, rm, g.e, Lb, rb), Lb: mm(Lb), rm: mm(Math.max(rm, rh)), rs: mm(Math.max(2.5, 0.15 * d)), hs: mm(0.6 * d + 8), ll: mm(4 * d + 20), tl: mm(Math.max(3, 0.12 * d)), wl: mm(Math.max(10, 0.6 * d)), af: mm(3.2 * Math.max(2.5, 0.15 * d)), nh: mm(1.6 * Math.max(2.5, 0.15 * d)) }; };
 const VALVE_ROWS: Record<string, VRow> = Object.fromEntries(Object.entries(G_ROWS).filter(([k]) => k !== 'G1/8'));
 const BALLVALVE: PartFamily<VRow> = {
   id: 'piece.ballvalve', name: 'Ball valve', gloss: 'A two-way ball valve by its ISO 228-1 thread, G1/4 to G2: its body turned, its stem and lever on top', domains: ['mechanical', 'pipelines', 'everyday'],
-  says: 'A two-way ball valve, female both ends (ISO 228-1 G1/4 to G2): its body a turned profile along the flow (its ends, shoulders and the swell round the ball), laid along x; its stem stood on top and its lever across it. Approximated: the ball, its seats and the stem\'s packing inside not drawn, the threads not drawn, its sizes worked from the thread by makers\' proportions (an estimate). Its body offers the flow\'s axis (`<size> ball valve body/axis`) for a pipe or nipple at either end',
+  says: 'A two-way ball valve, female both ends (ISO 228-1 G1/4 to G2): its body a turned profile along the flow (its ends, shoulders and the swell round the ball), laid along x; its stem stood on top, its lever on the stem running one way from it along the flow (open), held by a nut on the stem. Approximated: the ball, its seats and the stem\'s packing inside not drawn, the threads not drawn, its sizes worked from the thread by makers\' proportions (an estimate). Its body offers the flow\'s axis (`<size> ball valve body/axis`) for a pipe or nipple at either end',
   rows: VALVE_ROWS, size: 'G1/2', source: 'ISO 228-1 sizes (bd_warehouse); the body by makers\' proportions, an estimate (src/nexus/parts/plumbing.ts)',
   settings: [{ key: 'matter', label: 'Body', type: 'choice', default: 'brass', choices: Object.keys(V_MAT) }],
   recipe: (g, size, set) => { const v = ballOf(g), mat = V_MAT[ch(set, 'matter')] ?? 'brass', n = `${size} ball valve`;
     const body = turn(made(`${n} body`, mat, { lathe: { pts: v.pts } }, { color: mat === 'brass' ? BRASS : STEEL }), 2, 90);
-    const handle = stack(`${n} handle`, 1, [{ b: made(`${n} stem`, mat, { cyl: [v.rs, v.hs] }, { color: STEEL }) }, { b: made(`${n} lever`, 'steel-low', { box: [v.ll, v.tl, v.wl] }, { color: 0xc0392b }) }]);
+    // (the lever's stem point at one end, half its width in: the stem, the lever and its nut stacked aligned on it, so the
+    // lever runs one way from the stem; its nut's across-flats 1.6 and height 0.8 of the stem's diameter, as ISO 4032's
+    // nuts run, typical. The nut is named for its lever, not the valve: a line asked of the valve by the word means its
+    // body's or its stem's)
+    const lever = made(`${n} lever`, 'steel-low', { box: [v.ll, v.tl, v.wl] }, { color: 0xc0392b, pattern: { name: 'stem', points: [[-(v.ll - v.wl) / 2, 0]] } });
+    const handle = stack(`${n} handle`, 1, [{ b: made(`${n} stem`, mat, { cyl: [v.rs, v.hs] }, { color: STEEL }) }, { b: lever }, { b: made(`${size} lever nut`, 'steel-low', { hex: [v.af, v.nh] }, { color: STEEL }) }], `${n} lever/stem`);
     return onto(body, '+y', handle, 'touch', `${n} stem/axis`); },
-  expect: (g, _s, set) => { const v = ballOf(g), d = rho(V_MAT[ch(set, 'matter')] ?? 'brass');
-    return { bound: [Math.max(v.Lb, v.ll), 2 * v.rm + v.hs + v.tl, Math.max(2 * v.rm, v.wl)], mass: latheV(v.pts) * d + Math.PI * v.rs * v.rs * v.hs * d + v.ll * v.tl * v.wl * rho('steel-low'), tol: 0.01, massTol: 0.03, says: 'its body\'s length and swell, its stem and lever (an estimate); nominal mass, the body turned (Pappus), stem and lever' }; },
-  tests: [{ inputs: {}, outputs: { pieces: 3, offers: ['G1/2 ball valve body/axis', 'G1/2 ball valve stem/axis'] } }],
+  expect: (g, _s, set) => { const v = ballOf(g), d = rho(V_MAT[ch(set, 'matter')] ?? 'brass'), rc = v.af / Math.sqrt(3);
+    return { bound: [Math.max(v.Lb / 2, v.wl / 2, rc) + Math.max(v.Lb / 2, v.ll - v.wl / 2, rc), 2 * v.rm + v.hs + v.tl + v.nh, Math.max(2 * v.rm, v.wl, 2 * rc)], mass: latheV(v.pts) * d + Math.PI * v.rs * v.rs * v.hs * d + (v.ll * v.tl * v.wl + hexV(v.af, v.nh)) * rho('steel-low'), tol: 0.01, massTol: 0.03, says: 'its body\'s length and swell, its stem, its lever one way from it and its nut (an estimate); nominal mass, the body turned (Pappus), stem, lever and nut' }; },
+  tests: [{ inputs: {}, outputs: { pieces: 4, offers: ['G1/2 ball valve body/axis', 'G1/2 ball valve lever/stem', 'G1/2 ball valve stem/axis', 'G1/2 lever nut/axis'] } }],
 };
 const checkOf = (g: VRow) => { const d = g.d, Lb = 2.2 * d + 12, rh = g.D / 2, rm = Math.max(rh + 1, 0.7 * d); return { pts: valveBody(d, rh, rm, g.e, Lb, 0.36 * d), Lb: mm(Lb), rm: mm(rm) }; };
 const CHECKVALVE: PartFamily<VRow> = {

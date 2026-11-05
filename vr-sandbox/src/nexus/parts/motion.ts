@@ -56,7 +56,7 @@
 //   SERVOS) and the vendor figures below, labelled typical. The rest typical, each table says so.
 // (Figures are mm in the tables and m in the solids.)
 
-import { made, over, stack, through, turn, run, type Block, type RunSeg } from '../room';
+import { made, over, stack, through, turn, run, onto, type Block, type RunSeg } from '../room';
 import { bracket, METRIC } from '../common';
 import { densityKg } from '../mass';
 import { TAP_DRILL } from '../interfaces';
@@ -329,15 +329,21 @@ const WHEEL: PartFamily<[number, number, number]> = {
 const CASTORS: Record<string, number> = Object.fromEntries([30, 40, 50, 75, 100, 125].map((d) => [String(d), d]));
 const CASTOR: PartFamily<number> = {
   id: 'piece.castor', name: 'Castor', gloss: 'A plate castor by its wheel: wheel, fork, swivel and its mounting plate with four holes', domains: ['mechanical', 'everyday', 'vehicles'],
-  says: 'A plate castor by its wheel (30 to 125 mm; its box as the kinds give it, typical): its wheel on its side, the fork\'s bridge on it, the swivel and the mounting plate with four bolt holes on top. Approximated: the fork\'s legs, the axle and the ball race not drawn (the bridge rests on the tyre). It offers <d> mm castor plate/holes (bolt it up under a deck: Bolted joint)',
-  rows: CASTORS, size: '50', source: 'src/nexus/kinds/stock.ts castor sizes and box (typical)',
-  recipe: (d, size) => { const P = 0.9 * d + 20, W = 0.3 * d + 10, tb = 3 + 0.02 * d, tp = 3 + 0.01 * d, hs = 0.3 * d + 10 - tb - tp, bolt = d >= 75 ? 'M6' : 'M5', a = 0.35 * P, name = `${size} mm castor`;
-    const wheel = turn(wheelOf(`${name} wheel`, d, W, 8), 2, 90);
-    return stack(name, 1, [{ b: wheel }, { b: made(`${name} fork`, 'steel-low', { box: [mm(W + 8), mm(tb), mm(0.4 * d + 10)] }, { color: 0xa9acb0 }) },
+  says: 'A plate castor by its wheel (30 to 125 mm; its box as the kinds give it, typical): its wheel between the fork\'s two legs on an 8 mm axle through its bore and both legs, the fork\'s bridge on the legs, the swivel and the mounting plate with four bolt holes on top. Approximated: the ball race not drawn, the legs flat plates. It offers <d> mm castor plate/holes (bolt it up under a deck: Bolted joint)',
+  rows: CASTORS, size: '50', source: 'src/nexus/kinds/stock.ts castor sizes and box (typical); the legs, the axle and the tyre\'s clearance under the bridge typical',
+  recipe: (d, size) => { const P = 0.9 * d + 20, W = 0.3 * d + 10, tb = 3 + 0.02 * d, tp = 3 + 0.01 * d, c = 2, hs = 0.3 * d + 10 - tb - tp - c, bolt = d >= 75 ? 'M6' : 'M5', a = 0.35 * P, name = `${size} mm castor`;
+    // (the wheel between two legs along its axle, each leg's axle line at its foot, aligned on it; the axle passed through
+    // the one leg, the wheel's bore and the other; then the whole stood: the axle along x, the legs up to the bridge, which
+    // rests on them, the tyre 2 mm under it (typical))
+    const lw = 0.3 * d + 8, e = 8, lh = d / 2 + c + e, leg = () => made(`${name} fork leg`, 'steel-low', { box: [mm(lw), mm(tb), mm(lh)] }, { color: 0xa9acb0, pattern: { name: 'axle', points: [[0, mm(-(lh / 2 - e))]] } });
+    const between = stack(`${name} wheel`, 1, [{ b: leg() }, { b: wheelOf(`${name} wheel`, d, W, 8), fit: 'slide' }, { b: leg(), fit: 'slide' }], `${name} fork leg/axle`);
+    const axled = through(between, made(`${name} axle`, 'steel-low', { cyl: [mm(4) - 0.00025, mm(2 * tb + W) + 0.0005] }, { color: 0x8a8c90 }), { port: `${name} fork leg/axle`, k: 0, from: 'lo' }, 'slide');
+    const wheel = turn(turn(axled, 2, -90), 0, -90);
+    return stack(name, 1, [{ b: wheel }, { b: made(`${name} fork`, 'steel-low', { box: [mm(W + 2 * tb) + 0.0005, mm(tb), mm(0.4 * d + 10)] }, { color: 0xa9acb0 }) },
       { b: made(`${name} swivel`, 'steel-low', { cyl: [mm(0.18 * P), mm(hs)] }, { color: 0xa9acb0 }) },
       { b: made(`${name} plate`, 'steel-low', { box: [mm(P), mm(tp), mm(P)] }, { color: 0xa9acb0, pattern: { name: 'holes', points: [[-a, -a], [a, -a], [a, a], [-a, a]].map(([x, z]) => [mm(x!), mm(z!)] as [number, number]), hole: mm(METRIC[bolt]!.clear!) / 2 } }) }]); },
   expect: (d) => ({ bound: [mm(0.9 * d + 20), mm(1.3 * d + 10), mm(0.9 * d + 20)], tol: 0.01, says: 'its box as the kinds give it (typical)' }),
-  tests: [{ inputs: {}, outputs: { pieces: 5 } }],
+  tests: [{ inputs: {}, outputs: { pieces: 8 } }],
 };
 // ---- motors: brushed DC cans, gear motors, hobby servos (envelopes) ----------------------------------------------------
 /** Each can size's shaft: diameter and how far it stands out, mm (typical of the makers' drawings). */
@@ -377,15 +383,24 @@ const SERVO_ROWS: Record<string, { L: number; W: number; Hc: number; span: numbe
 };
 const SERVO: PartFamily<(typeof SERVO_ROWS)[string]> = {
   id: 'piece.servo', name: 'Hobby servo', gloss: 'A hobby servo (SG90, MG90S, MG996R, standard size) as its envelope: case, mounting tabs with their holes, output spline', domains: ['electrical', 'mechanical', 'everyday'],
-  says: 'A hobby servo by its model (SG90, MG90S, MG996R, a standard size; vendor figures, typical): its case below its tabs, the tabs with their two holes, its case above, and its output spline off the middle toward one end. It offers <model> tabs/holes (screw it down: Bolted joint) and <model> spline/axis (a horn or a wheel over it: Over a shaft)',
+  says: 'A hobby servo by its model (SG90, MG90S, MG996R, a standard size; vendor figures, typical): its case below its tabs, the tabs with their two holes, its case above, its output spline (toothed) off the middle toward one end, and a stub of its three-wire lead out of the case\'s foot at that end. It offers <model> tabs/holes (screw it down: Bolted joint) and <model> spline/axis (a horn or a wheel over it: Over a shaft)',
   rows: SERVO_ROWS, size: 'SG90', source: 'families.ts SERVOS (SG90, MG996R), vendor pages for the rest (typical)',
-  envelope: 'its case is its outline (no motor, gears or board inside), so its drawn mass is a solid case\'s, not the servo\'s',
+  envelope: 'its case is its outline (no motor, gears or board inside), so its drawn mass is a solid case\'s, not the servo\'s; its lead a stub, its wires as their insulation',
   recipe: (r, size) => {
     const tabs = made(`${size} tabs`, 'abs', { box: [mm(r.span), mm(r.tt), mm(r.W)] }, { color: 0x2a4fa0, pattern: { name: 'holes', points: [[mm(-r.hs / 2), 0], [mm(r.hs / 2), 0]], hole: mm(r.hd) / 2 } });
-    const body = stack(`${size} case`, 1, [{ b: made(`${size} case below`, 'abs', { box: [mm(r.L), mm(r.th), mm(r.W)] }, { color: 0x2a4fa0 }) }, { b: tabs }, { b: made(`${size} case above`, 'abs', { box: [mm(r.L), mm(r.Hc - r.th - r.tt), mm(r.W)] }, { color: 0x2a4fa0, pattern: { name: 'output', points: [[mm(r.off), 0]] } }) }]);
-    return stack(`${size} servo`, 1, [{ b: body }, { b: made(`${size} spline`, 'pom', { cyl: [mm(r.sd) / 2, mm(r.sh)] }, { color: 0xf2f2f2 }) }], `${size} case above/output`); },
+    // (its lead's three wires (brown, red, orange, Ø1 mm on a micro servo, 1.2 on a standard one, typical) out of the case's
+    // foot at its output's end, a stub as long as the tabs stand past the case (the lead itself, about 25 cm, not drawn);
+    // its output spline toothed (21 teeth on a micro servo's, 25 on a standard one's, typical of their horns, an estimate),
+    // a section stood up along its axis)
+    const dw = r.W < 15 ? 1.0 : 1.2, stub = (r.span - r.L) / 2 - 0.3, teeth = r.W < 15 ? 21 : 25, ro = mm(r.sd) / 2, ri = ro - mm(r.W < 15 ? 0.25 : 0.3);
+    const below = made(`${size} case below`, 'abs', { box: [mm(r.L), mm(r.th), mm(r.W)] }, { color: 0x2a4fa0, pattern: { name: 'lead', face: '+x', points: [[mm(-r.th / 2 + 0.5 + dw / 2), 0]] } });
+    const body = stack(`${size} case`, 1, [{ b: below }, { b: tabs }, { b: made(`${size} case above`, 'abs', { box: [mm(r.L), mm(r.Hc - r.th - r.tt), mm(r.W)] }, { color: 0x2a4fa0, pattern: { name: 'output', points: [[mm(r.off), 0]] } }) }]);
+    const spline = turn(made(`${size} spline`, 'pom', { section: { pts: Array.from({ length: 2 * teeth }, (_, k) => { const a = (Math.PI * k) / teeth, q = k % 2 ? ri : ro; return [q * Math.cos(a), q * Math.sin(a)] as [number, number]; }), L: mm(r.sh) } }, { color: 0xf2f2f2 }), 0, -90);
+    const wire = (c: string, color: number) => turn(made(`${size} lead ${c} wire`, 'pvc', { cyl: [mm(dw) / 2, mm(stub)] }, { color }), 2, 90);
+    const lead = stack(`${size} lead`, 2, [{ b: wire('brown', 0x6b3e1f) }, { b: wire('red', 0xc0262d) }, { b: wire('orange', 0xf08a24) }]);
+    return onto(stack(`${size} servo`, 1, [{ b: body }, { b: spline }], `${size} case above/output`), '+x', lead, 'touch', `${size} case below/lead`); },
   expect: (r) => ({ bound: [mm(r.span), mm(r.Hc + r.sh), mm(r.W)], ...(r.g !== undefined ? { mass: r.g / 1000 } : {}), tol: 0.01, says: 'its tabs\' span, its height to the spline\'s top, its width' }),
-  tests: [{ inputs: {}, outputs: { pieces: 4, offers: ['SG90 case above/output', 'SG90 spline/axis', 'SG90 tabs/holes'] } }],
+  tests: [{ inputs: {}, outputs: { pieces: 7, offers: ['SG90 case above/output', 'SG90 case below/lead', 'SG90 lead brown wire/axis', 'SG90 lead orange wire/axis', 'SG90 lead red wire/axis', 'SG90 spline/axis', 'SG90 tabs/holes'] } }],
 };
 
 // ---- more held bearings: SCxUU blocks round an LMxUU, UCF four-bolt flanges; NEMA motor plates -------------------------

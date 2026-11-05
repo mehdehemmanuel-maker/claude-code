@@ -61,16 +61,20 @@ export function withButton(t: Part | Assembly, name: string, face: string, colou
  *  turned by its turning about its own upright middle; the rest where it was. No place is given: the stick's state
  *  moves what the operations put. */
 export function driven(t: Part | Assembly, piece: string, s: StickState): Assembly {
-  const kids = !isAssembly(t) ? t.parts ?? [] : [], mine = piece ? kids.filter((p) => p.name === piece) : [];
-  if (piece && !mine.length) throw new Error(`the ${t.name} has no piece "${piece}" to drive (it has ${[...new Set(kids.map((p) => p.name))].join(', ') || 'none'})`);
+  // (the pieces it drives by name, split by commas: a cart of a deck, its axles and its wheels carried as one, turned
+  // about the first one's middle)
+  const names = piece.split(',').map((x) => x.trim()).filter(Boolean), kids = !isAssembly(t) ? t.parts ?? [] : [], mine = kids.filter((p) => names.includes(p.name));
+  const lost = names.filter((n) => !kids.some((p) => p.name === n));
+  if (lost.length) throw new Error(`the ${t.name} has no piece ${lost.map((n) => `"${n}"`).join(', ')} to drive (it has ${[...new Set(kids.map((p) => p.name))].join(', ') || 'none'})`);
+  const first = mine.find((p) => p.name === names[0]), pivot = first ? new THREE.Vector3(...(first.at ?? [0, 0, 0])) : new THREE.Vector3();
   const carry = (p: Part | Assembly): Assembly['items'][number] => {
     const own = !isAssembly(p) ? new THREE.Vector3(...(p.at ?? [0, 0, 0])) : new THREE.Vector3(), q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.turn);
     const turned = new THREE.Euler().setFromQuaternion(q.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...(!isAssembly(p) ? p.rot ?? [0, 0, 0] : [0, 0, 0])))));
-    const to = own.clone().add(new THREE.Vector3(s.px, 0, s.pz));
+    const to = (names.length ? own.clone().sub(pivot).applyQuaternion(q).add(pivot) : own.clone()).add(new THREE.Vector3(s.px, 0, s.pz));
     return place(p, [to.x, to.y, to.z], [turned.x, turned.y, turned.z]);
   };
-  if (!piece) return { name: `${t.name}, driven`, items: [carry(t)] };
-  const rest = kids.filter((p) => p.name !== piece);
+  if (!names.length) return { name: `${t.name}, driven`, items: [carry(t)] };
+  const rest = kids.filter((p) => !names.includes(p.name));
   return { name: `${t.name}, driven`, items: [...rest.map((p) => place(p, p.at ?? [0, 0, 0], p.rot ?? [0, 0, 0])), ...mine.map(carry)] };
 }
 
@@ -91,7 +95,7 @@ register({ version: 1, by: 'built in', pure: false, id: 'control.button', name: 
 register({ version: 1, by: 'built in', pure: false, id: 'control.stick', name: 'Stick (move and steer)', kind: 'input', ability: 'measure', domains: ['everyday', 'software', 'vehicles'],
   spec: spec('A stick a person pushes while the board runs: where it points, and where it has carried something.'),
   says: 'A stick you push while the board runs: on a computer the arrow keys (or W A S D when you are not walking), on a phone a stick drawn on the screen, in a headset the right hand\'s stick. It gives where it is pushed (x right, y forward, −1 to 1) and where it has carried something at its speed: wire px, pz and turn into Place to drive a thing about (steer: forward drives, left and right turn it as a car does)',
-  settings: [{ key: 'name', label: 'Name', type: 'text', default: 'Move' }, { key: 'speed', label: 'Speed at full push, m/s', type: 'number', default: 2 }, { key: 'mode', label: 'Slide or steer', type: 'choice', default: 'steer', choices: ['steer', 'slide'] }, { key: 'piece', label: 'Of the thing, the piece it drives (its name; blank: all of it)', type: 'text', default: '' }],
+  settings: [{ key: 'name', label: 'Name', type: 'text', default: 'Move' }, { key: 'speed', label: 'Speed at full push, m/s', type: 'number', default: 2 }, { key: 'mode', label: 'Slide or steer', type: 'choice', default: 'steer', choices: ['steer', 'slide'] }, { key: 'piece', label: 'Of the thing, the pieces it drives (their names, split by commas; blank: all of it)', type: 'text', default: '' }],
   live: (set) => JSON.stringify(controlState(String(set.name || 'Move'), null)),
   ports: { inputs: [P('thing', 'assembly', { optional: true, label: 'a thing to drive (a room block\'s drawing)' })], outputs: [P('x', 'number'), P('y', 'number'), P('px', 'number', { unit: 'm', label: 'carried to, x' }), P('pz', 'number', { unit: 'm', label: 'carried to, z' }), P('turn', 'number', { unit: 'rad', label: 'turned to' }), P('driven', 'assembly', { label: 'the thing, its piece carried from where it was made to where the stick has driven it' })] },
   run: (i, c) => { const s = controlState<StickState>(String(c.set.name || 'Move'), { x: 0, y: 0, px: 0, pz: 0, turn: 0 }), t = i.thing as Part | Assembly | undefined;

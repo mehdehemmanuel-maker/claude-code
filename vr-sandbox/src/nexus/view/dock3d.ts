@@ -325,7 +325,10 @@ export class Dock3D {
   constructor(private readonly host: HTMLElement, private readonly picked: (key: string) => void) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true, alpha: true });
     this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping; this.renderer.toneMappingExposure = 1.3;
+    // (Khronos PBR Neutral, at an exposure of 1: a face turned to the view shows its own colour, a brick of 0x9c4a32 drawn
+    // 0x9b472d, where ACES at 1.3 drew it 0xc56d54 and washed copper, gold and grey mortar toward white (the critic,
+    // 2026-11-05; measured on the brick wall's picture). Only highlights are rolled off)
+    this.renderer.toneMapping = THREE.NeutralToneMapping; this.renderer.toneMappingExposure = 1;
     this.renderer.shadowMap.enabled = true; this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; this.renderer.localClippingEnabled = true;
     // (the canvas first in its element, so the labels laid over it are painted above it (fault D16: the count was under it))
     host.prepend(this.renderer.domElement); this.renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;touch-action:none';
@@ -394,13 +397,34 @@ export class Dock3D {
     const c = b.getCenter(new THREE.Vector3()), r = Math.max(0.05, b.getSize(new THREE.Vector3()).length() / 2);
     // (the sphere round the box, in the narrower of the view's two angles (a phone stands taller than wide); then nearer,
     // while every corner of the box stays within 85% of the view's half: the sphere is loose round a long or flat thing)
-    const half = Math.min(THREE.MathUtils.degToRad(this.camera.fov / 2), Math.atan(Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.camera.aspect)), dir = new THREE.Vector3(0.75, 0.62, 1).normalize();
-    let d = r / Math.sin(half) * 1.05; const corners = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z));
+    const half = Math.min(THREE.MathUtils.degToRad(this.camera.fov / 2), Math.atan(Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * this.camera.aspect));
+    let d = r / Math.sin(half) * 1.05; const dir = this.leastHidden(c, d); const corners = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z));
     this.camera.near = Math.max(1e-12, d / 1e4); this.camera.far = d * 100; this.camera.updateProjectionMatrix();
     for (let k = 0; k < 6; k++) { this.camera.position.copy(c).addScaledVector(dir, d); this.camera.lookAt(c); this.camera.updateMatrixWorld();
       const m = Math.max(...corners.map((p) => { const q = p.clone().project(this.camera); return Math.max(Math.abs(q.x), Math.abs(q.y)); }));
       if (!(m > 0 && Number.isFinite(m))) break; d = Math.max(r * 1.1, d * Math.min(1.3, Math.max(0.5, m / 0.85))); }
     this.controls.target.copy(c); this.camera.position.copy(c).addScaledVector(dir, d); this.camera.near = Math.max(1e-12, d / 1e4); this.camera.far = d * 100; this.camera.updateProjectionMatrix(); this.controls.update();
+  }
+  /** Which of the four corners above it to look from (front right first): the one from which the fewest pieces are hidden
+   *  behind nearer ones (each piece's box as the screen sees it, covered by the boxes of those nearer), so a ball beside a
+   *  tower is framed from its side, not from behind the tower (the critic, 2026-11-05). Front right unless another hides
+   *  at least one piece fewer; front right for a scene of more pieces than `pieceBoxes` weighs. */
+  private leastHidden(c: THREE.Vector3, d: number): THREE.Vector3 {
+    const dirs = [[0.75, 1], [-0.75, 1], [0.75, -1], [-0.75, -1]].map(([x, z]) => new THREE.Vector3(x, 0.62, z).normalize()), boxes = this.view.pieceBoxes();
+    if (boxes.length < 2) return dirs[0]!;
+    const cam = this.camera.clone(), q = new THREE.Vector3();
+    const score = (dir: THREE.Vector3): number => {
+      cam.position.copy(c).addScaledVector(dir, d); cam.lookAt(c); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+      const seen = boxes.map((b) => { let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        for (let i = 0; i < 8; i++) { q.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).project(cam); x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); }
+        return { x0, x1, y0, y1, a: Math.max(1e-12, (x1 - x0) * (y1 - y0)), z: b.getCenter(new THREE.Vector3()).distanceTo(cam.position) }; }).sort((u, v) => u.z - v.z);
+      let hidden = 0, covered = 0;
+      seen.forEach((s, i) => { let k = 0; for (let j = 0; j < i && k < 1; j++) { const o = seen[j]!, w = Math.min(s.x1, o.x1) - Math.max(s.x0, o.x0), h = Math.min(s.y1, o.y1) - Math.max(s.y0, o.y0); if (w > 0 && h > 0) k += (w * h) / s.a; }
+        k = Math.min(1, k); covered += k; if (k > 0.9) hidden++; });
+      return hidden + 0.1 * covered;
+    };
+    const s = dirs.map(score); let best = 0; for (let k = 1; k < 4; k++) if (s[k]! < s[best]! - 0.5) best = k;
+    return dirs[best]!;
   }
   get canvas(): HTMLCanvasElement { return this.renderer.domElement; }
   /** The view put somewhere and turned to look at a point (a test's, or a bookmark's). */
