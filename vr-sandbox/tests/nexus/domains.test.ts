@@ -23,9 +23,9 @@ const RUN_PINS: [string, string, string, string][] = [
   ['src/nexus/view/nodes.ts', '      const r = await res.json()', 'renderAll();', '98c38ebfaba4eed8'],
 ];
 /** The relay's handler, its whole text pinned (the test "an open andon stops the line…" says why). */
-const RELAY_PIN = 'b7aa7c96748b5309';
+const RELAY_PIN = '50351022748b6f54';
 /** agentBuild's whole text, pinned (the test "an open andon stops the line…" says why). */
-const AGENT_PIN = '827c6d19f645c051';
+const AGENT_PIN = '2d20938a16f8da28';
 /** The most laws the kernel may still leave undecided (erf and integrals: not in it yet). */
 const UNDECIDED_MOST = 3;
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
@@ -401,6 +401,8 @@ describe('every domain, in one pass', () => {
     // (the relay's handling of a run, exactly: from agentBuild's call to the run sent, nothing between that could strip it)
     const relay = readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), callLine = "const r = await m.agentBuild(String(request ?? ''), { model, effort, board, blocks, seconds: 180, steps: 40 });";
     expect(relay.slice(relay.indexOf(callLine), relay.indexOf('res.end(m.relayBody(r));') + 24), 'the relay sends the run as agentBuild made it').toBe(`${callLine}\n      res.setHeader('Content-Type', 'application/json'); res.end(m.relayBody(r));`);
+    // (and streamed, as the phone page asks (decision 0023): its steps as they come, short, then the whole run as relayBody makes it)
+    expect(relay, 'the stream ends with the whole run').toContain('line({ done: JSON.parse(m.relayBody(r)) });');
     // (the relay sends the page all of the run: its near misses, diff and certificates)
     const sent = JSON.parse(relayBody(run)) as AgentRun; expect(sent.nearMisses, 'every near miss sent whole: its step, tool, what, kind and response').toEqual(run.nearMisses);
     expect(sent, 'and the whole run as it was made (its certificates and diff too)').toEqual(JSON.parse(JSON.stringify(run))); expect(sent.nearMisses.length).toBe(4); expect(sent).toHaveProperty('diff'); expect(sent).toHaveProperty('certificates');

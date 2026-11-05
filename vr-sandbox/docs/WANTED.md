@@ -470,3 +470,10 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
 - 2026-11-03: "Okay but I want mostly dmaller peices built not whole engines yet just every common peice with all there
   matings or whatever else screws bolts plates boxes hollows inverts inputs wires copper wraps copper wires aluminum and
   tubes pipes leds lights allth lil stuff and everything"
+- 2026-11-03: "Continue I feel this is finally the right direction it allows speedy in law breaking builds" (the common
+  pieces made by the operations, and things built from them, are the way on)
+- 2026-11-03: "Continue / Also make this app easily accessible right away for me on mobile with a vibe engineer
+  interface kind of like typical vibe spaces but for cad and yea" (the phone page, `view/vibe.html`: say what to build
+  in a chat, Claude builds it from the pieces with the nodes, the 3D result fills the screen and grows as it works;
+  served at once from the session (`npm run app`), the phone opening it there; decision 0023)
+- 2026-11-05: "Try again" (after the session's context ran out: carry on with the phone page)

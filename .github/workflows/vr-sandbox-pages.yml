@@ -1,8 +1,9 @@
 name: vr-sandbox Pages
 
-# Publishes the Nexus forge so it opens in the Meta Quest browser (WebXR needs HTTPS) and installs as an app.
-# The forge is the landing page; the scene room stays at scene.html and room.html.
-# One-time setup: repository Settings -> Pages -> Source: GitHub Actions.
+# Publishes the Nexus app (view/: the dashboard, the phone page vibe.html, the space, the look and the gauntlet) so it
+# opens on a phone and in the Meta Quest browser (WebXR needs HTTPS) and installs as an app. A phone opening it lands on
+# the phone page. A static copy has no relay, so no key and no Claude: its pieces and boards open, and the chat says
+# where Claude is (the app served by `npm run app`). One-time setup: repository Settings -> Pages -> Source: GitHub Actions.
 on:
   push:
     branches: [main]
@@ -36,9 +37,7 @@ jobs:
           cache-dependency-path: vr-sandbox/package-lock.json
       - run: npm ci
       - run: npm run gate
-      - run: npm run nexus:view
-      - name: The forge as the landing page
-        run: mv dist-view/index.html dist-view/scene.html && cp dist-view/forge.html dist-view/index.html
+      - run: npx vite build --config vite.view.config.ts --logLevel error
       - uses: actions/upload-pages-artifact@v3
         with:
           path: vr-sandbox/dist-view

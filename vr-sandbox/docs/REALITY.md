@@ -2636,3 +2636,29 @@ footprints, the board into a project box's cavity). Every node on the three new 
 AI's guide (`docs/FOR-AI.md`) now tells it to build only with the pieces and the operations and never with the nodes
 that set places by number. Seen: from the 3D view's angle the box's 40 mm walls hide its floor, so the board is shown
 beside the box as well; the motor reads as a can with its shaft, its inside seen with Cut.
+
+## 2026-11-05: the phone page, a chat that builds (decision 0023); a bolt's head resting on its own hole
+
+`view/vibe.html` (`src/nexus/view/vibe.ts`): the 3D view fills a phone's screen, a chat at its foot goes to Claude
+through the relay, and each step comes back as it is taken with the board as it stands, so the thing is drawn while
+Claude works; seven piece boards open from chips with no AI. A phone opening the dashboard is sent there. One request at
+phone size (iPhone 13 in Playwright, not a phone), "Two 3 mm aluminium plates, 80 by 50 mm, bolted together with four M5
+bolts, nuts and washers": done in 31 s, 18 pieces, 81 g, 80 × 15.2 × 50 mm (`npm run eval:phone -- .audit/phone "…"` with
+`npm run app` serving, the page's own reading); by hand, two plates of 11.7 cm³ of aluminium are about 63 g and four M5 bolts with nuts and
+washers about 18 g. Seen in its picture first: the four heads at 3.5 mm steps above the plate, the shanks in the right
+holes. Stack had set each block on the highest piece anywhere in what came before; now on the pieces in its path (their
+bounds overlapping across the axis), else on all. A second joint's head now rests on the plate: 10 faces where pieces
+meet, against 8 before (`npx vitest run tests/nexus/domains.test.ts -t Mechanical`, the node's test). The second
+model's check of that run's answer said `FAULTS: 8` (claims in the answer no step supports); it is shown on the page as
+it came. A board with no "Show in space" node shows what it ends with (the first thing given by each node nothing
+builds on): the AI had left the show node out and nothing was drawn.
+
+The audit (`node scripts/audit.cjs`), 2026-11-05: its board match had stopped working (the library's search rows put the
+board's title first and "open this board" last), so every board read "not found" and no picture was taken; mended, and
+an audit that finds no board now says it is broken. On this machine each board took about a minute (its software
+renderer on all four cores), so the whole run stopped at its 30-minute limit after 30 of 34 boards; the other four were
+run apart. Every board's nodes ran but the prompt trial's (its image services). Freezes of 2 s or more on the battery,
+the 6502, paint, choosing a spring, export, what it is made of, the cart and the pendulum; with the stack change taken
+out the cart froze 4570 ms and the pendulum 2368 ms, with it 4324 and 2404 ms, so it is not this round's; the ball's
+board read 135 ms and 2364 ms on two runs, so the reading is noisy here. The five piece boards, the matings board and
+the two built from pieces opened with no fault and no freeze over 1 s.

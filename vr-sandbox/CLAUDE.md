@@ -139,7 +139,7 @@ known gaps are there too.
 | Bodies, agents, awareness, gases | `nexus/act/`, `nexus/aware/`, `nexus/life/segments.ts`; a human body laid out `anatomy.ts` |
 | Expressions in words and units (the formula language nodes take); embodied machines | `nexus/generate.ts`, `nexus/embody/` |
 | Controls worked by hand while it runs (Button, Stick, Slider; a button put on a thing); being in it (walking, keys, phone controls, gamepad) | `nexus/controls.ts`, `nexus/view/pad.ts` |
-| The app: dashboard, board, 3D dock, space, renderer, look | `nexus/view/` (`dashboard.ts`, `nodes.ts`, `dock3d.ts`, `space.ts`, `space3d.ts`, `kit3d.ts`, `look.ts`) |
+| The app: dashboard, board, 3D dock, space, renderer, look; the phone page, a chat that builds (say it, see it built; decision 0023) | `nexus/view/` (`dashboard.ts`, `nodes.ts`, `dock3d.ts`, `space.ts`, `space3d.ts`, `kit3d.ts`, `look.ts`, `vibe.ts`) |
 
 ## Before writing a new file or function
 

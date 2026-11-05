@@ -32,8 +32,12 @@ const titles = [...readFileSync(join(ROOT, 'src/nexus/starters.ts'), 'utf8').mat
         await p.goto(`http://127.0.0.1:${port}/index.html`); await p.evaluate(() => localStorage.clear()); await p.reload(); await p.waitForTimeout(1500);
         // (searched by its name before any colon, as the library lists it; matched on its first words)
         const q = title.split(/[:(]/)[0].trim().slice(0, 32), key = q.slice(0, 18); await p.fill('#libQ', q); await p.waitForTimeout(500);
-        // (a starter board's row only: a node of the same name, clicked, would be put on whatever board is open)
-        let hit = null; for (const r of await p.$$('#shelves .blk')) if (/^(Open this board|Your board)/.test((await r.getAttribute('title')) ?? '') && (await r.textContent()).includes(key)) { hit = r; break; }
+        // (a starter board's row only: a node of the same name, clicked, would be put on whatever board is open. A search's
+        // row says the board's whole title first and "open this board" last; several boards share a first name ("Common
+        // pieces"), so the row whose title starts with this board's is taken, else the first board row of that name)
+        let hit = null, first = null; for (const r of await p.$$('#shelves .blk')) { const t = (await r.getAttribute('title')) ?? '';
+          if (!/open this board|^Your board/i.test(t)) continue; if (t.startsWith(title.slice(0, 60))) { hit = r; break; } if (!first && (await r.textContent()).includes(key)) first = r; }
+        hit = hit || first;
         if (!hit) { row.fails = 'not found in the library by its title'; rows.push(row); await p.close(); continue; }
         const t0 = Date.now(); await hit.click({ noWaitAfter: true });
         // (the page answers between tasks only: the longest wait for an answer is the longest freeze while it opens)
@@ -51,5 +55,8 @@ const titles = [...readFileSync(join(ROOT, 'src/nexus/starters.ts'), 'utf8').mat
   let byHand = ''; try { byHand = execFileSync('node', [join(ROOT, 'scripts/by-hand.mjs')], { encoding: 'utf8' }).trim().split('\n').pop(); } catch (e) { byHand = `by-hand failed: ${e.message}`; }
   const bad = rows.filter((r) => !r.ran || r.fails || r.errors.length || r.freezeMs >= 2000);
   writeFileSync(join(OUT, 'audit.json'), JSON.stringify({ boards: rows, bad: bad.length, byHand }, null, 1));
+  // (an audit that found no board opened nothing: it is the audit that is broken, not every board (2026-11-05: the library's
+  // search rows changed and every board read "not found", the run looking merely slow))
+  if (rows.length && rows.every((r) => /not found in the library/.test(r.fails))) { console.log(`the audit is broken: none of the ${rows.length} boards was found in the library (its rows' titles changed?)`); process.exitCode = 2; }
   console.log(`${rows.length} boards opened, ${bad.length} with something wrong a person would see (failed nodes or checks, page errors, a freeze of 2 s or more); ${byHand}; written to ${OUT}`);
 })();

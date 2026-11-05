@@ -1341,7 +1341,9 @@ const BUILT_THINGS: BlockDef[] = [
     settings: [{ key: 'line', label: 'The hole (a port, as "top plate/holes")', type: 'text', default: '' }, { key: 'which', label: 'Which of its holes (0: the first)', type: 'number', default: 0 }, { key: 'size', label: 'Size', type: 'choice', default: 'M8', choices: METRIC_SIZES }, { key: 'head', label: 'Head', type: 'choice', default: 'hex', choices: ['hex', 'socket'] }],
     ports: { inputs: [P('held', 'any', { label: 'what it holds (plates stacked)' })], outputs: ROOM_OUT },
     run: (i, c) => roomOut(cpBolted(i.held as Block, String(c.set.line), String(c.set.size), Math.round(Number(c.set.which ?? 0)), String(c.set.head) as 'hex')),
-    tests: [{ set: { line: 'plate/holes', size: 'M8' }, inputs: { held: cpPlate('plate', 0.08, 0.005, 0.05, 'al-6061', [[-0.025, 0], [0.025, 0]], 0.009) }, outputs: { pieces: 5 } }] }),
+    tests: [{ set: { line: 'plate/holes', size: 'M8' }, inputs: { held: cpPlate('plate', 0.08, 0.005, 0.05, 'al-6061', [[-0.025, 0], [0.025, 0]], 0.009) }, outputs: { pieces: 5 } },
+      // (a second joint beside the first: its head rests on the plate, a face under it, not on the first joint's head's height (it floated: 2026-11-05))
+      { set: { line: 'plate/holes', size: 'M8', which: 1 }, inputs: { held: cpBolted(cpPlate('plate', 0.08, 0.005, 0.05, 'al-6061', [[-0.025, 0], [0.025, 0]], 0.009), 'plate/holes', 'M8', 0) }, outputs: { pieces: 9, faces: 10 } }] }),
   def({ id: 'combine', name: 'Combine', kind: 'logic', ability: 'transform', domains: ['mechanical', 'structural', 'everyday'], says: 'Several things as one assembly, each where it is: a frame and its motors, a city and the swarm over it',
     settings: [{ key: 'name', label: 'Name', type: 'text', default: 'assembly' }],
     ports: { inputs: [P('things', 'assembly', { many: true, label: 'things' })], outputs: [thing('assembly', 'assembly')] },

@@ -147,7 +147,9 @@ async function checkOf(client: InstanceType<typeof import('@anthropic-ai/sdk').d
 }
 
 /** The agent given a request: its board, its steps, its answer. At most `steps` tool calls and `seconds` of time. */
-export async function agentBuild(request: string, o: { model?: string; effort?: 'low' | 'medium' | 'high'; steps?: number; seconds?: number; board?: Board; blocks?: AgentBlock[]; check?: string | false; signal?: AbortSignal } = {}): Promise<AgentRun> {
+export async function agentBuild(request: string, o: { model?: string; effort?: 'low' | 'medium' | 'high'; steps?: number; seconds?: number; board?: Board; blocks?: AgentBlock[]; check?: string | false; signal?: AbortSignal;
+  /** each step as it is taken, with the board as it stands after it (the relay streams these to the page) */ onStep?: (s: AgentStep, board: Board) => void;
+  /** what the model says between its tool calls, as it says it */ onSay?: (text: string) => void } = {}): Promise<AgentRun> {
   if (typeof process === 'undefined' || !process.env?.ANTHROPIC_API_KEY) throw new Error('no ANTHROPIC_API_KEY where this runs: the agent runs under Node with it set (the environment\'s secrets); a page holds no keys');
   const { default: Sdk } = await import('@anthropic-ai/sdk'), client = new Sdk({ baseURL: 'https://api.anthropic.com' }), system = await guideOf();
   const model = o.model ?? 'claude-haiku-5-5', steps: AgentStep[] = [], t0 = Date.now(), until = t0 + 1000 * (o.seconds ?? 180);
@@ -165,7 +167,9 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
     if (turn.ends) { const answer = turn.answer;
       const checked = o.check === false ? undefined : await checkOf(client, request, steps, answer, o.check ?? 'claude-sonnet-5-5', (u) => { tokIn += u.input_tokens; tokOut += u.output_tokens; }).catch((e) => `not checked: ${(e as Error).message}`);
       return runOf({ start, board: t.board(), steps, answer, model: r.model, tokens: { in: tokIn, out: tokOut, cached, written }, made: t.made, ...(checked ? { checked } : {}) }); }
-    messages.push({ role: 'user', content: await callTools(turn.uses, t.doTool, steps) });
+    const said = r.content.map((b) => (b.type === 'text' ? b.text : '')).join('').trim(); if (said) o.onSay?.(said);
+    const n0 = steps.length; messages.push({ role: 'user', content: await callTools(turn.uses, t.doTool, steps) });
+    for (const s of steps.slice(n0)) o.onStep?.(s, t.board());
   }
   return runOf({ start, board: t.board(), steps, answer: '', model, tokens: { in: tokIn, out: tokOut, cached, written }, made: t.made, ...(stopped ? { stopped } : {}) });
 }

@@ -14,7 +14,9 @@ newest last). Then do all six, each time:
 1. **Open the app as a person would.** Build it (`npx vite build --config vite.view.config.ts --logLevel error`) and
    run `node scripts/audit.cjs` from `vr-sandbox/`. It opens every starter board and writes, under `.audit/`, whether
    its nodes ran, its failed checks, page errors, the longest freeze, and a screenshot. Every row it marks BAD is a
-   finding.
+   finding. A row "not found in the library" is the audit failing to open the board, not a board fault: when many say
+   so, mend the audit first (2026-11-05: every board read so for a session, and nothing was looked at). Open the phone
+   page too (`view/vibe.html`, `node tests/evals/phone.cjs` with `npm run app` serving): it is what the user opens.
 2. **Look at every screenshot yourself** (Read each `.audit/<n>.png`). For each board: is anything shown in the 3D view? Is the thing
    recognisable? Name what a person would call wrong:
    - blocky (boxes standing for curved or detailed parts, facets showing);

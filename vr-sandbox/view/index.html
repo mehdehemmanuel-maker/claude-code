@@ -7,6 +7,8 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <meta name="theme-color" content="#070a10" />
+  <!-- (a phone opens the phone page, vibe.html: say what to build, see it built; its "Full board" comes back here with ?full) -->
+  <script>if (matchMedia('(max-width: 700px)').matches && !/[?&]full\b/.test(location.search)) location.replace('./vibe.html');</script>
   <style>
     :root {
       --bg: #070a10; --panel: #0d121b; --panel2: #131a26; --line: #1f2a3a; --text: #dfe7f1; --dim: #8796aa; --accent: #40c4ff;

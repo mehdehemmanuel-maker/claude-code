@@ -1,8 +1,8 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 01.I16 (failing on its blind clause); common pieces and their matings made with the operations of room.ts, builds made from them (decision 0021); the critic each session (decision 0022)
-Spec in hand: spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: a5297f2 (2026-11-03)
+Task in hand: 06.M2 (the phone page, a chat that builds: decision 0023, `view/vibe.html`, served by `npm run app`); common pieces and builds from them by the operations (decision 0021); 01.I16 (failing on its blind clause); the critic each session (decision 0022)
+Spec in hand: spec 06, the phone (`plan/specs/06-phone/`); spec 01, interfaces (`plan/specs/01-interfaces/`)
+Last commit the gate passed: 1708162 (2026-11-03)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -32,7 +32,7 @@ Last commit the gate passed: a5297f2 (2026-11-03)
   to what can be shown (the cases not yet built go in before their code), or accept the order as it was?
 - The pipe port case gains a check beyond the standard, derived (`npm run gate` runs it): the tap drill's point inside
   the block too, so a block deep enough for the standard's drill depth but not for the point is refused. Keep it?
-- Hosting is proposed (decision 0011), to confirm at phase 3.
+- Hosting is proposed (decision 0011), to confirm at phase 3. The Pages copy (main only, after Settings → Pages) has no relay, so no Claude.
 
 ## Pipeline notes (the loop breaker reads these: a line "pipeline: <task>: <answer>" resets its count)
 pipeline: 01.I16: yes, a small one: three runs failed on PROGRESS.md itself (its last gated commit four behind after commits that only recorded the user's words, then a line too many), a line kept by hand that falls behind; the efficiency agent being designed is to flag a gate failing twice on the same bookkeeping

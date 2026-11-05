@@ -262,7 +262,11 @@ export class Block {
       const across = line.length ? [line[0]!.x, mid[1]!, line[0]!.z] : mid, d0 = [0, 1, 2].map((k) => (k === axis ? 0 : level && k === 1 && axis !== 1 ? -it.b.lo[1] : -across[k]!)) as V3;
       let s = Block.#shift(it.b, d0);
       if (i > 0) {
-        const A = prev.map((k) => pieces[k]!), B = s.pieces, top = Math.max(...A.map((p) => (B.some((q) => !coMove(p, q)) ? boundOf(p) : primBox(p.solid.base))[1][axis]));
+        // (it comes to rest on what is in its path: the pieces before it whose bounds overlap its own across the stack's
+        // axis (a bolt's head on its own hole's plate, not on another joint's head beside it); none in its path, on all)
+        const other = ([0, 1, 2] as const).filter((k) => k !== axis), sb = s.pieces.map(boundOf);
+        const inPath = prev.map((k) => pieces[k]!).filter((p) => { const pb = boundOf(p); return sb.some((q) => other.every((k) => pb[0][k]! < q[1][k]! - 1e-12 && q[0][k]! < pb[1][k]! - 1e-12)); });
+        const A = inPath.length ? inPath : prev.map((k) => pieces[k]!), B = s.pieces, top = Math.max(...A.map((p) => (B.some((q) => !coMove(p, q)) ? boundOf(p) : primBox(p.solid.base))[1][axis]));
         const bot = Math.min(...B.map((q) => (A.some((p) => !coMove(p, q)) ? boundOf(q) : primBox(q.solid.base))[0][axis])), d: V3 = [0, 0, 0]; d[axis] = top + gapOf(it.fit ?? 'touch') - bot;
         s = Block.#shift(Block.#seal(it.b.name, s.pieces, s.faces, s.rooms), d);
       } else { const d: V3 = [0, 0, 0]; d[axis] = -it.b.lo[axis]!; s = Block.#shift(Block.#seal(it.b.name, s.pieces, s.faces, s.rooms), d); }
