@@ -2662,3 +2662,23 @@ the 6502, paint, choosing a spring, export, what it is made of, the cart and the
 out the cart froze 4570 ms and the pendulum 2368 ms, with it 4324 and 2404 ms, so it is not this round's; the ball's
 board read 135 ms and 2364 ms on two runs, so the reading is noisy here. The five piece boards, the matings board and
 the two built from pieces opened with no fault and no freeze over 1 s.
+
+## 2026-11-05: parts turned to any angle, pipes that bend, twenty more pieces, three ways to build (decisions 0024, 0025)
+
+Built rough, in parallel, by three agents in their own worktrees, merged and gated here (`npm run gate`: 66 passed).
+A whole block turns rigidly by any angle about any axis (`room.turn`): each solid carries its frame, each line its
+direction, and through and over work along a turned line in its own frame; a bent tube (a torus segment) is a solid of
+its own; a run of tube is laid from its steps alone ("200; bend 90; 150; elbow 90 toward +z"), its segments that do not
+follow one another kept apart by their bounds. A turned bolted joint, pipe run and angle at six angles about each axis
+kept every pair of pieces apart at 9³ sampled points each (`npx vitest run tests/nexus/domains.test.ts -t "a turned
+block keeps every pair"`); the 1275 drawn vertices of a turned run lay on their solids' skins within 1e-6 m (the
+builder's probe, deleted). The socket elbows' figures are typical (no EN 1254-1 table found). Twenty more pieces by their
+standards, many figures typical or from memory and labelled so: resistors, capacitors, a TO-92, cells, a toggle, a fuse,
+a JST header, a pot, a lid, an L bracket bolted down, ball bearings (balls drawn as their bounding cylinders: the space
+has no sphere), dowels, set screws, a spur gear, a GT2 pulley, a spring, a hinge, inserts; cut for want of turning then:
+the DIP IC, the barrel jack, the bracket's upright holes, the tee. The phone page builds three ways: by hand (no AI),
+Assist (one call for a plan, changed, then built on the page) and Auto. On one fixed request, input-equivalent tokens (a
+cache read a tenth, a write 1.25 times: an estimate from the counts, not a bill) were about 21,100 before, 13,700 for
+Auto after (the second model's check made a toggle, steps 16, a shorter guide) and 4,500 for Assist, which built the same
+18 pieces, 81 g (`MODES=assist,auto node tests/evals/phone.cjs …`, three real calls in all). `docs/FOR-AI.md` went from
+6,590 to 5,149 bytes (`wc -c`), then gained a paragraph on turning, pipes and the new pieces.
