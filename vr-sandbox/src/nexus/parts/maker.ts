@@ -92,3 +92,17 @@ export const CHECK_ROW: BlockDef = {
     const r = checkRow(String(c.set.family), String(c.set.size), set, i.block as Block | undefined); return { ok: r.ok, mass: r.mass, bound: r.bound, says: r.says }; },
   tests: [{ inputs: {}, outputs: { ok: true } }, { set: { family: 'piece.nut', size: 'M64' }, inputs: {}, outputs: { ok: true } }],
 };
+/** A family's piece at a size that comes along a wire, as its table calls it ("M10", "6205"): a size worked out on the
+ *  board (a bolt from its load), made by its row, or refused saying the sizes it has. The family's own node keeps its
+ *  size a setting, so its card can say what it offers. */
+export const SIZED_PIECE: BlockDef = {
+  id: 'piece.sized', name: 'Piece at a size worked out', version: 1, by: 'built in', pure: true, kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing'],
+  says: 'A piece of any table-driven family (piece.bolt, piece.nut, piece.bearing and the rest) at a size that comes along a wire, as its table calls it ("M10", "6205"): a size worked out on the board (a bolt from its load), made by its row; a size the table does not have refused, with the sizes it has',
+  spec: { gloss: 'Which piece does a size worked out on the board make?', ...ROOM_SPEC },
+  settings: [{ key: 'family', label: 'Family (its node)', type: 'text', default: 'piece.bolt' }, { key: 'set', label: 'Its other settings (JSON)', type: 'text', default: '{}' }],
+  ports: { inputs: [P('size', 'text', { label: 'its size, as its table calls it' })], outputs: PIECE_OUT },
+  run: (i, c) => { const f = PART_FAMILIES.get(String(c.set.family)); if (!f) throw new Error(`no family ${String(c.set.family)} made by the table-driven maker (${[...PART_FAMILIES.keys()].slice(0, 12).join(', ')}, …)`);
+    let set: Record<string, unknown> = {}; try { set = JSON.parse(String(c.set.set ?? '{}')) as Record<string, unknown>; } catch { throw new Error(`its other settings are JSON ("${String(c.set.set)}")`); }
+    const defaults = Object.fromEntries((f.settings ?? []).map((s) => [s.key, s.default])); return pieceOut(build(f, String(i.size ?? '').trim(), { ...defaults, ...set }), f.envelope); },
+  tests: [{ set: { family: 'piece.bolt', set: '{"length": 40}' }, inputs: { size: 'M10' }, outputs: { pieces: 2, offers: ['M10 head/axis', 'M10 shank/axis'] } }],
+};

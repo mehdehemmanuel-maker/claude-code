@@ -14,7 +14,7 @@ const relay = (): Plugin => {
     // no second model)
     if (mode === 'plan') {
       try { await load(seeds); const m = await load(agent);
-        const p = await m.agentPlan(String(request ?? ''), { model, effort, board, failing: Array.isArray(failing) ? failing.map(String) : undefined, signal: AbortSignal.timeout(90_000) });
+        const p = await m.agentPlan(String(request ?? ''), { model, effort, board, failing: Array.isArray(failing) ? failing.map(String) : undefined, blocks, signal: AbortSignal.timeout(90_000) });
         res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(p)); }
       catch (e) { res.statusCode = 500; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: (e as Error).message })); }
       return;

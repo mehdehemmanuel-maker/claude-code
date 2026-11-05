@@ -57,7 +57,6 @@ export const UPDATE_SAYS = `the update of ${UPDATE.slice(0, 10)} (laws with thei
 const SET: Record<string, [EvidenceKind, string]> = {
   'vehicle.model': ['specified', 'a real model from its maker\'s published figures'],
   'part.family': ['specified', 'a part made to its standard\'s table'],
-  'card.part': ['specified', 'a part from the library, made to its standard'],
   'battery.starter': ['specified', 'a battery by its BCI group\'s published sizes'],
   'battery.cell': ['specified', 'a cell by its format\'s published sizes'],
   'chip.transistor': ['specified', 'a FinFET at its process\'s published pitches'],

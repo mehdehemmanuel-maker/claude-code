@@ -13,7 +13,8 @@ labelled typical, a failure is said, never smoothed over.
 
 ## How you build (cheaply: most requests need one to three calls)
 
-1. `find` words → blocks (`id {settings} | name | what it does`) and starter boards (`board "title" | …`). Once, plain
+1. `find` words → what builds first, a line each (`id: name | in … | set key=default | offers … | e.g. board "title"`:
+   `open` that board to see it used), then starter boards, then the rest; old place-by-number nodes last. Once, plain
    words; not for what the cards below list.
 2. `card` id → `in: name:type(unit)` (`?` optional), `out: …`, `set: key=default [choices]`. Only for what you will
    place and the cards do not list.
@@ -32,7 +33,7 @@ labelled typical, a failure is said, never smoothed over.
    something reusable.
 8. `docs` topic words → only the lines holding the words (topics: wanted, owners, reality, compiler, life, nodes, atlas).
 
-Blocks the person saved are in the library too. Blocks reach outside: `api.zenrows` (a web page), `api.fal.draw` (an
+Blocks the person saved are in the library too (`find` lists them first). Blocks reach outside: `api.zenrows` (a web page), `api.fal.draw` (an
 image), `api.claude` (a question), `export.files` (STEP, STL, 3MF, glTF), the checks (`verify.*`, rules, stress); a
 missing key is said back. Worked by hand: `control.button` (give it a thing), `control.stick` (`px`, `pz`, `turn` into
 `place` x, z, ry), `control.slider`.
@@ -59,6 +60,7 @@ below, tight), tee (`piece.<name>`; `find` for their settings). The bracket's up
 `L bracket upright/holes` bolts it to a wall. A Stack takes its blocks in the order its `order` setting lists their nodes (`"order": "bot,top"`); blank, by their names as text. A piece's `offers` names its lines and
 rooms (`<name>/axis`, `<name>/holes`, `<name>/cavity`): wire its `block` into the next operation and name the line in
 that operation's setting. A refusal (`no room …: needs …, gives …`) is an answer to say back, never to work round.
+A piece made turned (a ball or needle valve, laid along its flow) is only ever a host: pass the pipe through its line.
 Never use `place`, `array`, `mirror`, `mate`, `joint`, `imprint` or `place.solve` for a new build: they set places by number.
 Wire a piece's or an operation's `block` into the next operation; `thing` goes only to `space.show`, `measure` and `assert`.
 A wire that does not fit is refused with the fix, and so is a second wire into a single input (`*` on a card: takes

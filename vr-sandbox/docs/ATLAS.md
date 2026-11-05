@@ -10,9 +10,9 @@ What a board is built from: the node library, its laws, its seeds (nodes built f
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Node library | 272 | the library panel | `src/nexus/blocks.ts` |
+| Node library | 382 | the library panel | `src/nexus/blocks.ts` |
 | Laws | 330 | the library panel | `src/nexus/law.ts` |
-| Seeds | 23 | the library panel | `src/nexus/seeds.ts` |
+| Seeds | 3 | the library panel | `src/nexus/seeds.ts` |
 
 ### Flows
 
@@ -20,7 +20,7 @@ Boards: whole pipelines of nodes to start from, and yours.
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Starter boards | 67 | the library panel | `src/nexus/starters.ts` |
+| Starter boards | 44 | the library panel | `src/nexus/starters.ts` |
 
 ### Products
 
@@ -28,9 +28,7 @@ Real things by their makers' figures: machines, powertrains, the inventory of wh
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Machines | 10 | `vehicle.model` (its model), `engine.run` (its model); `drive`, `vehicle` (in their code) | `src/nexus/machines.ts` |
-| Powertrains | 1 | `drive`, `engine.run` (in their code) | `src/nexus/power/drive.ts` |
-| Inventory | 2,408 | `optics.colour` (its metal), `optics.film` (its metal); the mat of 20 nodes (`matter`, `shape.box`, `shape.cyl`, …); `line` (its core); `line` (its outer); `law.stages.series` (its solve); `group.out`, `read`, `research.parts`, `research.toInventory` (in their code) | `src/nexus/inventory.ts` |
+| Inventory | 2,408 | `optics.colour` (its metal), `optics.film` (its metal); the mat of 11 nodes (`matter`, `shape.box`, `shape.cyl`, …); the matter of 5 nodes (`piece.hosebarb`, `piece.hose`, `piece.airtube`, …); `line` (its core); `line` (its outer); `law.stages.series` (its solve); `group.out`, `read`, `research.parts`, `research.toInventory` (in their code) | `src/nexus/inventory.ts` |
 
 ### Parts
 
@@ -38,10 +36,10 @@ What builds are made of, by standard: designed components, families sized by the
 
 | Library | Holds | Reached by | Source |
 | --- | --- | --- | --- |
-| Designed components | 41 | `part.family` (its family); `card.part` (in its code) | `src/nexus/components.ts` |
-| Part families | 340 | `part.family` (its family) | `src/nexus/families.ts` |
-| Built parts | 4,864 | `stock.part` (its id) | `src/data/stock.json` |
-| Catalogue sizes | 56,064 | `card.part` (its what): 14,577 of its 56,064 sizes, those of the 41 kinds drawn in 3D; the rest are known by name and size and not drawn yet | `src/nexus/catalogue.ts` |
+| Designed components | 41 | `part.family` (its family) | `src/nexus/components.ts` |
+| Part families | 340 | `part.family` (its family); `piece.kind` (its size) | `src/nexus/families.ts` |
+| Built parts | 902 | `stock.part` (its id) | `src/data/stock.json` |
+| Catalogue sizes | 56,172 | **no node reaches it yet** | `src/nexus/catalogue.ts` |
 | Standard faces | 14 | **no node reaches it yet** | `src/nexus/mate.ts` |
 | Line sections | 11 | `tether` (its section), `line` (its section), `route` (its section) | `src/nexus/placement/line.ts` |
 | BCI battery groups | 6 | `battery.starter` (its group) | `src/data/batteries.ts` |
@@ -75,93 +73,70 @@ What is known and run: researched references, programs.
 | The app itself | 22 | the library panel | `src/nexus/navigate.ts (APP)` |
 | Programs | 3 | `logic.run` (its program) | `src/nexus/logic/programs.ts` |
 
-Not reached by any node yet: Standard faces. Each is a node to make, or a setting to give one.
+Not reached by any node yet: Catalogue sizes, Standard faces. Each is a node to make, or a setting to give one.
 
 ## How each node's work flows
 
 | Flow | Nodes | Which |
 | --- | --- | --- |
-| Worked once: from its inputs, again only when they change (most nodes) | 582 | the rest |
+| Worked once: from its inputs, again only when they change (most nodes) | 677 | the rest |
 | With the clock: again as the board's time goes on | 2 | Approved, Clock |
 | Worked once, played by the clock: a simulation run once and posed at any time | 3 | Agent, Follow a path, Let it go |
-| Many at once: one thing for each row or point: spawned, scattered, patterned | 6 | City, Neighbourhood, Pattern of, Road system, Scatter, Spawn |
+| Many at once: one thing for each row or point: spawned, scattered, patterned | 3 | Pattern of, Scatter, Spawn |
 | To a fixed point: rounds until nothing more changes: repairs, research, gauntlets | 5 | Autopilot, Loop round a block, Repairs, Research loop (to the bottom), Run the gauntlet |
 | On an event: when something happens | 1 | When… |
 | From outside: fetched or run elsewhere (a source online, a worker, Claude) | 7 | Ask Claude, Claude (Anthropic Messages API), Claude builds a board, Code, Gemini: look at pictures, Search the web (Wikidata), Transistor-level netlist |
-| Shown: an end of a flow: a table, a value, a chart, the space | 19 | 3D view, Chart, Check a limit, Clashes, Comes apart to the bottom?, Gauge, Interfaces, Mass, centre and inertia, Measure, Note, Nothing runs into anything?, Say why, Show, Show a map, Show in space, Side by side from the same camera, Table view, Task, What it is made of |
+| Shown: an end of a flow: a table, a value, a chart, the space | 17 | 3D view, Chart, Check a limit, Comes apart to the bottom?, Gauge, Heat exposure check, Interfaces, Mass, centre and inertia, Measure, Note, Say why, Show, Show a map, Show in space, Table view, Task, What it is made of |
 
 ## Flows to start from
 
 | Board | Field | Nodes | Stages it reaches | May be missing |
 | --- | --- | --- | --- | --- |
-| A house from seeds: pick its plan, its rooms change | structural | 10 | 2 3 5 10 | · |
-| Power as nodes: an engine run from its numbers, the powertrain it dr… | vehicles | 19 | 1 2 3 6 9 10 | · |
-| Traffic on the clock: cars round a block, stopping at red | structural | 9 | 2 3 5 6 9 10 | · |
-| A world without end: neighbourhoods for ever, each its own | structural | 6 | 2 5 6 10 | · |
-| A battery built from its parts, node by node: grid, paste, separator… | manufacturing | 24 | 2 3 5 10 | it has what plays with time, and no clock |
-| An engine from its first parts: piston, rod, crank, block, head, the… | mechanical | 36 | 1 2 3 5 6 10 | · |
-| Research to what is missing: Toyota's engine held against its sources | mechanical | 19 | 1 2 5 9 10 11 | · |
-| The gauntlet as nodes: makers through gate after gate, the unknown s… | software | 26 | 1 2 5 9 10 | · |
+| A battery built from its parts, node by node: plates with their lugs… | mechanical | 26 | 2 5 10 | · |
+| The gauntlet as nodes: makers through gate after gate, the unknown s… | software | 27 | 1 2 5 9 10 | · |
 | The 6502 from its transistors: a real program run switch by switch, … | electronics | 9 | 5 6 10 | · |
-| Proximity and mates: each thing carries the room and the mates it ne… | structural | 8 | 2 3 4 10 | · |
-| A body from its measured segments, its math on every part | life | 9 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
-| Metals, coloured by their physics: fourteen polished metals, each it… | structural | 45 | 2 3 8 10 | it places things itself and never checks whether they run into each other or keep their room |
-| Steel, finished five ways: turned, ground, polished, bead blasted an… | structural | 19 | 2 3 8 10 | it places things itself and never checks whether they run into each other or keep their room |
-| Colours with no dye: titanium anodised from 10 to 100 volts, and ste… | structural | 63 | 2 3 8 10 | it places things itself and never checks whether they run into each other or keep their room |
-| One shape, eight looks: bare steel, aluminium and copper coloured by… | structural | 27 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
-| Paint jobs and wear: a striped panel new and worn, a two-tone drum, … | structural | 21 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
-| Picture to model: the Monte Carlo fitted to the AI-made picture of h… | vehicles | 12 | 1 2 10 | · |
-| Fit to a target: one node that sizes anything to what is asked of it… | pipelines | 7 | 1 3 10 | it makes things and never shows them |
-| Onto a surface: any outline laid onto any thing and following its cu… | mechanical | 6 | 2 3 10 | · |
-| Variants of anything: twelve windows drawn by seed over their width,… | structural | 4 | 3 10 | · |
-| What matters: which of a block's inputs move which of its outputs, a… | finance | 6 | 5 10 | · |
+| A body from its measured segments, its math on every part | life | 9 | 2 3 10 | · |
+| Metals, coloured by their physics: fourteen polished metals, each it… | manufacturing | 47 | 2 3 8 10 | · |
+| Steel, finished five ways: turned, ground, polished, bead blasted an… | manufacturing | 19 | 2 3 8 10 | · |
+| Colours with no dye: titanium anodised from 10 to 100 volts, and ste… | manufacturing | 65 | 2 3 8 10 | · |
+| One shape, eight looks: bare steel, aluminium and copper coloured by… | manufacturing | 22 | 2 3 10 | · |
+| Paint jobs and wear: a striped panel new and worn, a two-tone drum, … | manufacturing | 19 | 2 3 10 | · |
+| Fit to a target: one node that sizes anything to what is asked of it… | finance | 4 | 1 3 10 | it makes things and never shows them |
 | Choosing and fitting: a 40 kN/m coil spring as light as can be, 1.3 … | finance | 4 | 3 10 | · |
-| Engineering compiler: an inline four carried through the compiler's … | mechanical | 12 | 2 5 6 10 | it makes things and never shows them |
-| Compiler correction (stage 27): an inline four held to two requireme… | vehicles | 9 | 2 4 5 6 10 | · |
-| Controls you work while it runs: a stick drives the cart (the arrow … | structural | 15 | 1 2 3 8 10 | it places things itself and never checks whether they run into each other or keep their room |
-| Export: an M8 bolt as exact solids, written as STEP (named, coloured… | mechanical | 5 | 2 10 11 | · |
-| Blind judge: the Monte Carlo drawn from three sides and shown to a v… | vehicles | 6 | 2 5 10 | it makes things and never shows them |
+| Controls you work while it runs: a stick drives the cart (the arrow … | mechanical | 8 | 1 2 10 | · |
+| Export: an M8 bolt as exact solids, written as STEP (named, coloured… | mechanical | 5 | 3 10 11 | · |
 | Prompt trial: four ways of asking an image model for one thing, each… | software | 3 | 4 10 | · |
-| Fit in parallel: the highest speed an engine holds (its valves not f… | finance | 4 | 3 10 | it makes things and never shows them |
-| Run many at once: what moves an engine's valve float and its least f… | finance | 3 | 5 10 | · |
-| Difference: the Monte Carlo as Chevrolet sold it against the one in … | mechanical | 6 | 2 5 10 | · |
 | Trade-offs: a coil spring as light as can be and as stiff as can be,… | finance | 5 | 4 10 | · |
-| Pipelines tried: every recipe for fitting a model to a picture run o… | vehicles | 7 | 2 4 5 9 10 | it makes things and never shows them |
-| Chevrolet Monte Carlo SS (2004), built from its first parts: its 3.8… | mechanical | 7 | 2 5 10 | · |
-| Materials from their phases: carbon fibre and epoxy, thermal paste a… | structural | 16 | 2 3 5 8 10 | · |
-| What it is made of, and what it carries: a copper and an aluminium r… | structural | 28 | 2 3 5 6 10 | · |
-| Two agents: one goes to sit, opening the way; one keeps within a lea… | structural | 11 | 1 2 6 7 10 | · |
-| An agent opens a door: it sees it, walks to it, takes hold, pulls; t… | structural | 10 | 2 4 6 7 10 | · |
-| Who notices what: a car running, a person behind it, one at its door… | vehicles | 11 | 2 3 4 7 10 | · |
-| What things give off and let you do: a house and a car, tagged from … | structural | 11 | 2 3 4 7 10 | · |
-| Lines: one section, any material, any route (a battery cable, a road) | mechanical | 17 | 1 2 3 4 10 | · |
-| The autopilot on the Corolla: checked, repaired, checked again, what… | mechanical | 12 | 2 3 4 10 | · |
-| A battery placed by the solver: where it goes, why, and what it give… | mechanical | 13 | 2 3 4 10 | · |
-| Fields over the engine bay: what each part needs, and maps of heat, … | mechanical | 16 | 2 3 4 10 | · |
-| A car down to its bolts: tyres made in depth, a shared battery, take… | mechanical | 10 | 2 3 5 10 | · |
-| A truck from the ground up: axles, then tyres, then batteries | mechanical | 17 | 2 3 5 10 | · |
-| An electric car's pack: 3,360 cells, one stored | mechanical | 10 | 2 3 5 10 | · |
-| A computer down to the transistor: FinFET, cell, die, package, board… | electrical | 14 | 2 3 5 10 | · |
-| Physics: a steel ball let go into a tower of wooden blocks | mechanical | 10 | 2 3 6 10 | it places things itself and never checks whether they run into each other or keep their room |
-| Physics: a cart on two motor-driven wheels | mechanical | 15 | 2 3 6 10 | it places things itself and never checks whether they run into each other or keep their room |
-| Motion: a door swinging, and the room its swing needs | structural | 11 | 2 3 5 6 10 | · |
-| Physics: a pendulum on a hinge | mechanical | 6 | 2 3 6 10 | · |
-| Mating: a door set in its wall by their frames | structural | 5 | 2 3 5 10 | it has what plays with time, and no clock |
-| Clear away: a field of grass, cleared where a road goes | structural | 9 | 2 3 5 10 | · |
-| Seeds, one of each: window, door, toilet, sink, bed, car, stop light | structural | 20 | 2 3 5 10 | · |
-| Ground: a foot of grass, then a whole terrain of it | structural | 6 | 2 3 5 10 | · |
-| Streets: a road and a stop light, then a road system | structural | 6 | 2 3 5 10 | · |
-| A neighbourhood, then a city, from seeds | structural | 6 | 2 3 5 10 | · |
-| A city from a few nodes: motor, drone, swarm, buildings | structural | 10 | 2 3 5 10 | · |
-| Parts in 3D: a bolt sized from its load, drawn whole | mechanical | 12 | 1 2 4 8 9 10 | · |
+| Materials from their phases: carbon fibre and epoxy, thermal paste a… | manufacturing | 16 | 2 3 5 8 10 | · |
+| What it is made of, and what it carries: a copper and an aluminium r… | mechanical | 26 | 2 3 5 6 10 | · |
+| Physics: a steel ball let go into a tower of wooden blocks | mechanical | 10 | 2 6 10 | · |
+| Physics: a cart on two motor-driven wheels | mechanical | 24 | 2 6 10 | · |
+| Physics: a pendulum on a hinge | mechanical | 10 | 2 6 10 | · |
+| Parts in 3D: a bolt sized from its load, drawn whole | mechanical | 12 | 1 3 4 5 8 9 10 | · |
 | Cantilever: how far it bends, for every length | structural | 17 | 1 5 8 10 11 | · |
 | Bolt: shear, tightening torque and margin | mechanical | 13 | 1 5 8 10 11 | · |
 | Business: cash flow, loan and what it is worth | finance | 12 | 1 8 9 10 | · |
 | Electrical: a resistor heating, swept over current | electrical | 11 | 1 5 8 10 11 | · |
 | Paste a bolt onto anything: one cap screw stood on a plate, a round … | mechanical | 15 | 2 3 5 10 | · |
-| Cut by the standards: a bearing's housing and its shaft, a dowel's h… | mechanical | 25 | 2 3 10 | it places things itself and never checks whether they run into each other or keep their room |
+| Cut by the standards: a bearing's housing and its shaft, a dowel's h… | mechanical | 25 | 2 3 10 | · |
 | The cover follows the bore: widen the bore and the bolt circle, both… | structural | 16 | 1 2 3 9 10 | · |
+| Nothing can overlap: a starter motor put together by operations, its… | mechanical | 13 | 2 10 | · |
+| Common pieces: bolts, screws, nuts, washers, a standoff, a plate wit… | mechanical | 12 | 2 3 10 | · |
+| Common pieces: copper wire bare and insulated, a winding on its bobb… | electrical | 13 | 2 3 10 | · |
+| Matings: two plates bolted twice, a wire's stripped end in its termi… | mechanical | 17 | 2 3 10 | · |
+| Common pieces: angles, a channel, an I-beam and a tee, a hollow box,… | manufacturing | 11 | 2 3 10 | · |
+| Built from pieces: a small DC motor, its rotor wound, its magnets ro… | mechanical | 3 | 2 10 | · |
+| Built from pieces: a switch box, a board with its LED and push butto… | mechanical | 10 | 2 3 10 | · |
+| Pipes that turn: a copper run with bends and an elbow, a plate turne… | mechanical | 11 | 2 3 10 | · |
+| Electronic pieces: a resistor, two capacitors, a transistor, cells, … | electronics | 14 | 2 3 10 | · |
+| Mechanical pieces: bearings, a gear, a pulley, an L bracket, a dowel… | mechanical | 13 | 2 3 10 | · |
+| Small builds from pieces: two 18650 cells boxed under a lid, a 608 b… | mechanical | 14 | 2 3 10 | · |
+| A desk fan: the small DC motor in its housing, four pitched blades r… | mechanical | 24 | 2 5 10 | · |
+| A small robot base: a motor on each side driving its wheel, a batter… | mechanical | 19 | 2 3 5 10 | · |
+| A pipe loop and its tank: copper runs with bends, elbows and couplin… | mechanical | 12 | 2 3 5 10 | · |
+| A quadcopter: the small motor with a two-blade prop, made once and r… | mechanical | 23 | 2 3 5 10 | · |
+| Turned pieces: DIP ICs of 8 and 16 leads, a DC jack with its plug in… | mechanical | 12 | 2 3 10 | · |
 
 ## Nodes no starter board uses yet
 
-95 of 295 (laws aside): Accuracy, four ways (silhouette, features, surface, dimensions), Add, Ask Claude, Battery runtime at constant power, Body fitted to a picture (analysis by synthesis), Bore where it passes, Break-even analysis (cost–volume–profit), Chain round wheels, Choose, Claude (Anthropic Messages API), Claude builds a board, Coil spring, made and loaded, Compare, Compound interest (future value), Cone, Conservation balance (in − out − accumulation), Critical path method (CPM), Crossing, Cut gear or sprocket, Daily photovoltaic energy yield, Dense outline on the image's edges (active contour, one step), Divide, Exact solids (B-rep, OpenCascade), Extrude, Fastener (any), Feed the proposals in, Filament for a print, Floor plan, Frame, Gemini: draw from words, Gemini: look at pictures, Geometry fitted to its features (windows, flares, wing, skirts; the intake taken off the picture), Gross margin and markup, Higgsfield: pictures and video, Hole, Integral, Interference two ways (exact booleans, the rules), Internal rate of return, Joints solved together, Keep where, LED series current-limiting resistor, Laws by field, List of numbers, Machining time, Made whole (the attention-to-detail pass and its critic), Mate by a measure, Mirror, Move rows, Negative of an interface, Next best view or measurement (uncertainty ranking), Onto a shaft, Onto the ground, Overall equipment effectiveness (OEE), PID loop on a lag, Pass, Photogrammetric dimensions (back-projection onto its middle plane), Picture from words (image model), Point along, Power, Quantity, RC low-pass cutoff frequency (−3 dB), Relative change (percentage), Resistive voltage divider (unloaded), Round, Rows on a grid, Rules over rows, Same-camera view (z-buffered render), Search the web (Wikidata), Side by side from the same camera, Signal cycle, Silhouette comparison (IoU, signed contour error), Silhouette rendering from a camera, Slope, Solve for zero, Solve through laws, Sort, Spindle speed, Spring under load, Stored part (the built-parts library), Straight-line depreciation, Stress three ways (CalculiX, the book, our frame), Tether, Through time, Turned part, Unit converter, Variant, Wall, What a material is, What each touches, Winding, Wound roll, Yes / no, ZenRows: read a web page, Zone, fal.ai: draw from words (FLUX).
+251 of 385 (laws aside): Add, Agent, Air tube, Aluminium extrusion, Angle bracket (timber), Ask Claude, Audio jack, Autopilot, Axial diode, Axial fan, Ball valve, Bar (flat, square, round), Battery pack, Battery runtime at constant power, Bent pipe, Blind judge (vision model), Blind rivet, Block magnet, Bore where it passes, Bought part (its envelope), Branch into a side, Break-even analysis (cost–volume–profit), Brick or block, Brushed DC motor (can), Bumper, Button head screw, Buzzer, Cable tie, Cap nut, Carriage bolt, Castor, Check a piece against its table row, Check valve, Choose, Claude (Anthropic Messages API), Claude builds a board, Clear away, Clevis pin, Coil spring, made and loaded, Coiled spring, Compare, Compile research, Compile: bill of materials and its audit, Compile: correct (failed requirements fitted, re-checked), Compile: exact solids (B-rep), Compile: release gate and package, Compile: start (inputs, requirements, parameters), Compile: verify (heat, requirements), Compound interest (future value), Cone, Conservation balance (in − out − accumulation), Copper capillary fitting, Copper tube (EN 1057), Countersunk screw, Critical path method (CPM), Crystal (HC-49), D-sub connector, DC gear motor, Daily photovoltaic energy yield, Deck screw (countersunk wood screw), Development board, Difference (any two), Disc magnet, Display module, Divide, Drawer slide, Exact solids (B-rep, OpenCascade), Extrude, Extrusion corner bracket, Feed the proposals in, Filament for a print, Fit in, Flange bearing (UCF), Flange gasket, Flange nut, Floor plan, Follow a path, Forever, Frame, GT2 belt loop, Gas emission and dispersion, Gas strut, Gemini: draw from words, Gemini: look at pictures, Goal, Gross margin and markup, Heat exposure check, Heat-set insert, Hex standoff, Higgsfield: pictures and video, Hobby servo, Hole, Hose barb, Hose clamp, How finely is it made?, Integral, Internal rate of return, Into the inventory, It is, Its mates, measured, Its parts, and theirs, Joints solved together, Joist hanger, Keep where, LED series current-limiting resistor, Large washer, Laws by field, Lead screw, Lead screw nut, Line, Linear ball bushing (LMxUU), Linear bushing block (SCxUU), List of numbers, Lithium cell, Loop round a block, Machining time, Made whole (the attention-to-detail pass and its critic), Map of the space, Maps as one cost, Mate, Mate by a measure, Micro switch, Miniature rail and carriage (MGN), Mirror, Modular jack (RJ45, RJ11), Move rows, NEMA motor plate, Nail (common), Needle valve, Negative of an interface, Nyloc nut, O-ring, Onto a shaft, Onto a surface (any outline, laid on and following it), Onto the ground, Overall equipment effectiveness (OEE), PCB relay, PID loop on a lag, PVC-U pipe, PVC-U solvent fitting, Pan head screw, Parallel key, Pass, Pattern of, Perfboard, Piano hinge, Pick by duty, Pick one, Picture from words (image model), Pillow block (UCP), Pipe by NPS, Pipe flange (ASME B16.5), Pipe flange (EN 1092-1 PN6), Place a part, Point along, Power, Proximity and mates, Pull handle, Push-in fitting, Quantity, RC low-pass cutoff frequency (−3 dB), Reinforcing bar (B500B), Relative change (percentage), Repairs, Research notes, Resistive voltage divider (unloaded), Retaining ring, Ring, Rivet nut, Roll pin, Round, Round shaft, Route, Rows on a grid, Rubber foot, Rules over rows, Run of tube, Say why, Scatter, Screw terminal block, Search the web (Wikidata), Sensitivity (elementary effects), Set a column, Shaft collar, Shaft coupler, Sheet (board, plastic or metal), Shoulder screw, Show a map, Signal cycle, Size a line, Slider, Slope, Soft hose, Solderless breadboard, Solve for zero, Solve through laws, Sort, Spawn, Sphere, Spindle speed, Split lock washer, Split pin, Spring under load, Square nut, Star knob, Starting battery, Steel angle (equal or unequal), Steel beam (IPE, HEA, HEB, UPN), Steel hollow section (SHS, RHS, CHS), Stepper motor (NEMA frame), Stored part (the built-parts library), Straight-line depreciation, Stress three ways (CalculiX, the book, our frame), Sweep (stress test), Swept envelope, T-slot nut, TO-220 part, Tactile switch, Take apart, Take out a piece, Tank, Terrain, Tether, Text, Threaded pipe fitting, Threaded rod, Through time, Timber (lumber), Tube, Turn, USB receptacle, Unit converter, Variants of anything (none twice), Wall of bricks or blocks, Wall plug, Wall with an opening, Wedge anchor, What a material is, What each part needs, What each touches, What is missing, What it gives off, What it lets you do, Wheel, Who notices what, Wing nut, Wood screw, Yes / no, ZenRows: read a web page, Zone, fal.ai: draw from words (FLUX).

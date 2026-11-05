@@ -559,10 +559,10 @@ Each law's worked example given, its output sought through the other laws alone 
 
 | Table | Defined in | Holds | Read by |
 | --- | --- | --- | --- |
-| handbook materials | `src/data/materials.ts` | E, ν, yield, ultimate, elongation, conductivity, friction, restitution, colour; source and confidence; ids like steel.a36 | `nexus/blocks.ts`, `nexus/machines.ts`, `nexus/matter.ts`, `nexus/navigate.ts` |
+| handbook materials | `src/data/materials.ts` | E, ν, yield, ultimate, elongation, conductivity, friction, restitution, colour; source and confidence; ids like steel.a36 | `nexus/blocks.ts`, `nexus/matter.ts`, `nexus/navigate.ts` |
 | thermal | `src/engineering/thermal.ts` | c, k, emissivity by handbook id | `engineering/dcmotor.ts`, `nexus/blocks.ts`, `nexus/graph.ts`, `nexus/matter.ts` |
 | fusion | `src/engineering/fusion.ts` | melting, expansion, bond, base element by handbook id | `nexus/matter.ts` |
-| density | `src/nexus/mass.ts` | density by the ids parts carry (typical) | `nexus/assembly.ts`, `nexus/blocks.ts`, `nexus/brep.ts`, `nexus/compiler.ts`, `nexus/components.ts`, `nexus/drivetrain.ts`, `nexus/engines.ts`, `nexus/gauntlet.ts`, `nexus/graph.ts`, `nexus/kits.ts`, `nexus/loads.ts`, `nexus/machines.ts`, `nexus/madeof.ts`, `nexus/matter.ts`, `nexus/sim.ts`, `nexus/view/kit3d.ts`, `nexus/view/nodes3d.ts` |
+| density | `src/nexus/mass.ts` | density by the ids parts carry (typical) | `nexus/assembly.ts`, `nexus/blocks.ts`, `nexus/brep.ts`, `nexus/compiler.ts`, `nexus/components.ts`, `nexus/gauntlet.ts`, `nexus/graph.ts`, `nexus/kits.ts`, `nexus/madeof.ts`, `nexus/matter.ts`, `nexus/parts/maker.ts`, `nexus/sim.ts`, `nexus/view/kit3d.ts`, `nexus/view/nodes3d.ts`, `nexus/view/vibe.ts` |
 | composition | `src/nexus/elements.ts` | alloys, formulas, blends down to elements, by the ids parts carry | `nexus/inventory.ts`, `nexus/life/index.ts`, `nexus/matter.ts`, `nexus/pieces.ts` |
 | service limit | `src/nexus/make/rules.ts` | most service temperature, °C, by the ids parts carry | `nexus/placement/line.ts`, `nexus/placement/model.ts`, `nexus/placement/repair.ts`, `nexus/placement/solve.ts` |
 | the material system | `src/nexus/matter.ts` | every part material id: its family, what it is exactly or that it is unspecified, its handbook grade (its own, or a stand-in, said); every property with its source and evidence | `nexus/blocks.ts`, `nexus/fea.ts`, `nexus/graph.ts`, `nexus/interfaces.ts`, `nexus/loads.ts`, `nexus/madeof.ts`, `nexus/make/rules.ts`, `nexus/sim.ts` |
@@ -570,7 +570,7 @@ Each law's worked example given, its output sought through the other laws alone 
 | wood species | `src/data/woods.ts` | species by the Wood Handbook: specific gravity, MOE, MOR at 12 % moisture | `nexus/mass.ts`, `nexus/matter.ts` |
 | mixes | `src/data/mixes.ts` | mixes by what goes into a cubic metre: their density and make-up follow | `nexus/elements.ts`, `nexus/mass.ts`, `nexus/matter.ts` |
 | words to matter | `src/nexus/kinds/core.ts` | a word → inventory id, density, label | **nothing** |
-| spring wires | `src/engineering/springs.ts` | ASTM spring wires: A, m, G, E, density | `nexus/blocks.ts`, `nexus/engines.ts`, `nexus/loads.ts`, `nexus/seeds.ts` |
+| spring wires | `src/engineering/springs.ts` | ASTM spring wires: A, m, G, E, density | `nexus/blocks.ts`, `nexus/common.ts`, `nexus/loads.ts`, `nexus/seeds.ts` |
 | adhesives | `src/engineering/joining.ts` | adhesives by the handbook categories | **nothing** |
 | gases | `src/nexus/aware/gas.ts` | molar mass, smell, harm, flammable limits | `nexus/aware/sense.ts`, `nexus/navigate.ts` |
 | edges | `src/nexus/finish.ts` | edge radius by material | **nothing** |

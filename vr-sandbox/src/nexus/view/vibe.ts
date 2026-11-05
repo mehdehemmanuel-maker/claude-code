@@ -371,7 +371,7 @@ async function askPlan(q: string, failing: string[] = []): Promise<void> {
   chat.push({ who: 'me', html: failing.length ? `<span class="k">✦</span> Ask again with the ${failing.length} line${failing.length === 1 ? '' : 's'} that failed` : esc(q.trim()) }); keepChat();
   const live: Said = { who: 'ai', html: '<div class="live"><span class="dots">One call: writing a plan</span></div>' }; chat.push(live); drawChat();
   try {
-    const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'plan', request: failing.length ? q : before() + q.trim(), board: nodesOf(board).length ? board : undefined, ...(failing.length ? { failing } : {}) }) });
+    const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'plan', request: failing.length ? q : before() + q.trim(), board: nodesOf(board).length ? board : undefined, blocks: savedBlocks(), ...(failing.length ? { failing } : {}) }) });
     if (res.status === 404 || res.status === 405) throw new Error('this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand works without it; to plan with Claude, open the app the session serves (npm run app).');
     const r = await res.json() as PlanRun & { error?: string };
     if (r.tokens) spent(r.tokens);

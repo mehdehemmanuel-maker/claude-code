@@ -88,7 +88,7 @@ const boardKeys = new WeakMap<Board, string>();
 /** A board's shape and settings as one key (kept on it, so a library block's board is hashed once). */
 export function boardKey(b: Board): string {
   let k = boardKeys.get(b); if (k) return k;
-  const ns = nodesOf(b).map((n) => n.id).sort(), es = edgesOf(b).filter(isWire).map((e) => `${e.from}.${e.out}>${e.to}.${e.in}`).sort();
+  const ns = nodesOf(b).map((n) => n.id).sort(), es = edgesOf(b).filter(isWire).map((e) => `${e.from}.${e.out}>${e.to}.${e.in}${e.order !== undefined ? `#${e.order}` : ''}`).sort();
   k = hash(`${ns.map((id) => { const n = b.nodes[id]!; return `${id}=${n.block}:${digest(n.set ?? {})}:${n.inner ? boardKey(n.inner) : ''}`; }).join(';')}|${es.join(';')}`);
   boardKeys.set(b, k); return k;
 }
@@ -133,7 +133,11 @@ export function groupBlock(inner: Board, meta: Partial<BlockDef> = {}): BlockDef
       const x = inner.nodes[n.id]!; if (x.block !== 'group.in' && x.block !== 'group.out') continue;
       const s = { ...defaultsOf(block(x.block)!), ...(x.set ?? {}) }, unit = String(s.unit ?? '');
       // a seed's input says what it is, what it is when not given, and what it may be picked from
-      const type = String(s.type || 'any') as Type, dv = String(s.default ?? ''), choices = String(s.choices ?? '').split('|').map((c) => c.trim()).filter(Boolean);
+      let type = String(s.type || 'any') as Type, dv = String(s.default ?? ''), choices = String(s.choices ?? '').split('|').map((c) => c.trim()).filter(Boolean);
+      // (an input bound to inner settings (`into`, NC5) takes the first one's type, choices and value where it says none)
+      const to = x.block === 'group.in' && String(s.into ?? '').trim() ? (() => { try { return intoOf(s.into)[0]; } catch { return undefined; } })() : undefined;
+      if (to) { const tn = inner.nodes[to[0]], st = tn ? blockOf(tn)?.settings?.find((q) => q.key === to[1]) : undefined;
+        if (st) { if (type === 'any') type = (st.type === 'number' || st.type === 'quantity' ? 'number' : st.type === 'boolean' ? 'boolean' : 'text') as Type; if (!choices.length && st.choices) choices = st.choices.map(String); if (dv === '') dv = String(tn!.set?.[to[1]] ?? st.default ?? ''); } }
       const def = dv === '' ? undefined : type === 'number' || type === 'integer' ? Number(dv) : type === 'boolean' ? dv === 'true' : dv;
       const p: PortDef = { name: String(s.name), type, ...(unit ? { unit } : {}), label: String(s.says || s.name), ...(def !== undefined ? { default: def, optional: true } : {}), ...(choices.length ? { choices } : {}) };
       if (x.block === 'group.in') ins.push(p); else if (x.block === 'group.out') outs.push(p);
@@ -422,8 +426,10 @@ export class Engine {
     if (b.run) { const o = b.run(inputs, { set, code: this.env.code, ai: this.env.ai, signal: this.env.signal, time: this.env.time ?? 0 }); return o instanceof Promise ? await o : o; }
     if (!b.graph) throw new Error(`${b.name} has nothing to run`);
     // a group, or a block made of a pipeline: its own board, with what came in
-    let k = this.kids.get(id); if (!k || k.board !== b.graph) { k = new Engine(b.graph, this.env, this.memo); this.kids.set(id, k); }
-    return runInside(k, b.graph, inputs);
+    // (its inputs bound to inner settings set into a copy of its board, one for each set of values: NC5)
+    const g = boundBoard(b.graph, inputs);
+    let k = this.kids.get(id); if (!k || k.board !== g) { k = new Engine(g, this.env, this.memo); this.kids.set(id, k); }
+    return runInside(k, g, inputs);
   }
   /** The engine running a group's board, once it has run. */
   inside(id: string): Engine | undefined { return this.kids.get(id); }
@@ -461,10 +467,12 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
  *  not blank, as it lists those sources by id or label, split by commas; any it does not list after, by id (decision 0026:
  *  the order the wires were made was tried and changed 21 of 43 many-inputs on the starter boards, so it is said). */
 export function manyOrder(b: Board, order: unknown): (a: LiveEdge, c: LiveEdge) => number {
-  const byId = (a: LiveEdge, c: LiveEdge) => (a.from < c.from ? -1 : a.from > c.from ? 1 : 0);
+  // (a wire made in place of another (a fold, an opening, a merge) keeps that wire's place: its order key, else its
+  // source's id (spec 13, 2.7; fault D32))
+  const keyOf = (e: LiveEdge) => e.order ?? e.from, byId = (a: LiveEdge, c: LiveEdge) => { const x = keyOf(a), y = keyOf(c); return x < y ? -1 : x > y ? 1 : 0; };
   const names = typeof order === 'string' ? order.split(',').map((x) => x.trim()).filter(Boolean) : [];
   if (!names.length) return byId;
-  const at = (e: LiveEdge) => { const k = names.indexOf(e.from); if (k >= 0) return k; const l = names.indexOf(String(b.nodes[e.from]?.label ?? '')); return l >= 0 ? l : names.length; };
+  const at = (e: LiveEdge) => { for (const k of [names.indexOf(e.from), e.order !== undefined ? names.indexOf(e.order) : -1]) if (k >= 0) return k; const l = names.indexOf(String(b.nodes[e.from]?.label ?? '')); return l >= 0 ? l : names.length; };
   return (a, c) => at(a) - at(c) || byId(a, c);
 }
 
@@ -488,9 +496,11 @@ export const emptyBoard = (title = 'Pipeline'): Board => ({ title, kind: 'pipeli
 // ---- trees: fold, open, cut back ------------------------------------------------------------------------------------
 /**
  * Folds nodes into one group node holding them: wires crossing into the selection become the group's inputs, wires
- * leaving it its outputs, each named by the port it was. What the board computes is the same before and after.
+ * leaving it its outputs, each named by the port it was. What the board computes is the same before and after: each wire
+ * made in place of another keeps that wire's place in a many-input (its `order`, fault D32). `bind` makes chosen inner
+ * settings inputs of the group, by name ({ size: 'core.c; mag.c' }), each set where it was (NC5).
  */
-export function collapse(b: Board, ids: string[], title = 'Group', gid = uid('g')): { board: Board; id: string; folded: string[] } {
+export function collapse(b: Board, ids: string[], title = 'Group', gid = uid('g'), bind: Record<string, string> = {}): { board: Board; id: string; folded: string[] } {
   const sel = new Set(ids.filter((id) => b.nodes[id] && !b.nodes[id]!.deleted));
   if (!sel.size) throw new Error('nothing chosen to fold');
   // what lies between two chosen nodes (fed by one, feeding another) is folded with them, or the group would feed
@@ -522,7 +532,7 @@ export function collapse(b: Board, ids: string[], title = 'Group', gid = uid('g'
         inner.nodes[nid] = { label: `in ${name}`, block: 'group.in', set: { name, type, unit: p?.unit || (q?.unit ?? '') }, x: cx - 260, y: cy + 90 * k++ };
         outer.edges[uid('w')] = { from: e.from, to: gid, rel: 'feeds', out: e.out, in: name };
       }
-      inner.edges[uid('w')] = { from: `${gid}_in_${name}`, to: e.to, rel: 'feeds', out: 'value', in: e.in };
+      inner.edges[uid('w')] = { from: `${gid}_in_${name}`, to: e.to, rel: 'feeds', out: 'value', in: e.in, order: e.order ?? e.from };
     } else {
       // out of the selection: one group output for each source port inside
       const src = `${e.from}.${e.out}`;
@@ -533,31 +543,80 @@ export function collapse(b: Board, ids: string[], title = 'Group', gid = uid('g'
         inner.nodes[nid] = { label: `out ${name}`, block: 'group.out', set: { name, type: p?.type ?? 'any', unit: p?.unit ?? '' }, x: cx + 260, y: cy + 90 * k++ };
         inner.edges[uid('w')] = { from: e.from, to: nid, rel: 'feeds', out: e.out, in: 'value' };
       }
-      outer.edges[uid('w')] = { from: gid, to: e.to, rel: 'feeds', out: name, in: e.in };
+      outer.edges[uid('w')] = { from: gid, to: e.to, rel: 'feeds', out: name, in: e.in, order: e.order ?? e.from };
     }
   }
-  outer.nodes[gid] = { label: title, inner, x: cx, y: cy };
+  const set: Record<string, unknown> = {};
+  for (const [name, into] of Object.entries(bind)) { if (inNames.has(name)) throw new Error(`the group already has an input "${name}"`); inNames.add(name); set[name] = bindSetting(inner, name, into, `${gid}_in_${name}`).value; }
+  outer.nodes[gid] = { label: title, inner, x: cx, y: cy, ...(Object.keys(set).length ? { set } : {}) };
   return { board: outer, id: gid, folded: [...sel] };
+}
+/** Where an `into` points: each "node.setting", split by semicolons. */
+function intoOf(into: unknown): [string, string][] {
+  return String(into ?? '').split(';').map((t) => t.trim()).filter(Boolean).map((t) => { const k = t.lastIndexOf('.'); if (k <= 0 || k === t.length - 1) throw new Error(`"${t}": a setting is bound as "node.setting"`); return [t.slice(0, k), t.slice(k + 1)]; });
+}
+/** An inner setting made an input of the group (NC5): a group.in of that name whose `into` names the settings it sets
+ *  (one or several, "core.c; mag.c"), its type, choices and default the first one's as it is now. Refused for a node or a
+ *  setting not there. Returns the group.in's id and the value it starts at. */
+export function bindSetting(inner: Board, name: string, into: string, id = `in_${name}`, says = ''): { id: string; value: unknown } {
+  const ts = intoOf(into); if (!ts.length) throw new Error(`${name}: nothing to set`);
+  let first: { st: NonNullable<BlockDef['settings']>[number]; v: unknown } | undefined;
+  for (const [nid, key] of ts) { const n = inner.nodes[nid]; if (!n || n.deleted) throw new Error(`${name} sets ${nid}.${key}: there is no node "${nid}" inside`); const d = blockOf(n), st = d?.settings?.find((q) => q.key === key); if (!d || !st) throw new Error(`${name} sets ${nid}.${key}: ${d?.name ?? nid} has no setting "${key}"`); first ??= { st, v: n.set?.[key] ?? st.default }; }
+  let k = 2, nid = id; while (inner.nodes[nid]) nid = `${id}${k++}`;
+  const { st, v } = first!;
+  inner.nodes[nid] = { label: `in ${name}`, block: 'group.in', set: { name, type: st.type === 'number' || st.type === 'quantity' ? 'number' : st.type === 'boolean' ? 'boolean' : 'text', unit: '', default: String(v ?? ''), choices: (st.choices ?? []).join('|'), says: says || st.label, into } };
+  return { id: nid, value: v };
+}
+const bounds = new WeakMap<Board, Map<string, Board>>();
+/** A group's board with what comes in set into the inner settings its inputs are bound to (`into`, NC5): a copy for each
+ *  set of bound values, kept, so the stored board, shared by every use of the block, is never written. A board with
+ *  nothing bound is itself. Refused: a node or setting not there, and a setting whose value changes the node's ports. */
+export function boundBoard(g: Board, inputs: Record<string, unknown>): Board {
+  const bs: { name: string; to: [string, string][] }[] = [];
+  for (const n of nodesOf(g)) { const x = g.nodes[n.id]!; if (x.block === 'group.in' && String(x.set?.into ?? '').trim()) bs.push({ name: String(x.set!.name), to: intoOf(x.set!.into) }); }
+  if (!bs.length) return g;
+  const vals = bs.map((x) => inputs[x.name]), key = digest(vals);
+  let m = bounds.get(g); if (!m) bounds.set(g, (m = new Map()));
+  const kept = m.get(key); if (kept) return kept;
+  const c: Board = { ...g, nodes: { ...g.nodes } };
+  bs.forEach((x, j) => { const v = vals[j]; if (v === undefined) return;
+    for (const [nid, k] of x.to) {
+      const n = c.nodes[nid]; if (!n || n.deleted) throw new Error(`${x.name} sets ${nid}.${k}: there is no node "${nid}" inside`);
+      const d = blockOf(n); if (!d || !d.settings?.some((q) => q.key === k)) throw new Error(`${x.name} sets ${nid}.${k}: ${d?.name ?? nid} has no setting "${k}"`);
+      const set = { ...defaultsOf(d), ...(n.set ?? {}) }, was = portsOf(d, set), now = portsOf(d, { ...set, [k]: v }), sig = (p: Ports) => [...p.inputs, ...p.outputs].map((q) => `${q.name}:${q.type}`).join(',');
+      if (sig(was) !== sig(now)) throw new Error(`${x.name} sets ${nid}.${k}, which changes the ports of ${n.label || d.name}: a setting that gives other ports is not bound`);
+      c.nodes[nid] = { ...n, set: { ...(n.set ?? {}), [k]: v } };
+    } });
+  if (m.size >= 500) m.delete(m.keys().next().value!);
+  m.set(key, c); return c;
 }
 const avg = (v: number[]) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0);
 
-/** Opens a group back into the board it sits on: its nodes as they were, its wires joined through. */
+/** Opens a group back into the board it sits on: its nodes as they were, its wires joined through, each in the place in
+ *  a many-input the wire it replaces had (D32); an input bound to inner settings (`into`) writes its value into them, and
+ *  is refused when it is wired from another node (a setting is not wired). */
 export function expand(b: Board, gid: string): Board {
   const g = b.nodes[gid]; if (!g?.inner) throw new Error('not a group');
   const inner = g.inner, out: Board = { ...b, nodes: { ...b.nodes }, edges: { ...b.edges } };
   delete out.nodes[gid];
   const rename = new Map<string, string>();
   for (const n of nodesOf(inner)) { const x = inner.nodes[n.id]!; if (x.block === 'group.in' || x.block === 'group.out') continue; const nid = out.nodes[n.id] ? uid('n') : n.id; rename.set(n.id, nid); out.nodes[nid] = structuredClone(x); }
+  const gports = portsOf(groupBlock(inner), {}).inputs;
+  for (const n of nodesOf(inner)) { const x = inner.nodes[n.id]!; if (x.block !== 'group.in' || !String(x.set?.into ?? '').trim()) continue;
+    const name = String(x.set!.name); if (edgesOf(b).some((e) => isWire(e) && e.to === gid && e.in === name)) throw new Error(`${name} is wired in from another node, and it sets ${String(x.set!.into)}: a setting is not wired, so it is not opened`);
+    const v = g.set && name in g.set && g.set[name] !== '' ? g.set[name] : gports.find((p) => p.name === name)?.default;
+    if (v !== undefined) for (const [nid, k] of intoOf(x.set!.into)) { const to = out.nodes[rename.get(nid) ?? '']; if (to) to.set = { ...(to.set ?? {}), [k]: v }; } }
   const ins = new Map<string, LiveEdge[]>(), outs = new Map<string, { from: string; out: string }>();
   for (const e of edgesOf(inner)) {
     const f = inner.nodes[e.from]!, t = inner.nodes[e.to]!;
     if (f.block === 'group.in') { const name = String(f.set?.name); (ins.get(name) ?? ins.set(name, []).get(name)!).push(e); continue; }
     if (t.block === 'group.out') { outs.set(String(t.set?.name), { from: rename.get(e.from)!, out: e.out! }); continue; }
-    out.edges[out.edges[e.id] ? uid('w') : e.id] = { ...inner.edges[e.id]!, from: rename.get(e.from)!, to: rename.get(e.to)! };
+    const from = rename.get(e.from)!;
+    out.edges[out.edges[e.id] ? uid('w') : e.id] = { ...inner.edges[e.id]!, from, to: rename.get(e.to)!, ...(from !== e.from ? { order: e.order ?? e.from } : {}) };
   }
   for (const e of edgesOf(b)) {
-    if (e.to === gid && isWire(e)) { delete out.edges[e.id]; for (const w of ins.get(e.in!) ?? []) out.edges[uid('w')] = { from: e.from, to: rename.get(w.to)!, rel: 'feeds', out: e.out, in: w.in }; }
-    else if (e.from === gid && isWire(e)) { delete out.edges[e.id]; const s = outs.get(e.out!); if (s) out.edges[uid('w')] = { from: s.from, to: e.to, rel: 'feeds', out: s.out, in: e.in }; }
+    if (e.to === gid && isWire(e)) { delete out.edges[e.id]; for (const w of ins.get(e.in!) ?? []) out.edges[uid('w')] = { from: e.from, to: rename.get(w.to)!, rel: 'feeds', out: e.out, in: w.in, order: w.order ?? w.from }; }
+    else if (e.from === gid && isWire(e)) { delete out.edges[e.id]; const s = outs.get(e.out!); if (s) out.edges[uid('w')] = { from: s.from, to: e.to, rel: 'feeds', out: s.out, in: e.in, order: e.order ?? e.from }; }
     else if (e.from === gid || e.to === gid) delete out.edges[e.id];
   }
   return out;
@@ -618,7 +677,7 @@ export function mergeTwins(b: Board): { board: Board; merged: number } {
   for (const g of twins(b)) for (const dup of g.slice(1)) to.set(dup, g[0]!);
   for (const e of edgesOf(b)) {
     if (to.has(e.to)) out.edges[e.id] = { ...out.edges[e.id]!, deleted: true };
-    else if (to.has(e.from) && isWire(e)) out.edges[e.id] = { ...out.edges[e.id]!, from: to.get(e.from)! };
+    else if (to.has(e.from) && isWire(e)) out.edges[e.id] = { ...out.edges[e.id]!, from: to.get(e.from)!, order: e.order ?? e.from };
   }
   for (const dup of to.keys()) out.nodes[dup] = { ...out.nodes[dup]!, deleted: true };
   const merged = to.size;
@@ -653,12 +712,16 @@ export function suggest(b: Board, e?: Engine): Suggestion[] {
 }
 
 /** A group made a library block of its own, by name: placed anywhere after like any other, its board stored once. */
-export function makeBlock(b: Board, gid: string, meta: { id?: string; name: string; says?: string; domains?: string[]; by?: BlockDef['by'] }): { board: Board; block: BlockDef; duplicateOf?: string } {
+/** `settings` makes chosen inner settings its inputs, by name ({ size: 'core.c; mag.c' }): placed, a block of a few
+ *  settings (NC5), each starting as it was. */
+export function makeBlock(b: Board, gid: string, meta: { id?: string; name: string; says?: string; domains?: string[]; by?: BlockDef['by']; settings?: Record<string, string> }): { board: Board; block: BlockDef; duplicateOf?: string } {
   const g = b.nodes[gid]; if (!g?.inner) throw new Error('not a group');
-  const id = meta.id ?? `my.${meta.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${boardKey(g.inner).slice(0, 6)}`;
-  const d = groupBlock(g.inner, { id, name: meta.name, says: meta.says ?? `Made from a pipeline of ${nodesOf(g.inner).length} blocks`, domains: meta.domains ?? ['software'], by: meta.by ?? 'you' });
+  const inner = meta.settings && Object.keys(meta.settings).length ? structuredClone(g.inner) : g.inner, set: Record<string, unknown> = { ...(g.set ?? {}) };
+  for (const [name, into] of Object.entries(meta.settings ?? {})) set[name] = bindSetting(inner, name, into).value;
+  const id = meta.id ?? `my.${meta.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${boardKey(inner).slice(0, 6)}`;
+  const d = groupBlock(inner, { id, name: meta.name, says: meta.says ?? `Made from a pipeline of ${nodesOf(inner).length} blocks`, domains: meta.domains ?? ['software'], by: meta.by ?? 'you' });
   const r = register(d), out: Board = { ...b, nodes: { ...b.nodes } };
-  out.nodes[gid] = { label: meta.name, block: r.id, set: {}, x: g.x, y: g.y };
+  out.nodes[gid] = { label: meta.name, block: r.id, set, x: g.x, y: g.y };
   return { board: out, block: block(r.id) ?? d, ...(r.duplicateOf ? { duplicateOf: r.duplicateOf } : {}) };
 }
 
@@ -684,8 +747,10 @@ export function runnerOf(d: BlockDef): (inputs: Record<string, unknown>, set: Re
   if (d.run) return async (inputs, set) => { const o = d.run!(inputs, { set, time: 0 } as Ctx); return o instanceof Promise ? await o : o; };
   if (!d.graph) throw new Error(`${d.name} has nothing to run`);
   // (an input not given takes its default, as it would placed on a board: a window's frame colour when only its size moves)
-  const k = new Engine(d.graph, {}), dflt = Object.fromEntries(portsOf(d, defaultsOf(d)).inputs.filter((q) => q.default !== undefined).map((q) => [q.name, q.default]));
-  return (inputs) => runInside(k, d.graph!, { ...dflt, ...Object.fromEntries(Object.entries(inputs).filter(([, v]) => v !== undefined)) });
+  // (one engine for each bound copy of its board: its inputs bound to inner settings set into it, NC5)
+  const ks = new WeakMap<Board, Engine>(), dflt = Object.fromEntries(portsOf(d, defaultsOf(d)).inputs.filter((q) => q.default !== undefined).map((q) => [q.name, q.default]));
+  return (inputs) => { const all = { ...dflt, ...Object.fromEntries(Object.entries(inputs).filter(([, v]) => v !== undefined)) }, g = boundBoard(d.graph!, all);
+    let k = ks.get(g); if (!k) { k = new Engine(g, {}); ks.set(g, k); } return runInside(k, g, all); };
 }
 /** A library block run on its own with these inputs: its outputs (a seed's whole board, run where it is needed). */
 export async function runBlock(id: string, inputs: Record<string, unknown>, env: Env = {}): Promise<Outputs> {
@@ -711,9 +776,17 @@ function rangesOf(t: BlockDef, set0: Record<string, unknown>, text: string): Mov
     const known = listOf(m[1]!), bad = known ? opts.filter((o) => !known.includes(o)) : []; if (bad.length) throw new Error(`the ${t.name}'s ${m[1]} is not ${bad.join(' or ')}: it is one of ${known!.join(', ')}`);
     return { name: m[1]!, lo: 0, hi: opts.length - 1, isSet, opts }; });
 }
-/** What a worker must be handed to run a block: nothing for one built in (each worker has the library), its board for a
- *  pipeline folded by you. */
-function carryOf(t: BlockDef): { carry?: Carry } { return t.graph && t.by !== 'built in' ? { carry: { id: t.id, name: t.name, graph: t.graph, says: t.says, domains: t.domains } } : {}; }
+/** What a worker must be handed to run a block: nothing for one built in (each worker has the library); for a pipeline
+ *  folded by you, its board and every block not built in that its board reaches, at any depth, inner first, so a saved
+ *  block holding another runs there too (fault D34). */
+export function carryOf(t: BlockDef): { carry?: Carry[] } {
+  if (!t.graph || t.by === 'built in') return {};
+  const out: Carry[] = [], seen = new Set<string>([t.id]);
+  const walk = (g: Board): void => { for (const n of nodesOf(g)) { const x = g.nodes[n.id]!; if (x.inner) { walk(x.inner); continue; }
+    const d = x.block ? block(x.block) : undefined; if (!d?.graph || d.by === 'built in' || seen.has(d.id)) continue; seen.add(d.id); walk(d.graph); out.push({ id: d.id, name: d.name, graph: d.graph, says: d.says, domains: d.domains }); } };
+  walk(t.graph); out.push({ id: t.id, name: t.name, graph: t.graph, says: t.says, domains: t.domains });
+  return { carry: out };
+}
 /** A moved value at u, 0..1 across what it is moved over: a number in its range, a whole number, or one of its choices. */
 function valueAt(v: Moved, u: number): number | string { if (v.opts) return v.opts[Math.min(v.opts.length - 1, Math.floor(u * v.opts.length))]!; const x = v.lo + (v.hi - v.lo) * u; return v.int ? Math.round(x) : x; }
 /** The k-th point of Halton's sequence in base b: points that fill a range evenly, each new one in the biggest gap left. */

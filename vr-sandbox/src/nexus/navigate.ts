@@ -118,9 +118,9 @@ export function libraries(): Library[] {
     const hits = (id: string) => ch.filter((c) => idsOf.get(id)!.has(c)).length;
     if (top >= 0.5) for (const [id, x] of shares) if (x === top && hits(id) >= 2) found.set(id, [...(found.get(id) ?? []), { node: b.id, key: s.key, how: 'found' }]);
   }
-  // (the catalogue's sizes go into the Part node by their words; it draws those of the kinds designed in 3D, the rest are known by name and size)
+  // (the catalogue's sizes are known by name and size; the node that drew them by their words (card.part) is gone with the
+  // old makers (decision 0026): a size is built by its family's piece.* node)
   const drawn = (line: string) => DESIGNED.includes(line.split(' ')[0]!), lines = idsOf.get('catalogue')!, nDrawn = [...lines].filter(drawn).length;
-  found.set('catalogue', [{ node: 'card.part', key: 'what', how: 'found' }]);
   return L.map((l) => {
     const reach = [...(found.get(l.id) ?? [])];
     if (l.id === 'stock') return { ...l, count: idsOf.get(l.id)!.size, reach: [{ node: 'stock.part', key: 'id', how: 'found' }] };
@@ -144,7 +144,7 @@ export function useOf(l: Library, e: Entry): Pick<Found, 'add' | 'board'> {
   if (l.id === 'boards') return { board: e.id };
   if (l.id === 'inventory') return { add: { block: 'read', set: { id: `item:${e.id}`, kind: 'item' } } };
   if (l.id === 'stock') return { add: { block: 'stock.part', set: { id: e.id } } };
-  if (l.id === 'catalogue') return DESIGNED.includes(e.id.split(' ')[0]!) ? { add: { block: 'card.part', set: { what: e.id } } } : {};
+  if (l.id === 'catalogue') return {};
   const via = l.reach.find((r) => r.how === 'found' && r.key) ?? l.reach.find((r) => r.how === 'named');
   return via && via.node !== '*' ? { add: { block: via.node, ...(via.key ? { set: { [via.key]: e.id } } : {}) } } : {};
 }
@@ -227,7 +227,7 @@ export function search(q: string, most = 40): Found[] {
     for (const [e, lo] of lowered(l)) { const r = rank(lo.n, lo.i, lo.all); if (!r) continue;
       const f: Found = { library: l.id, libraryName: l.name, id: e.id, name: e.name, says: e.says, score: r > 0 ? r + (l.type === 'nodes' ? 3 : 0) : (3 * -r) / ws.length };
       (r > 0 ? out : partial).push({ ...f, ...useOf(l, e) }); } }
-  for (const line of searchCatalogue(ws.join(' '), 10)) { const d = DESIGNED.includes(line.split(' ')[0]!); out.push({ library: 'catalogue', libraryName: 'Catalogue sizes', id: line, name: line, says: d ? 'a standard size, drawn whole' : 'a standard size, known and not drawn yet', score: 4, ...(d ? { add: { block: 'card.part', set: { what: line } } } : {}) }); }
+  for (const line of searchCatalogue(ws.join(' '), 10)) { const d = DESIGNED.includes(line.split(' ')[0]!); out.push({ library: 'catalogue', libraryName: 'Catalogue sizes', id: line, name: line, says: d ? 'a standard size (its family\'s piece.* node builds it)' : 'a standard size, known and not drawn yet', score: 4 }); }
   const by = (a: Found, b: Found) => b.score - a.score || a.name.length - b.name.length;
   return [...out.sort(by), ...(out.length < most ? partial.sort(by) : [])].slice(0, most);
 }
@@ -256,15 +256,17 @@ export function flowOf(b: BlockDef): string {
 }
 
 // ---- discovery: what goes with what -------------------------------------------------------------------------------------
-let wiredKept: Map<string, number> | null = null, usedKept: Map<string, string[]> | null = null;
-/** How the starter flows wire one node into another (from → to, how many times), and where each node is used. */
-export function usage(): { wired: Map<string, number>; used: Map<string, string[]> } {
-  if (wiredKept && usedKept) return { wired: wiredKept, used: usedKept };
-  const wired = new Map<string, number>(), used = new Map<string, string[]>();
+let wiredKept: Map<string, number> | null = null, usedKept: Map<string, string[]> | null = null, sizeKept: Map<string, number> | null = null;
+/** How the starter flows wire one node into another (from → to, how many times), where each node is used, and how many
+ *  nodes each starter board has (the smallest that uses a block is its cheapest worked example: decision 0026). */
+export function usage(): { wired: Map<string, number>; used: Map<string, string[]>; size: Map<string, number> } {
+  if (wiredKept && usedKept && sizeKept) return { wired: wiredKept, used: usedKept, size: sizeKept };
+  const wired = new Map<string, number>(), used = new Map<string, string[]>(), size = new Map<string, number>();
   for (const [title, mk] of boards()) { const b = mk(); const blockOf = (id: string) => b.nodes[id]?.block ?? '';
-    for (const n of nodesIn(b)) { const k = n.block; if (k) { const u = used.get(k) ?? []; if (!u.includes(title)) u.push(title); used.set(k, u); } }
+    const ns = nodesIn(b); size.set(title, ns.length);
+    for (const n of ns) { const k = n.block; if (k) { const u = used.get(k) ?? []; if (!u.includes(title)) u.push(title); used.set(k, u); } }
     for (const e of wiresIn(b)) { const f = blockOf(e.from), t = blockOf(e.to); if (f && t) wired.set(`${f}>${t}`, (wired.get(`${f}>${t}`) ?? 0) + 1); } }
-  wiredKept = wired; usedKept = used; return { wired, used };
+  wiredKept = wired; usedKept = used; sizeKept = size; return { wired, used, size };
 }
 const fits = (out: Type, into: Type) => out === into || into === 'any' || (out === 'part' && into === 'assembly') || (out === 'assembly' && into === 'part') || (into.startsWith('list<') && out.startsWith('list<')) || (out === 'integer' && into === 'number');
 export interface Neighbour { id: string; name: string; why: string; score: number }

@@ -737,7 +737,7 @@ function nodeInspector(el: HTMLElement, id: string): void {
     ${ins ? `<h3>Inputs</h3>${ins}` : ''}
     ${into.length ? `<p class="src">${into.length} input${into.length > 1 ? 's' : ''} wired</p>` : ''}
     <h3>Results</h3><div id="iouts">${outsHtml(id)}</div>
-    <div class="btns">${n.inner ? '<button id="iOpen" class="hot">▣ Open inside</button><button id="iUnfold">Unfold</button><button id="iSave">Save to library</button>' : ''}${d?.graph && !n.inner ? '<button id="iCopy">Open a copy to change</button>' : ''}${n.block === 'view.3d' || n.block === 'card.part' ? '<button id="i3d" class="hot">⤢ See it in 3D, full screen</button>' : ''}${n.block === 'card.part' ? `<a href="./look.html?kit=part&words=${encodeURIComponent(String(stateOf(id)?.out?.name ? (n.set?.what ?? '') : ''))}" target="_blank"><button>Open in the part viewer</button></a>` : ''}<button id="iCut">Cut branch</button><button id="iDel">Delete</button>${d?.tests?.length ? '<button id="iTest">Run its tests</button>' : ''}</div>
+    <div class="btns">${n.inner ? '<button id="iOpen" class="hot">▣ Open inside</button><button id="iUnfold">Unfold</button><button id="iSave">Save to library</button>' : ''}${d?.graph && !n.inner ? '<button id="iCopy">Open a copy to change</button>' : ''}${n.block === 'view.3d' ? '<button id="i3d" class="hot">⤢ See it in 3D, full screen</button>' : ''}<button id="iCut">Cut branch</button><button id="iDel">Delete</button>${d?.tests?.length ? '<button id="iTest">Run its tests</button>' : ''}</div>
     <p class="src">${d ? `${esc(STAGES.find((x) => x.id === stageOf(d))?.name ?? '')} · ` : ''}${esc(KINDS[k].name)} · ${esc(ABILITIES[d?.ability ?? 'transform'])} · ${esc((d?.domains ?? []).map((x) => DOMAINS.find((y) => y.id === x)?.name ?? x).join(', '))}${d ? ` · v${d.version} · ${esc(d.by)}` : ''}${d?.tests?.length ? ` · ${d.tests.length} test${d.tests.length > 1 ? 's' : ''}` : ' · draft: no tests yet'}</p>
     ${d?.sources?.length ? `<p class="src">From: ${d.sources.map((s) => esc(s.cite)).join('; ')}</p>` : ''}
     <div id="iTestOut"></div>
@@ -765,7 +765,7 @@ function nodeInspector(el: HTMLElement, id: string): void {
   }
   const on = (bid: string, fn: () => void) => { const b = document.getElementById(bid); if (b) b.onclick = fn; };
   on('i3d', () => {
-    const src = n.block === 'card.part' ? id : local.wiresInto(id)[0]?.from, st = src ? stateOf(src) : undefined;
+    const src = local.wiresInto(id)[0]?.from, st = src ? stateOf(src) : undefined;
     if (!st?.out?.part) { toast('nothing to draw yet: wire a Part into it', true); return; }
     fullScreen(st.out.part as Part, String(st.out.name ?? ''), String(st.out.check ?? ''));
   });

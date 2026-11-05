@@ -23,9 +23,9 @@ const RUN_PINS: [string, string, string, string][] = [
   ['src/nexus/view/nodes.ts', '      const r = await res.json()', 'renderAll();', '98c38ebfaba4eed8'],
 ];
 /** The relay's handler, its whole text pinned (the test "an open andon stops the line…" says why). */
-const RELAY_PIN = '2a25a6e9b1357859';
+const RELAY_PIN = 'f21e186a9eb82be9';
 /** agentBuild's whole text, pinned (the test "an open andon stops the line…" says why). */
-const AGENT_PIN = '9f99c5210a3a349e';
+const AGENT_PIN = '61b9dd3bb311b681';
 /** The most laws the kernel may still leave undecided (erf and integrals: not in it yet). */
 const UNDECIDED_MOST = 3;
 import { checkBudget, checkHonesty, checkLoop, checkPush, ownersFromPlan, progressOf, pushes, entriesOf } from '../../scripts/hooks/lib.mjs';
@@ -69,8 +69,8 @@ const env: Env = { code: async (lang, code, inputs) => (await run({ id: 0, lang:
 // legacy suite): what a person opens first in that field
 const QUICK: Record<string, string> = {
   electrical: 'Electrical: a resistor heating', electronics: 'The 6502 from its transistors', finance: 'Business: cash flow',
-  manufacturing: 'A battery built from its parts', mechanical: 'Physics: a steel ball let go', life: 'A body from its measured segments',
-  software: 'The gauntlet as nodes', structural: 'What it is made of, and what it carries',
+  manufacturing: 'Common pieces: angles, a channel', mechanical: 'Physics: a steel ball let go', life: 'A body from its measured segments',
+  software: 'The gauntlet as nodes', structural: 'Cantilever: how far it bends',
 };
 const root = resolve(__dirname, '../..');
 const resolveFrom = (dir: string, spec: string): string | null => {
@@ -844,6 +844,28 @@ describe('every domain, in one pass', () => {
       expect([g.kept, g.lost.map((x) => x.of)], `${what}: lost`).toEqual([[], ['M8 cap screw']]); expect(g.lost[0]!.why.length).toBeGreaterThan(20);
       expect([gp.cuts?.length ?? 0, gp.ports?.length ?? 0, gp.imprints?.[0]?.lost], `${what}: nothing of it moved anywhere; its record says it is lost`).toEqual([0, 0, g.lost[0]!.why]); }
   });
+  // (decision 0026, step 3: the boards the old makers built, rebuilt by the operations and the pieces; the old makers gone.
+  // Each board runs, every node ok, none of them an old maker; and each shows what the old one showed: the battery a BCI
+  // group 35's size (230 × 175 × 225 mm), six cells of seven negative and six positive plates; the bolt the load picks
+  // (10 kN in shear at 2 on class 8.8: 8.3 mm, so M10); the M8 bolt's STEP read back as written; the sensor researched)
+  it('the old makers\' boards rebuilt by the operations, and the old makers gone', async () => {
+    const OLD = /^(make\.(grid|coat|wrap|stack|strap|enclosure|into|roll|fill|turned|wound|gear|chain|sensor|fastener)|card\.part)$/;
+    expect([...LIBRARY.keys()].filter((id) => OLD.test(id)), 'no old maker in the library').toEqual([]);
+    const boards = new Map(starterBoards()), run = async (re: RegExp) => { const [t, make] = [...boards].find(([x]) => re.test(x))!, b = make(), e = new Engine(b); await e.run();
+      expect(Object.keys(b.nodes).filter((id) => e.state.get(id)!.status !== 'ok').map((id) => `${id}: ${e.state.get(id)!.error}`), `${t.slice(0, 40)}: every node ok`).toEqual([]);
+      expect(Object.values(b.nodes).map((n) => n.block).filter((x) => OLD.test(x ?? '') || x === 'part.family'), `${t.slice(0, 40)}: no old maker on it`).toEqual([]);
+      return (id: string) => e.state.get(id)!.out as Record<string, unknown>; };
+    const bat = await run(/^A battery built from its parts/), sz = ['w', 'h', 'd'].map((k) => +((bat('measure')[k] as number) * 1000).toFixed(1));
+    sz.forEach((v, k) => expect(Math.abs(v - [175, 225, 230][k]!) / [175, 225, 230][k]!, `the battery's ${'whd'[k]} ${v} mm, against BCI group 35's`).toBeLessThan(0.02));
+    const names = (bat('all').block as { pieces: { name: string }[] }).pieces.map((p) => p.name), count = (n: string) => names.filter((x) => x === n).length;
+    expect([count('cell compartment'), count('negative plate'), count('positive plate'), count('strap'), count('terminal post'), count('battery case'), count('lid')], 'six cells of 7 + 6 plates, two straps each; the case, its lid, two posts').toEqual([6, 42, 36, 12, 2, 1, 1]);
+    expect(bat('audit').missing, 'it comes apart to the bottom').toEqual([]);
+    const bolt = await run(/^Parts in 3D: a bolt sized from its load/);
+    expect([bolt('words').text, bolt('part').offers], 'the load picks M10, made by its row').toEqual(['M10', ['M10 head/axis', 'M10 shank/axis']]);
+    expect(bolt('ms').mass as number, 'an M10 × 40 hex bolt weighs some tens of grams').toBeGreaterThan(0.02);
+    const ex = await run(/^Export: an M8 bolt/); expect(String(ex('ex').says), 'its STEP read back as it went out').toMatch(/STEP read back: 2 solids.*the same/);
+    const g = await run(/^The gauntlet as nodes/); expect([g('sens').pieces, String(g('loop').says)], 'the sensor made, and researched').toEqual([2, expect.stringMatching(/round/)]);
+  }, 120_000);
   // (the fastener for a stack (spec 01, I10): evaluation case 8 chooses its bolt; a tapped and an insert stack each the
   // catalogue's screw, said why; mate() lays its fasteners through it; a bolt's bore is ISO 273's; and the four machines'
   // fasteners as they were before (tests/nexus/fasteners.before.json, taken at a8ecae3, before the change; less, from
@@ -890,6 +912,37 @@ describe('every domain, in one pass', () => {
   // whether the hinge is one revolute joint or a pin in a knuckle and the knuckles' faces (7 equations, rank 5); a latch
   // 5 mm off the lid's arc fights the hinge and the two are named, the handle fixed on the lid not; a misdrilled hole
   // fights its neighbour and is the one that, left out alone, lets the rest hold)
+  // (decision 0026, step 3: the physics and controls boards rebuilt by the room's operations alone, no Shape, Place, Array
+  // or Combine node on them: each runs with every node ok and does what the old board did. The ball shoved at the tower
+  // hits it and its upper layers fall; the cart pulls away and settles at the speed its motors' constants give, V / (K_t
+  // × ratio) × r = 24 / (0.0302 × 12) × 0.1 = 6.62 m/s less its friction (the old board said about 6.5); the pendulum
+  // swings with a physical pendulum's period, 2π √(I / m g d) × 2K(sin 30°)/π = 1.0732 for its 60° swing (I/m = (L² + w²)/12
+  // + d², its pivot d = 475 mm from its middle: 1.737 s); a press makes the row one crate longer and the stick carries the
+  // cart. The body board keeps its body nodes: the room has no turn about a joint, which its poses need)
+  it('the physics and controls boards built by the operations alone, doing what the old ones did', async () => {
+    const { pressButton, pushStick, resetControls } = await import('../../src/nexus/controls');
+    const boards = new Map(starterBoards()), byTitle = (re: RegExp) => [...boards].find(([t]) => re.test(t))!, OLD = /^(shape\.|place$|array$|combine$)/;
+    const runIt = async (re: RegExp) => { const b = byTitle(re)[1](), e = new Engine(b, env); await e.run();
+      expect(Object.keys(b.nodes).filter((id) => e.state.get(id)?.status !== 'ok').map((id) => `${id}: ${e.state.get(id)?.error}`), `${re}: every node runs`).toEqual([]);
+      expect(Object.values(b.nodes).map((n) => n.block!).filter((x) => OLD.test(x)), `${re}: no node that places by number`).toEqual([]);
+      return { e, out: (id: string) => e.state.get(id)!.out as Record<string, unknown> }; };
+    type End = { name: string; moved: number; dropped: number; speed: number };
+    const tower = (await runIt(/^Physics: a steel ball/)).out('go').ends as End[];
+    expect([tower.length, tower.find((x) => x.name === 'ball')!.moved > 0.05], 'the ball and 24 blocks, each a body; the ball moved into the tower').toEqual([25, true]);
+    expect(tower.filter((x) => x.name.startsWith('block') && x.dropped > 0.2).length, 'a quarter of the blocks or more fell a layer or more').toBeGreaterThanOrEqual(6);
+    const cart = (await runIt(/^Physics: a cart on two/)).out('go').ends as End[], deck = cart.find((x) => x.name === 'chassis')!, v0 = (24 / (0.0302 * 12)) * 0.1;
+    expect([cart.length, +(deck.speed / v0).toFixed(2), deck.moved > 30], 'eight bodies; the deck at its motors\' speed less their friction, over 30 m in 8 s').toEqual([8, 0.99, true]);
+    const swing = ((await runIt(/^Physics: a pendulum/)).out('go').joint as { period: number; swings: number }[])[0]!, Im = (1 + 0.05 ** 2) / 12 + 0.475 ** 2, T = 2 * Math.PI * Math.sqrt(Im / (9.81 * 0.475)) * 1.073182;
+    expect([Math.abs(swing.period / T - 1) < 0.02, swing.swings >= 10], `its period ${swing.period.toFixed(3)} s against ${T.toFixed(3)} s, over ten swings or more`).toEqual([true, true]);
+    resetControls();
+    try {
+      const ctl = await runIt(/^Controls you work/), crates = () => (ctl.out('yard').block as RoomBlock).pieces.filter((p) => p.name === 'crate').length, cartAt = () => ((ctl.out('drive').driven as Assembly).items.find((x) => x.of.name === 'cart')!.at);
+      const z0 = cartAt()[2]; expect(crates(), 'one crate before a press').toBe(1);
+      pressButton('Add a crate', true, false); pressButton('Add a crate', false, false); pushStick('Drive', 0, 1, 1, 3, true);
+      ctl.e.touch('add'); ctl.e.touch('drive'); await ctl.e.run();
+      expect([crates(), +(z0 - cartAt()[2]).toFixed(6)], 'a press: two crates in the row; a second of full stick: the cart 3 m on').toEqual([2, 3]);
+    } finally { resetControls(); }
+  }, 120_000);
   it('joints solved together: flipped, freedom left by rank, the fewest that fight named', () => {
     const f = NEMA_FACE['17']!, h = f.holes / 2 / 1000, sq: [number, number][] = [[h, h], [-h, h], [-h, -h], [h, -h]];
     const plate = (pattern = sq): Part => ({ name: 'plate', ports: [{ name: 'motor mount', sex: 'holes', thread: f.thread, pattern, at: [0, 0.003, 0], n: [0, 1, 0], u: [1, 0, 0], t: 0.006, std: 'NEMA 17' }] });
@@ -1222,6 +1275,63 @@ describe('every domain, in one pass', () => {
   // (ISO 286 classes as limits (spec 01, I17): H, h and JS from the IT grade alone, other letters from ISO 286-2's
   // fundamental deviations; each of the evaluation set's waiting cases' limits as the app now works them out, offset and
   // width (a width alone let a wrong offset through: I15's evaluator); and the fit two make)
+  // (decision 0026, step 3: the AI finds what it needs to build, cheaply. `find` answers a request for a thing with what
+  // builds first (operations, pieces, joints, the blocks you saved), a line each with its inputs, settings, offers and the
+  // smallest starter board that uses it, the rest after; Assist's one call carries the saved blocks' cards after its one
+  // cached block (the guide, cards and worked plans, the same every call); and three plans written as a model writes them
+  // run with nothing failing, a setting named otherwise read and said, and the refusals they met on the way say the fix)
+  it('find answers a build with what builds first, Assist is sent the saved blocks, plans as a model writes them run', async () => {
+    const { findLines, planRequest, planOf, runPlan, buildsInSpace, cardOf: card, WORKED } = await import('../../src/nexus/agent');
+    const titles = starterBoards().map(([t]) => t.toLowerCase()), builds = (l: string) => /^[\w.-]+: /.test(l);
+    for (const q of ['motor', 'bolt a plate', 'pipe valve']) {
+      const out = await findLines(q), lines = out.split('\n').slice(1), first = lines[0]!, k = lines.findIndex((l) => !builds(l));
+      expect(out.startsWith('(what builds first'), `${q}: says what comes first`).toBe(true);
+      expect(buildsInSpace(LIBRARY.get(first.split(':')[0]!)!), `${q}: the first line builds (${first.slice(0, 60)})`).toBe(true);
+      expect(first, `${q}: with its inputs`).toMatch(/^[\w.-]+: [^|]+ \| in [^|]+/);
+      expect(lines.filter(builds).some((l) => / \| offers [^|]*\/(axis|holes|cavity|ports)/.test(l)), `${q}: the pieces with what they offer (a joint offers what it holds)`).toBe(true);
+      expect(lines.slice(k).some(builds), `${q}: nothing that builds after the rest`).toBe(false);
+      const boards = [...out.matchAll(/board "([^"]+)"/g)].map((m) => m[1]!.toLowerCase());
+      expect(boards.length, `${q}: a worked board named`).toBeGreaterThan(0);
+      for (const b of boards) expect(titles.some((t) => t.startsWith(b)), `${q}: board "${b}" opens by its words`).toBe(true);
+      if (q !== 'motor') expect(out, `${q}: a builder with the board that uses it`).toMatch(/^[\w.-]+: .* \| e\.g\. board "[^"]+"$/m);
+      expect(out.length, `${q}: short`).toBeLessThan(2500);
+      console.log(`find "${q}": ${out.length} characters, ${k < 0 ? lines.length : k} of ${lines.length} lines build`);
+    }
+    // (a block you saved: found first by its words, and its card sent with Assist's one call, after the cached block)
+    const t = await toolsFor(emptyBoard('saved')), bolt: Record<string, unknown> = { ...WORKED[1]!.plan }; delete bolt.tool; await t.doTool('build', bolt);
+    expect(await t.doTool('fold', { name: 'Plate bolt', says: 'a plate with a bolt down its first hole and its nut', outs: ['on.block'] })).toMatch(/^saved\. /);
+    const mine = t.made[0]!;
+    try {
+      expect((await findLines('plate bolt')).split('\n')[1], 'yours first').toMatch(new RegExp(`^${mine.id.replace(/[.-]/g, '\\$&')}: Plate bolt \\(yours\\) \\| `));
+      const req = await planRequest('two of them on a shelf', { blocks: [mine] }), sys = req.system[0]!, said = String(req.messages[0]!.content);
+      expect(said, 'the saved block\'s card in the request').toContain(card(LIBRARY.get(mine.id)!)); expect(said.indexOf('Blocks you saved'), 'before the request').toBe(0);
+      expect([req.system.length, sys.cache_control, 'cache_control' in req], 'the fixed prefix one cached block; no top-level caching of the one-off tail').toEqual([1, { type: 'ephemeral' }, false]);
+      // (Claude Haiku 5.5 caches a prefix of 512 tokens or more (the claude-api skill's caching reference); 4 characters a
+      // token is an estimate (typical of English; JSON runs denser), so the prefix is held to four times the minimum)
+      expect(sys.text.length / 4, 'the cached prefix above the model\'s minimum, by an estimate').toBeGreaterThan(4 * 512);
+      expect(sys.text, 'the guide, the cards, the worked plans').toMatch(/^# Nexus, for the AI[^]*## The cards you need most[^]*## Worked plans[^]*## Here: one plan, no tools/);
+      console.log(`Assist's cached prefix: ${sys.text.length} characters (about ${Math.round(sys.text.length / 4)} tokens at 4 a token, an estimate)`);
+    } finally { LIBRARY.delete(mine.id); }
+    // (three plans as a model writes them from the cards: a lamp on a base, a box with a lid bolted on, a pipe from a tank
+    // to a valve; a setting named otherwise (material, thread, a face in words) read as the block names it, and said)
+    const PLANS = [
+      '{"tool": "build", "nodes": {"base": {"b": "room.make", "s": {"name": "lamp base", "shape": "rod", "a": 50, "b": 20, "material": "al-6061"}}, "bulb": {"b": "piece.bulb"}, "on": {"b": "room.onto", "s": {"face": "top"}}, "show": {"b": "space.show"}}, "wires": ["base.block>on.host", "bulb.block>on.child", "on.thing>show.thing"], "says": "a lamp bulb on a round base"}',
+      '{"tool": "build", "nodes": {"box": {"b": "piece.case", "s": {"name": "box", "w": 100, "h": 40, "d": 60}}, "lid": {"b": "piece.plate", "s": {"name": "lid", "w": 100, "t": 3, "d": 60, "holes": "-40,-20; 40,20", "hole": 3.4}}, "on": {"b": "room.onto", "s": {"face": "+y"}}, "b0": {"b": "mate.bolted", "s": {"line": "lid/holes", "which": 0, "thread": "M3"}}, "b1": {"b": "mate.bolted", "s": {"line": "lid/holes", "which": 1, "size": "M3"}}, "show": {"b": "space.show"}}, "wires": ["box.block>on.host", "lid.block>on.child", "on.block>b0.held", "b0.block>b1.held", "b1.thing>show.thing"], "says": "a box with its lid bolted on at two corners"}',
+      '{"tool": "build", "nodes": {"tank": {"b": "piece.tank", "s": {"size": "10 L"}}, "pipe": {"b": "piece.pipe", "s": {"size": "copper 15×0.7", "length": 600}}, "port": {"b": "room.through", "s": {"line": "10 L tank/ports", "which": 0}}, "valve": {"b": "piece.checkvalve", "s": {"size": "G1/2"}}, "on": {"b": "room.over", "s": {"line": "copper 15×0.7 pipe/axis", "where": "hi", "fit": "touch"}}, "show": {"b": "space.show"}}, "wires": ["tank.block>port.host", "pipe.block>port.passer", "port.block>on.host", "valve.block>on.sleeve", "on.thing>show.thing"], "says": "a pipe from the tank\'s low port to a check valve on its end"}',
+    ];
+    const ran = await Promise.all(PLANS.map((p) => runPlan(planOf(p), emptyBoard('asked'))));
+    ran.forEach((r, i) => expect(r.failing, `plan ${i + 1} (${planOf(PLANS[i]!).says}) runs with nothing failing`).toEqual([]));
+    expect(ran[0]!.out.split('\n').filter((l) => l.startsWith('note ')), 'what was named otherwise, read and said').toEqual(['note base: material read as mat', 'note on: "top" read as +y']);
+    expect(ran[1]!.out, 'and a thread for a size').toMatch(/^note b0: thread read as size$/m);
+    const pieces = (r: { out: string }, n: string) => { const m = new RegExp(`^${n} ok pieces=(\\d+)`, 'm').exec(r.out); return m ? Number(m[1]) : -1; };
+    expect([pieces(ran[0]!, 'on'), pieces(ran[1]!, 'b1'), pieces(ran[2]!, 'on')], 'the base and its bulb; the box, lid and two joints; the tank, pipe and valve').toEqual([3, 2 + 2 * 4, 3]);
+    // (the refusals met on the way, each now saying the fix: a ball valve is made turned, so it slides over nothing; a lid
+    // made by mate.lid has no holes, and what is wired in is listed)
+    const turned = await runPlan(planOf(PLANS[2]!.replace('piece.checkvalve', 'piece.ballvalve')), emptyBoard('asked'));
+    expect(turned.failing[0], 'a turned valve: be the host').toMatch(/^on failed: over: the G1\/2 ball valve body is turned: .* \(a piece made turned slides over nothing: make it the host/);
+    const lid = await runPlan(planOf('{"tool": "build", "nodes": {"box": {"b": "piece.case"}, "lid": {"b": "mate.lid"}, "b0": {"b": "mate.bolted", "s": {"line": "lid/holes"}}}, "wires": ["box.block>lid.box", "lid.block>b0.held"]}'), emptyBoard('asked'));
+    expect(lid.failing, 'a line not there: what is there').toEqual(['b0 failed: bolted joint: case offers no hole lid/holes (what is wired in offers: case/cavity)']);
+  }, 120_000);
   it('ISO 286 limits from the tables held, and fits judged from both: the evaluation set\'s bearing, dowel and key', () => {
     const set = JSON.parse(readFileSync(join(root, 'evals/interfaces/cases.json'), 'utf8')) as { cases: { case: number; expect: Record<string, unknown> }[] }, e = (n: number) => set.cases.find((c) => c.case === n)!.expect;
     const lim = (size: number, cls: string, table = DEVIATION) => { const l = limitsOf(cls, size, table); if ('refused' in l) throw new Error(l.why); return [l.loUm, l.hiUm]; };
@@ -1640,6 +1750,79 @@ describe('every domain, in one pass', () => {
     for (const f of readdirSync(vd).filter((x) => x.endsWith('.json'))) { const v = JSON.parse(readFileSync(join(vd, f), 'utf8')); if (v.task !== f.replace(/\.json$/, '')) bad.push(`${f} names its task ${v.task}`); if (!['pass', 'fail'].includes(v.verdict)) bad.push(`${f}: verdict ${v.verdict}`); }
     expect(bad, 'marked passing with no pass from the evaluator').toEqual([]);
   });
+  // (decision 0026, step 3: an assembly as one block of a few settings. The small DC motor is one library block
+  // (seed.motor-dc) whose inputs set its inner settings (group.in's `into`, NC5): placed with two settings it gives two
+  // builds, each the very build its pieces give wired inline on a board; the four boards that copied it place it, and
+  // the robot base and the quadcopter their pack of two cells (seed.pack-two); the same fold made by collapse with its settings
+  // bound, set on the node, and opened again with them written back. A fold keeps a Stack's order (fault D32: the group's
+  // id, a 'g…', sorted before 'p1'; a twin merged into 'a0' sorted before 'm'). A saved block holding another saved block
+  // runs on the pool's workers when every block it reaches is carried, and fails there when only the outer one is (D34))
+  it('the motor as one block of settings, the same as inline; a fold keeps a stack\'s order; a nested saved block on the workers', async () => {
+    const { bindSetting, boundBoard, carryOf, collapse, expand, makeBlock, mergeTwins, runnerOf } = await import('../../src/nexus/dataflow');
+    const { runMany } = await import('../../src/nexus/pool');
+    const inline = (R: number, L: number, shaft: number): Board => {
+      const b = emptyBoard('inline motor'), put = (id: string, blk: string, set: Record<string, unknown>, ...ws: [string, string, string][]) => { placeBlock(b, blk, 0, 0, set, id); for (const [f, o, i] of ws) wire(b, f, o, id, i); };
+      put('core', 'room.make', { name: 'rotor core', shape: 'tube', mat: 'steel-low', a: 1, b: 6.5, c: L }); put('coil', 'piece.coil', { R: 6.75, wire: 0.5, turns: 23, layers: 2 });
+      put('wound', 'room.over', { line: 'rotor core/axis', where: 'mid', fit: 'touch' }, ['core', 'block', 'host'], ['coil', 'block', 'sleeve']);
+      put('comm', 'room.make', { name: 'commutator', shape: 'tube', mat: 'copper', a: 1, b: 2.5, c: 3 }); put('rotor', 'room.stack', { name: 'rotor', axis: 'y', fit: 'touch' }, ['comm', 'block', 'blocks'], ['wound', 'block', 'blocks']);
+      put('mag', 'room.make', { name: 'magnet ring', shape: 'tube', mat: 'ndfeb', a: 9, b: R, c: L }); put('field', 'room.over', { line: 'rotor core/axis', where: 'mid', fit: 'clear' }, ['rotor', 'block', 'host'], ['mag', 'block', 'sleeve']);
+      put('can', 'room.around', { name: 'motor can', mat: 'steel-low', wall: 0.5, ends: 1, fit: 'clear', open: 'no' }, ['field', 'block', 'child']);
+      put('shaft', 'room.make', { name: 'shaft', shape: 'rod', mat: 'steel-alloy', a: 1, b: shaft }); put('shafted', 'room.through', { line: 'motor can/axis', which: 0, from: 'below', fit: 'slide' }, ['can', 'block', 'host'], ['shaft', 'block', 'passer']);
+      put('tab', 'room.make', { name: 'terminal tab', shape: 'box', mat: 'brass', a: 2, b: 4, c: 0.4 }); put('tabs', 'room.ring', { name: 'terminals', n: 2, R: 5, fit: 'clear' }, ['tab', 'block', 'block']);
+      put('motor', 'room.onto', { face: '-y', fit: 'touch' }, ['shafted', 'block', 'host'], ['tabs', 'block', 'child']); put('show', 'space.show', {}, ['motor', 'thing', 'thing']);
+      return b; };
+    const ran = async (b: Board) => { const e = new Engine(b, env, new Memo()); await e.run(); expect([...e.state].filter(([, s]) => s.status !== 'ok').map(([id, s]) => `${id}: ${s.error}`), `every node of ${b.title} runs`).toEqual([]); return e; };
+    // (the block placed with two settings: two builds, each the inline one's)
+    const sizes: [number, number, number][] = [[10.5, 12, 30], [12, 16, 40]], placed = emptyBoard('two motors');
+    sizes.forEach(([R, L, shaft], k) => placeBlock(placed, 'seed.motor-dc', 0, 0, { R, L, shaft }, `m${k}`));
+    const pe = await ran(placed), got = sizes.map((_, k) => pe.state.get(`m${k}`)!.out!);
+    expect(digest(got[0]!.motor) === digest(got[1]!.motor), 'two settings, two builds').toBe(false);
+    for (const [k, [R, L, shaft]] of sizes.entries()) { const ie = await ran(inline(R, L, shaft)), o = (id: string) => ie.state.get(id)!.out!.block;
+      expect([digest(got[k]!.motor) === digest(o('motor')), digest(got[k]!.can) === digest(o('can'))], `the block at R ${R}, L ${L}, shaft ${shaft}: its motor and its can the inline board's`).toEqual([true, true]); }
+    const seedGraph = LIBRARY.get('seed.motor-dc')!.graph!;
+    expect(boundBoard(seedGraph, { R: 12, L: 16, shaft: 40 }) === boundBoard(seedGraph, { R: 12, L: 16, shaft: 40 }), 'one bound copy for each set of values, the stored board unwritten').toBe(true);
+    expect(seedGraph.nodes.mag!.set!.b, 'the stored board as it was').toBe(10.5);
+    expect(() => bindSetting(structuredClone(seedGraph), 'x', 'nothing.b'), 'a setting of no node refused').toThrow(/no node "nothing"/);
+    // (the four boards that copied the helper place the block: the motor board shows what the inline one shows)
+    const boards = new Map(starterBoards()), motorBoard = [...boards].find(([t]) => t.startsWith('Built from pieces: a small DC motor'))![1](), me = await ran(motorBoard), de = await ran(inline(10.5, 12, 30));
+    expect(digest(me.state.get('motor')!.out!.thing) === digest(de.state.get('motor')!.out!.thing), 'the motor board, the block placed, shows the inline build').toBe(true);
+    for (const pre of ['A desk fan', 'A small robot base', 'A quadcopter']) { const b = [...boards].find(([t]) => t.startsWith(pre))![1](), n = (id: string) => nodesOf(b).filter((x) => b.nodes[x.id]!.block === id).length;
+      expect([n('seed.motor-dc'), n('seed.pack-two')], `${pre} places the motor block (and the pack of two cells)`).toEqual([1, pre === 'A desk fan' ? 0 : 1]); }
+    // (a fold made by collapse with three inner settings bound: set on the node, the build the inline one at those sizes;
+    // opened, the values written back into the inner nodes; made a block, its inputs those chosen)
+    const flat = inline(10.5, 12, 30), f = collapse(flat, Object.keys(flat.nodes).filter((id) => id !== 'show'), 'Motor', 'gm', { R: 'mag.b', L: 'core.c; mag.c', shaft: 'shaft.b' });
+    expect(f.board.nodes.gm!.set, 'the group node starts at the settings as they were').toEqual({ R: 10.5, L: 12, shaft: 30 });
+    f.board.nodes.gm!.set = { R: 12, L: 16, shaft: 40 };
+    const fe = await ran(f.board), want = await ran(inline(12, 16, 40));
+    expect(digest(fe.state.get('gm')!.out!.thing) === digest(want.state.get('motor')!.out!.thing), 'the fold set to R 12, L 16, shaft 40 builds what the inline board does').toBe(true);
+    const opened = expand(f.board, 'gm');
+    expect([opened.nodes.mag!.set!.b, opened.nodes.core!.set!.c, opened.nodes.mag!.set!.c, opened.nodes.shaft!.set!.b], 'opened, its values written back').toEqual([12, 16, 16, 40]);
+    const made = makeBlock(collapse(inline(10.5, 12, 30), Object.keys(flat.nodes).filter((id) => id !== 'show'), 'Motor', 'gm').board, 'gm', { id: 'zz.motor-fold', name: 'zz motor fold', settings: { R: 'mag.b', shaft: 'shaft.b' } });
+    try { expect(portsOf(made.block, {}).inputs.map((p) => [p.name, p.type, p.default]), 'a made block whose settings are its chosen inner settings').toEqual([['R', 'number', 10.5], ['shaft', 'number', 30]]); } finally { LIBRARY.delete('zz.motor-fold'); }
+    // (a fold of a stack keeps its order; so does opening it, and a merge of twins)
+    const st = emptyBoard('stack'); for (const [id, a] of [['p1', 10], ['p2', 20], ['p3', 30]] as [string, number][]) placeBlock(st, 'room.make', 0, 0, { name: `box ${a}`, shape: 'box', a, b: 5, c: 5 }, id);
+    placeBlock(st, 'room.stack', 0, 0, { name: 'row', axis: 'x', fit: 'touch' }, 'st'); for (const id of ['p1', 'p2', 'p3']) wire(st, id, 'block', 'st', 'blocks');
+    const rowOf = async (b: Board) => digest((await ran(b)).state.get('st')!.out!.block), row0 = await rowOf(st), folded = collapse(st, ['p2']);
+    expect([folded.id < 'p1', await rowOf(folded.board) === row0, await rowOf(expand(folded.board, folded.id)) === row0], 'p2 folded under a group id sorting before p1: the row as it was, folded and opened').toEqual([true, true, true]);
+    const tw = emptyBoard('twins'); placeBlock(tw, 'room.make', 0, 0, { name: 'small', shape: 'box', a: 10, b: 5, c: 5 }, 'm'); for (const id of ['z1', 'a0']) placeBlock(tw, 'room.make', 0, 0, { name: 'big', shape: 'box', a: 30, b: 5, c: 5 }, id);
+    placeBlock(tw, 'room.stack', 0, 0, { name: 'row', axis: 'x', fit: 'touch' }, 'st'); wire(tw, 'm', 'block', 'st', 'blocks'); wire(tw, 'z1', 'block', 'st', 'blocks');
+    const tw0 = await rowOf(tw), merged = mergeTwins(tw);
+    expect([merged.merged, await rowOf(merged.board) === tw0], 'z1 merged into its twin a0: the row as it was').toEqual([1, true]);
+    // (a saved block holding another, run on the workers: four jobs asked wide; a pair of its own for the plant, so no
+    // worker has the inner block from the run before)
+    const pair = (tag: string) => { const host = emptyBoard('host'), ib = emptyBoard('twice'); placeBlock(ib, 'group.in', 0, 0, { name: 'x', type: 'number' }, 'x'); placeBlock(ib, 'math.expr', 0, 0, { expr: 'x * 2' }, 'f'); placeBlock(ib, 'group.out', 0, 0, { name: 'y', type: 'number' }, 'y'); wire(ib, 'x', 'value', 'f', 'x'); wire(ib, 'f', 'result', 'y', 'value');
+      host.nodes.g = { label: 'twice', inner: ib }; const inner = makeBlock(host, 'g', { id: `zz.twice-${tag}`, name: `zz twice ${tag}` }).block;
+      const ob = emptyBoard('twice and one'); placeBlock(ob, 'group.in', 0, 0, { name: 'x', type: 'number' }, 'x'); placeBlock(ob, inner.id, 0, 0, {}, 't'); placeBlock(ob, 'math.expr', 0, 0, { expr: 'y + 1' }, 'f'); placeBlock(ob, 'group.out', 0, 0, { name: 'z', type: 'number' }, 'z');
+      wire(ob, 'x', 'value', 't', 'x'); wire(ob, 't', 'y', 'f', 'y'); wire(ob, 'f', 'result', 'z', 'value');
+      const host2 = emptyBoard('host 2'); host2.nodes.g = { label: 'outer', inner: ob }; return { inner, outer: makeBlock(host2, 'g', { id: `zz.twice-and-one-${tag}`, name: `zz twice and one ${tag}` }).block }; };
+    try { const { inner, outer } = pair('a'), jobs = [1, 2, 3, 4].map((x) => ({ block: outer.id, inputs: { x }, set: {} })), carried = carryOf(outer);
+      expect(carried.carry!.map((c) => c.id), 'both carried, inner first').toEqual([inner.id, outer.id]);
+      const all = await runMany(jobs, (j) => runnerOf(outer)(j.inputs, j.set), { wide: true, ...carried });
+      expect([all.wide, all.results.map((r) => (r instanceof Error ? r.message : r.z))], 'on the workers, every job ran').toEqual([true, [3, 5, 7, 9]]);
+      const p = pair('b'), one = await runMany(jobs.map((j) => ({ ...j, block: p.outer.id })), (j) => runnerOf(p.outer)(j.inputs, j.set), { wide: true, carry: [carryOf(p.outer).carry!.at(-1)!] });
+      expect([one.wide, one.results.slice(1).every((r) => r instanceof Error && /no block/.test(r.message))], 'only the outer carried: the workers find no inner block').toEqual([true, true]);
+    } finally { for (const t of ['a', 'b']) { LIBRARY.delete(`zz.twice-${t}`); LIBRARY.delete(`zz.twice-and-one-${t}`); } }
+  }, 120_000);
   // (keys tell apart what the old writing could not (spec 11, LW15; fault D6): two Maps, two Sets, NaN and null, −0 and 0,
   // two functions, a typed array's kind; and the same value, built in another order, keys the same)
   // (the engine's keys use it: a node fed a Map changed to another Map, which the old writing wrote the same ({}), runs
@@ -1859,6 +2042,50 @@ describe('every domain, in one pass', () => {
     expect(sampleRoom(geared, 14), 'a shaft along a gear\'s bore, along z').toEqual(APART);
     expect(roomBound(geared.pieces[1]!).map((v) => +(v[2] * 1000).toFixed(2)), 'the shaft along the gear\'s length').toEqual([-4, 36]);
   });
+  // (decision 0026, step 3: the seven looks and materials boards rebuilt with the room's operations alone: every node
+  // ok, no shape, place, array or combine node left, and the numbers the old boards showed held: each colour worked out
+  // and drawn on its own piece, each finish, each look's colour, the mixtures, the bars' stiffness, the made-of board's
+  // mass, elements, heat capacity and rod-to-block contacts. What moved: the made-of rods now touch (no operation stands
+  // two things a set distance apart), so its centre in x, its heat path, its bending and warming read anew)
+  it('the looks and materials boards built by the operations alone show what they showed', async () => {
+    const { flatten } = await import('../../src/nexus/assembly');
+    const hexOf = (c: number | undefined) => `#${(c ?? 0).toString(16).padStart(6, '0')}`;
+    const open = async (t: string) => { const [, make] = starterBoards().find(([x]) => x.startsWith(t))!; const b = make(), e = new Engine(b, env); await e.run();
+      const failed = [...e.state].filter(([, s]) => s.status !== 'ok').map(([id, s]) => `${id}: ${s.error ?? s.status}`), old = Object.values(b.nodes).map((n) => n.block!).filter((k) => /^(shape\.|place$|array$|combine$)/.test(k));
+      expect([failed, old], `${t}: every node ok, no node that sets a place by number`).toEqual([[], []]);
+      const out = (id: string) => e.state.get(id)!.out as Record<string, unknown>;
+      // (what the 3D view draws: each piece by name, its colour, finish and look where it is)
+      const w = Object.values(b.edges).find((x) => x.to === 'show' && x.in === 'thing'), drawn = new Map<string, { color?: number; finish?: string; look?: unknown }>(); if (w) flatten(out(w.from)[w.out!] as Assembly, (f) => { drawn.set(f.leaf.name, { color: f.over.color, finish: f.over.finish, look: f.over.look }); });
+      return { out, drawn }; };
+    const metals = ['silver', 'aluminium', 'platinum', 'palladium', 'nickel', 'cobalt', 'zinc', 'lead', 'titanium', 'chromium', 'iron', 'tungsten', 'copper', 'gold'];
+    { const { out, drawn } = await open('Metals, coloured by their physics');
+      expect(metals.map((m, k) => out(`c${k}`).hex), 'each metal\'s colour, as the old board worked it out').toEqual(['#fefdfc', '#f4f5f6', '#d7d1c9', '#ded9d3', '#d9d1c6', '#d7d4ce', '#e0e3e3', '#cfcfd1', '#cec8c2', '#c4c5c4', '#c0bebb', '#bdbbb8', '#f7cfbf', '#ffdea3']);
+      expect(metals.map((m, k) => [hexOf(drawn.get(m)?.color), drawn.get(m)?.finish]), 'each ball drawn in its own colour, chrome').toEqual(metals.map((_, k) => [out(`c${k}`).hex, 'chrome'])); }
+    { const { out, drawn } = await open('Steel, finished five ways'); const ways = ['turned', 'ground', 'polished', 'bead blasted', 'sand cast'];
+      expect([out('fe').hex, ...ways.map((_, k) => +Number(out(`f${k}`).Ra).toFixed(3))], 'iron\'s colour; each process\'s Ra, µm').toEqual(['#c0bebb', 0.902, 0.4, 0.02, 2, 12.5]);
+      expect(ways.map((w) => [hexOf(drawn.get(`${w} bar`)?.color), drawn.get(`${w} bar`)?.finish]), 'each bar drawn in iron\'s colour, its own finish').toEqual(ways.map((w) => ['#c0bebb', w])); }
+    { const { out, drawn } = await open('Colours with no dye');
+      expect([out('c_ti30').hex, out('c_ti60').hex, out('c_fe50').hex, out('c_fe90').hex], 'titanium at 30 and 60 V, steel under 50 and 90 nm of oxide').toEqual(['#6ca5ca', '#deb643', '#00308e', '#99b2b9']);
+      expect(drawn.size, 'twenty coupons').toBe(20); expect(hexOf(drawn.get('Titanium, 30 V')?.color), 'each coupon drawn in its film\'s colour').toBe('#6ca5ca'); expect(hexOf(drawn.get('Steel, oxide 50 nm')?.color)).toBe('#00308e'); }
+    { const { out, drawn } = await open('One shape, eight looks'); const ids = ['steel', 'al', 'cu', 'ti', 'tint', 'red', 'blue', 'worn'];
+      expect(ids.map((k) => out(`l_${k}`).hex), 'each look\'s colour').toEqual(['#c0bebb', '#f4f5f6', '#f7cfbf', '#6ca5ca', '#210073', '#b3122b', '#1d3f8f', '#b3122b']);
+      expect(String(out('l_ti').says), 'said of the anodised one, as before').toBe('Titanium anodised at 30 V: its colour from titanium\'s own optics (titanium); a 60 nm film of TiO2 (amorphous) on it, its colour by interference');
+      expect([...drawn.values()].every((d) => d.look && d.finish === 'polished'), 'every ball drawn polished under its own look').toBe(true); }
+    { const { out, drawn } = await open('Paint jobs and wear');
+      expect(['new', 'worn', 'two', 'twow', 'tube', 'ring'].map((k) => out(`l_${k}`).hex), 'each look\'s colour').toEqual(['#b3122b', '#b3122b', '#1d3f8f', '#1d3f8f', '#c0bebb', '#2f6b3a']);
+      expect(String(out('l_new').says), 'the panel\'s two stripes, as before').toMatch(/2 graphics on it \(a 20 mm stripe across x, a 6 mm stripe across x\)$/);
+      expect([drawn.size, [...drawn.values()].every((d) => d.look && d.finish === 'ground')], 'six pieces, ground, each under its look').toEqual([6, true]); }
+    { const { out } = await open('Materials from their phases');
+      expect([out('cfrp').density, out('cfrp').E, +Number(out('cfrp').k).toFixed(2), out('paste').density, out('foam').E], 'the mixtures, as before').toEqual([1536, 139200000000, 6.38, 2800, out('foam').E]);
+      expect([+Number(out('lamb').stiffness).toFixed(1), +Number(out('stlb').stiffness).toFixed(1)], 'each 1 m bar\'s sideways stiffness, N/m').toEqual([6757.5, 9951.8]); }
+    { const { out, drawn } = await open('What it is made of, and what it carries');
+      expect([+Number(out('made').mass).toFixed(4), +Number(out('mp').heat).toFixed(1), +Number(out('mp').y).toFixed(4)], 'its mass, kg, heat capacity, J/K, and centre\'s height, m').toEqual([0.6876, 338.8, 0.1709]);
+      expect((out('made').elements as { element: string }[]).slice(0, 3).map((x) => x.element), 'by element, iron first').toEqual(['Fe', 'Cu', 'Al']);
+      const edges = out('touch').edges as { a: string; b: string; 'area mm²': number }[];
+      expect(edges.filter((x) => x.a === 'steel block').map((x) => [x.b, x['area mm²']]).sort(), 'each rod under the block over its whole end').toEqual([['aluminium rod', 113.1], ['copper rod', 113.1]]);
+      expect(Math.abs(Number(out('therm').hottest) - 35.34), 'the block 5 W warm: within 0.05 °C of the old board').toBeLessThan(0.05);
+      expect([hexOf(drawn.get('copper rod')?.color), hexOf(drawn.get('aluminium rod')?.color), hexOf(drawn.get('steel block')?.color), drawn.get('steel block')?.finish], 'drawn in its old colours, machined').toEqual(['#b87333', '#b0b8c0', '#6d7278', 'machined']); }
+  }, 120_000);
   it('ring copies turned to face out stay apart; a bend drawn hollow weighs what its tube does; a ring cut drawn with its core', () => {
     const blade = roomMade('blade', 'abs', { box: [0.06, 0.004, 0.012] }), fan = roomRing('fan', blade, 5, 0.06, 'clear', true);
     expect(sampleRoom(fan, 12), 'five blades turned out').toEqual(APART);

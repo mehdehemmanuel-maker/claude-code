@@ -275,16 +275,16 @@ export async function drawingsOf(lib: Lib, ids: string[]): Promise<Part[]> { con
 export function wordsOf(id: string): string { return (itemOf(id)?.name ?? id.replace(/^[a-z0-9-]+\./, '')).toLowerCase().replace(/[-_.(),/]+/g, ' ').replace(/\b(m\d+(x[\d.]+)?|\d+([.x]\d+)*\s*(mm|cm|m|in|v|w|a|ah)?|[0-9]+)\b/g, ' ').replace(/\s+/g, ' ').trim(); }
 /** The kind of thing words name, by how such things are made: one maker makes all of a kind. */
 export const CLASSES: { cls: string; re: RegExp; maker: string; says: string }[] = [
-  { cls: 'fastener', re: /\b(bolt|screw|nut|stud|washer|rivet|dowel|pin|clip)s?\b/, maker: 'make.fastener', says: 'headed, threaded or pressed: one fastener node of any size' },
-  { cls: 'winding', re: /\b(coil|winding|solenoid|stator|armature|choke|inductor|transformer)s?\b/, maker: 'make.wound', says: 'wire wound on a former, round a band, or round a pole' },
-  { cls: 'spring', re: /\bsprings?\b/, maker: 'make.coil', says: 'wire coiled round a mandrel' },
-  { cls: 'gear', re: /\b(gear|sprocket|pinion|rotor teeth|ring gear)s?\b/, maker: 'make.gear', says: 'teeth cut round a bore' },
-  { cls: 'sensor', re: /\b(sensor|switch|probe|transducer|sender)s?\b/, maker: 'make.sensor', says: 'a case, an element that senses, a plug: one sensor node of any kind' },
+  { cls: 'fastener', re: /\b(bolt|screw|nut|stud|washer|rivet|dowel|pin|clip)s?\b/, maker: 'piece.bolt', says: 'headed, threaded or pressed: a fastener family by its standard\'s rows (piece.bolt, piece.nut, piece.washer, piece.rivet and the rest)' },
+  { cls: 'winding', re: /\b(coil|winding|solenoid|stator|armature|choke|inductor|transformer)s?\b/, maker: 'piece.winding', says: 'wire wound on a former, round a band, or round a pole' },
+  { cls: 'spring', re: /\bsprings?\b/, maker: 'piece.spring', says: 'wire coiled round a mandrel' },
+  { cls: 'gear', re: /\b(gear|sprocket|pinion|rotor teeth|ring gear)s?\b/, maker: 'piece.gear', says: 'teeth cut round a bore' },
+  { cls: 'sensor', re: /\b(sensor|switch|probe|transducer|sender)s?\b/, maker: 'room.around', says: 'a case moulded round an element that senses, made by the operations' },
   { cls: 'seal', re: /\b(seal|gasket|o ring|o-ring|grommet|boot)s?\b/, maker: 'shape.lathe', says: 'a ring of elastomer or a cut sheet' },
   { cls: 'bearing', re: /\b(bearing|bush|bushing)s?\b/, maker: 'part.family', says: 'a standard size from its family' },
   { cls: 'tube', re: /\b(hose|pipe|tube|line|duct|rail|runner)s?\b/, maker: 'shape.tube', says: 'a tube along a path, bent at its corners' },
   { cls: 'wiring', re: /\b(wire|lead|cable|harness|connector|plug|terminal|loom)s?\b/, maker: 'shape.tube', says: 'leads along paths and moulded plugs' },
-  { cls: 'housing', re: /\b(housing|case|cover|casing|body|shell|can|enclosure|pan|box)s?\b/, maker: 'make.enclosure', says: 'a shell round what it holds' },
+  { cls: 'housing', re: /\b(housing|case|cover|casing|body|shell|can|enclosure|pan|box)s?\b/, maker: 'piece.case', says: 'a shell round what it holds' },
   { cls: 'sheet', re: /\b(plate|bracket|shield|panel|sheet|flange|strap)s?\b/, maker: 'shape.extrude', says: 'cut and bent from sheet, or a section extruded' },
   { cls: 'turned', re: /\b(shaft|pulley|hub|ring|collar|spacer|piston|valve|disc|disk|wheel)s?\b/, maker: 'shape.lathe', says: 'turned about its axis' },
   { cls: 'fluid', re: /\b(pump|injector|nozzle|regulator|filter|cooler|radiator)s?\b/, maker: 'combine', says: 'a housing round a moving or flowing part' },
@@ -360,7 +360,7 @@ export function proposeByMaker(u: Unknown): Proposal | null {
   const body = /knock/.test(w) ? 'puck' : /position|manifold|map\b|hall|speed|throttle/.test(w) ? 'block' : 'threaded';
   const element = /knock/.test(w) ? 'piezo' : /oxygen|o2|air.fuel|lambda/.test(w) ? 'zirconia' : /temperature|thermo/.test(w) ? 'thermistor' : /pressure|map\b|manifold/.test(w) ? 'strain' : 'hall';
   const base = itemOf(`sensor-${body}`); if (!base) return null;
-  return { id: u.id, name: w, of: [...base.of.map((x) => ({ ...x })), { id: `${element}-element`, n: 1 }], make: 'assemble', level: 'inferred', from: `make.sensor (${body}, ${element})`, says: `as the sensor node makes a ${w}: a ${body === 'threaded' ? 'threaded probe' : body} with a ${element} element (how such a sensor is made: to be confirmed by a source)` };
+  return { id: u.id, name: w, of: [...base.of.map((x) => ({ ...x })), { id: `${element}-element`, n: 1 }], make: 'assemble', level: 'inferred', from: `sensor-${body} (${element})`, says: `as such a sensor is made, a ${w}: a ${body === 'threaded' ? 'threaded probe' : body} with a ${element} element (how such a sensor is made: to be confirmed by a source)` };
 }
 export interface Resolvers { drawing?: Part[]; web?: (u: Unknown) => Promise<Proposal | null> }
 /** A proposal kept, unless one is already, or the entry already lists what is in it. Whether it was kept. */

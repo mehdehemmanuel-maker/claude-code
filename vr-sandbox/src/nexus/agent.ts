@@ -58,6 +58,50 @@ export function offersOf(d: BlockDef): string[] {
   offersKept.set(d.id, out); return out;
 }
 
+/** The old blocks that set a place by number and the old makers (CLAUDE.md: not to be built on): found last for a build. */
+const OLD_BUILD = /^(shape\.|place$|place\.|array$|mirror$|make\.|card\.part$|part\.family$|mate$|onto$|turn$|move$|joint$|imprint$|auto\.loop$)/;
+/** A block that builds in the space: an operation, a piece, a joint, a block you saved, or any block that gives a block. */
+export const buildsInSpace = (d: BlockDef): boolean => /^(room|piece|mate)\./.test(d.id) || d.by === 'you' || portsOf(d, defaultsOf(d)).outputs.some((p) => p.type === 'block');
+/** The smallest starter board that uses a block (the cheapest worked example to open), by a title's first words that
+ *  `open` finds it by and no other board starts with; undefined where no board uses it. */
+async function exampleOf(id: string): Promise<string | undefined> {
+  const [{ usage }, { starterBoards }] = await Promise.all([import('./navigate'), import('./starters')]), { used, size } = usage();
+  const best = [...(used.get(id) ?? [])].sort((a, b) => (size.get(a) ?? 0) - (size.get(b) ?? 0) || a.length - b.length)[0]; if (!best) return undefined;
+  const all = starterBoards().map(([t]) => t.toLowerCase()), ws = best.split(' '), cut = (n: number) => ws.slice(0, n).join(' ').replace(/[:,;]$/, '');
+  for (const t of [best.split(':')[0]!, cut(6), cut(10)]) if (t.length >= 8 && all.filter((x) => x.startsWith(t.toLowerCase())).length === 1) return t;
+  return best.slice(0, 120);
+}
+/** What `find` answers, for a build (decision 0026): the blocks that build first, the ones you saved before the library's
+ *  (operations, pieces, joints), each on one line with its inputs, its outputs where they are not the usual ones, its
+ *  settings and defaults, what it offers (the lines and rooms the next operation names) and the smallest starter board
+ *  that uses it, to open as a worked example; then boards, then everything else; the old place-by-number nodes and
+ *  makers last. At most `most` lines, short (tokens matter). */
+export async function findLines(q: string, most = 10): Promise<string> {
+  const { search, spelt } = await import('./navigate'), words = q.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !/^(the|and|with|for|from|into|onto|make|build|some|that|this)$/.test(w)).map(spelt);
+  // (the blocks you saved, by their own words: registered after the library's search index was made, so looked at here)
+  const saved = [...LIBRARY.values()].filter((d) => d.by === 'you' && words.some((w) => `${d.id} ${d.name} ${d.says ?? ''}`.toLowerCase().includes(w)));
+  const found = search(q, 200), seen = new Set(saved.map((d) => d.id)), builders: BlockDef[] = [...saved], boards: string[] = [], rest: string[] = [], old: string[] = [];
+  for (const f of found) {
+    if (f.board) { if (boards.length < 2) boards.push(`board "${f.board.slice(0, 80)}"`); continue; }
+    const id = f.add?.block ?? f.id, d = block(id);
+    if (d && !f.add?.set && buildsInSpace(d) && !OLD_BUILD.test(id)) { if (!seen.has(id)) { seen.add(id); builders.push(d); } continue; }
+    const line = `${id}${f.add?.set ? ` ${JSON.stringify(f.add.set)}` : ''} | ${f.name} | ${f.says.slice(0, 70)}`;
+    (OLD_BUILD.test(id) ? old : rest).push(OLD_BUILD.test(id) ? `${line} (old: sets places by number; not for a new build)` : line);
+  }
+  // (the library's own builders: those whose words start a word of theirs first, the most of the words first, then as the
+  // search ranked them: "lamp" is a bulb before a hose clamp)
+  const said = (d: BlockDef) => words.filter((w) => new RegExp(`\\b${w}`).test(`${d.id} ${d.name} ${d.says ?? ''}`.toLowerCase())).length;
+  // (and where some say a word of the request, those that say none are left out: "lamp" is not a hose clamp at all)
+  const ranked = builders.slice(saved.length).map((d, k) => [d, said(d), k] as const).sort((a, b) => b[1] - a[1] || a[2] - b[2]), any = ranked.some(([, n]) => n > 0);
+  builders.splice(saved.length, Infinity, ...ranked.filter(([, n]) => !any || n > 0).map(([d]) => d));
+  const lineOf = async (d: BlockDef) => { const ps = portsOf(d, defaultsOf(d)), outs = ps.outputs.map((p) => p.name).join(','), offers = offersOf(d), eg = await exampleOf(d.id);
+    const sets = (d.settings ?? []).slice(0, 6).map((x) => `${x.key}=${brief(x.default, 24)}`).join(' ');
+    return `${d.id}: ${d.name.slice(0, 40)}${d.by === 'you' ? ' (yours)' : ''} | in ${ps.inputs.map((p) => `${p.name}${p.many ? '*' : ''}`).join(',') || '-'}${outs === ROOM_GIVES ? '' : ` | out ${outs}`}${sets ? ` | set ${sets}` : ''}${offers.length ? ` | offers ${offers.join(', ')}` : ''}${eg ? ` | e.g. board "${eg}"` : ''}`; };
+  const top = await Promise.all(builders.slice(0, Math.max(1, most - 4)).map(lineOf));
+  const lines = [...top, ...boards, ...rest, ...old].slice(0, most);
+  return lines.length ? `${top.length ? `(what builds first; each gives ${ROOM_GIVES} unless out says; card one for its choices)\n` : ''}${lines.join('\n')}` : 'nothing matches';
+}
+
 /** The agent's tools, each answering in as few words as will do (docs/FOR-AI.md says how they are used). */
 const plan = { nodes: { type: 'object', description: '{name:{"b":blockId,"s":{settings}}}' }, wires: { type: 'array', items: { type: 'string' }, description: '"a.out>b.in"' } };
 const TOOLS: Anthropic.Tool[] = [
@@ -75,7 +119,13 @@ const TOOLS: Anthropic.Tool[] = [
  *  the cards of the blocks most builds are made of (piecesCard), so a build needs no find and no card for them. One text,
  *  the same every call: cached, read again at a tenth of the price. */
 let guide: string | undefined;
-const guideOf = async (): Promise<string> => { if (guide) return guide; const { readFileSync } = await import(/* @vite-ignore */ 'node:fs'); return (guide = `${readFileSync(new URL('../../docs/FOR-AI.md', import.meta.url), 'utf8')}\n\n${piecesCard()}\n\n${workedPlans()}`); };
+/** The fixed prefix sent as one system block with its own cache breakpoint (decision 0026): the guide, the cards and the
+ *  worked plans (and the tools before them, which render first), read back at a tenth of the price by every call that
+ *  follows within five minutes, whatever its request. Top-level caching alone puts its one breakpoint at the end of the
+ *  request, after the request's own words: a new request then reads none of the guide back and writes all of it again
+ *  (prompt caching, automatic vs explicit breakpoints). Whatever changes from call to call goes after it. */
+export const cachedSystem = (text: string): Anthropic.TextBlockParam[] => [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
+export const guideOf = async (): Promise<string> => { if (guide) return guide; const { readFileSync } = await import(/* @vite-ignore */ 'node:fs'); return (guide = `${readFileSync(new URL('../../docs/FOR-AI.md', import.meta.url), 'utf8')}\n\n${piecesCard()}\n\n${workedPlans()}`); };
 
 /** Worked plans, each one that runs with nothing failing (the test runs every one): the hand plan of tests/evals/phone.cjs,
  *  and the starter boards built from pieces (two cells boxed, then a lid added by a change; a bolt and its nut through a
@@ -186,7 +236,7 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
   /** each step as it is taken, with the board as it stands after it (the relay streams these to the page) */ onStep?: (s: AgentStep, board: Board) => void;
   /** what the model says between its tool calls, as it says it */ onSay?: (text: string) => void } = {}): Promise<AgentRun> {
   if (typeof process === 'undefined' || !process.env?.ANTHROPIC_API_KEY) throw new Error('no ANTHROPIC_API_KEY where this runs: the agent runs under Node with it set (the environment\'s secrets); a page holds no keys');
-  const { default: Sdk } = await import('@anthropic-ai/sdk'), client = new Sdk({ baseURL: 'https://api.anthropic.com' }), system = await guideOf();
+  const { default: Sdk } = await import('@anthropic-ai/sdk'), client = new Sdk({ baseURL: 'https://api.anthropic.com' }), system = cachedSystem(await guideOf());
   const model = o.model ?? AGENT_MODEL, steps: AgentStep[] = [], t0 = Date.now(), until = t0 + 1000 * (o.seconds ?? 180);
   const start: Board = o.board ? structuredClone(o.board) : emptyBoard(request.slice(0, 60));
   let tokIn = 0, tokOut = 0, cached = 0, written = 0, stopped: string | undefined;
@@ -214,7 +264,7 @@ export async function agentBuild(request: string, o: { model?: string; effort?: 
  *  code whether the model calls them or a test does with real inputs (no stand-in model: constitution C8). */
 export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ doTool: (name: string, a: Record<string, unknown>) => Promise<string>; board: () => Board; made: AgentBlock[] }> {
   let board: Board = board0, engine: Engine | undefined;
-  const [{ search }, { starterBoards }] = await Promise.all([import('./navigate'), import('./starters')]), made: AgentBlock[] = [];
+  const { starterBoards } = await import('./starters'), made: AgentBlock[] = [];
   // (blocks a person saved, sent with the request: the agent can place them like any other)
   for (const x of blocks ?? []) if (!block(x.id)) register(groupBlock(x.graph, { id: x.id, name: x.name, says: x.says, domains: x.domains, by: 'you' }));
   /** What fails on a run board, assertions first (spec 01, I14): an assertion that does not hold, then any other check a node
@@ -232,10 +282,20 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
     engine = new Engine(board); await engine.run();
     const ids = nodesOf(board).map((n) => n.id), out: string[] = failsOf(engine, board).map((f) => `FAILS ${f}`);
     for (const id of ids) { const st = engine.state.get(id), bad = st?.status !== 'ok'; if (only && !only.has(id) && !bad) continue;
-      if (bad) { out.push(`${id} ${st?.status ?? '?'}: ${(st?.error ?? '').slice(0, 160)}`); continue; }
+      if (bad) { out.push(`${id} ${st?.status ?? '?'}: ${(st?.error ?? '').slice(0, 160)}${hintOf(id, st?.error ?? '')}`); continue; }
       out.push(`${id} ok ${spaceLine(st!.out ?? {}) ?? Object.entries(st!.out ?? {}).filter(([k]) => k !== 'says').slice(0, 6).map(([k, v]) => `${k}=${brief(v, 50)}`).join(' ')}`); }
     return out.length > 40 ? [...out.slice(0, 40), `… and ${out.length - 40} more lines`] : out;
   };
+  /** What a refusal leaves unsaid, said after it (decision 0026: a refusal says the fix): what to do where a piece made
+   *  turned is put over or through, and the offers of what is wired in where a line or room named is not there. */
+  const hintOf = (id: string, err: string): string => {
+    const h = REFUSAL_HINTS.find(([re]) => re.test(err)); if (h) return ` (${h[1]})`;
+    if (!/offers no (hole|holes|line|room)/.test(err) || /it offers/.test(err)) return '';
+    const offers = [...new Set(edgesOf(board).filter((e) => e.to === id).flatMap((e) => (engine?.state.get(e.from)?.out?.offers as string[] | undefined) ?? []))];
+    return offers.length ? ` (what is wired in offers: ${offers.join('; ').slice(0, 200)})` : '';
+  };
+  /** Settings a plan named otherwise than its block, read as the block names them: said back as notes, never refused. */
+  let notes: string[] = [];
   /** What a plan's `s` may give a block: its settings, and the value of any input left unwired (as the page sets it). */
   const keysOf = (d: BlockDef) => new Set([...(d.settings ?? []).map((x) => x.key), ...portsOf(d, defaultsOf(d)).inputs.map((p) => p.name)]);
   /** Nodes placed on the board from a plan's names, each block's settings checked against it: what was wrong, said. */
@@ -246,8 +306,10 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
     for (const [nm, n] of Object.entries(nodes as Record<string, { b?: string; s?: Record<string, unknown> }>)) { const d = block(String(n.b)); if (!d) { bad.push(`${nm}: no block "${n.b}"`); continue; }
       // (a name already on the board is refused, never silently replaced (decision 0026): the node there is kept)
       const was = board.nodes[nm]; if (was && !was.deleted) { bad.push(`${nm}: a node of that name is on the board already (${was.block ?? 'a group'}): add it by another name, or set or remove that one`); continue; }
-      const keys = keysOf(d), wrong = Object.keys(n.s ?? {}).filter((k) => !keys.has(k)); if (wrong.length) bad.push(`${nm}: ${d.id} has no setting or input ${wrong.join(', ')} (it has ${[...keys].join(', ') || 'none'})`);
-      placeBlock(board, d.id, 0, 0, { ...defaultsOf(d), ...Object.fromEntries(Object.entries(n.s ?? {}).filter(([k]) => keys.has(k))) }, nm); board.nodes[nm]!.label = nm; }
+      const keys = keysOf(d), set: Record<string, unknown> = {}, wrong: string[] = [];
+      for (const [k, v] of Object.entries(n.s ?? {})) { const r = readSetting(d, keys, k, v); if (!r.key) { wrong.push(k); continue; } set[r.key] = r.value; if (r.note) notes.push(`${nm}: ${r.note}`); }
+      if (wrong.length) bad.push(`${nm}: ${d.id} has no setting or input ${wrong.join(', ')} (it has ${[...keys].join(', ') || 'none'})`);
+      placeBlock(board, d.id, 0, 0, { ...defaultsOf(d), ...set }, nm); board.nodes[nm]!.label = nm; }
     return Object.keys(nodes).filter((nm) => board.nodes[nm]);
   };
   const wireAll = (ws: string[], bad: string[]) => { for (const w of ws) { const m = /^(\w+)\.(\w+)\s*>\s*(\w+)\.(\w+)$/.exec(String(w).trim()); if (!m) { bad.push(`wire "${w}": write it a.out>b.in`); continue; }
@@ -255,24 +317,24 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
     try { wire(board, m[1]!, m[2]!, m[3]!, m[4]!); } catch (e) { bad.push(`wire ${w}: ${(e as Error).message}`); } } };
   const doTool = async (name: string, a: Record<string, unknown>): Promise<string> => {
     switch (name) {
-      case 'find': return search(String(a.q ?? ''), 10).map((f) => (f.board ? `board "${f.board}" | ${f.says.slice(0, 90)}` : `${f.add?.block ?? f.id}${f.add?.set ? ` ${JSON.stringify(f.add.set)}` : ''} | ${f.name} | ${f.says.slice(0, 90)}`)).join('\n') || 'nothing matches';
+      case 'find': return findLines(String(a.q ?? ''), 10);
       case 'card': { const d = block(String(a.id)); if (!d) throw new Error(`no block "${a.id}"`); return cardOf(d); }
-      case 'build': { const bad: string[] = []; board = emptyBoard(board.title); place(a.nodes ?? {}, bad); wireAll((a.wires ?? []) as string[], bad); return [...bad.map((x) => `! ${x}`), ...(await runLines())].join('\n'); }
+      case 'build': { const bad: string[] = []; notes = []; board = emptyBoard(board.title); place(a.nodes ?? {}, bad); wireAll((a.wires ?? []) as string[], bad); return [...bad.map((x) => `! ${x}`), ...notes.map((x) => `note ${x}`), ...(await runLines())].join('\n'); }
       case 'open': { const t = String(a.title ?? '').toLowerCase(), hit = starterBoards().find(([title]) => title.toLowerCase().startsWith(t)) ?? starterBoards().find(([title]) => title.toLowerCase().includes(t));
         if (!hit) throw new Error(`no starter board "${a.title}": find it first`); board = hit[1](); return [`opened "${hit[0].slice(0, 80)}"`, ...(await runLines())].join('\n'); }
-      case 'change': { const bad: string[] = [], touched = new Set<string>();
+      case 'change': { const bad: string[] = [], touched = new Set<string>(); notes = [];
         // (made on a copy: the board open is replaced only when every check that held on it still holds (design §2.8))
         if (!engine) { engine = new Engine(board); await engine.run(); }
         const accepted = board, before = engine, held = heldOf(before, accepted); board = JSON.parse(JSON.stringify(board)) as Board;
         for (const id of (a.remove ?? []) as string[]) { if (!board.nodes[id]) { bad.push(`no node ${id}`); continue; } board.nodes[id] = { ...board.nodes[id]!, deleted: true }; for (const e of edgesOf(board)) if (e.from === id || e.to === id) board.edges[e.id] = { ...board.edges[e.id]!, deleted: true }; }
         for (const w of (a.unwire ?? []) as string[]) { const [to, inp] = String(w).split('.'); const hit = edgesOf(board).filter((e) => e.to === to && e.in === inp); if (!hit.length) bad.push(`nothing feeds ${w}`); for (const e of hit) board.edges[e.id] = { ...board.edges[e.id]!, deleted: true }; touched.add(to!); }
         for (const [id, kv] of Object.entries((a.set ?? {}) as Record<string, Record<string, unknown>>)) { const n = board.nodes[id], d = n?.block ? block(n.block) : undefined; if (!n || !d) { bad.push(`no node ${id}`); continue; }
-          const keys = keysOf(d); for (const [k, v] of Object.entries(kv)) { if (!keys.has(k)) { bad.push(`${id}: no setting or input ${k} (it has ${[...keys].join(', ')})`); continue; } n.set = { ...(n.set ?? {}), [k]: v }; } touched.add(id); }
+          const keys = keysOf(d); for (const [k, v] of Object.entries(kv)) { const r = readSetting(d, keys, k, v); if (!r.key) { bad.push(`${id}: no setting or input ${k} (it has ${[...keys].join(', ')})`); continue; } if (r.note) notes.push(`${id}: ${r.note}`); n.set = { ...(n.set ?? {}), [r.key]: r.value }; } touched.add(id); }
         for (const k of place(a.add, bad)) touched.add(k);
         const ws = (a.wires ?? []) as string[]; wireAll(ws, bad); ws.forEach((w) => touched.add(String(w).split('>')[1]?.trim().split('.')[0] ?? ''));
         // (what the changes reach downstream is said too: a setting moved shows where it went)
         for (const e of edgesOf(board)) if (touched.has(e.from)) touched.add(e.to);
-        const lines = [...bad.map((x) => `! ${x}`), ...(await runLines(touched))], now = heldOf(engine!, board), broke = [...held].filter((id) => board.nodes[id] && !board.nodes[id]!.deleted && !now.has(id));
+        const lines = [...bad.map((x) => `! ${x}`), ...notes.map((x) => `note ${x}`), ...(await runLines(touched))], now = heldOf(engine!, board), broke = [...held].filter((id) => board.nodes[id] && !board.nodes[id]!.deleted && !now.has(id));
         if (broke.length) { shadow = { board, engine: engine! }; board = accepted; engine = before;
           return [`NOT TAKEN: it breaks what held (${broke.join(', ')}); the board is as it was. The change is kept as a shadow (read it with shadow: true); change again to mend it.`, ...lines].join('\n'); }
         shadow = undefined; return lines.join('\n'); }
@@ -294,6 +356,30 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
   };
   return { doTool, board: () => board, made };
 }
+
+/** Words a plan names a setting by that a block names otherwise (decision 0026: a reasonable plan is read, not refused). */
+const SETTING_ALSO: Record<string, string[]> = { material: ['mat', 'matter'], mat: ['matter', 'material'], matter: ['mat', 'material'], color: ['colour'], colour: ['color'], len: ['length'], count: ['n'], copies: ['n'], thread: ['size'], radius: ['R'] };
+/** A face a plan names in words, read as one of the six faces. */
+const FACE_WORDS: Record<string, string> = { top: '+y', up: '+y', above: '+y', bottom: '-y', down: '-y', below: '-y', right: '+x', left: '-x', front: '+z', back: '-z' };
+/** A setting a plan names, read as its block names it: the key itself; the same key in another case or with spaces; a
+ *  word the block says otherwise (`material` for `mat`); the one setting whose label holds the word whole (`thickness` for
+ *  a plate's `t`). A choice given in another case, or a face in words (`top` for +y), read as the choice. No key where
+ *  none is meant: the plan is told the keys there are. Each reading said back (a `note` line), never silent. */
+export function readSetting(d: BlockDef, keys: Set<string>, k: string, v: unknown): { key?: string; value: unknown; note?: string } {
+  const flat = (s: string) => s.toLowerCase().replace(/[\s_-]+/g, '');
+  let key = keys.has(k) ? k : [...keys].find((x) => flat(x) === flat(k)) ?? (SETTING_ALSO[flat(k)] ?? []).find((x) => keys.has(x));
+  if (!key && /^[a-z]{3,}$/.test(flat(k))) { const hits = (d.settings ?? []).filter((x) => x.label && new RegExp(`\\b${flat(k)}\\b`, 'i').test(x.label)); if (hits.length === 1) key = hits[0]!.key; }
+  if (!key) return { value: v };
+  const cs = (d.settings ?? []).find((s) => s.key === key)?.choices?.map(String), said = key !== k ? [`${k} read as ${key}`] : []; let value = v;
+  if (cs && typeof v === 'string' && !cs.includes(v)) { const w = v.toLowerCase().trim(), c = cs.find((x) => x.toLowerCase() === w) ?? (cs.includes('+y') ? FACE_WORDS[w] : undefined); if (c) { value = c; said.push(`"${v}" read as ${c}`); } }
+  return { key, value, ...(said.length ? { note: said.join('; ') } : {}) };
+}
+/** What to do where an operation refuses: a piece made turned (a valve laid along its flow) as its sleeve or passer, a sleeve slid where the line is not clear. */
+const REFUSAL_HINTS: [RegExp, string][] = [
+  [/is turned: a sleeve goes over/, 'a piece made turned slides over nothing: make it the host (wire its block into host) and pass the straight part through its line, or take a part made upright'],
+  [/is turned or bent: a passer goes along/, 'what is turned or bent passes no further: pass the straight piece first, into what is turned as its host'],
+  [/^no room over .* would meet /, 'that end of the line is in or against it: a longer piece the line is on, or `where`/`along` at a stretch clear of it'],
+];
 
 /** What a piece's or an operation's run is said as to the AI (decision 0026): its pieces, its mass and every line and
  *  room it offers (what the next operation names), any refusal, never the block's insides; undefined for any other node. */
@@ -472,17 +558,33 @@ Nodes and wires exactly as the build tool takes them; blocks and settings from t
 are sure of its id and inputs). \`says\`: one sentence of what it makes. Give no numbers of your own: the board, run, gives
 them. Asked again with what failed: a change that mends only those lines.`;
 
-/** What Assist's one call is sent: the board's short listing, then the request, or, asked again, only what failed. */
-export function planAsk(request: string, board?: Board, failing?: string[]): string {
-  return [boardBrief(board), failing?.length ? `Asked: ${request.slice(0, 400)}\nWhen the plan ran, these failed (mend only them, with a change):\n${failing.slice(0, 12).join('\n')}` : request].filter(Boolean).join('\n\n');
+/** The cards of the blocks the person saved, a line each (the tool loop registers them and `find` reaches them; Assist has
+ *  one call, so they are sent with it): after the cached prefix, as they differ from person to person. */
+export function savedCards(blocks?: AgentBlock[]): string {
+  for (const x of blocks ?? []) if (!block(x.id)) { try { register(groupBlock(x.graph, { id: x.id, name: x.name, says: x.says, domains: x.domains, by: 'you' })); } catch { /* one that no longer opens is left out */ } }
+  const ds = (blocks ?? []).map((x) => block(x.id)).filter((d): d is BlockDef => !!d);
+  return ds.length ? `Blocks you saved (place them by their id like any other):\n${ds.map(cardOf).join('\n')}` : '';
+}
+
+/** What Assist's one call is sent: the blocks the person saved, the board's short listing, then the request, or, asked
+ *  again, only what failed. */
+export function planAsk(request: string, board?: Board, failing?: string[], blocks?: AgentBlock[]): string {
+  return [savedCards(blocks), boardBrief(board), failing?.length ? `Asked: ${request.slice(0, 400)}\nWhen the plan ran, these failed (mend only them, with a change):\n${failing.slice(0, 12).join('\n')}` : request].filter(Boolean).join('\n\n');
+}
+
+/** Assist's one request as sent (decision 0026): the guide, the cards, the worked plans and the plan rule as one system
+ *  block cached by its own breakpoint (the same text every call: read back at a tenth); after it, the saved blocks' cards,
+ *  the board and the request (no top-level caching: it would write this one-off tail to the cache every call, never read). */
+export async function planRequest(request: string, o: { model?: string; effort?: 'low' | 'medium' | 'high'; board?: Board; failing?: string[]; blocks?: AgentBlock[] } = {}) {
+  return { model: o.model ?? AGENT_MODEL, max_tokens: 4000, system: cachedSystem(`${await guideOf()}\n\n${PLAN_RULE}`), output_config: { effort: o.effort ?? 'low' }, messages: [{ role: 'user', content: planAsk(request, o.board, o.failing, o.blocks) }] } satisfies Anthropic.MessageCreateParamsNonStreaming;
 }
 
 /** Assist (decision 0025): one call, no tool loop, no second model: the request answered by a plan in the build or change
  *  tool's own form, for the page to show, let a person change, and run itself (runPlan). Under Node, as agentBuild. */
-export async function agentPlan(request: string, o: { model?: string; effort?: 'low' | 'medium' | 'high'; board?: Board; failing?: string[]; signal?: AbortSignal } = {}): Promise<PlanRun> {
+export async function agentPlan(request: string, o: { model?: string; effort?: 'low' | 'medium' | 'high'; board?: Board; failing?: string[]; blocks?: AgentBlock[]; signal?: AbortSignal } = {}): Promise<PlanRun> {
   if (typeof process === 'undefined' || !process.env?.ANTHROPIC_API_KEY) throw new Error('no ANTHROPIC_API_KEY where this runs: the agent runs under Node with it set (the environment\'s secrets); a page holds no keys');
   const { default: Sdk } = await import('@anthropic-ai/sdk'), client = new Sdk({ baseURL: 'https://api.anthropic.com' }), t0 = Date.now();
-  const r = await client.messages.create({ model: o.model ?? AGENT_MODEL, max_tokens: 4000, cache_control: { type: 'ephemeral' }, system: `${await guideOf()}\n\n${PLAN_RULE}`, output_config: { effort: o.effort ?? 'low' }, messages: [{ role: 'user', content: planAsk(request, o.board, o.failing) }] }, { signal: o.signal ?? AbortSignal.timeout(60_000) });
+  const r = await client.messages.create(await planRequest(request, o), { signal: o.signal ?? AbortSignal.timeout(60_000) });
   const turn = turnOf(r), text = turn.ends ? turn.answer : '';
   const tokens = { in: r.usage.input_tokens, out: r.usage.output_tokens, cached: r.usage.cache_read_input_tokens ?? 0, written: r.usage.cache_creation_input_tokens ?? 0 };
   try { return { plan: planOf(text), text: text.slice(0, 4000), model: r.model, tokens, ms: Date.now() - t0 }; }

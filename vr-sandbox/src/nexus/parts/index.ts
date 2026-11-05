@@ -21,7 +21,7 @@ import { KINDS } from '../kinds';
 import { FAMILIES, type Family } from '../families';
 import type { Item } from '../inventory';
 import { readKind } from '../kinds/core';
-import { CHECK_ROW, familyNode, type Expect, type PartFamily } from './maker';
+import { CHECK_ROW, SIZED_PIECE, familyNode, type Expect, type PartFamily } from './maker';
 import { ELECTRONICS } from './electronics';
 import type { BlockDef } from '../blocks';
 import { MOTION_FAMILIES } from './motion';
@@ -192,7 +192,7 @@ const KIND: PartFamily<Family> = {
 
 /** Every family the maker makes, as the nodes it registers (blocks.ts puts them in the piece.* shelf). */
 export const FAMILIES_MADE = [BOLT, NUT, WASHER, SETSCREW, BEARING, CIRCLIP, KEY, ORING, NPSPIPE, STEPPER, KIND, ...MOTION_FAMILIES, ...ELECTRONICS, ...PLUMBING] as PartFamily<unknown>[];
-export const PIECE_NODES: BlockDef[] = [...FAMILIES_MADE.map((f) => familyNode(f)), CHECK_ROW];
+export const PIECE_NODES: BlockDef[] = [...FAMILIES_MADE.map((f) => familyNode(f)), CHECK_ROW, SIZED_PIECE];
 import { BUILDING_NODES } from './building'; PIECE_NODES.push(...BUILDING_NODES); // (building and structural, decision 0026 step 2)
 export type { Expect };
 import { HARDWARE_NODES } from './hardware'; PIECE_NODES.push(...HARDWARE_NODES); // fasteners and hardware (decision 0026, step 2)

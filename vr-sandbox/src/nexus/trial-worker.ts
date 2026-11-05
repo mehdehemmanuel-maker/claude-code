@@ -7,11 +7,12 @@ import { walkBuild } from './stock';
 import type { Carry, Job } from './pool';
 
 const runners = new Map<string, ReturnType<typeof runnerOf>>();
-async function handle(m: { id: number; job: Job; carry?: Carry }): Promise<unknown> {
+async function handle(m: { id: number; job: Job; carry?: Carry | Carry[] }): Promise<unknown> {
   try {
     // (a named task rather than a block: every build in the library walked for its pieces, stock.ts)
     if (m.job.block.startsWith('#task:')) { const t = m.job.block.slice(6); if (t === 'stock.walk') return { id: m.id, out: await walkBuild(String(m.job.inputs.id)) }; throw new Error(`no task "${t}"`); }
-    if (m.carry && !block(m.carry.id)) register(groupBlock(m.carry.graph, { id: m.carry.id, name: m.carry.name, says: m.carry.says ?? '', domains: m.carry.domains ?? ['software'], by: 'you' }));
+    // (each block carried that is not here yet, inner first: a saved block holding another runs (fault D34))
+    for (const c of m.carry ? [m.carry].flat() : []) if (!block(c.id)) register(groupBlock(c.graph, { id: c.id, name: c.name, says: c.says ?? '', domains: c.domains ?? ['software'], by: 'you' }));
     const d = block(m.job.block); if (!d) throw new Error(`no block "${m.job.block}" in the library`);
     let r = runners.get(d.id); if (!r) { r = runnerOf(d); runners.set(d.id, r); }
     return { id: m.id, out: await r(m.job.inputs, m.job.set) };

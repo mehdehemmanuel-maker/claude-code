@@ -2783,3 +2783,41 @@ end, 20 pieces; a steel post bolted through a block, 19 pieces. Left open, for t
 - there is no aircrete, OSB or mortar density;
 - no ball casters, T-nuts in a slot, MGN counterbores, belts round pulleys, stepper pilot mounts or D-shaft flats;
 - no picture of any new piece was looked at.
+
+## 2026-11-05: decision 0026, step 3: assemblies as blocks, search for building, the old makers' boards rebuilt (rough, by five agents, merged here)
+
+- **Assemblies as blocks.** A folded block's inputs can now set its inner nodes' settings (group.in `into`). The bound
+  copy is run once per set of values and kept (spec 13 NC5). Folding, opening and merging twins keep a many-input's order
+  (fault D32). The Stack's `order` setting alone did not hold it, because a fold gives the group a new id. A saved block
+  holding another saved block runs on the workers (D34): 4 jobs asked wide gave [3,5,7,9]. The small DC motor is one
+  library block, `seed.motor-dc`, with settings R, L and shaft; a pack of two cells is another, `seed.pack-two`. The four
+  boards that copied the motor helper place them now. Each board's shown thing is digest-equal to the old board's (the
+  builder's probe, deleted), at fewer nodes: the motor 15 to 3, the desk fan 31 to 24, the robot base 36 to 19 and the
+  quadcopter 35 to 23. These plan rows are not marked passing: the evaluator has not judged them.
+- **Search and Assist.** `find` answers a build with what builds first, one line each: its inputs, its settings, what it
+  offers, and the smallest starter board that uses it. About 1.2k to 1.3k characters for 'motor', 'bolt a plate' or 'pipe
+  valve' (`npx vitest run tests/nexus/domains.test.ts -t 'find answers a build'`). Assist's one call carries the person's
+  saved blocks. The guide, the cards and the worked plans are now one system block with its own cache mark. Before, the
+  only mark was at the request's end: the 40-build baseline, `npm run eval:builds` on 8cab483, read the cache in 1 call
+  of 72 and wrote 492,297 tokens to it. A setting named otherwise in a plan is read and said back as a note.
+- **Looks and materials boards.** Seven are built by room.make, room.stack and room.turn, with variant and look by
+  piece name. Every colour, finish, look, mixture and bar stiffness held exactly. The made-of board's rods now touch,
+  because no operation stands two blocks a set distance apart, so its heat path, warming stress and bend stiffness
+  changed (4.90 K/W, was 5.72).
+- **Physics and controls boards.** Let it go takes a room block, each piece a body by its name, and a hinge sits on a line
+  a block offers. The cart reached 6.583 m/s against the 6.62 m/s worked from its motor's constants. The pendulum's
+  period was 1.7315 s against 1.737 s. The ball and tower, and the controls board, run. The body board is kept, because
+  no operation turns a segment about another's end.
+- **Old makers.** The battery, the gauntlet's sensor, the bolt from its load and the M8 export boards are rebuilt by the
+  operations, with a new `piece.sized` (a family's piece at a size along a wire). Deleted: 15 `make.*` nodes, `card.part`,
+  and the sensor, fastener, turned, housing, chip and chain makers. Places written by hand fell from 612 to 564
+  (`node scripts/by-hand.mjs`).
+- **Kept.** `part.family` (the paste board, an AI-tools test), `make.coil` (a seed), components.ts, and the three spec 01
+  interface boards: imprint and cut.standard take Parts, not room blocks.
+- **Left open, for the polish pass:**
+  - the rebuilt battery's plates are solid lead (33.85 kg drawn, heavier than a real group 35, said on its board);
+  - no operation stands two things a set distance apart;
+  - a valve laid along x inside its own maker cannot take a pipe;
+  - `mate.lid` makes a lid with no holes;
+  - room.make takes no colour;
+  - no picture of any rebuilt board was looked at.

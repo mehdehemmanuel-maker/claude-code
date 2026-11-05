@@ -16,7 +16,11 @@ export interface BoardNode { label: string; note?: string; x?: number | null; y?
   block?: string; set?: Record<string, unknown>; inner?: Board }
 export interface BoardEdge { from: string; to: string; rel?: string; label?: string; note?: string; deleted?: boolean
   /** A wire between blocks: from the output port named `out` to the input port named `in`. */
-  out?: string; in?: string }
+  out?: string; in?: string
+  /** Where a wire into an input that takes many comes in its list, when it was made in place of another (by a fold, an
+   *  opening, a merge of twins): the order key of the wire it replaced (its `order`, else its source's id). A wire made
+   *  by hand has none and comes by its source's id (spec 13, 2.7; fault D32). */
+  order?: string }
 export interface Board {
   title: string; kind?: string; about?: string;
   nodes: Record<string, BoardNode>; edges: Record<string, BoardEdge>;

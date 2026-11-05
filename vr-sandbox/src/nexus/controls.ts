@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { register, type BlockDef, type PortDef, type Type } from './blocks';
 import { boundsOfAll, isAssembly, place, type Assembly } from './assembly';
 import type { Part } from './kits';
+import { partOfBlock, stack as roomStack, type Block } from './room';
 
 /** What every control is at, by its name. */
 const STATE = new Map<string, unknown>();
@@ -56,6 +57,23 @@ export function withButton(t: Part | Assembly, name: string, face: string, colou
   return { name: `${t.name} with a button`, items: [place(t), place(button, at, rot)] };
 }
 
+/** A thing driven by a stick: the piece named (or all of it) carried from where it was made by the stick's travel and
+ *  turned by its turning about its own upright middle; the rest where it was. No place is given: the stick's state
+ *  moves what the operations put. */
+export function driven(t: Part | Assembly, piece: string, s: StickState): Assembly {
+  const kids = !isAssembly(t) ? t.parts ?? [] : [], mine = piece ? kids.filter((p) => p.name === piece) : [];
+  if (piece && !mine.length) throw new Error(`the ${t.name} has no piece "${piece}" to drive (it has ${[...new Set(kids.map((p) => p.name))].join(', ') || 'none'})`);
+  const carry = (p: Part | Assembly): Assembly['items'][number] => {
+    const own = !isAssembly(p) ? new THREE.Vector3(...(p.at ?? [0, 0, 0])) : new THREE.Vector3(), q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.turn);
+    const turned = new THREE.Euler().setFromQuaternion(q.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(...(!isAssembly(p) ? p.rot ?? [0, 0, 0] : [0, 0, 0])))));
+    const to = own.clone().add(new THREE.Vector3(s.px, 0, s.pz));
+    return place(p, [to.x, to.y, to.z], [turned.x, turned.y, turned.z]);
+  };
+  if (!piece) return { name: `${t.name}, driven`, items: [carry(t)] };
+  const rest = kids.filter((p) => p.name !== piece);
+  return { name: `${t.name}, driven`, items: [...rest.map((p) => place(p, p.at ?? [0, 0, 0], p.rot ?? [0, 0, 0])), ...mine.map(carry)] };
+}
+
 const COLOURS: Record<string, number> = { red: 0xe53935, green: 0x43a047, blue: 0x1e88e5, yellow: 0xfdd835, white: 0xeceff1 };
 
 register({ version: 1, by: 'built in', pure: false, id: 'control.button', name: 'Button', kind: 'input', ability: 'measure', domains: ['everyday', 'software', 'electrical'],
@@ -63,18 +81,21 @@ register({ version: 1, by: 'built in', pure: false, id: 'control.button', name: 
   says: 'A button you press while the board runs: on a computer by its key, on a phone by the button drawn on the screen, in a headset by a hand\'s ray; given a thing, the button is put on it (on top, the front or the side) and pressed there, in the 3D world. A toggle stays on until pressed again. It gives whether it is down (or on), how many presses, and the thing with the button on it',
   settings: [{ key: 'name', label: 'Name (its label; one name, one button)', type: 'text', default: 'Go' }, { key: 'key', label: 'Key on a computer (a letter, Space, Enter)', type: 'text', default: 'E' }, { key: 'mode', label: 'Press or toggle', type: 'choice', default: 'press', choices: ['press', 'toggle'] }, { key: 'face', label: 'On the thing, where', type: 'choice', default: 'top', choices: ['top', 'front', 'side'] }, { key: 'colour', label: 'Colour', type: 'choice', default: 'red', choices: Object.keys(COLOURS) }],
   live: (set) => JSON.stringify(controlState(String(set.name || 'Go'), null)),
-  ports: { inputs: [P('thing', 'assembly', { optional: true, label: 'a thing to put it on' })], outputs: [P('on', 'boolean', { label: 'down (or on)' }), P('presses', 'integer'), P('thing', 'assembly', { label: 'the thing with the button on it' })] },
-  run: (i, c) => { const name = String(c.set.name || 'Go'), s = controlState<ButtonState>(name, { on: false, presses: 0 }), t = i.thing as Part | Assembly | undefined;
-    return { on: s.on, presses: s.presses, thing: withButton(t && (isAssembly(t) || typeof (t as Part).name === 'string') ? t : { name: 'nothing' } as Part, name, String(c.set.face), COLOURS[String(c.set.colour)] ?? COLOURS.red!) }; },
+  ports: { inputs: [P('thing', 'assembly', { optional: true, label: 'a thing to put it on' }), P('block', 'block', { optional: true, label: 'a block of the room: one more of it in the row each press' })], outputs: [P('on', 'boolean', { label: 'down (or on)' }), P('presses', 'integer'), P('thing', 'assembly', { label: 'the thing with the button on it' }), P('row', 'block', { label: 'the row: one more than the presses, laid along x on the ground by the room\'s Stack (a clear fit)' })] },
+  run: (i, c) => { const name = String(c.set.name || 'Go'), s = controlState<ButtonState>(name, { on: false, presses: 0 }), t = i.thing as Part | Assembly | undefined, bk = i.block as Block | undefined;
+    // (the row made by the room's own Stack: no place given, so no crate can be put in another)
+    const row = bk ? (s.presses ? roomStack(`row of ${bk.name}`, 0, Array.from({ length: s.presses + 1 }, (_, k) => ({ b: bk, ...(k ? { fit: 'clear' as const } : {}) })), undefined, true) : bk) : undefined;
+    return { on: s.on, presses: s.presses, thing: withButton(t && (isAssembly(t) || typeof (t as Part).name === 'string') ? t : row ? partOfBlock(row) : { name: 'nothing' } as Part, name, String(c.set.face), COLOURS[String(c.set.colour)] ?? COLOURS.red!), ...(row ? { row } : {}) }; },
   tests: [{ set: { name: 'test-button' }, inputs: {}, outputs: { on: false, presses: 0 } }] } as BlockDef);
 
 register({ version: 1, by: 'built in', pure: false, id: 'control.stick', name: 'Stick (move and steer)', kind: 'input', ability: 'measure', domains: ['everyday', 'software', 'vehicles'],
   spec: spec('A stick a person pushes while the board runs: where it points, and where it has carried something.'),
   says: 'A stick you push while the board runs: on a computer the arrow keys (or W A S D when you are not walking), on a phone a stick drawn on the screen, in a headset the right hand\'s stick. It gives where it is pushed (x right, y forward, −1 to 1) and where it has carried something at its speed: wire px, pz and turn into Place to drive a thing about (steer: forward drives, left and right turn it as a car does)',
-  settings: [{ key: 'name', label: 'Name', type: 'text', default: 'Move' }, { key: 'speed', label: 'Speed at full push, m/s', type: 'number', default: 2 }, { key: 'mode', label: 'Slide or steer', type: 'choice', default: 'steer', choices: ['steer', 'slide'] }],
+  settings: [{ key: 'name', label: 'Name', type: 'text', default: 'Move' }, { key: 'speed', label: 'Speed at full push, m/s', type: 'number', default: 2 }, { key: 'mode', label: 'Slide or steer', type: 'choice', default: 'steer', choices: ['steer', 'slide'] }, { key: 'piece', label: 'Of the thing, the piece it drives (its name; blank: all of it)', type: 'text', default: '' }],
   live: (set) => JSON.stringify(controlState(String(set.name || 'Move'), null)),
-  ports: { inputs: [], outputs: [P('x', 'number'), P('y', 'number'), P('px', 'number', { unit: 'm', label: 'carried to, x' }), P('pz', 'number', { unit: 'm', label: 'carried to, z' }), P('turn', 'number', { unit: 'rad', label: 'turned to' })] },
-  run: (_, c) => { const s = controlState<StickState>(String(c.set.name || 'Move'), { x: 0, y: 0, px: 0, pz: 0, turn: 0 }); return { x: s.x, y: s.y, px: s.px, pz: s.pz, turn: s.turn }; },
+  ports: { inputs: [P('thing', 'assembly', { optional: true, label: 'a thing to drive (a room block\'s drawing)' })], outputs: [P('x', 'number'), P('y', 'number'), P('px', 'number', { unit: 'm', label: 'carried to, x' }), P('pz', 'number', { unit: 'm', label: 'carried to, z' }), P('turn', 'number', { unit: 'rad', label: 'turned to' }), P('driven', 'assembly', { label: 'the thing, its piece carried from where it was made to where the stick has driven it' })] },
+  run: (i, c) => { const s = controlState<StickState>(String(c.set.name || 'Move'), { x: 0, y: 0, px: 0, pz: 0, turn: 0 }), t = i.thing as Part | Assembly | undefined;
+    return { x: s.x, y: s.y, px: s.px, pz: s.pz, turn: s.turn, ...(t ? { driven: driven(t, String(c.set.piece ?? '').trim(), s) } : {}) }; },
   tests: [{ set: { name: 'test-stick' }, inputs: {}, outputs: { x: 0, y: 0, px: 0, pz: 0 } }] } as BlockDef);
 
 register({ version: 1, by: 'built in', pure: false, id: 'control.slider', name: 'Slider', kind: 'input', ability: 'measure', domains: ['everyday', 'software'],
