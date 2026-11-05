@@ -22,6 +22,8 @@
 //   run      a tube laid as segments (straights, sleeves round them, bends) each from where the last ended in the last
 //            one's frame: each lies between its start's plane and its end's, so two that follow one another meet only
 //            on their shared plane; two that do not are kept apart by (3). A bend radius not above the tube's is refused.
+//   branch   a tube joined square into the side of a straight (a tee's branch): the straight's wall opened by the
+//            branch's bore, the branch's end cut to the straight's outside (a saddle), both cuts: (B − S) ∩ (A − H) = ∅.
 //
 // The comparisons the operations make (none decides whether two solids may share a point; construction does):
 //   (1) each size's sign and finiteness, as it is written;
@@ -39,7 +41,9 @@
 // refused; face patches are sampled (a 64-cell grid, so a few per cent), a turned piece laid on a plane touches it along
 // an edge and no face is written for it, and a face written before a later cut keeps its first area. Known ways past it, found by a red team on
 // 2026-11-02 and not yet closed: a room on a moving host, a bought host on a joint, the 1e-12 m tolerance at very small
-// sizes, rounding at 1e20 m, and data changed after it is checked (docs/REALITY.md).
+// sizes, rounding at 1e20 m, and data changed after it is checked (docs/REALITY.md). Found on 2026-11-05 and not yet closed:
+// two pieces laid against a turned plane can both hold a point within about 1e-18 m of it (each rounded apart); a tilt
+// under 1e-12 in a direction cosine is taken as upright whatever the length.
 import type { Cut, Part, Shape } from './kits';
 
 export type P3 = readonly [number, number, number];
@@ -122,6 +126,7 @@ const rodrigues = (u: P3, c: number, s: number): M3 => { const [x, y, z] = u, t 
 /** A turn by so many degrees about x, y or z (or any axis), right-handed; a quarter turn's written exactly. */
 export function turnOf(axis: Axis | P3, deg: number): M3 {
   if (!Number.isFinite(deg)) throw new Error(`a turn is finite (${deg}°)`);
+  if (typeof axis === 'number' && axis !== 0 && axis !== 1 && axis !== 2) throw new Error(`a turn is about x, y or z (0, 1, 2) or a direction, not ${axis}`);
   const u: V3 = typeof axis === 'number' ? (() => { const n: V3 = [0, 0, 0]; n[axis] = 1; return n; })() : (() => { const n = Math.hypot(axis[0], axis[1], axis[2]); if (!(n > 0 && Number.isFinite(n))) throw new Error('a turn about an axis of some length'); return [axis[0] / n, axis[1] / n, axis[2] / n] as V3; })();
   const q = ((deg % 360) + 360) % 360, quarter = [1, 0, -1, 0][q / 90];
   const c = Number.isInteger(q / 90) ? quarter! : Math.cos((q * Math.PI) / 180), s = Number.isInteger(q / 90) ? [0, 1, 0, -1][q / 90]! : Math.sin((q * Math.PI) / 180);
@@ -131,7 +136,8 @@ export function turnOf(axis: Axis | P3, deg: number): M3 {
 const toY = (d: P3): M3 => { const n = Math.hypot(d[0], d[1], d[2]), x = d[0] / n, y = d[1] / n, z = d[2] / n; if (y > 1 - 1e-15) return I3; if (y < -1 + 1e-15) return [1, 0, 0, 0, -1, 0, 0, 0, -1];
   const k = Math.hypot(x, z); return rodrigues([-z / k, 0, x / k], y, k); };
 /** A turn as the app's Euler angles (x, then y, then z, as three.js reads `rot`). */
-const eulerOf = (m: M3): V3 => { const y = Math.asin(Math.max(-1, Math.min(1, m[2]))); return Math.abs(m[2]) < 0.9999999 ? [Math.atan2(-m[5], m[8]), y, Math.atan2(-m[1], m[0])] : [Math.atan2(m[7], m[4]), y, 0]; };
+// (Day's angles (M. Day, "Extracting Euler angles from a rotation matrix", 2014): no threshold, exact near a quarter turn about y)
+const eulerOf = (m: M3): V3 => { const x = Math.atan2(-m[5], m[8]), cx = Math.cos(x), sx = Math.sin(x); return [x, Math.atan2(m[2], Math.hypot(m[0], m[1])), Math.atan2(cx * m[3] + sx * m[6], cx * m[4] + sx * m[7])]; };
 /** A point in a solid's own frame, about its c. */
 const local = (p: Prim, x: number, y: number, z: number): V3 => { const d: V3 = [x - p.c[0], y - p.c[1], z - p.c[2]]; return p.frame ? mtv(p.frame, d) : d; };
 // (a round solid whose own axis is along ±y: its formulas round a line along y hold as they are)
@@ -318,7 +324,8 @@ export class Block {
    *  placed is an input. Its solids carry their frames, its lines their directions; its rooms are kept under a turn about
    *  y and closed under any other. A block with a piece on a joint is refused (not made yet). */
   static turn(b: Block, axis: Axis | P3, degrees: number, name = b.name): Block {
-    Block.#is(b); const R = turnOf(axis, degrees);
+    Block.#is(b); const R = turnOf(axis, degrees), RtR = mul(tr(R), R), det = R[0] * (R[4] * R[8] - R[5] * R[7]) - R[1] * (R[3] * R[8] - R[5] * R[6]) + R[2] * (R[3] * R[7] - R[4] * R[6]);
+    if (!RtR.every((x, i) => Math.abs(x - I3[i]!) < 1e-12) || Math.abs(det - 1) > 1e-12) throw new Error(`turn: not a rotation (a scaling or a mirror would put pieces in each other): refused`);
     const j = b.pieces.find((p) => p.joint); if (j) throw new Error(`turn: the ${j.name} is on a joint (${j.joint!.name}): a block with a joint is not turned yet; turn what it goes on, then put it there`);
     const t = Block.#turned(b, R, Block.#mid(b), true); return name === b.name ? t : Block.#seal(name, [...t.pieces], [...t.faces], [...t.rooms]);
   }
@@ -458,7 +465,9 @@ export class Block {
     const rho = Math.max(...P.pieces.map((q) => reach(sweepOf(q), o.l.x, o.l.z)));
     if (rho + g > o.l.slot + 1e-12) throw new Error(`no room on ${on.port}: the ${passer.name} needs ${((rho + g) * 1000).toFixed(2)} mm from the line; the line offers ${(o.l.slot * 1000).toFixed(2)} mm`);
     const pb = P.pieces.map(boundOf), all: [V3, V3] = [[0, 1, 2].map((k) => Math.min(...pb.map((x) => x[0][k]!))) as V3, [0, 1, 2].map((k) => Math.max(...pb.map((x) => x[1][k]!))) as V3];
-    const grow = (m: Prim): Prim => (m.k === 'box' ? { ...m, size: [m.size[0] + 2 * g, m.size[1], m.size[2] + 2 * g] } : m.k === 'bend' ? { ...m, ro: m.ro + g, ...(m.ri !== undefined ? { ri: Math.max(0, m.ri - g) } : {}) }
+    // (a box passer's cut is its whole box grown by the gap: a case's cavity and a section's outline are dropped, so the
+    // cut holds the gap all round them too (a red team, 2026-11-05: a case kept its wall, a section no gap))
+    const grow = (m: Prim): Prim => (m.k === 'box' ? { k: 'box', c: m.c, size: [m.size[0] + 2 * g, m.size[1], m.size[2] + 2 * g], ...(m.frame ? { frame: m.frame } : {}) } : m.k === 'bend' ? { ...m, ro: m.ro + g, ...(m.ri !== undefined ? { ri: Math.max(0, m.ri - g) } : {}) }
       : { k: 'cyl', c: m.c, r: m.r + g, h: m.h, ...((m.k === 'cyl' || m.k === 'coil' || m.k === 'hex') && m.ri !== undefined ? { ri: Math.max(0, m.ri - g) } : {}), ...(m.frame ? { frame: m.frame } : {}) });
     const onLine = (ax: readonly [number, number]) => Math.hypot(ax[0] - o.l.x, ax[1] - o.l.z) < 1e-12;
     const cutFor = (q: Piece, s: Piece): Prim => {
@@ -530,6 +539,11 @@ export class Block {
     const floor = r.c[1] - r.h / 2, C = Block.#shift(child, [r.c[0] - cx, floor + g - child.lo[1], r.c[2] - cz]), n = host.pieces.length;
     const pieces = [...host.pieces, ...C.pieces], faces: Face[] = [...host.faces, ...C.faces.map((f) => ({ ...f, a: f.a + n, b: f.b + n }))];
     const holder = host.pieces.findIndex((p) => `${p.name}/cavity` === port);
+    // (an open room: what stands above its rim must meet none of the host's other pieces, a rod laid across over the cup or a
+    // washer wider than it (a red team, 2026-11-05); below the rim the room is kept free by every operation)
+    const cb = C.pieces.map(boundOf), clo = [0, 1, 2].map((k) => Math.min(...cb.map((q) => q[0][k]!))) as V3, chi = [0, 1, 2].map((k) => Math.max(...cb.map((q) => q[1][k]!))) as V3;
+    const rim = floor + r.h; if (r.open && chi[1] > rim + 1e-12) { const col: [V3, V3] = [[clo[0], rim, clo[2]], chi];
+      const hit = host.pieces.find((p, i) => i !== holder && meets(boundOf(p), col)); if (hit) throw new Error(`no room in ${port}: the ${child.name} stands above its rim and would meet the ${hit.name}`); }
     C.pieces.forEach((p, i) => { const w = r.size ? { area: 0, length: 0, at: [0, 0, 0] as V3 } : roundFace(p, r.c[0], r.c[2], r.r - g, floor, floor + r.h, true);
       if (w.area > 0 || w.length > 0) faces.push({ a: holder, b: n + i, kind: g > 0 ? 'gap' : 'contact', patch: w.area > 0 ? 'area' : 'line', area: w.area, ...(w.area > 0 ? {} : { length: w.length }), at: w.at, normal: [1, 0, 0], gap: g, ...(g > 0 ? { medium: MEDIUM } : {}), by: `${child.name} into ${port}` }); });
     faces.push(...Block.#plane(pieces, holder, C.pieces.map((_, i) => n + i), 1, floor, g, `${child.name} on ${port}'s floor`, true));
@@ -636,6 +650,36 @@ export class Block {
       throw new Error(`${name}: segments ${i + 1} (${segs[i]!.name}) and ${j + 1} (${segs[j]!.name}) do not follow one another and their bounds meet (${mmOf(bs[i]!)} against ${mmOf(bs[j]!)}): the path runs into itself`);
     return Block.#seal(name, pieces, faces);
   }
+
+  /** A branch joined into the side of a straight tube (a tee's): the branch (a block whose first piece is a hollow
+   *  straight, a run) turned so its first straight heads square off the straight's heading, toward the straight's own +x
+   *  (0), +z (90), −x (180) or −z (270), and its start set on the straight's axis at its middle. Where they meet, the
+   *  straight's wall is opened by the branch's bore (a rod of the bore's radius from the axis out, taken out of it) and
+   *  the branch's first straight has the straight's outside taken out of it (its end the saddle on the straight's side):
+   *  with S the straight's outside and H the rod, (B − S) ∩ (A − H) ⊆ (B − S) ∩ S = ∅, as A ⊆ S. Refused: either not a
+   *  hollow straight, or moving; the branch as wide as half the straight or more (it would reach past its ends); its first
+   *  straight no longer than the straight's outside radius; any other piece of it whose bound meets one of the host's
+   *  (comparison (3)). A face where they meet, its area the ring's (its projection). (decision 0024) */
+  static branch(host: Block, port: string, b: Block, toward = 0): Block {
+    Block.#is(host); Block.#is(b); if (!Number.isFinite(toward)) throw new Error(`branch: a way round it in degrees (${toward})`);
+    const k = host.pieces.findIndex((p) => p.lines.some((l) => l.port === port)), o = host.pieces[k]; if (!o) throw new Error(`branch: ${host.name} offers no line ${port}`);
+    const A = o.solid.base, B0 = b.pieces[0]?.solid.base;
+    if (A.k !== 'cyl' || A.ri === undefined || o.joint) throw new Error(`branch: the ${o.name} is not a hollow straight, off any joint`);
+    if (!B0 || B0.k !== 'cyl' || B0.ri === undefined || b.pieces.some((p) => p.joint)) throw new Error(`branch: the ${b.name} does not start with a hollow straight, or moves`);
+    if (!(B0.r < A.h / 2)) throw new Error(`branch: the ${b.name} is ${(B0.r * 2000).toFixed(2)} mm across; the ${o.name} is ${(A.h * 1000).toFixed(2)} mm long: it would reach past its ends`);
+    if (!(B0.h > A.r)) throw new Error(`branch: the ${b.pieces[0]!.name} is ${(B0.h * 1000).toFixed(2)} mm long; it must reach past the ${o.name}'s outside, ${(A.r * 1000).toFixed(2)} mm from its axis`);
+    const F = A.frame ?? I3, t = ((toward % 360) + 360) % 360, q = t / 90, [cs, sn] = Number.isInteger(q) ? ([[1, 0], [0, 1], [-1, 0], [0, -1]] as const)[q]! : [Math.cos((t * Math.PI) / 180), Math.sin((t * Math.PI) / 180)];
+    const u = snapDir(add(mv(F, [cs, 0, 0]), mv(F, [0, 0, sn]))), e = endsOf(B0), R = mul(tr(toY(u)), toY(e.startDir));
+    const moved = Block.#shift(Block.#turned(b, R, e.start, false), sub(A.c, e.start)), up = snap(tr(toY(u))), len = A.r + 1e-9;
+    const hole: Prim = { k: 'cyl', c: add(A.c, [u[0] * len / 2, u[1] * len / 2, u[2] * len / 2]), r: B0.ri, h: len, ...(up ? { frame: up } : {}) };
+    const outside: Prim = { k: 'cyl', c: A.c, r: A.r, h: A.h, ...(A.frame ? { frame: A.frame } : {}) };
+    const pieces = host.pieces.map((p, i) => (i === k ? { ...p, solid: { base: p.solid.base, minus: [...p.solid.minus, hole] } } : p));
+    const added = moved.pieces.map((p, i) => (i === 0 ? { ...p, solid: { base: p.solid.base, minus: [...p.solid.minus, outside] } } : p));
+    for (const [i, p] of added.entries()) for (const [j, h] of pieces.entries()) if (!(i === 0 && j === k) && meets(boundOf(p), boundOf(h))) throw new Error(`branch: the ${p.name} would meet the ${h.name} (their bounds meet)`);
+    const n = pieces.length, faces: Face[] = [...host.faces, ...moved.faces.map((f) => ({ ...f, a: f.a + n, b: f.b + n })),
+      { a: k, b: n, kind: 'contact', patch: 'area', area: Math.PI * (B0.r * B0.r - B0.ri * B0.ri), at: add(A.c, [u[0] * A.r, u[1] * A.r, u[2] * A.r]), normal: u, gap: 0, by: `${b.name} into the side of ${o.name}` }];
+    return Block.#seal(host.name, [...pieces, ...added], faces, host.rooms.filter((r) => !added.some((p) => meets(boundOf(p), primBox({ k: 'cyl', c: r.c, r: r.r, h: r.h })))));
+  }
 }
 /** A tube a run lays: its name, material, outside radius and bore (none: solid). */
 export interface RunTube { readonly name: string; readonly mat: string; readonly ro: number; readonly ri?: number; readonly color?: number }
@@ -659,7 +703,7 @@ function boxSide(s: Piece, q: Piece, g: number): { area: number; length: number;
     for (let a = 0; a < M; a++) for (let k = 0; k < M; k++) { const o: V3 = [0, y0 + ((k + 0.5) * (y1 - y0)) / M, 0]; o[ax] = B.c[ax] + sg * (B.size[ax] / 2 + g + EPS); o[w] = B.c[w] - L / 2 + ((a + 0.5) * L) / M; tot++; if (inPiece(s, ...o)) n++; } }
   return n ? { area: (n / tot) * 2 * (B.size[0] + B.size[2]) * (y1 - y0), length: 0, at: [B.c[0], (y0 + y1) / 2, B.c[2]] } : { area: 0, length: 0, at: [0, 0, 0] };
 }
-export const made = Block.made, stack = Block.stack, around = Block.around, through = Block.through, into = Block.into, onto = Block.onto, ring = Block.ring, over = Block.over, turn = Block.turn, run = Block.run;
+export const made = Block.made, stack = Block.stack, around = Block.around, through = Block.through, into = Block.into, onto = Block.onto, ring = Block.ring, over = Block.over, turn = Block.turn, run = Block.run, branch = Block.branch;
 
 // ---- a block as the app draws it --------------------------------------------------------------------------------
 const LOOK: Record<string, number> = { 'steel-low': 0x8a8c90, 'steel-alloy': 0x6e7175, copper: 0xb87333, brass: 0xc9a54a, 'al-6061': 0xc4c8cc, 'al-6063': 0xc8ccd0, 'al-a380': 0xb8bcc0, abs: 0xc9ccd1, 'stainless-304': 0xb8bcc2, fr4: 0x1f6b3a, pvc: 0x2a2a2a, nylon: 0xe8e4d8, glass: 0xdfe8ee, pc: 0xf2f2f0, epoxy: 0xf4f4f0, pom: 0x1c1c1c, ndfeb: 0x4a4d52 };

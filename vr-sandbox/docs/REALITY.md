@@ -2682,3 +2682,34 @@ cache read a tenth, a write 1.25 times: an estimate from the counts, not a bill)
 Auto after (the second model's check made a toggle, steps 16, a shorter guide) and 4,500 for Assist, which built the same
 18 pieces, 81 g (`MODES=assist,auto node tests/evals/phone.cjs …`, three real calls in all). `docs/FOR-AI.md` went from
 6,590 to 5,149 bytes (`wc -c`), then gained a paragraph on turning, pipes and the new pieces.
+
+## 2026-11-05: the second pass: bigger builds, the pieces that waited for turning, the phone polished, a red team of the turn
+
+Built rough by three agents in their own worktrees and read by a fourth who only looked for faults; merged here. Four
+boards made only by nodes from the common pieces: a desk fan, a small robot base, a pipe loop with its tank, and a
+quadcopter. Their masses come from their measure nodes, every size an estimate: 0.215, 0.212, 3.77 (empty) and 0.193 kg
+(the builder's probe, deleted). Their audits opened with every node run: 31/31, 36/36, 12/12, 35/35 (`node
+scripts/audit.cjs <dir> "A desk fan"` and so on, a run per board). The pieces that waited for turning: DIP ICs of 8, 14
+and 16 leads (JEDEC MS-001 by Renesas' tables), the PJ-002A jack with its plug passed along its turned bore, a copper
+tee by a new operation `branch`, the L bracket's upright drilled and bolted to a wall plate, the hinge's leaves drilled.
+The tee was sampled at 18 turns with no point in two pieces (`npx vitest run tests/nexus/domains.test.ts -t "a turned
+block keeps"`). The TO-92's rounded back was not built: a section offers no line along its length. On the phone, by
+hand gained the bolted joint and every one-input operation as a joint on what is there, a fit tried from loose to tight
+and the refusal said with both sizes, the form kept, ends tapped in the view; one real Assist call made a plan of 8
+nodes whose stack failed ("not made by the constructor"), most likely a `thing` wired where a `block` goes, now said in
+the guide (`MODES=assist node tests/evals/phone.cjs …`). The red team broke the turn eleven ways. Closed here, each held
+by a test (`npx vitest run tests/nexus/domains.test.ts -t "red team"`):
+- a turn about an axis that is none of x, y, z gave a scaling or the zero matrix;
+- a case passed through a plate kept the plate inside its wall;
+- a section passed through on a clear fit kept no gap;
+- a post into an open cup met a rod laid across above it;
+- the drawn angles were off by 3e-4 near a quarter turn about y.
+
+Left open, written in room.ts's header or here:
+- two pieces against a turned plane share points within about 1e-18 m;
+- a tilt under 1e-12 is taken as upright at any length;
+- a pipe's ring cut, a case's cuts and a bend's bore are not drawn;
+- a run on a diagonal coming back parallel is wrongly refused;
+- an interference fit in a host turned about a general axis loses its pressure.
+
+A Stack takes its blocks in the order of their nodes' names, not as wired; its text now says so.

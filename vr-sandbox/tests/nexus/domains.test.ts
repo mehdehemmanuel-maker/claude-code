@@ -58,8 +58,8 @@ import { builtOf } from '../../src/nexus/evidence';
 import { parseUnit } from '../../src/ganglia/units';
 import { run } from '../../src/nexus/view/code-worker';
 import { builtPieces, stockProblems } from '../../src/nexus/stock';
-import { turn as roomTurn, insideOf, boundOf as roomBound, endsOf, stack as roomStack, made as roomMade, over as roomOver, through as roomThrough, type Block as RoomBlock } from '../../src/nexus/room';
-import { boltedJoint as cpBolted, plate as cpPlate, pipe as cpPipe, coupling as cpCoupling, pipeRun, section as cpSection } from '../../src/nexus/common';
+import { turn as roomTurn, insideOf, boundOf as roomBound, endsOf, stack as roomStack, made as roomMade, over as roomOver, through as roomThrough, into as roomInto, partOfBlock, branch as roomBranch, run as roomRun, type Block as RoomBlock } from '../../src/nexus/room';
+import { boltedJoint as cpBolted, plate as cpPlate, pipe as cpPipe, coupling as cpCoupling, pipeRun, roundCase as cpRoundCase, section as cpSection, tee as cpTee } from '../../src/nexus/common';
 
 // a board's code blocks run here as the page's worker runs them
 const env: Env = { code: async (lang, code, inputs) => (await run({ id: 0, lang: lang as 'js', code, facts: {}, input: '', vars: inputs })).value };
@@ -1192,6 +1192,27 @@ describe('every domain, in one pass', () => {
   // in and round each piece's bound); a coupling along a turned pipe's line and a pin through a turned plate's hole keep
   // apart the same way; a run's segments meet end to end, each one's end at the next one's start, read from the solids
   // alone; a bend radius not above the pipe's, and a path that runs into itself, are refused; the starter board runs)
+  it('the red team\'s ways past the turn are closed: a turn about no axis, a case\'s cut keeping its wall, a post into a cup over which a rod runs, the drawn turn near a quarter about y', () => {
+    // (2026-11-05: each wrote an overlap or drew a piece off its solid; each is now refused or exact)
+    const two = roomStack('two', 1, [{ b: cpPlate('a', 0.1, 0.01, 0.1, 'steel-low') }, { b: cpPlate('b', 0.1, 0.01, 0.1, 'steel-low') }]);
+    expect(() => roomTurn(two, -1 as 0, 60), 'an axis that is not x, y or z').toThrow(/x, y or z/);
+    expect(() => roomTurn(two, 3 as 0, 90)).toThrow(/x, y or z/);
+    // (a case passed through a plate on a clear fit: the plate is cut all round it, the gap kept, nothing inside its wall)
+    const b = roomThrough(cpPlate('pl', 0.2, 0.01, 0.2, 'steel-low', [[0, 0]]), roomMade('box case', 'abs', { case: [0.05, 0.05, 0.05, 0.005, 0.005] }), { port: 'pl/holes', from: 'lo' }, 'clear');
+    const c = b.pieces[1]!.solid.base.c, y = b.pieces[0]!.solid.base.c[1];
+    expect(b.pieces.filter((p) => insideOf(p, c[0] + 0.0205, y + 0.002, c[2])).map((p) => p.name), 'inside the case\'s wall: the case only').toEqual(['box case']);
+    expect(b.pieces.filter((p) => insideOf(p, c[0] + 0.0254, y + 0.002, c[2])).map((p) => p.name), 'in the gap: neither').toEqual([]);
+    // (a rod through a plate on edge, running over an open cup: a tall post into the cup is refused by name)
+    const host = roomStack('h', 0, [{ b: cpRoundCase('cup', 0.02, 0.02, 0.002, 0.002, 'abs') }, { b: roomTurn(cpPlate('pl', 0.1, 0.01, 0.03, 'steel-low', [[0.04, 0]], 0.004), 2, 90) }]);
+    const rod = roomThrough(host, roomMade('rod', 'steel-low', { cyl: [0.003, 0.08] }), { port: 'pl/holes', from: 'lo' }, 'slide');
+    expect(() => roomInto(rod, 'cup/cavity', roomMade('post', 'steel-low', { cyl: [0.01, 0.1] })), 'the post would meet the rod').toThrow(/meet the rod/);
+    expect(roomInto(rod, 'cup/cavity', roomMade('short post', 'steel-low', { cyl: [0.01, 0.015] })).pieces.length, 'a post under the rod goes in').toBe(rod.pieces.length + 1);
+    // (the drawn turn matches the solid's frame near a quarter turn about y, where the old angles were off by 3e-4)
+    const tilted = roomTurn(roomTurn(roomMade('rod', 'steel-low', { cyl: [0.01, 1] }), 2, 70), 1, -89.98), part = partOfBlock(tilted).parts![0]!, f = tilted.pieces[0]!.solid.base.frame!;
+    const o = new THREE.Object3D(); o.rotation.set(...(part.rot as [number, number, number])); o.updateMatrix(); const e = o.matrix.elements;
+    const drawn = [e[0], e[4], e[8], e[1], e[5], e[9], e[2], e[6], e[10]];
+    expect(Math.max(...drawn.map((x, i) => Math.abs(x! - f[i]!))), 'drawn as its frame').toBeLessThan(1e-12);
+  });
   it('a turned block keeps every pair of its pieces apart at every angle; a run\'s segments meet end to end', async () => {
     const sample = (b: RoomBlock, n: number) => { let shared = 0, outOwn = 0, outBlock = 0, inside = 0;
       for (const p of b.pieces) { const [lo, hi] = roomBound(p), g = [0, 1, 2].map((k) => (hi[k]! - lo[k]!) * 0.15);
@@ -1203,7 +1224,12 @@ describe('every domain, in one pass', () => {
       return { shared, outOwn, outBlock, inside: inside > 0 }; };
     const plates = roomStack('two plates', 1, [{ b: cpPlate('bottom plate', 0.08, 0.005, 0.05, 'steel-low', [[-0.025, 0], [0.025, 0]], 0.009) }, { b: cpPlate('top plate', 0.08, 0.005, 0.05, 'al-6061', [[-0.025, 0], [0.025, 0]], 0.009) }]);
     const joint = cpBolted(plates, 'top plate/holes', 'M8'), run = pipeRun('copper 15×0.7', [{ straight: 0.06 }, { bend: 90 }, { straight: 0.05 }, { elbow: 90, toward: 90 }, { straight: 0.04 }, { bend: 45, toward: 180 }, { straight: 0.03 }]);
-    for (const [what, b] of [['a bolted joint', joint], ['a pipe run with an elbow', run], ['a bar of a section', cpSection('steel angle 50×50×5 (EN 10056)', 0.08)]] as const)
+    // (a tee: its branch joined into its run's side (Branch, decision 0024): the run's wall opened on the branch's axis and
+    // whole across from it, the branch's end cut to the run's outside; nothing shared at any angle, as for the rest)
+    const tee = cpTee('copper 22×0.9'), body = tee.pieces.find((p) => p.name === 'copper 22×0.9 tee body')!, B = body.solid.base as unknown as { c: [number, number, number]; r: number; ri: number }, wall = (B.r + B.ri) / 2;
+    expect([insideOf(body, B.c[0] + wall, B.c[1], B.c[2]), insideOf(body, B.c[0] - wall, B.c[1], B.c[2]), tee.pieces.filter((p) => insideOf(p, B.c[0] + B.r + 0.0005, B.c[1], B.c[2])).map((p) => p.name)], 'the run\'s wall opened toward the branch only; past its outside, the branch\'s bore').toEqual([false, true, []]);
+    expect(() => roomBranch(tee, 'copper 22×0.9 tee socket 1/axis', roomRun('stub', [{ name: 'stub', mat: 'copper', ro: 0.012, ri: 0.01, straight: 0.03 }])), 'a branch as wide as half its straight').toThrow(/would reach past its ends/);
+    for (const [what, b] of [['a bolted joint', joint], ['a pipe run with an elbow', run], ['a bar of a section', cpSection('steel angle 50×50×5 (EN 10056)', 0.08)], ['a copper tee', tee]] as const)
       for (const axis of [0, 1, 2] as const) for (const deg of [0, 17, 30, 90, 123, 200]) expect(sample(roomTurn(b, axis, deg), 9), `${what} turned ${deg}° about ${'xyz'[axis]}`).toEqual({ shared: 0, outOwn: 0, outBlock: 0, inside: true });
     // (along a turned line: a coupling over a pipe laid across, a pin through a tilted plate's hole)
     const across = roomTurn(cpPipe('copper 15×0.7', 0.2), 2, 90), coupled = roomOver(across, 'copper 15×0.7 pipe/axis', cpCoupling('copper 15×0.7'), 'hi');

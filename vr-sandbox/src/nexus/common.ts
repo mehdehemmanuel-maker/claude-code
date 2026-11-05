@@ -18,8 +18,13 @@
 // bearings (ISO 15), dowel pins (ISO 8734), set screws (ISO 4026), a spur gear (its teeth from its module and count, ISO
 // 53's basic rack), a GT2 pulley, a compression spring (its rate by Shigley), a butt hinge, heat-set inserts. Each
 // says, where it is made, what it stands on and what is approximated.
+//
+// The third set (decision 0024), pieces made upright and turned: DIP ICs (JEDEC MS-001, 8, 14 and 16 leads, their leads
+// bent down outside the body), a DC barrel jack and its 5.5 × 2.1 mm plug (Same Sky's PJ-002A and PP3-002A), a copper
+// equal tee (its branch joined into its run's side by Branch); the L bracket's upright and the hinge's leaves made flat
+// with their holes and turned up, and a block bolted to a wall plate by holes that run across it.
 
-import { made, stack, through, onto, ring, over, into, joint, run, boundOf, FITS, type Block, type Fit, type RunSeg, type RunTube } from './room';
+import { made, stack, through, onto, ring, over, into, joint, run, turn, branch, boundOf, FITS, type Block, type Fit, type P3, type RunSeg, type RunTube } from './room';
 import { SPRING_WIRES, springRate } from '../engineering/springs';
 
 const mm = (x: number): number => x / 1000;
@@ -359,20 +364,38 @@ export function closed(box: Block, t = mm(2), mat = 'abs'): Block {
   const c = box.pieces[0]?.color;
   return onto(box, '+y', made(`${box.name} lid`, mat, { box: [box.hi[0] - box.lo[0], t, box.hi[2] - box.lo[2]] }, c !== undefined ? { color: c } : {}), 'touch');
 }
-/** An L bracket: its upright and its foot, legs `a` by `a`, `t` thick and `L` long, its foot's holes in a row along it
- *  (ISO 273 medium clearance for a bolt of that size), offered as `<name> foot/holes`. Drawn as its two legs touching at
- *  the bend (a bent bracket is one piece; its bend's radius not drawn); its upright's holes need lines across it, and
- *  room.ts's lines run along y only. */
-export function bracket(name = 'L bracket', a = mm(40), t = mm(4), L = mm(40), size = 'M5', holes = 2, mat = 'steel-low'): Block {
+/** An L bracket: its upright and its foot, legs `a` by `a`, `t` thick and `L` long, the holes in each in a row along it
+ *  (ISO 273 medium clearance for a bolt of that size), offered as `<name> foot/holes` and `<name> upright/holes`. Drawn as
+ *  its two legs touching at the bend (a bent bracket is one piece; its bend's radius not drawn). Its upright is made as a
+ *  plate lying flat with its holes through it, then turned up (decision 0024): its holes run across it (along +x, into
+ *  the bracket), at the middle of its height above the foot. Bolted down by its foot, or to a wall by its upright
+ *  (Bolted down to a plate). */
+export function bracket(name = 'L bracket', a = mm(40), t = mm(4), L = mm(40), size = 'M5', holes = 2, mat = 'steel-low', upright = holes): Block {
   if (!(Number.isInteger(holes) && holes >= 1 && holes <= 6)) throw new Error('a bracket with 1 to 6 holes in its foot');
+  if (!(Number.isInteger(upright) && upright >= 0 && upright <= 6)) throw new Error('a bracket with 0 to 6 holes in its upright');
   if (!(t < a / 2)) throw new Error(`a bracket's legs (${a * 1000} mm) more than twice its thickness (${t * 1000} mm)`);
-  const m = sizeOf(size), pts = Array.from({ length: holes }, (_, i) => [0, (i - (holes - 1) / 2) * (L / holes)] as [number, number]);
-  return stack(name, 0, [{ b: made(`${name} upright`, mat, { box: [t, a, L] }) }, { b: plate(`${name} foot`, a - t, t, L, mat, pts, mm(m.clear)) }], undefined, true);
+  const m = sizeOf(size), row = (n: number, x: number) => Array.from({ length: n }, (_, i) => [x, (i - (n - 1) / 2) * (L / n)] as [number, number]);
+  // (flat, its width across x; turned −90° about z its width stands up along y and its holes run along +x: a hole at
+  // x = −t/2 in the flat plate stands t/2 above the upright's middle, the middle of its height above the foot)
+  const up = turn(plate(`${name} upright`, a, t, L, mat, row(upright, -t / 2), mm(m.clear)), 2, -90);
+  return stack(name, 0, [{ b: up }, { b: plate(`${name} foot`, a - t, t, L, mat, row(holes, 0), mm(m.clear)) }], undefined, true);
 }
 /** What offers holes (a bracket's foot, a plate) bolted down to a plate made under it: the plate's holes the reverse of its
- *  pattern (each under one of its holes, ISO 273 medium clearance), the two stacked, each hole bolted (Bolted joint). */
+ *  pattern (each under one of its holes, ISO 273 medium clearance), the two stacked, each hole bolted (Bolted joint).
+ *  Holes that run across (a bracket's upright's, along x or z): the whole turned so they run up, the plate made against
+ *  the face they come out of, bolted, and turned back (decision 0024): a wall plate. Refused where the piece with the
+ *  holes is not on the outside there, or the holes run at an angle. */
 export function boltedDown(held: Block, port: string, w: number, t: number, d: number, mat = 'steel-low', size = 'M5', head: 'hex' | 'socket' = 'hex'): Block {
   const ls = held.pieces.flatMap((p) => p.lines.filter((l) => l.port === port)); if (!ls.length) throw new Error(`bolted down: the ${held.name} offers no holes ${port}`);
+  const dir = ls[0]!.dir;
+  if (dir && !(Math.abs(dir[0]) < 1e-9 && Math.abs(dir[2]) < 1e-9 && dir[1] > 0)) {
+    const ax = dir.findIndex((v) => Math.abs(Math.abs(v) - 1) < 1e-9); if (ax < 0) throw new Error(`bolted down: the ${held.name}'s holes ${port} run at an angle, not along x, y or z: not made yet`);
+    const owner = held.pieces.find((p) => p.lines.some((l) => l.port === port))!, ob = boundOf(owner), off = dir[ax]! > 0 ? ob[0][ax]! - held.lo[ax]! : held.hi[ax]! - ob[1][ax]!;
+    if (off > 1e-9) throw new Error(`bolted down: the ${owner.name} is ${(off * 1000).toFixed(2)} mm inside the ${held.name} where its holes ${port} come out: a plate cannot go against it`);
+    // (the quarter turn taking the holes' way onto +y, about dir × y; a half turn about x where they run down)
+    const about: P3 = dir[1] < 0 ? [1, 0, 0] : [-dir[2], 0, dir[0]], deg = dir[1] < 0 ? 180 : 90;
+    return turn(boltedDown(turn(held, about, deg), port, w, t, d, mat, size, head), about, -deg);
+  }
   const cx = (held.lo[0] + held.hi[0]) / 2, cz = (held.lo[2] + held.hi[2]) / 2;
   let b = stack(`${held.name}, bolted down`, 1, [{ b: plate(`${held.name} base plate`, w, t, d, mat, ls.map((l) => [l.x - cx, l.z - cz] as [number, number]), mm(sizeOf(size).clear)) }, { b: held }]);
   for (let i = 0; i < ls.length; i++) b = boltedJoint(b, port, size, i, head);
@@ -474,15 +497,22 @@ export function spring(d: number, OD: number, L0: number, active: number, wire =
 }
 /** A butt hinge (typical of a 50 mm steel hinge): its knuckles Ø6 mm, each its share of its height, stacked along its axis,
  *  its pin Ø3 mm through them all (their bores a sliding fit over it), its two leaves 22 mm wide and 1.5 mm thick against
- *  the knuckles on each side, opened flat. A leaf and its knuckles are one rolled piece in a hinge; here they touch. Its
- *  leaves' screw holes need lines across them, and its leaves' turn about the pin (off their own middles) a turned block:
- *  neither in room.ts yet. */
-export function hinge(H = mm(50), knuckles = 3): Block {
+ *  the knuckles on each side, opened flat or at a right angle. Each leaf is made lying flat with its screw holes through it
+ *  (Ø4.5 for a 4 mm screw, their countersinks not drawn; typical) and turned up (decision 0024), so its holes run across
+ *  it; the second leaf, opened, is turned again a quarter about y and set against the knuckles on the pin's line. A leaf
+ *  and its knuckles are one rolled piece in a hinge; here they touch. Its turn about the pin is not a joint: a turned
+ *  piece goes on no joint yet, and a joint turns a piece about its own middle, not the pin (decision 0024). */
+export function hinge(H = mm(50), knuckles = 3, holes = 2, open: 0 | 90 = 0): Block {
   if (!(Number.isInteger(knuckles) && knuckles >= 2 && knuckles <= 7)) throw new Error('a hinge of 2 to 7 knuckles');
+  if (!(Number.isInteger(holes) && holes >= 0 && holes <= 4)) throw new Error('a hinge leaf of 0 to 4 screw holes');
+  if (open !== 0 && open !== 90) throw new Error(`a hinge opened flat (0) or at a right angle (90), not ${String(open)}°`);
   const ks = stack('hinge knuckles', 1, Array.from({ length: knuckles }, (_, i) => ({ b: made(`hinge knuckle ${i + 1}`, 'steel-low', { tube: [mm(1.5) + FITS.slide.gap, mm(3), H / knuckles] }) })));
   const pin = through(ks, made('hinge pin', 'steel-low', { cyl: [mm(1.5), H] }), { port: 'hinge knuckle 1/axis', from: 'lo' }, 'slide');
-  const leaf = () => made('hinge leaf', 'steel-low', { box: [mm(22), H, mm(1.5)] });
-  return stack(`butt hinge ${Math.round(H * 1000)} mm`, 1, [{ b: onto(onto(pin, '+x', leaf(), 'touch'), '-x', leaf(), 'touch') }]);
+  const pts = Array.from({ length: holes }, (_, i) => [0, (i - (holes - 1) / 2) * (H / holes)] as [number, number]);
+  const leaf = (n: number) => turn(made(`hinge leaf ${n}`, 'steel-low', { box: [mm(22), mm(1.5), H] }, holes ? { pattern: { name: 'screw holes', points: pts, hole: mm(4.5) / 2 } } : {}), 0, 90);
+  const one = onto(pin, '+x', leaf(1), 'touch');
+  const both = open === 90 ? onto(one, '-z', turn(leaf(2), 1, 90), 'touch', 'hinge pin/axis') : onto(one, '-x', leaf(2), 'touch');
+  return stack(`butt hinge ${Math.round(H * 1000)} mm${open ? ', opened 90°' : ''}`, 1, [{ b: both }]);
 }
 /** Heat-set threaded inserts (brass) by thread: length, outside (its knurl's crest), the hole they are pressed into and
  *  their bore (the thread's tap drill: the thread not drawn), mm (typical of the common heat-set inserts). */
@@ -492,5 +522,83 @@ export const INSERTS = { M2: { L: 4, OD: 3.6, hole: 3.2, bore: 1.6 }, M3: { L: 5
 export function insert(size: string): Block {
   const q = INSERTS[size as keyof typeof INSERTS]; if (!q) throw new Error(`no heat-set insert ${size} (${Object.keys(INSERTS).join(', ')})`);
   return made(`${size} heat-set insert`, 'brass', { tube: [mm(q.bore) / 2, mm(q.OD) / 2, mm(q.L)] });
+}
+
+// ---- the third set: pieces made upright and turned (decision 0024) ----------------------------------------------------
+/** Plastic DIPs by their lead count, JEDEC MS-001 (.300 in rows), as Renesas' E8.3, E14.3 and E16.3 give it (MS-001-BA,
+ *  -AA, -BB): the body's length D, mm, its limits (9.01 to 10.16 for 8 leads, 18.66 to 19.68 for 14 and 16), drawn at
+ *  their middle; `corner` where the corner leads (1, N/2, N/2 + 1, N) are narrower (E8.3's and E16.3's note 10). */
+export const DIPS = { 8: { D: [9.01, 10.16], variant: 'MS-001-BA', corner: true }, 14: { D: [18.66, 19.68], variant: 'MS-001-AA', corner: false }, 16: { D: [18.66, 19.68], variant: 'MS-001-BB', corner: true } } as const;
+/** The rest of MS-001's outline, mm, each drawn at the middle of its limits: the body's width E1 (6.10 to 7.11) and
+ *  thickness A2 (2.93 to 4.95), a lead's width b (0.356 to 0.558), its shoulder's b2 (1.15 to 1.77; a corner lead's 0.76
+ *  to 1.14), its thickness c (0.204 to 0.355), its length below the seating plane L (2.93 to 3.81); the pitch e 2.54 and
+ *  the rows eA 7.62 apart (basic). Estimates: the body's foot 0.5 above the seating plane (A1, at least 0.39; the whole
+ *  then 4.44 high, within A's 5.33), each lead leaving the body at its middle (the lead frame between the mould's halves),
+ *  moulded in 1.0 deep. */
+export const DIP_OUTLINE = { E1: [6.1, 7.11], A2: [2.93, 4.95], b: [0.356, 0.558], b2: [1.15, 1.77], b2corner: [0.76, 1.14], c: [0.204, 0.355], L: [2.93, 3.81], e: 2.54, eA: 7.62, A1: 0.5, inner: 1.0 } as const;
+const midOf = (r: readonly [number, number]) => mm((r[0] + r[1]) / 2);
+/** A DIP IC by its leads (8, 14 or 16), JEDEC MS-001: its moulded body (epoxy), each lead (copper alloy) four solids of one
+ *  bent strip: its part moulded in, through the body's side on its row's line (the body made with its rows' lines running
+ *  up through it, and turned a quarter about x so they run across it); its arm out of the side, against the body on that
+ *  line; its shoulder and its tip down from the arm's end to below the seating plane. Built upside down, each leg stood on
+ *  its arm's end (the only piece in its path), its second row's side turned to face the same way first, and the whole
+ *  turned over at the end: no place is written. Pins counted round from pin 1 anticlockwise seen from above; its pin-1
+ *  notch not drawn. Its tips go down a board's holes 2.54 mm apart in rows 7.62 mm apart, or into a DIP socket; neither is
+ *  an operation on it yet (a turned passer is refused, decision 0024): it stands on its own. */
+export function dip(pins: number, name = `DIP-${pins}`): Block {
+  const q = DIPS[pins as keyof typeof DIPS]; if (!q) throw new Error(`no DIP of ${pins} leads (${Object.keys(DIPS).join(', ')})`);
+  const o = DIP_OUTLINE, k = pins / 2, E1 = midOf(o.E1), A2 = midOf(o.A2), c = midOf(o.c), arm = mm(o.eA / 2) + c / 2 - E1 / 2, shoulder = mm(o.A1) + A2 / 2 - c / 2;
+  const wide = (p: number) => (q.corner && (p === 1 || p === k || p === k + 1 || p === pins) ? midOf(o.b2corner) : midOf(o.b2)), lead = (p: number) => `${name} pin ${p} lead`;
+  let b = turn(made(`${name} body`, 'epoxy', { box: [midOf(q.D), E1, A2] }, { color: 0x1c1c1c, pattern: { name: 'leads', points: inRow(k, mm(o.e)) } }), 0, 90);
+  // (a row: each lead's moulded-in part through the body's side on its line, from the +z face, and its arm against that
+  // face on the line the part offers)
+  const row = (pin: (i: number) => number, from: 'lo' | 'hi') => { for (let i = 0; i < k; i++) { const p = pin(i), w = wide(p);
+    b = through(b, made(`${lead(p)}, moulded in`, 'copper', { box: [w, mm(o.inner), c] }, { color: LEAD, pattern: { name: 'line', points: [[0, 0]] } }), { port: `${name} body/leads`, i, from }, 'tight');
+    b = onto(b, '+z', made(lead(p), 'copper', { box: [w, c, arm] }, { color: LEAD, pattern: { name: 'bend', points: [[0, arm / 2 - c / 2]] } }), 'touch', `${lead(p)}, moulded in/line`); } };
+  row((i) => k - i, 'hi'); b = turn(b, 1, 180); row((i) => k + 1 + i, 'lo');
+  for (let p = 1; p <= pins; p++) { const w = wide(p);
+    b = onto(b, '+y', stack(`${lead(p)}'s leg`, 1, [{ b: made(`${lead(p)}'s shoulder`, 'copper', { box: [w, shoulder, c] }, { color: LEAD }) }, { b: made(`${lead(p)}'s tip`, 'copper', { box: [midOf(o.b), midOf(o.L), c] }, { color: LEAD }) }]), 'touch', `${lead(p)}/bend`); }
+  return turn(b, 0, 180, `${name} (${q.variant})`);
+}
+
+/** A DC barrel jack for 5.5 × 2.1 mm plugs, right-angle, through-hole, as Same Sky's (formerly CUI) PJ-002A datasheet
+ *  draws it: its housing (PBT) 9.0 wide, 11.0 high and 14.4 long, its bore Ø6.5 with its axis 6.5 above the board and
+ *  9.5 deep (the plug's insertion), its centre pin Ø2.0 (copper) standing 8.0 from the bore's floor, three terminals 2.5
+ *  × 1.0 standing 3.5 below it. Approximated: its housing drawn as two blocks (its back, and its bored front made upright
+ *  and turned a quarter to lie along z: one moulding), its three terminals in a row across its back (on the datasheet the
+ *  sleeve's and the switch's stand under the bore), its sleeve's contact spring not drawn. A plug goes along its bore from
+ *  the front, over its pin (Through a line on `DC jack housing front/bore`, from the bore's floor); its terminals down a
+ *  board's holes. */
+export function barrelJack(): Block {
+  const W = mm(9), H = mm(11), L = mm(14.4), depth = mm(9.5), axis = mm(6.5);
+  const front = turn(made('DC jack housing front', 'pbt', { box: [W, depth, H] }, { color: 0x1c1c1c, pattern: { name: 'bore', points: [[0, H / 2 - axis]], hole: mm(6.5) / 2 } }), 0, 90);
+  const back = made('DC jack housing back', 'pbt', { box: [W, H, L - depth] }, { color: 0x1c1c1c, pattern: { name: 'terminals', points: inRow(3, mm(3)) } });
+  let b = through(stack('DC barrel jack 5.5 × 2.1 mm (PJ-002A)', 2, [{ b: back }, { b: front }]), made('DC jack centre pin', 'copper', { cyl: [mm(1), mm(8)] }, { color: LEAD }), { port: 'DC jack housing front/bore', from: 'lo' }, 'tight');
+  for (let i = 0; i < 3; i++) b = through(b, made(`DC jack terminal ${i + 1}`, 'brass', { box: [mm(1), H + mm(3.5), mm(2.5)] }, { color: LEAD }), { port: 'DC jack housing back/terminals', i, from: 'hi' }, 'tight');
+  return b;
+}
+/** A 5.5 × 2.1 mm DC plug, as Same Sky's PP3-002A draws it: its barrel 9.5 long, its outer barrel (brass) Ø5.5 outside,
+ *  its centre contact (brass) Ø2.1 inside, an insulator (POM) between them (the barrels' walls 0.25 and 0.45 mm, typical),
+ *  its cover (ABS) Ø8.2 and 22.5 long; its cable not drawn. Its contacts slid over one another (Over a shaft), its cover
+ *  behind them along its axis (y). It goes along a jack's bore over its pin, its tip at the bore's floor. */
+export function plug(): Block {
+  const L = mm(9.5), centre = made('DC plug centre contact', 'brass', { tube: [mm(1.05), mm(1.5), L] }, { color: LEAD });
+  const ins = over(centre, 'DC plug centre contact/axis', made('DC plug insulator', 'pom', { tube: [mm(1.5), mm(2.5), L] }, { color: 0x1c1c1c }), 'mid', 'touch');
+  const barrel = over(ins, 'DC plug centre contact/axis', made('DC plug outer barrel', 'brass', { tube: [mm(2.5), mm(2.75), L] }, { color: LEAD }), 'mid', 'touch');
+  return stack('DC plug 5.5 × 2.1 mm (PP3-002A)', 1, [{ b: barrel }, { b: made('DC plug cover', 'abs', { cyl: [mm(4.1), mm(22.5)] }, { color: 0x1c1c1c }) }]);
+}
+
+/** An equal tee for copper pipe after EN 1254-1 (capillary, end feed), by the EN 1057 sizes: its sockets and walls the
+ *  elbow's (ELBOWS, typical), its run's body between its two sockets as long as its outside is across and 2 mm more, its
+ *  branch's body from the run's axis to the branch's socket its outside radius and 2 mm (typical of makers' tables, so
+ *  labelled). The run laid as a run (socket, body, socket); the branch made upright as a run of its own (body, socket),
+ *  turned square to the run and joined into the side of its body (Branch, decision 0024): the run's wall opened by the
+ *  branch's bore, the branch's end cut to the run's outside. A pipe's end goes into each socket to its shoulder; as a
+ *  step in a Run of pipe it is not made yet (its branch a second run). */
+export function tee(size: string, toward = 0): Block {
+  const k = elbowRings(size), name = `${size} tee`, socket = (nm: string): RunSeg => ({ name: nm, mat: 'copper', ri: k.ri, ro: k.ro, straight: k.depth });
+  const main = run(name, [socket(`${name} socket 1`), { name: `${name} body`, mat: 'copper', ri: k.bore, ro: k.ro, straight: 2 * k.ro + mm(2) }, socket(`${name} socket 2`)]);
+  const side = run(`${name} branch`, [{ name: `${name} branch body`, mat: 'copper', ri: k.bore, ro: k.ro, straight: k.ro + mm(2) }, socket(`${name} socket 3`)]);
+  return branch(main, `${name} body/axis`, side, toward);
 }
 

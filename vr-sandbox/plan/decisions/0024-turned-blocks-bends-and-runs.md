@@ -39,7 +39,15 @@ end's, so two that follow one another meet only on their shared plane; two that 
 `common.ts`: socket elbows for the EN 1057 copper sizes after EN 1254-1, 90° and 45° (their sizes typical, labelled so),
 a bent length of pipe (its bend radius 3.5 × its outside diameter, an estimate), and a pipe run of straights, bends and
 elbows (`pipeRun`, `pathOf` for its steps written out). Nodes: Turn (`room.turn`), Pipe elbow (`piece.elbow`), Bent pipe
-(`piece.bend`), Run of pipe (`piece.run`); a starter board, "Pipes that turn". The tee was cut for time.
+(`piece.bend`), Run of pipe (`piece.run`); a starter board, "Pipes that turn". The tee was cut for time, and came the
+same day with one operation more: `branch(host, port, b, toward)` joins a block that starts with a hollow straight (a
+run) square into the side of a straight the host offers, at its middle, its start on that straight's axis; the straight's
+wall is opened by the branch's bore (a rod of that radius from the axis out, taken out of it) and the branch's first
+straight has the straight's outside taken out of it, so (B − S) ∩ (A − H) ⊆ (B − S) ∩ S = ∅; refused where the branch is
+as wide as half the straight or more, its first straight does not reach past the straight's outside, or any other pair's
+bounds meet. With it, in `common.ts`: an equal tee (`piece.tee`), and, made upright and turned, a DIP IC (`piece.dip`),
+a DC barrel jack and its plug (`piece.jack`, `piece.plug`), holes in an L bracket's upright bolted to a wall plate, and a
+hinge's leaves with their screw holes; a starter board, "Turned pieces".
 
 ## The assumption it rests on
 
