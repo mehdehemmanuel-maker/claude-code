@@ -488,3 +488,7 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
 - 2026-11-05: "Okay populate the library and make it so the ai can easily build a lot of things but first research and
   report to me a plan before starting" (many more pieces and assemblies in the library, and the AI able to build a wide
   range of things from them with little effort; researched first, the plan reported and agreed before any building)
+- 2026-11-05: "Okay clarify the plan and put it into the most logical order also no polishing just go through and speed
+  run it and don't worry to hard on mistakes then bootstrap at the end" (the plan of decision 0026 run in the order its
+  steps depend on each other, fast, no polish pass; faults found on the way noted, not chased; at the end the AI builds
+  with what was made, and what it builds and where it fails feed back into the library)

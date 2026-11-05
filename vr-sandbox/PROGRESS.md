@@ -1,6 +1,6 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 06.M2 (the phone page, a chat that builds three ways: decisions 0023, 0025, `view/vibe.html`, `npm run app`); turned parts, bends, runs and their red team (decision 0024); common pieces and builds from them by the operations (decision 0021); 01.I16 (failing on its blind clause); the critic each session (decision 0022)
+Task in hand: 06.M2 (the library the AI builds a lot from, decision 0026: foundations, tables filled, assemblies and search, bootstrap); the phone page (decisions 0023, 0025, `npm run app`)
 Spec in hand: spec 06, the phone (`plan/specs/06-phone/`); spec 01, interfaces (`plan/specs/01-interfaces/`)
 Last commit the gate passed: bc82a9f (2026-11-05)
 
