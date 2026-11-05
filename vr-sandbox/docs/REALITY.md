@@ -2906,3 +2906,25 @@ agent that made it. The numbers are read off those pictures' gauges and pixels, 
   - a G1 or larger ball valve is two groups;
   - the fan's struts are a floor with windows, because spokes need a floorless room;
   - no blind check of the new pictures.
+
+## 2026-11-05: decision 0026, the forty builds at its end, and the app restarted
+
+On 4a2c1f9, each request run once (`npm run eval:builds`; Auto with `EVAL_MODE=auto EVAL_ONLY=10 npm run eval:builds`).
+One run of each is too few to tell a case's change from chance: request 37 was right in the run before and wrong in this
+one.
+- **Assist:** 23 of 40 right, 21 of them at the first call. 6,398 tokens in and out per right build, cache reads apart
+  (384,505 read from the cache, 34,955 written, 75,591 out).
+- **Auto, on the first ten:** 5 of 10 right, 26,959 tokens per right build (854,108 read from the cache).
+
+What still fails, by class:
+- **Fits** refused (5 of 17): a nut's bore of 8.00 mm against the 8.5 mm a clear fit asks, where a nut goes on by its
+  thread; a washer and nut that meet what is already on a shank; an insert's thread line too small for the bolt the plan
+  chose.
+- **Not one thing** (3): parts left side by side.
+- **Fewer pieces than asked** (5).
+- **A turned or bent piece** given as a passer (2), and a fan's holes that are turned (1).
+- **Kinds left unused** (1): an MGN rail's plate made inside mate.plate, not a piece.plate.
+
+The app was rebuilt and restarted on port 5173 with the keys (`npm run app`). The phone page opened with no page error,
+and one Assist call through its relay came back with a plan in 10.8 s, reading 6,991 tokens from the cache and writing
+none (a scratch script, `node check.cjs`, in the session's scratch folder).

@@ -2,7 +2,7 @@
 
 Task in hand: 06.M2 (the library the AI builds a lot from, decision 0026: foundations, tables filled, assemblies and search, bootstrap); the phone page (decisions 0023, 0025, `npm run app`)
 Spec in hand: spec 06, the phone (`plan/specs/06-phone/`); spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 9fd4a8b (2026-11-05)
+Last commit the gate passed: 4a2c1f9 (2026-11-05)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -22,7 +22,7 @@ Last commit the gate passed: 9fd4a8b (2026-11-05)
   to its end. Mended since; five blind runs (decision 0018); it fails still on its blind clause (`docs/REALITY.md`).
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
-- Turning's open faults (`docs/REALITY.md`, the second pass): ring, case and bend cuts not drawn; a diagonal run wrongly refused; the small transistor still a box.
+- Decision 0026 run rough end to end (steps 1 to 4b): Assist 23 of 40 on the build set, Auto 5 of 10 (`npm run eval:builds`); what still fails, and the polish list, in `docs/REALITY.md`.
 - 10.T24 superseded by decision 0021 ("Gone now"). 11.LW12 and 10.T1 are claimed in part; their open parts are in `plan/DEFECTS.md` (D7) and the task rows.
 - The one test (`npm run eval:one`) passes 2 of its 18 lines; the rest wait on specs 01, 03, 04 and 06.
 
