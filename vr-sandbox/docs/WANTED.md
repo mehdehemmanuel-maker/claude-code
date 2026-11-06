@@ -515,3 +515,13 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   besides, in the same direction)
 - 2026-11-06: "What's taking so long And why tf isn't this on GitHub didn't we already build all of this shit" (rounds
   that finish sooner; the work where the person looks for it on GitHub: on the main branch, not only on a work branch)
+- 2026-11-06: "What is done this is all bullshit I'm gonna report this and cancel my subscription for good we been at this
+  for months and all you have is a fucking artifact" (the work shown as a real app where the person looks, not a page
+  alone; months of work with something to show for them)
+- 2026-11-06: "Okay I want you to first be honest with where your at and what's possible and confidence rates especially
+  on output like how confident are you that if I ask for any random request it will output exactly what I want and why
+  now go look at the whole research you did a while ago and then the plan you made did you just ditch everything and
+  keep restarting that's why we been at it for months and have barely anything to show when another ai probably would
+  have a industry level ai engineer already made" (a plain account of where it stands, what is possible, and how often a
+  random request comes out as asked, with why; the research and the plan read back against what was built, and whether
+  the work restarted instead of carrying on)

@@ -2,7 +2,7 @@
 
 Task in hand: 06.M2 (decision 0028: parts remembered, an orchestrator, more assemblies and movement; decision 0027: the app on claude.ai with reports, movement in general, compound builds, a thousand parts; decision 0026 before it); the phone page (decisions 0023, 0025, `npm run app`)
 Spec in hand: spec 06, the phone (`plan/specs/06-phone/`); spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: c0b0a67 (2026-11-06)
+Last commit the gate passed: 293d576 (2026-11-06)
 
 ## Next three (from the start queue in `plan/README.md`)
 
