@@ -138,7 +138,11 @@ function builtText(): string {
   const now = new Date().toISOString(), built: Record<string, string> = {}, unfound: string[] = [];
   for (const id of [...LIBRARY.keys()].sort()) {
     const key = id.startsWith('law.') ? id.slice(4) : id, inBook = id.startsWith('law.');
-    const written = (k: string, book: boolean) => lines.find((l) => (!book || l.file.includes('/book/')) && (l.text.includes(`id: '${k}'`) || l.text.includes(`id: "${k}"`) || l.text.includes(`save('${k}'`) || (l.text.includes('save(') && l.text.includes(`'${k}'`))));
+    const written = (k: string, book: boolean) => { const at = (l: { file: string }) => !book || l.file.includes('/book/');
+      return lines.find((l) => at(l) && (l.text.includes(`id: '${k}'`) || l.text.includes(`id: "${k}"`) || l.text.includes(`save('${k}'`)))
+        // (made by a helper or a choice: its id as a call's first argument, or quoted on a save or an id line; only for an
+        // id with a dot, so a short id such as "frame" is never matched in another's line)
+        ?? (k.includes('.') ? lines.find((l) => at(l) && (((l.text.includes('save(') || /\bid: /.test(l.text)) && l.text.includes(`'${k}'`)) || new RegExp(`\\w\\(\\s*'${k.replace(/[.]/g, '\\.')}'`).test(l.text))) : undefined); };
     // (made in a loop: the line that makes it, its id a template on its prefix)
     const prefix = id.slice(0, id.lastIndexOf('.') + 1), looped = () => lines.find((l) => l.text.includes(`id: \`${prefix}\${`) || l.text.includes(`save(\`${prefix}\${`));
     const hit = (inBook ? written(key, true) : undefined) ?? written(id, false) ?? (prefix ? looped() : undefined);

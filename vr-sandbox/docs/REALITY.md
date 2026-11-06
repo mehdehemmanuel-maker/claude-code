@@ -2956,3 +2956,33 @@ none (a scratch script, `node check.cjs`, in the session's scratch folder).
   - parts left in separate groups (5);
   - a part whose plan made no block, said as "nothing to start from" (it should say what the plan made);
   - kinds missing (a camera, blades, wheels).
+
+## 2026-11-06: decision 0027: movement in general, builds able to do more, 224 new families, the parts catalogue (nine agents, merged here)
+
+- **Counted.** A probe walking the table-driven families, deleted, against the 149 piece ids there were before this
+  round (`npx vitest run` of the probe): 224 new families and 3,530 new sized parts (family by size row; a length
+  setting not counted). There are 373 piece nodes now. The new families by trade:
+  - drive: 29 families, 1,193 sizes;
+  - electronics: 41 families, 385 sizes;
+  - fixings: 40 families, 621 sizes;
+  - structure: 30 families, 505 sizes;
+  - fluid: 48 families, 450 sizes;
+  - enclosures and installation: 36 families, 376 sizes.
+- **Movement.** `motionOf` reads bodies, joints and gear meshes from how the operations joined the pieces. In the 3D
+  view, Move steps the physics live: a frozen piece stays put even in mid-air, and a loose one turns on its joint when
+  dragged. On the crank board (a gear and a crank on a rod frozen in the air, meshing a second gear on a second rod),
+  a 0.05 N·m torque for one simulated second turned the gears 28.62 and −38.17 rad, a ratio of −1.3334 for 40:30 teeth.
+  The rods stayed within 4e-8 of where they were (the motion builder's probe, deleted). In a headless browser the
+  handle was dragged round and the gears turned at 1.33. Not built yet:
+  - a sleeve sliding along its shaft;
+  - racks and belts;
+  - a motor node driving a joint at a set speed (Move has Spin at 1 turn a second);
+  - pieces colliding with what they turn on.
+- **Builds.** Nuts are tapped, so one goes on by its thread whatever fit is asked. Turned passers and sleeves are laid
+  as made. A bolted joint goes down a hole that is turned. A face is written wherever pieces touch.
+- **Catalogue.** Every piece is on an aisle (trade / category), there is a parts browser behind the phone page's +, and
+  search takes size words. The AI's cards list the other pieces by aisle.
+- **Mended at the merge.** The gauntlet's unique gate compared each candidate with every one of the 373 pieces by
+  building them, and took 19.3 s. A pure block's answer to a test is now kept, so the software field's board runs in
+  time. The cards' shared lists of choices are now counted over the cards sent in full only: they had come to 7,263
+  characters, against the 7,000 the test allows.

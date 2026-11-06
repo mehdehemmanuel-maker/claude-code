@@ -17,6 +17,7 @@ import { show, type PortDef } from '../blocks';
 import { boundsOfAll, isAssembly, isPart, leavesOf, massOfAll, matrixOf, placedCount, type Assembly } from '../assembly';
 import type { Part } from '../kits';
 import { massGauge } from '../parts/maker';
+import { addPiece, mountParts } from './parts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -150,5 +151,7 @@ wall.changed = () => { void variations(); };
 $('stripBtn').onclick = () => $('strip').classList.toggle('open');
 window.setInterval(metrics, 1000);
 drawClock(); void variations();
+// (the parts browser, by the board's name: every piece by trade, category and size; a size tapped is placed and shown)
+mountParts({ into: $('boardName').parentElement!, add: (id, set) => wall.change((b) => addPiece(b, id, set), `added ${id}${set.size ? ` ${String(set.size)}` : ''}`) });
 // what a browser test drives it by
 (window as unknown as { dashboard: object }).dashboard = { dock, wall, paste, verdictLines, variations: () => variations(true), enter };

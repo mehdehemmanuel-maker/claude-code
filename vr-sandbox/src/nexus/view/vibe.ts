@@ -18,6 +18,7 @@
 import * as THREE from 'three';
 import '../seeds';
 import { Dock3D } from './dock3d';
+import { blocksShown } from './move3d';
 import type { Shown } from './space3d';
 import { Engine, SHARED, blockOf, emptyBoard, groupBlock, type Env } from '../dataflow';
 import { edgesOf, nodesOf, type Board } from '../boards';
@@ -30,6 +31,7 @@ import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
 import { askClaude, inViewer, sendReport, whyNot, type Report } from './viewer';
 // (the guide bundled, for the page on claude.ai, which builds Assist's call itself: decision 0027)
 setGuideMd(GUIDE_MD);
+import { mountParts } from './parts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -64,6 +66,8 @@ const insets = () => { const root = document.documentElement.style, over = Math.
   root.setProperty('--under', `${Math.max(0, $('sheet').offsetHeight - 22)}px`); root.setProperty('--over', `${over + 4}px`); };
 { const ro = new ResizeObserver(insets); for (const id of ['sheet', 'top', 'title', 'stat']) ro.observe($(id)); }
 let board: Board = emptyBoard('Nothing yet'), engine = new Engine(board, env, SHARED), runs = 0;
+// (Move: the blocks behind what is shown, moving live: move3d.ts)
+dock.move.source = () => blocksShown(board, (id) => engine.state.get(id)?.out as Record<string, unknown> | undefined);
 try { const s = store.get(KEY); if (s) { const b = JSON.parse(s) as Board; if (b.nodes && b.edges) board = b; } } catch { /* start empty */ }
 /** The boards before each step (by hand, a plan built, a run taken, a board opened): Undo goes back one. */
 const history: Board[] = [];
@@ -577,6 +581,9 @@ function drawChips(): void {
 
 drawChat(); drawTok(); setMode(mode);
 void use(board);
+// (the parts browser on the '+': every piece by trade, category and size; a size tapped is the by-hand step's piece, set to
+// it, joined to what is there as the form says, or built at once on an empty board; starting again is in it)
+mountParts({ trigger: $('fresh'), keepAs: 'Start again', add: (id, set) => { handPiece = id; for (const [k, v] of Object.entries(set)) handVals.set(`${id}.${k}`, String(v)); setMode('hand'); $('sheet').classList.remove('low'); if (!endsOf().length) void handAdd(); } });
 // what a browser test drives it by
 (window as unknown as { nexusVibe: object }).nexusVibe = { board: () => board, ask, open: (title: string) => { const hit = starterBoards().find(([t]) => t.startsWith(title)); return hit ? step(hit[1]()) : Promise.reject(new Error(`no board ${title}`)); }, busy: () => busy, mode: setMode, tokens: () => total, plan: () => plan, headOf, ends: () => endsOf().map((e) => e.name),
   /** a plan, as the model would write it, shown in Assist's panel to be built (the browser test builds one by its own hand) */ showPlan: (p: AgentPlan, asked = 'a plan') => { plan = { asked, plan: p, failing: [], built: false }; drawPlan(); } };

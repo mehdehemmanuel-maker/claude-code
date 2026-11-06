@@ -385,7 +385,7 @@ const FLANGENUT: PartFamily<Flange> = {
   id: 'piece.flangenut', name: 'Flange nut', gloss: 'A hex nut with a flange (DIN 1665) by its size', domains: FAST,
   says: 'A hex flange nut (DIN 1665; its serrations not drawn): its flange and its hex above it, both bored to the thread\'s size; it slides over a bolt\'s shank (Over a shaft), its flange against what it holds',
   rows: Object.fromEntries(Object.entries(DIN1665).map(([k, r]) => [k, { d: dOf(k), ...r }])), size: 'M6', source: 'DIN 1665 as bd_warehouse gives it (copied here)',
-  recipe: (q, size) => stack(`${size} flange nut`, 1, [{ b: made(`${size} flange nut flange`, 'steel-low', { tube: [mm(q.d) / 2, mm(q.dc) / 2, mm(q.c)] }, { color: ZINC }) }, { b: made(`${size} flange nut hex`, 'steel-low', { hex: [mm(q.s), mm(q.m - q.c), mm(q.d) / 2] }, { color: ZINC }) }]),
+  recipe: (q, size) => stack(`${size} flange nut`, 1, [{ b: made(`${size} flange nut flange`, 'steel-low', { tube: [mm(q.d) / 2, mm(q.dc) / 2, mm(q.c)] }, { color: ZINC, tapped: true }) }, { b: made(`${size} flange nut hex`, 'steel-low', { hex: [mm(q.s), mm(q.m - q.c), mm(q.d) / 2] }, { color: ZINC, tapped: true }) }]),
   expect: (q) => ({ bound: [mm(q.dc), mm(q.m), mm(q.dc)], mass: (annulus(mm(q.dc), mm(q.d)) * mm(q.c) + (hexA(mm(q.s)) - disc(mm(q.d))) * mm(q.m - q.c)) * rho('steel-low'), tol: 0.01, massTol: 0.02, says: 'its flange across by its height; nominal mass, flange and hex less their bore' }),
   tests: [T(2)],
 };
@@ -394,7 +394,7 @@ const NYLOC: PartFamily<Nyloc> = {
   id: 'piece.nyloc', name: 'Nyloc nut', gloss: 'A prevailing-torque hex nut with a nylon insert (ISO 7040) by its size', domains: FAST,
   says: 'A nyloc nut (ISO 7040): its steel hex (ISO 4032\'s height) and its nylon ring above it (the steel crimped round the ring not drawn: the ring drawn bare, its bore at the thread\'s size). It slides over a bolt\'s shank (Over a shaft)',
   rows: Object.fromEntries(Object.entries(ISO7040).filter(([k]) => METRIC[k]?.s !== undefined && METRIC[k]?.m !== undefined).map(([k, r]) => [k, { d: dOf(k), s: METRIC[k]!.s!, m: METRIC[k]!.m!, h: r.h }])), size: 'M6', source: 'ISO 7040 heights recalled from makers\' tables (typical); the hex by ISO 4032 (src/nexus/parts/bdw.ts)',
-  recipe: (q, size) => stack(`${size} nyloc nut`, 1, [{ b: made(`${size} nyloc hex`, 'steel-low', { hex: [mm(q.s), mm(q.m), mm(q.d) / 2] }, { color: ZINC }) }, { b: made(`${size} nyloc ring`, 'nylon', { tube: [mm(q.d) / 2, mm(0.45 * q.s), mm(q.h - q.m)] }, { color: 0x2f5fd0 }) }]),
+  recipe: (q, size) => stack(`${size} nyloc nut`, 1, [{ b: made(`${size} nyloc hex`, 'steel-low', { hex: [mm(q.s), mm(q.m), mm(q.d) / 2] }, { color: ZINC, tapped: true }) }, { b: made(`${size} nyloc ring`, 'nylon', { tube: [mm(q.d) / 2, mm(0.45 * q.s), mm(q.h - q.m)] }, { color: 0x2f5fd0, tapped: true }) }]),
   expect: (q) => ({ bound: [mm(corners(q.s)), mm(q.h), mm(corners(q.s))], mass: (hexA(mm(q.s)) - disc(mm(q.d))) * mm(q.m) * rho('steel-low') + annulus(mm(0.9 * q.s), mm(q.d)) * mm(q.h - q.m) * rho('nylon'), tol: 0.01, massTol: 0.02, says: 'across corners by its height; nominal mass, the hex and its ring' }),
   tests: [T(2)],
 };
@@ -415,7 +415,7 @@ const WINGNUT: PartFamily<Wing> = {
   rows: Object.fromEntries(['M3', 'M4', 'M5', 'M6', 'M8', 'M10', 'M12'].map((k) => [k, { d: dOf(k) }])), size: 'M6', source: 'typical (DIN 315\'s proportions, as src/nexus/kinds/fasteners.ts takes them)',
   settings: [{ key: 'matter', label: 'Made of', type: 'choice', default: 'zinc', choices: ['zinc', 'A2', 'nylon'] }],
   recipe: (q, size, set) => { const w = wingOf(q.d), m = matOf(set), wing = (i: number) => made(`${size} wing nut wing ${i}`, m, { box: [mm(w.lw), mm(w.h), mm(w.tw)] }, { color: ZINC });
-    return stack(`${size} wing nut`, 0, [{ b: wing(1) }, { b: made(`${size} wing nut hub`, m, { tube: [mm(q.d) / 2, mm(q.d), mm(w.h)] }, { color: ZINC }) }, { b: wing(2) }]); },
+    return stack(`${size} wing nut`, 0, [{ b: wing(1) }, { b: made(`${size} wing nut hub`, m, { tube: [mm(q.d) / 2, mm(q.d), mm(w.h)] }, { color: ZINC, tapped: true }) }, { b: wing(2) }]); },
   expect: (q, _s, set) => { const w = wingOf(q.d); return { bound: [mm(w.e), mm(w.h), mm(2 * q.d)], mass: (annulus(mm(2 * q.d), mm(q.d)) * mm(w.h) + 2 * mm(w.lw) * mm(w.h) * mm(w.tw)) * rho(matOf(set)), tol: 0.01, massTol: 0.02, says: 'tip to tip by its height and its hub; nominal mass, hub and wings' }; },
   tests: [T(3)],
 };
@@ -660,7 +660,7 @@ const CAPNUT: PartFamily<{ d: number; dk: number; m: number; s: number }> = {
   id: 'piece.capnut', name: 'Cap nut', gloss: 'A domed cap (acorn) nut (DIN 1587) by its size', domains: FAST,
   says: 'A domed cap nut (DIN 1587): its hex, bored to the thread\'s size through its height, and its dome closing the top. A bolt\'s end goes up into it no further than its hex (Through a line, its hex\'s axis from below); Over a shaft does not take it (its dome has no bore)',
   rows: Object.fromEntries(Object.entries(DIN1587).map(([k, r]) => [k, { d: dOf(k), ...r }])), size: 'M6', source: 'DIN 1587 as bd_warehouse gives it (copied here)',
-  recipe: (q, size) => stack(`${size} cap nut`, 1, [{ b: made(`${size} cap nut hex`, 'steel-low', { hex: [mm(q.s), mm(q.m), mm(q.d) / 2] }, { color: 0xb8bcc2 }) }, { b: made(`${size} cap nut dome`, 'steel-low', { dome: [mm(q.dk) / 2] }, { color: 0xb8bcc2 }) }]),
+  recipe: (q, size) => stack(`${size} cap nut`, 1, [{ b: made(`${size} cap nut hex`, 'steel-low', { hex: [mm(q.s), mm(q.m), mm(q.d) / 2] }, { color: 0xb8bcc2, tapped: true }) }, { b: made(`${size} cap nut dome`, 'steel-low', { dome: [mm(q.dk) / 2] }, { color: 0xb8bcc2 }) }]),
   expect: (q) => ({ bound: [mm(corners(q.s)), mm(q.m + q.dk / 2), mm(corners(q.s))], mass: ((hexA(mm(q.s)) - disc(mm(q.d))) * mm(q.m) + (2 / 3) * Math.PI * (mm(q.dk) / 2) ** 3) * rho('steel-low'), tol: 0.01, massTol: 0.03, says: 'across corners by hex and dome; nominal mass, the hex less its bore and the half sphere' }),
   tests: [T(2)],
 };

@@ -198,9 +198,9 @@ type NutRow = { d: number; D: number; F: number; b: number; L: number; hole: num
 const LEADNUTS: Record<string, NutRow> = { T8: { d: 8, D: 22, F: 3.5, b: 10.2, L: 15, hole: 3.5, pcd: 16 } };
 const LEADNUT: PartFamily<NutRow> = {
   id: 'piece.leadnut', name: 'Lead screw nut', gloss: 'A brass flanged nut for a T8 lead screw: its flange with four screw holes and its body', domains: ['mechanical', 'manufacturing'],
-  says: 'A brass flanged nut for a lead screw (T8: flange Ø22 × 3.5 with four Ø3.5 holes on Ø16, body Ø10.2, 15 long; typical of the nuts sold): one turned piece, its bore the screw\'s outside (its thread not drawn), so it slides over the screw (Over a shaft, a touch fit). It offers <size> lead nut/holes, for screws into what it drives',
+  says: 'A brass flanged nut for a lead screw (T8: flange Ø22 × 3.5 with four Ø3.5 holes on Ø16, body Ø10.2, 15 long; typical of the nuts sold): one turned piece, its bore the screw\'s outside (its thread not drawn), tapped: it goes on the screw by its thread whatever fit is asked (Over a shaft). It offers <size> lead nut/holes, for screws into what it drives',
   rows: LEADNUTS, size: 'T8', source: 'the T8 brass flange nut as sold for 3D printers (typical)',
-  recipe: (r, size) => made(`${size} lead nut`, 'brass', { lathe: { pts: [[0, 0], [mm(r.D) / 2, 0], [mm(r.D) / 2, mm(r.F)], [mm(r.b) / 2, mm(r.F)], [mm(r.b) / 2, mm(r.L)], [0, mm(r.L)]], bore: mm(r.d) / 2 } }, { pattern: { name: 'holes', face: '-y', circle: { n: 4, r: mm(r.pcd) / 2, phase: Math.PI / 4 }, hole: mm(r.hole) / 2, depth: mm(r.F) } }),
+  recipe: (r, size) => made(`${size} lead nut`, 'brass', { lathe: { pts: [[0, 0], [mm(r.D) / 2, 0], [mm(r.D) / 2, mm(r.F)], [mm(r.b) / 2, mm(r.F)], [mm(r.b) / 2, mm(r.L)], [0, mm(r.L)]], bore: mm(r.d) / 2 } }, { tapped: true, pattern: { name: 'holes', face: '-y', circle: { n: 4, r: mm(r.pcd) / 2, phase: Math.PI / 4 }, hole: mm(r.hole) / 2, depth: mm(r.F) } }),
   expect: (r) => ({ bound: [mm(r.D), mm(r.L), mm(r.D)], mass: ((disc(mm(r.D)) - disc(mm(r.d))) * mm(r.F) + (disc(mm(r.b)) - disc(mm(r.d))) * mm(r.L - r.F) - 4 * disc(mm(r.hole)) * mm(r.F)) * rho('brass'), tol: 0.01, massTol: 0.03, says: 'its flange by its length; nominal mass, flange and body less bore and holes' }),
   tests: [{ inputs: {}, outputs: { pieces: 1, offers: ['T8 lead nut/axis', 'T8 lead nut/holes'] } }],
 };

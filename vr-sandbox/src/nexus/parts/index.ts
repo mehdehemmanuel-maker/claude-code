@@ -196,3 +196,9 @@ export const PIECE_NODES: BlockDef[] = [...FAMILIES_MADE.map((f) => familyNode(f
 import { BUILDING_NODES } from './building'; PIECE_NODES.push(...BUILDING_NODES); // (building and structural, decision 0026 step 2)
 export type { Expect };
 import { HARDWARE_NODES } from './hardware'; PIECE_NODES.push(...HARDWARE_NODES); // fasteners and hardware (decision 0026, step 2)
+import { DRIVE_NODES } from './drive'; PIECE_NODES.push(...DRIVE_NODES); // bearings and power transmission (decision 0026, the drive trade)
+import { ELECTRO_NODES } from './electro'; PIECE_NODES.push(...ELECTRO_NODES); // electronics, the second shelf: packages, LEDs, controls, connectors, modules, cells, thermal, magnetics (decision 0026)
+import { FIXINGS_NODES } from './fixings'; PIECE_NODES.push(...FIXINGS_NODES); // fixings and rigging: inch fasteners, tapping screws, studs, eye bolts, shackles, chain, clips, hinges (decision 0026)
+import { STRUCTURE_NODES } from './structure'; PIECE_NODES.push(...STRUCTURE_NODES); // structure and building: EN 755 aluminium, EN 10255 tube, UPE, HEM, IPN, purlins, timber, paving, drainage (decision 0026)
+import { FLUID_NODES } from './fluid'; PIECE_NODES.push(...FLUID_NODES); // pneumatics, hydraulics and plumbing (decision 0026)
+import { INSTALL_NODES } from './install'; PIECE_NODES.push(...INSTALL_NODES); // enclosures and electrical installation (decision 0026, 2026-11-06)

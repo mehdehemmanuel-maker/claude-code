@@ -25,6 +25,7 @@ import { starterBoards } from './starters';
 import { searchCatalogue } from './catalogue';
 import { NAMED } from './navigate-named';
 import { stocked } from './stock';
+import { ALIASES, aisleOf, splitAisle, tradeRank } from './parts/aisles';
 import type { Board, BoardNode, BoardEdge } from './boards';
 
 const nodesIn = (b: Board): (BoardNode & { id: string })[] => Object.entries(b.nodes).filter(([, n]) => !n.deleted && n.block).map(([id, n]) => ({ ...n, id }));
@@ -227,9 +228,78 @@ export function search(q: string, most = 40): Found[] {
     for (const [e, lo] of lowered(l)) { const r = rank(lo.n, lo.i, lo.all); if (!r) continue;
       const f: Found = { library: l.id, libraryName: l.name, id: e.id, name: e.name, says: e.says, score: r > 0 ? r + (l.type === 'nodes' ? 3 : 0) : (3 * -r) / ws.length };
       (r > 0 ? out : partial).push({ ...f, ...useOf(l, e) }); } }
+  // (the parts catalogue: a piece at a size its words name ("M8 nut", "608 bearing", "2x4"), its node set to that size,
+  // over what only says the words; a family the words name whole raised a little)
+  const parts = findParts(q, 12), whole = new Set(parts.filter((h) => !h.size && h.full).map((h) => h.id));
+  for (const h of parts) if (h.size && h.full) out.push({ library: 'parts', libraryName: 'Parts catalogue', id: `${h.id} ${h.size}`, name: `${h.name} ${h.size}`, says: h.says, add: { block: h.id, set: { size: h.size } }, score: 50 + h.score / 10 });
+  for (const f of out) if (f.library === 'nodes' && whole.has(f.id)) f.score += 20;
   for (const line of searchCatalogue(ws.join(' '), 10)) { const d = DESIGNED.includes(line.split(' ')[0]!); out.push({ library: 'catalogue', libraryName: 'Catalogue sizes', id: line, name: line, says: d ? 'a standard size (its family\'s piece.* node builds it)' : 'a standard size, known and not drawn yet', score: 4 }); }
   const by = (a: Found, b: Found) => b.score - a.score || a.name.length - b.name.length;
   return [...out.sort(by), ...(out.length < most ? partial.sort(by) : [])].slice(0, most);
+}
+
+// ---- the parts catalogue (decision 0026, the user 2026-11-06): trade, category, family, size --------------------------
+/** A family of piece in the catalogue: its node, its aisle, every size its table has (none where it is made to any size
+ *  by its settings: a plate, a box), and the words it is found by. */
+export interface PartEntry { id: string; name: string; aisle: string; trade: string; category: string; sizes: string[]; says: string; words: string[] }
+export interface PartCategory { name: string; aisle: string; families: PartEntry[]; sizes: number }
+export interface PartTrade { name: string; categories: PartCategory[]; families: number; sizes: number }
+/** A piece found by its words: a family, or one size of it (with what to place: its node set to that size). */
+export interface PartHit { id: string; name: string; aisle: string; size?: string; says: string; score: number; full: boolean }
+/** A family's or a size's words, as they are matched: lower case, × as x, split at what is not a letter, a digit or a
+ *  point (a "-" or "/" kept whole and split too: "esp32-devkitc" is it, "esp32" and "devkitc"). */
+export const partWords = (s: string): string[] => { const out: string[] = [];
+  for (const w of s.toLowerCase().replace(/×/g, 'x').split(/[^a-z0-9./-]+/)) { const t = w.replace(/^[./-]+|[./-]+$/g, ''); if (!t) continue; out.push(t); if (/[/-]/.test(t)) out.push(...t.split(/[/-]+/).filter(Boolean)); }
+  return out; };
+const PIECE_ID = /^(piece|mate|seed)\./;
+let partsKept: { entries: PartEntry[]; size: number } | null = null;
+/** Every piece family in the library (piece.*, the joints mate.* and the folded builds seed.* that have an aisle), each
+ *  with its aisle (its own, else aisles.ts's), its sizes (its size setting's choices) and its words; worked out again
+ *  when the library has grown. */
+export function partEntries(): PartEntry[] {
+  if (partsKept && partsKept.size === LIBRARY.size) return partsKept.entries;
+  const entries: PartEntry[] = [];
+  for (const d of LIBRARY.values()) { if (!PIECE_ID.test(d.id)) continue; const own = aisleOf(d); if (!own && !d.id.startsWith('piece.')) continue;
+    const aisle = own ?? 'Other / Not yet in an aisle', [trade, category] = splitAisle(aisle), sizes = (d.settings ?? []).find((s) => s.key === 'size' && s.choices?.length)?.choices?.map(String) ?? [];
+    const short = d.id.replace(PIECE_ID, '');
+    entries.push({ id: d.id, name: d.name, aisle, trade, category, sizes, says: d.says ?? '', words: [...new Set([...partWords(`${d.name} ${short} ${short.replace(/\./g, ' ')} ${aisle} ${ALIASES[d.id] ?? ''}`)])] }); }
+  partsKept = { entries, size: LIBRARY.size }; return entries;
+}
+/** The catalogue: trades in their order (aisles.ts TRADES), each its categories by name, each its families by name. */
+export function partsCatalogue(): PartTrade[] {
+  const trades = new Map<string, Map<string, PartEntry[]>>();
+  for (const e of partEntries()) { const t = trades.get(e.trade) ?? new Map<string, PartEntry[]>(); trades.set(e.trade, t); t.set(e.category, [...(t.get(e.category) ?? []), e]); }
+  return [...trades].sort(([a], [b]) => tradeRank(a) - tradeRank(b) || a.localeCompare(b)).map(([name, cats]) => {
+    const categories = [...cats].sort(([a], [b]) => a.localeCompare(b)).map(([c, fs]) => ({ name: c, aisle: `${name} / ${c}`, families: fs.sort((x, y) => x.name.localeCompare(y.name)), sizes: fs.reduce((n, f) => n + Math.max(1, f.sizes.length), 0) }));
+    return { name, categories, families: categories.reduce((n, c) => n + c.families.length, 0), sizes: categories.reduce((n, c) => n + c.sizes, 0) }; });
+}
+/** One word of a request against one of a family's or a size's: a number or a short word whole ("608", "m8", "pi"), a
+ *  longer word as the start of one ("rasp" of "raspberry"), a plural as its singular. */
+const wordHits = (q: string, ws: readonly string[], whole = false): boolean => { const one = q.length > 3 && q.endsWith('s') && !q.endsWith('ss') ? q.slice(0, -1) : q;
+  return ws.some((w) => w === q || w === one || w === `${q}s` || (!whole && !/\d/.test(q) && q.length >= 3 && (w.startsWith(q) || w.startsWith(one)))); };
+/**
+ * Pieces matching some words, best first: a size ("M8 nut" is the nut at M8, "608 bearing" the bearing 608, "2x4" the
+ * timber 2x4, "Raspberry Pi 4" the dev board Raspberry Pi 4 Model B), else a family ("lock nut", "valve"). Each word is
+ * looked for in the family's name, id, aisle and aliases, and in each size; a size is offered where one of the words is
+ * in it. Ranked by the share of the words found, then a size whose words are most of what was asked, then the family
+ * whose name is the words themselves, then the shorter name. At most three sizes a family.
+ */
+export function findParts(q: string, most = 10): PartHit[] {
+  const raw = partWords(q), kept = raw.filter((w) => !STOP.has(w)), ws = kept.length ? kept : raw; if (!ws.length) return [];
+  const typed = ws.join(' '), out: PartHit[] = [];
+  for (const e of partEntries()) {
+    const inFam = ws.map((w) => wordHits(w, e.words)), famN = inFam.filter(Boolean).length, nw = partWords(`${e.name} ${e.id.replace(PIECE_ID, '')}`), nm = partWords(e.name).join(' ');
+    // (the family whose name is the words, then one whose name holds them (not only its aisle or an alias); a family of
+    // any part (its envelope by kind, a size from a wire) under the families that are the part)
+    const named = (nm === typed ? 30 : nm.startsWith(typed) || typed.startsWith(nm) ? 8 : 0) + (10 * ws.filter((w) => wordHits(w, nw)).length) / ws.length - (e.trade === 'Any part' ? 20 : 0);
+    const sized: PartHit[] = [];
+    for (const s of e.sizes) { const sw = partWords(s), inSize = ws.map((w) => wordHits(w, sw, true)); if (!inSize.some(Boolean)) continue;
+      const n = ws.filter((_, k) => inFam[k] || inSize[k]).length, own = inSize.filter(Boolean).length;
+      sized.push({ id: e.id, name: e.name, aisle: e.aisle, size: s, says: `${e.aisle}: ${e.name} ${s}`, full: n === ws.length, score: (100 * n) / ws.length + 10 * (own / Math.max(1, sw.length)) + named / 3 + (famN ? 5 : 0) - (e.trade === 'Any part' ? 20 : 0) - s.length * 0.01 }); }
+    out.push(...sized.sort((a, b) => b.score - a.score).slice(0, 3));
+    if (famN) out.push({ id: e.id, name: e.name, aisle: e.aisle, says: `${e.aisle}: ${e.name}${e.sizes.length ? `, ${e.sizes.length} sizes` : ''}`, full: famN === ws.length, score: (100 * famN) / ws.length + named - e.name.length * 0.01 });
+  }
+  return out.sort((a, b) => b.score - a.score || a.name.length - b.name.length).slice(0, most);
 }
 
 /** How a node's work flows. */

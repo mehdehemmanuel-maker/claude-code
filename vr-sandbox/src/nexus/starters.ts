@@ -424,6 +424,30 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     return b;
   }],
 
+  ['Movement: a crank and a gear loose on a rod frozen in the air, meshing a second gear on a second rod: press Move, then drag the handle round', () => {
+    // (the user, 2026-11-06: "freeze things in the air like a rod then add a loose gear to it and a crank and crank it")
+    // all of it by the operations: an m2 40-tooth spur gear (ISO 53's rack), a crank arm stacked on its face with a wooden
+    // handle at its end, a Ø10 steel rod through both with a clear fit (so they turn on it); an m2 30-tooth gear on a second
+    // rod, meshed beside the first (their axes 70 mm apart and a slide fit's backlash). In Move the rods are frozen where
+    // they stand, in the air, and what turns on them is loose: drag the handle and both gears turn, the second the other
+    // way, 40:30 (sizes typical: a 20 mm face, a 100 mm arm)
+    const b = emptyBoard('A crank turning two gears');
+    const put = (id: string, block: string, set: Record<string, unknown>, label?: string) => { placeBlock(b, block, 0, 0, set, id); if (label) b.nodes[id]!.label = label; };
+    put('gearA', 'piece.gear', { module: '2', teeth: 40, width: 20, bore: 8 }, 'An m2 spur gear, 40 teeth');
+    put('arm', 'room.make', { name: 'crank arm', shape: 'box', mat: 'steel-low', a: 12, b: 100, c: 8 }, 'A crank arm, 100 mm');
+    put('handle', 'room.make', { name: 'crank handle', shape: 'rod', mat: 'oak', a: 6, b: 40 }, 'Its handle (oak), Ø12 × 40');
+    put('handleZ', 'room.turn', { axis: 'x', degrees: 90 }, 'Laid along the gear\'s axis'); wire(b, 'handle', 'block', 'handleZ', 'block');
+    put('crank', 'room.onto', { face: '+z', fit: 'touch', end: 'hi' }, 'The handle on the arm, at its end'); wire(b, 'arm', 'block', 'crank', 'host'); wire(b, 'handleZ', 'block', 'crank', 'child');
+    put('geared', 'room.stack', { name: 'gear and crank', axis: 'z', fit: 'touch', order: 'gearA, crank' }, 'The crank on the gear\'s face'); wire(b, 'gearA', 'block', 'geared', 'blocks'); wire(b, 'crank', 'block', 'geared', 'blocks');
+    put('rodA', 'room.make', { name: 'rod A', shape: 'rod', mat: 'steel-low', a: 5, b: 120 }, 'A steel rod, Ø10 × 120');
+    put('onA', 'room.through', { line: 'm2 z40 spur gear/axis', from: 'below', fit: 'clear' }, 'The rod through the gear and the crank, a clear fit: they turn on it'); wire(b, 'geared', 'block', 'onA', 'host'); wire(b, 'rodA', 'block', 'onA', 'passer');
+    put('gearB', 'piece.gear', { module: '2', teeth: 30, width: 20, bore: 8 }, 'A second gear, 30 teeth');
+    put('rodB', 'room.make', { name: 'rod B', shape: 'rod', mat: 'steel-low', a: 5, b: 120 }, 'A second rod');
+    put('onB', 'room.through', { line: 'm2 z30 spur gear/axis', from: 'below', fit: 'clear' }, 'The second rod through it'); wire(b, 'gearB', 'block', 'onB', 'host'); wire(b, 'rodB', 'block', 'onB', 'passer');
+    put('meshed', 'room.mesh', { line: 'm2 z40 spur gear/axis', gear: 'm2 z30 spur gear/axis', toward: '+x', fit: 'slide' }, 'Meshed beside the first'); wire(b, 'onA', 'block', 'meshed', 'host'); wire(b, 'onB', 'block', 'meshed', 'gear');
+    put('show', 'space.show', {}, 'Press Move: the rods frozen in the air, the gears loose; drag the handle round'); wire(b, 'meshed', 'thing', 'show', 'thing');
+    return b;
+  }],
   ['Parts in 3D: a bolt sized from its load, drawn whole', () => {
     // the load picks the bolt: the shank area its shear needs, the next ISO 262 size up, and that bolt made by the
     // operations from its standard's row (ISO 4014's hex bolt: its head and shank), its size along a wire into the piece's family (piece.sized)

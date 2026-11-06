@@ -11,6 +11,7 @@
 // out of steps or time (said, with the board as far as it got), or where the service refuses (said as it said it).
 import type Anthropic from '@anthropic-ai/sdk';
 import { LIBRARY, block, defaultsOf, portsOf, register, type BlockDef, type PortDef, type SettingDef, type Type } from './blocks';
+import { aisleOf, splitAisle, tradeRank } from './parts/aisles';
 import { Engine, collapse, emptyBoard, groupBlock, makeBlock, placeBlock, wire } from './dataflow';
 // (navigation and the starter boards are loaded when the agent runs, not when the library does: imported at the top they
 // change the order the library's modules start in, and a worker that loads the whole library then fails to start)
@@ -138,10 +139,15 @@ async function exampleOf(id: string): Promise<string | undefined> {
  *  that uses it, to open as a worked example; then boards, then everything else; the old place-by-number nodes and
  *  makers last. At most `most` lines, short (tokens matter). */
 export async function findLines(q: string, most = 10): Promise<string> {
-  const { search, spelt } = await import('./navigate'), words = q.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !/^(the|and|with|for|from|into|onto|make|build|some|that|this)$/.test(w)).map(spelt);
+  const { search, spelt, findParts } = await import('./navigate'), words = q.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !/^(the|and|with|for|from|into|onto|make|build|some|that|this)$/.test(w)).map(spelt);
   // (the blocks you saved, by their own words: registered after the library's search index was made, so looked at here)
   const saved = [...LIBRARY.values()].filter((d) => d.by === 'you' && words.some((w) => `${d.id} ${d.name} ${d.says ?? ''}`.toLowerCase().includes(w)));
   const found = search(q, 200), seen = new Set(saved.map((d) => d.id)), builders: BlockDef[] = [...saved], boards: string[] = [], rest: string[] = [], old: string[] = [];
+  // (then the parts catalogue (navigate.ts findParts): the families the words name whole, at most three, each at the size
+  // the words name where they name one ("M8 nut": the nut, its size M8; "608 bearing"; "Raspberry Pi 4"))
+  const asked = new Map<string, string>(), catalogued: BlockDef[] = [];
+  for (const h of findParts(q, 12)) { if (!h.full || catalogued.length >= 3) continue; const d = block(h.id); if (!d || seen.has(h.id) || !buildsInSpace(d) || OLD_BUILD.test(h.id)) continue; seen.add(h.id); catalogued.push(d); if (h.size) asked.set(h.id, h.size); }
+  builders.push(...catalogued); const ahead = saved.length + catalogued.length;
   for (const f of found) {
     if (f.board) { if (boards.length < 2) boards.push(`board "${f.board.slice(0, 80)}"`); continue; }
     const id = f.add?.block ?? f.id, d = block(id);
@@ -153,10 +159,10 @@ export async function findLines(q: string, most = 10): Promise<string> {
   // search ranked them: "lamp" is a bulb before a hose clamp)
   const said = (d: BlockDef) => words.filter((w) => new RegExp(`\\b${w}`).test(`${d.id} ${d.name} ${d.says ?? ''}`.toLowerCase())).length;
   // (and where some say a word of the request, those that say none are left out: "lamp" is not a hose clamp at all)
-  const ranked = builders.slice(saved.length).map((d, k) => [d, said(d), k] as const).sort((a, b) => b[1] - a[1] || a[2] - b[2]), any = ranked.some(([, n]) => n > 0);
-  builders.splice(saved.length, Infinity, ...ranked.filter(([, n]) => !any || n > 0).map(([d]) => d));
+  const ranked = builders.slice(ahead).map((d, k) => [d, said(d), k] as const).sort((a, b) => b[1] - a[1] || a[2] - b[2]), any = ranked.some(([, n]) => n > 0);
+  builders.splice(ahead, Infinity, ...ranked.filter(([, n]) => !any || n > 0).map(([d]) => d));
   const lineOf = async (d: BlockDef) => { const ps = portsOf(d, defaultsOf(d)), outs = ps.outputs.map((p) => p.name).join(','), offers = offersOf(d), eg = await exampleOf(d.id);
-    const sets = (d.settings ?? []).slice(0, 6).map((x) => `${x.key}=${brief(x.default, 24)}`).join(' ');
+    const sets = (d.settings ?? []).slice(0, 6).map((x) => (x.key === 'size' && asked.has(d.id) ? `size=${asked.get(d.id)} (asked)` : `${x.key}=${brief(x.default, 24)}`)).join(' ');
     return `${d.id}: ${d.name.slice(0, 40)}${d.by === 'you' ? ' (yours)' : ''} | in ${ps.inputs.map((p) => `${p.name}${p.many ? '*' : ''}`).join(',') || '-'}${outs === ROOM_GIVES ? '' : ` | out ${outs}`}${sets ? ` | set ${sets}` : ''}${offers.length ? ` | offers ${offers.join(', ')}` : ''}${eg ? ` | e.g. board "${eg}"` : ''}`; };
   const top = await Promise.all(builders.slice(0, Math.max(1, most - 4)).map(lineOf));
   const lines = [...top, ...boards, ...rest, ...old].slice(0, most);
@@ -537,18 +543,31 @@ export function piecesCard(): string {
   // (a list of choices said by more than one card is said once, named, and each card names it: the pipe sizes, the
   // metric sizes and the fits were most of the cards' length)
   const listOf = (x: SettingDef) => `${x.choices!.slice(0, 8).join('|')}${x.choices!.length > 8 ? '|…' : ''}`, seen = new Map<string, number>();
-  for (const id of ids) for (const x of block(id)!.settings ?? []) if (x.choices) seen.set(listOf(x), (seen.get(listOf(x)) ?? 0) + 1);
+  // (counted over the cards sent in full only: a list only the other pieces' cards hold is never said here, decision 0027)
+  const inFull = (id: string) => !id.startsWith('piece.') || CORE_PIECES.has(id);
+  for (const id of ids.filter(inFull)) for (const x of block(id)!.settings ?? []) if (x.choices) seen.set(listOf(x), (seen.get(listOf(x)) ?? 0) + 1);
   const named = new Map([...seen].filter(([l, n]) => n > 1 && l.length > 20).map(([l], k) => [l, `L${k + 1}`] as const));
   const line = (d: BlockDef) => { const ps = portsOf(d, defaultsOf(d)), outs = ps.outputs.map((p) => p.name).join(','), offers = offersOf(d);
     const sets = (d.settings ?? []).map((x) => `${x.key}=${brief(x.default, 24)}${x.choices ? ` [${named.get(listOf(x)) ?? listOf(x)}]` : ''}`);
     return `${d.id}${ps.inputs.length ? `(${ps.inputs.map((p) => `${p.name}${p.optional ? '?' : ''}${p.many ? '*' : ''}`).join(', ')})` : ''}${outs === ROOM_GIVES ? '' : ` → ${outs}`}${sets.length ? ` | ${sets.join('; ')}` : ''}${offers.length ? ` | offers ${offers.join(', ')}` : ''}`; };
-  // (the operations, the joints and the pieces most builds use, in full; every other piece only its short id, a line of
-  // them a trade, to card when it is wanted: so the prefix grows a word a piece, not a card (decision 0026); `find`
-  // reaches them by what they are)
-  const full = (id: string) => !id.startsWith('piece.') || CORE_PIECES.has(id), trades = new Map<string, string[]>();
-  for (const id of ids.filter((x) => !full(x))) { const t = block(id)!.domains?.[0] ?? 'other'; trades.set(t, [...(trades.get(t) ?? []), id.slice('piece.'.length)]); }
-  return `## The cards you need most (as \`card\` gives them; each piece and operation gives ${ROOM_GIVES} unless an arrow says; block into the next operation, thing only to show, measure, assert; * takes many wires; offers: its lines and rooms, <key> a setting's value)\n${[...named].map(([l, n]) => `${n}=[${l}]`).join(' ')}\n${ids.filter(full).map((id) => line(block(id)!)).join('\n')}\n## The other pieces, piece.<id> by trade (\`card\` one for its settings and offers, or \`find\` by what it is)\n${[...trades].sort(([a], [b]) => a.localeCompare(b)).map(([t, xs]) => `${t}: ${xs.join(' ')}`).join('\n')}`;
+  // (the operations, the joints and the pieces most builds use, in full; every other piece by its aisle (parts/aisles.ts),
+  // a line a trade: each aisle its count, and its pieces' short ids while the cards stay within CARDS_ROOM, in the
+  // catalogue's order; past that an aisle is its count alone, and past even that a trade is: `find` brings any piece by
+  // what it is or its size and the named cards send it, so the prefix stays short however many pieces there are
+  // (decision 0026, the user 2026-11-06: a thousand more parts))
+  const full = (id: string) => !id.startsWith('piece.') || CORE_PIECES.has(id), aisles = new Map<string, string[]>();
+  for (const id of ids.filter((x) => !full(x))) { const a = aisleOf(block(id)) ?? 'Other / Not yet in an aisle'; aisles.set(a, [...(aisles.get(a) ?? []), id.slice('piece.'.length)]); }
+  const trades = new Map<string, [string, string[]][]>();
+  for (const [a, xs] of [...aisles].sort(([a], [b]) => a.localeCompare(b))) { const [t, c] = splitAisle(a); trades.set(t, [...(trades.get(t) ?? []), [c, xs]]); }
+  const order = [...trades].sort(([a], [b]) => tradeRank(a) - tradeRank(b) || a.localeCompare(b));
+  const head = `## The cards you need most (as \`card\` gives them; each piece and operation gives ${ROOM_GIVES} unless an arrow says; block into the next operation, thing only to show, measure, assert; * takes many wires; offers: its lines and rooms, <key> a setting's value)\n${[...named].map(([l, n]) => `${n}=[${l}]`).join(' ')}\n${ids.filter(full).map((id) => line(block(id)!)).join('\n')}\n## The other pieces by aisle, piece.<id> (\`card\` one for its settings and offers; \`find\` any by what it is or its size: "M8 nut", "608 bearing", "2x4"; an aisle with a count only: find in it)\n`;
+  const listed = new Set<string>(), text = (byTrade: boolean) => order.map(([t, cs]) => byTrade ? `${t}: ${cs.reduce((n, [, xs]) => n + xs.length, 0)} in ${cs.length} aisles (${cs.map(([c]) => c).join(', ')})` : `${t} | ${cs.map(([c, xs]) => listed.has(`${t}/${c}`) ? `${c}: ${xs.join(' ')}` : `${c} ${xs.length}`).join(' | ')}`).join('\n');
+  if (head.length + text(false).length > CARDS_ROOM) return head + text(true);
+  for (const [t, cs] of order) for (const [c] of cs) { listed.add(`${t}/${c}`); if (head.length + text(false).length > CARDS_ROOM) listed.delete(`${t}/${c}`); }
+  return head + text(false);
 }
+/** How long the cards may grow: the guide's cards, cached with it and sent every call (the test holds them under 7,000). */
+const CARDS_ROOM = 6500;
 
 /** The board as the model is told it, short: a line a node (its name, its block, the settings that are not the block's
  *  own, each value cut to 60 characters), then every wire: never cut (decision 0026: the quadcopter's and the robot

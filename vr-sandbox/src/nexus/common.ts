@@ -63,8 +63,9 @@ export function bolt(size: string, length: number, head: 'hex' | 'socket' = 'hex
   const top = head === 'hex' ? (() => { const h = sizeOf(size, 's', 'k'); return made(`${size} head`, mat, { hex: [mm(h.s), mm(h.k)] }, { color: 0x5c5f63 }); })() : (() => { const h = sizeOf(size, 'dk', 'ks'); return made(`${size} head`, mat, { cyl: [mm(h.dk) / 2, mm(h.ks)] }, { color: 0x2a2b2e }); })();
   return stack(`${size}×${Math.round(length * 1000)} ${head === 'hex' ? 'hex bolt' : 'socket screw'}`, 1, [{ b: shank }, { b: top }]);
 }
-/** A hex nut, ISO 4032: its bore the thread's size (the thread itself not drawn). */
-export const nut = (size: string, mat = 'steel-low'): Block => { const m = sizeOf(size, 's', 'm'); return made(`${size} nut`, mat, { hex: [mm(m.s), mm(m.m), mm(m.d) / 2] }, { color: 0x8a8c90 }); };
+/** A hex nut, ISO 4032: its bore the thread's size (the thread itself not drawn), tapped: it goes on a shank or a rod
+ *  of its size by its thread whatever fit is asked (ISO 965's fit, no gap drawn), as an insert does. */
+export const nut = (size: string, mat = 'steel-low'): Block => { const m = sizeOf(size, 's', 'm'); return made(`${size} nut`, mat, { hex: [mm(m.s), mm(m.m), mm(m.d) / 2] }, { color: 0x8a8c90, tapped: true }); };
 /** A plain washer, ISO 7089. */
 export const washer = (size: string, mat = 'steel-low'): Block => { const m = sizeOf(size, 'd1', 'd2', 'hw'); return made(`${size} washer`, mat, { tube: [mm(m.d1) / 2, mm(m.d2) / 2, mm(m.hw)] }, { color: 0xa9acb0 }); };
 /** A hex standoff, female both ends (M3, 5.5 mm across flats; its bore the M3 tap drill, 2.5 mm; typical). */
@@ -226,7 +227,14 @@ export function boltedJoint(held: Block, port0: string, size: string, i = 0, hea
   // second joint on the same plates is not lengthened by the first one's head and nut)
   const lines = top ? top.p.lines.filter((l) => l.port === port) : [], o = lines.slice(i, i + 1)[0] ?? lines[0];
   if (!o) throw new Error(`bolted joint: ${held.name} offers no hole ${port}`);
-  if (o.dir && !(Math.abs(o.dir[0]) < 1e-9 && Math.abs(o.dir[2]) < 1e-9 && o.dir[1] > 0)) throw new Error(`bolted joint: the hole ${port} is turned (not along +y): bolt what it holds first, then turn the whole (not made yet)`);
+  // (a hole that runs across or down (a fan's frame stood on its side, a wall plate's): the whole turned so it runs up, bolted
+  // there, and turned back, so the joint follows the hole's own direction (decision 0026, as Bolted down does); a hole at an
+  // angle to x, y and z is refused)
+  if (o.dir && !(Math.abs(o.dir[0]) < 1e-9 && Math.abs(o.dir[2]) < 1e-9 && o.dir[1] > 0)) {
+    const d = o.dir, ax = d.findIndex((v) => Math.abs(Math.abs(v) - 1) < 1e-9); if (ax < 0) throw new Error(`bolted joint: the hole ${port} runs at an angle, not along x, y or z: not made yet`);
+    const about: P3 = d[1] < 0 ? [1, 0, 0] : [-d[2], 0, d[0]], deg = d[1] < 0 ? 180 : 90;
+    return noted(turn(boltedJoint(turn(held, about, deg), port, size, i, head, fit), about, -deg), notes.join('; '));
+  }
   const owner = top!.p, ceiling = boundOf(owner)[1][1];
   const under = held.pieces.map(boundOf).filter((b) => b[0][0] < o.x && o.x < b[1][0] && b[0][2] < o.z && o.z < b[1][2] && b[1][1] <= ceiling + 1e-9);
   const m = sizeOf(size, 'hw', 'm'), grip = ceiling - Math.min(...under.map((b) => b[0][1])), L = grip + mm(m.hw) + mm(m.m);

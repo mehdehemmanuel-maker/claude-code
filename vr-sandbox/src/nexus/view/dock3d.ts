@@ -14,6 +14,7 @@ import { placeBlock, runBlock, wire } from '../dataflow';
 import type { Cut, Keep, Part, V3 } from '../kits';
 import { standOn, type Ring } from '../mate';
 import type { PasteCard, PasteHooks } from './pad';
+import { MoveMode } from './move3d';
 
 // ---- drag to imprint (spec 01, I16; design §2.9, decision 0016): what is pasted where, found from what is drawn --------
 // The flow: a chip of the view's strip (a bolt the board makes, or an interface copied) is held over the view; each move
@@ -370,7 +371,11 @@ export class Dock3D {
     this.renderer.domElement.addEventListener('contextmenu', (e) => { if (!this.paste) return; e.preventDefault(); this.paste.menuAt(e.clientX, e.clientY); });
     new ResizeObserver(() => this.resize()).observe(host); this.resize();
     this.renderer.setAnimationLoop((now) => this.frame(now));
+    // (Move: what is shown moving live, its pieces frozen or loose, a crank turned by a drag: move3d.ts)
+    this.move = new MoveMode(this);
   }
+  /** The view's Move mode (move3d.ts): its source of blocks is set by the page. */
+  readonly move: MoveMode;
 
   /** What to draw: the board's shown things. The first time anything is shown (or a new board), it is framed. */
   show(things: Shown[], board: string): void { this.view.show(things); this.redraw(); if (board !== this.framed && things.length) { this.framed = board; requestAnimationFrame(() => this.fit()); } }

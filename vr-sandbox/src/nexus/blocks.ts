@@ -64,7 +64,7 @@ import { arrayCircle, arrayGrid, arrayLine, boundsOfAll, cellPick, combine, diff
 import { massOf } from './mass';
 import { cellPack, explodeAudit, liCell, starterBattery } from './components';
 import { rulesOf } from './make/rules';
-import { FITS as ROOM_FITS, made as roomMade, stack as roomStack, around as roomAround, into as roomInto, onto as roomOnto, ring as roomRing, through as roomThrough, over as roomOver, turn as roomTurn, run as roomRun, branch as roomBranch, noteOf as roomNoteOf, partOfBlock, type Axis, type Block, type Fit, type FaceName, type MadeOpts, type RunSeg, type Shape0 } from './room';
+import { FITS as ROOM_FITS, made as roomMade, stack as roomStack, around as roomAround, into as roomInto, onto as roomOnto, ring as roomRing, through as roomThrough, over as roomOver, mesh as roomMesh, turn as roomTurn, run as roomRun, branch as roomBranch, noteOf as roomNoteOf, partOfBlock, type Axis, type Block, type Fit, type FaceName, type MadeOpts, type RunSeg, type Shape0 } from './room';
 import { METRIC_SIZES, PIPES as CP_PIPES, WIRES as CP_WIRES, INSULATION as CP_INSULATION, LED_COLOURS as CP_LED_COLOURS, standoff as cpStandoff, plate as cpPlate, pipe as cpPipe, coupling as cpCoupling, wire as cpWire, winding as cpWinding, led as cpLed, bulb as cpBulb, header as cpHeader, button as cpButton, terminal as cpTerminal, boltedJoint as cpBolted, SECTIONS as CP_SECTIONS, section as cpSection, boxCase as cpCase, coil as cpCoil, ELBOWS as CP_ELBOWS, elbow as cpElbow, bentPipe as cpBentPipe, pipeRun as cpPipeRun, pathOf as cpPathOf } from './common';
 import { RESISTORS as CP_RESISTORS, ELECTROLYTICS as CP_ELECTROLYTICS, CELLS as CP_CELLS, DOWELS as CP_DOWELS, INSERTS as CP_INSERTS, resistor as cpResistor, ceramicCap as cpCeramic, electrolytic as cpElectrolytic, to92 as cpTo92, cell as cpCell, toggle as cpToggle, fuse as cpFuse, pot as cpPot, closed as cpClosed, bracket as cpBracket, boltedDown as cpBoltedDown, dowel as cpDowel, gear as cpGear, gt2 as cpGt2, spring as cpSpring, hinge as cpHinge, insert as cpInsert } from './common';
 import { DIPS as CP_DIPS, dip as cpDip, barrelJack as cpJack, plug as cpPlug, tee as cpTee } from './common';
@@ -344,6 +344,7 @@ export function register(b: BlockDef): { id: string; duplicateOf?: string } {
   LIBRARY.set(b.id, b); return { id: b.id };
 }
 const sig = (p: Ports) => `${p.inputs.map((x) => `${x.type}:${x.unit ?? ''}`).join(',')}>${p.outputs.map((x) => `${x.type}:${x.unit ?? ''}`).join(',')}`;
+const SAME_RUNS = new WeakMap<BlockDef, Map<string, unknown>>();
 export function sameBehaviour(a: BlockDef, b: BlockDef): boolean {
   if (a.kind !== b.kind || !a.run || !b.run || !a.pure || !b.pure || !a.tests?.length || !b.tests?.length) return false;
   if (sig(portsOf(a)) !== sig(portsOf(b))) return false;
@@ -351,7 +352,10 @@ export function sameBehaviour(a: BlockDef, b: BlockDef): boolean {
   const pa = portsOf(a), pb = portsOf(b);
   for (const t of b.tests) {
     const inA = Object.fromEntries(pa.inputs.map((p, i) => [p.name, t.inputs[pb.inputs[i]!.name]]));
-    try { const r = a.run(inA, { set: t.set ?? {} }); if (r instanceof Promise) return false; if (!pb.outputs.every((p, i) => near(r[pa.outputs[i]!.name], t.outputs[p.name], t.rel))) return false; } catch { return false; }
+    // (a pure block's answer to the same inputs and settings is the same: kept, so comparing one block with the whole
+    // library builds each block once, not once a comparison: the unique gate over 373 pieces took 19 s, decision 0027)
+    try { const key = JSON.stringify([inA, t.set ?? {}]), seen = SAME_RUNS.get(a) ?? new Map<string, unknown>(); SAME_RUNS.set(a, seen);
+      const r = (seen.has(key) ? seen.get(key) : (seen.set(key, a.run(inA, { set: t.set ?? {} })), seen.get(key))) as Record<string, unknown> | Promise<unknown>; if (r instanceof Promise) return false; if (!pb.outputs.every((p, i) => near(r[pa.outputs[i]!.name], t.outputs[p.name], t.rel))) return false; } catch { return false; }
   }
   return true;
 }
@@ -1332,6 +1336,12 @@ const BUILT_THINGS: BlockDef[] = [
       // (over a pipe turned to lie along x: the coupling goes on along the pipe's own line, in its own frame)
       { set: { line: 'copper 15×0.7 pipe/axis', where: 'hi' }, inputs: { host: roomTurn(cpPipe('copper 15×0.7', 0.2), 2, 90), sleeve: cpCoupling('copper 15×0.7') }, outputs: { pieces: 2, faces: 1 } },
       { set: { line: 'copper 15×0.7 pipe/axis', where: 'lo', along: 50 }, inputs: { host: cpPipe('copper 15×0.7', 0.2), sleeve: cpCoupling('copper 15×0.7') }, outputs: { pieces: 2, faces: 1 } }] }),
+  def({ id: 'room.mesh', name: 'Mesh gears', spec: { gloss: 'A spur gear put beside another, meshing: axes parallel at m (z₁ + z₂) / 2, its teeth in the other\'s gaps', ...ROOM_SPEC }, kind: 'logic', ability: 'connect', domains: ['mechanical', 'manufacturing', 'vehicles'], says: 'A spur gear (and whatever it is on: its shaft) put beside the host\'s gear toward +x, -x, +y or -y, meshing: their axes parallel at m (z₁ + z₂) / 2 and the fit\'s gap (its backlash), faces level, turned about its axis so its teeth stand in the host\'s gaps; refused, with both numbers, where a tip would reach the other\'s drawn radial flank (too few teeth for the fit), the modules differ, or another piece is in the way. In Move, the two turn together by their teeth, the other way',
+    settings: [{ key: 'line', label: 'The host gear\'s axis (as "m2 z40 spur gear/axis")', type: 'text', default: '' }, { key: 'gear', label: 'The other gear\'s axis', type: 'text', default: '' }, { key: 'toward', label: 'Beside it toward', type: 'choice', default: '+x', choices: ['+x', '-x', '+y', '-y'] }, { key: 'fit', label: 'Fit (its backlash)', type: 'choice', default: 'slide', choices: ['slide', 'clear'] }],
+    ports: { inputs: [P('host', 'block', { label: 'the block with the first gear' }), P('gear', 'block', { label: 'the block with the gear that meshes it' })], outputs: ROOM_OUT },
+    run: (i, c) => { const h = i.host as Block, g = i.gear as Block, axis = (b: Block, s: unknown) => String(s ?? '').trim() || b.pieces.flatMap((p) => p.lines.map((l) => l.port)).find((p) => /gear\/axis$/.test(p)) || '';
+      return roomOut(roomMesh(h, axis(h, c.set.line), g, axis(g, c.set.gear), String(c.set.toward || '+x') as '+x', String(c.set.fit || 'slide') as Fit)); },
+    tests: [{ inputs: { host: cpGear(2, 40, 0.02, 0.01), gear: cpGear(2, 30, 0.02, 0.01) }, outputs: { pieces: 2, faces: 1 } }] }),
   def({ id: 'room.turn', name: 'Turn', spec: { gloss: 'A whole block turned about its middle by any angle about x, y, z or any direction', ...ROOM_SPEC }, kind: 'logic', ability: 'transform', domains: ['mechanical', 'manufacturing', 'structural', 'everyday'], says: 'A whole block turned rigidly about its bound\'s middle, by any angle about x, y, z or a direction ("1,1,0"): a plate tilted, a pipe laid across. A rigid turn of what was valid stays valid, so it cannot put one piece in another; its lines turn with it (a coupling then slides along a turned pipe), its rooms kept under a turn about y. A block with a moving joint is refused (not made yet)',
     settings: [{ key: 'axis', label: 'About (x, y, z or a direction as "1,1,0")', type: 'text', default: 'x' }, { key: 'degrees', label: 'By, degrees', type: 'number', default: 90 }],
     ports: { inputs: [P('block', 'block', { label: 'the block to turn' })], outputs: ROOM_OUT },
@@ -1416,7 +1426,7 @@ const BUILT_THINGS: BlockDef[] = [
     run: (i, c) => roomOut(cpBolted(i.held as Block, String(c.set.line), String(c.set.size), Math.round(Number(c.set.which ?? 0)), String(c.set.head) as 'hex')),
     tests: [{ set: { line: 'plate/holes', size: 'M8' }, inputs: { held: cpPlate('plate', 0.08, 0.005, 0.05, 'al-6061', [[-0.025, 0], [0.025, 0]], 0.009) }, outputs: { pieces: 5 } },
       // (a second joint beside the first: its head rests on the plate, a face under it, not on the first joint's head's height (it floated: 2026-11-05))
-      { set: { line: 'plate/holes', size: 'M8', which: 1 }, inputs: { held: cpBolted(cpPlate('plate', 0.08, 0.005, 0.05, 'al-6061', [[-0.025, 0], [0.025, 0]], 0.009), 'plate/holes', 'M8', 0) }, outputs: { pieces: 9, faces: 10 } }] }),
+      { set: { line: 'plate/holes', size: 'M8', which: 1 }, inputs: { held: cpBolted(cpPlate('plate', 0.08, 0.005, 0.05, 'al-6061', [[-0.025, 0], [0.025, 0]], 0.009), 'plate/holes', 'M8', 0) }, outputs: { pieces: 9, faces: 12 } }] }), // (each shank in its 9 mm hole across the clearance: a gap face, decision 0026)
   // ---- common pieces, the second set (common.ts, decision 0021): electronics on their leads, cells, a switch, a fuse, a
   // connector, a pot; a lid and a box closed by it, an L bracket and a block bolted down to a plate made under its holes,
   // bearings, dowels, set screws, a gear, a pulley, a spring, a hinge, an insert. Sizes in mm; each says how it mates
