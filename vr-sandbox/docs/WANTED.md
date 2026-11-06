@@ -505,3 +505,8 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   things working before any polish; movement in general, not joints alone: any piece frozen in place or left loose, a
   loose gear on a frozen rod turned by a crank by hand; threads explained before any work on them; builds able to do
   more; a thousand new working parts, none mocked; the library organised for finding them)
+- 2026-11-06: "That is really bad I asked for a drone with a robot arm attached I'm gonna send random requests everytime
+  and it was spitting out randomness like a plate with a rod was it version of a drone with a arm Also how com I can't
+  see nodes and where the fuck is the real app" (any request, sent at random, comes out as the thing asked for and
+  recognisable: a drone with a robot arm is a drone with an arm, not a plate and a rod; the nodes and the whole app,
+  not the phone page alone, in the link)
