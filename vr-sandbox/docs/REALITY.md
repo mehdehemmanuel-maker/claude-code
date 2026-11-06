@@ -2986,3 +2986,18 @@ none (a scratch script, `node check.cjs`, in the session's scratch folder).
   building them, and took 19.3 s. A pure block's answer to a test is now kept, so the software field's board runs in
   time. The cards' shared lists of choices are now counted over the cards sent in full only: they had come to 7,263
   characters, against the 7,000 the test allows.
+
+## 2026-11-06: decision 0027: both sets of requests run again after the merge
+
+On 301365a, each request run once:
+- **Compound requests** (`npm run eval:compose`): 13 of 25 right, from 11. A robot car with a camera on a pan-tilt head,
+  a desk lamp with an arm that bends, and a cart towed behind a robot car went right. A pump bolted next to a tank went
+  wrong: the split gave the pump no start, and its plan made no block.
+- **The forty single builds** (`npm run eval:builds`): 19 of 40, from 23.
+  - The 23 plans that were right on bb1c1f5 were run again on 301365a (a probe, deleted). All 23 are still right, so
+    nothing merged broke them. The 9 lost are new plans the model wrote this run: five left parts in separate groups,
+    and one used a new flange family the scorer's kinds do not name.
+  - 7,629 tokens a right build.
+
+One run of each request is too few to tell a change from chance. No report has come in from the page yet: the store's
+`reports` collection is empty.
