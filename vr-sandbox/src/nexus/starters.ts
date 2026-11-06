@@ -388,7 +388,9 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
       put(`${ax}2`, 'room.over', { line: `${name}/axis`, where: 'hi', fit: 'slide' }, 'And over the other'); wire(b, `${ax}1`, 'block', `${ax}2`, 'host'); wire(b, 'wheel', 'block', `${ax}2`, 'sleeve');
       put(`${ax}t`, 'room.turn', { axis: 'x', degrees: 90 }, 'Laid across'); wire(b, `${ax}2`, 'block', `${ax}t`, 'block');
     }
-    put('frame', 'room.make', { name: 'frame', shape: 'rod', mat: 'steel-low', a: 10, b: 690 }, 'Frame rod between the axles');
+    // (780 mm: the axles 802 mm apart, centre to centre, the rod end to end with each; decision 0028: before, a stack left
+    // the front axle 91 mm off a 690 mm rod's end, and the board was measured at that wheelbase)
+    put('frame', 'room.make', { name: 'frame', shape: 'rod', mat: 'steel-low', a: 10, b: 780 }, 'Frame rod between the axles, 780 mm');
     put('frameT', 'room.turn', { axis: 'z', degrees: 90 }, 'Laid along'); wire(b, 'frame', 'block', 'frameT', 'block');
     put('gear', 'room.stack', { name: 'running gear', axis: 'x', fit: 'clear', order: 'rt, frameT, ft' }, 'Rear axle, frame, front axle, end to end');
     for (const x of ['rt', 'frameT', 'ft']) wire(b, x, 'block', 'gear', 'blocks');

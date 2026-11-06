@@ -1016,7 +1016,7 @@ export const BOARDS_BUILT: Record<string, string> = {
   "Materials from their phases: carbon fibre and epoxy, thermal paste and a metal foam worked out from what goes into them, and a laminate bar beside a steel one":"2026-11-05T20:55:58.000Z",
   "What it is made of, and what it carries: a copper and an aluminium rod side by side under a steel block, opened down to its elements, weighed and balanced, and as a path for heat, current and force":"2026-11-05T20:55:58.000Z",
   "Physics: a steel ball let go into a tower of wooden blocks":"2026-11-05T18:55:49.000Z",
-  "Physics: a cart on two motor-driven wheels":"2026-11-05T20:55:58.000Z",
+  "Physics: a cart on two motor-driven wheels":"2026-11-06T06:07:39.000Z",
   "Physics: a pendulum on a hinge":"2026-11-05T18:55:49.000Z",
   "Movement: a crank and a gear loose on a rod frozen in the air, meshing a second gear on a second rod: press Move, then drag the handle round":"2026-11-06T03:13:05.000Z",
   "Movement: a rack and pinion, an m1 30-tooth gear loose on a rod frozen in the air, a rack laid under it: press Move, then drag the gear round":"2026-11-06T05:47:53.000Z",

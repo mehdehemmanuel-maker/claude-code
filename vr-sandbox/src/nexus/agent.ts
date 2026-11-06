@@ -723,6 +723,7 @@ export interface ComposePart { name: string; is: string; from: string; set?: Rec
   /** how it was made: placed from the library, a part remembered placed again, a starter board opened, a plan by one
    *  call, split into parts of its own (each made so, joined, folded), or not made */ by?: 'assembly' | 'remembered' | 'starter' | 'plan' | 'split' | 'none';
   /** its node on the final board, its pieces' names (each once a piece), and what still failed when it was made */ node?: string; names: string[]; failing: string[];
+  /** the part not made that the final check built this one in place of (decision 0028) */ instead?: string;
   /** the id it is kept under (remembered, decision 0028; or the remembered part it was placed from), and its own parts */ saved?: string; children?: ComposePart[] }
 export interface ComposeJoin { part: string; how: string; to: string }
 /** One step of the pipeline, a line for the chat. */
@@ -1010,8 +1011,8 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
     let want: (ComposePart & { joins: string })[] = [];
     try { const o2 = firstJson(await call(`${GATE_RULE}\nAssemblies (from): ${ids.join(', ')}${PROMPT_CUT}${mem.length ? `Parts remembered (from): ${mem.map((x) => `${x.id} (${x.name})`).join(', ')}\n` : ''}Asked: ${request.slice(0, 600)}\nBuilt:\n${built}${top ? `\nThe whole: ${top[2].pieces.length} pieces` : ''}`, 'quick'), 'check');
       const have = new Set([...parts.map((p) => p.name), ...Object.keys(board.nodes)]);
-      want = (Array.isArray(o2.missing) ? o2.missing : []).slice(0, 3).map((m, k) => { const x = (m ?? {}) as Record<string, unknown>; let name = String(x.name ?? `missing${k + 1}`).toLowerCase().replace(/\W+/g, '_').replace(/^_+|_+$/g, '') || `missing${k + 1}`; if (/^\d/.test(name)) name = `p${name}`; while (have.has(name)) name = `${name}2`; have.add(name);
-        return { name, is: String(x.is ?? name).slice(0, 300), from: String(x.from ?? '').slice(0, 120), names: [], failing: [], joins: String(x.joins ?? 'onto the whole').slice(0, 60) }; }); }
+      want = (Array.isArray(o2.missing) ? o2.missing : []).slice(0, 3).map((m, k) => { const x = (m ?? {}) as Record<string, unknown>; let name = String(x.name ?? `missing${k + 1}`).toLowerCase().replace(/\W+/g, '_').replace(/^_+|_+$/g, '') || `missing${k + 1}`; if (/^\d/.test(name)) name = `p${name}`; const asked = name, instead = parts.find((q) => q.name === asked && !q.node)?.name; while (have.has(name)) name = `${name}2`; have.add(name);
+        return { name, is: String(x.is ?? name).slice(0, 300), from: String(x.from ?? '').slice(0, 120), names: [], failing: [], joins: String(x.joins ?? 'onto the whole').slice(0, 60), ...(instead ? { instead } : {}) }; }); }
     catch (x) { say('gate', `the final check could not be read: ${(x as Error).message.slice(0, 160)}`, false); break; }
     if (!want.length) { say('gate', `nothing missing${round ? ' now' : ''}: ${made().map((p) => p.name).join(', ')}`); break; }
     missing.push(...want.map((p) => p.name)); say('gate', `missing: ${want.map((p) => `${p.name} (${p.is.slice(0, 60)})`).join(', ')}; built and joined`, false);
@@ -1030,6 +1031,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
   if (bad.length) unmet.push(`${bad.length} node(s) not ok: ${bad.slice(0, 3).map((n) => `${n.id} ${e.state.get(n.id)?.status ?? '?'} ${(e.state.get(n.id)?.error ?? '').slice(0, 100)}`).join('; ')}`);
   const whole = biggest(board, e)?.[2];
   for (const p of parts) {
+    if (!p.node && parts.some((q) => q.node && q.instead === p.name)) continue;
     if (!p.node) { unmet.push(`${p.name} not made: ${(p.failing[0] ?? 'nothing to start from').slice(0, 140)}`); continue; }
     if (p.failing.length) unmet.push(`${p.name} still fails: ${p.failing[0]!.slice(0, 140)}`);
     const left = new Map<string, number>(); for (const nm of whole ? namesOf(whole) : []) left.set(nm, (left.get(nm) ?? 0) + 1);

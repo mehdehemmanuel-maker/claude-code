@@ -217,7 +217,7 @@ export function terminal(poles: number): Block {
 
 /** A bolted joint: the bolt's shank down a hole of what it holds (from above), its head on top of it on that hole, and a
  *  washer and a nut slid over the shank's end below it. The shank is as long as the grip, the washer and the nut. */
-export function boltedJoint(held: Block, port0: string, size: string, i = 0, head: 'hex' | 'socket' = 'hex', fit: Fit = 'slide'): Block {
+export function boltedJoint(held: Block, port0: string, size: string, i = 0, head: 'hex' | 'socket' = 'hex', fit: Fit = 'slide', turned = false): Block {
   // (a name given almost right: the holes it plainly means, said back as a note (decision 0026, step 4))
   const nm = namedIn(held, port0, 'line', 'bolted joint'), port = nm.port, notes = nm.note ? [nm.note] : [];
   // (holes of one name in two pieces or more, stacked: the bolt goes down the top one's, through all under it, said back)
@@ -232,8 +232,11 @@ export function boltedJoint(held: Block, port0: string, size: string, i = 0, hea
   // angle to x, y and z is refused)
   if (o.dir && !(Math.abs(o.dir[0]) < 1e-9 && Math.abs(o.dir[2]) < 1e-9 && o.dir[1] > 0)) {
     const d = o.dir, ax = d.findIndex((v) => Math.abs(Math.abs(v) - 1) < 1e-9); if (ax < 0) throw new Error(`bolted joint: the hole ${port} runs at an angle, not along x, y or z: not made yet`);
+    // (turned once and still not up: holes of that name on pieces facing different ways, the top one changing with each
+    // turn; refused, not turned again (decision 0028: it turned for ever, 'Maximum call stack size exceeded'))
+    if (turned) throw new Error(`bolted joint: the holes ${port} face different ways on the pieces that offer them (${owners.map((w) => w.p.name).slice(0, 3).join(', ')}): turned so the top one's runs up, another's is on top and does not; turn the whole first (room.turn) so the hole meant runs up, or bolt the part that offers it before it is joined to the rest`);
     const about: P3 = d[1] < 0 ? [1, 0, 0] : [-d[2], 0, d[0]], deg = d[1] < 0 ? 180 : 90;
-    return noted(turn(boltedJoint(turn(held, about, deg), port, size, i, head, fit), about, -deg), notes.join('; '));
+    return noted(turn(boltedJoint(turn(held, about, deg), port, size, i, head, fit, true), about, -deg), notes.join('; '));
   }
   const owner = top!.p, ceiling = boundOf(owner)[1][1];
   const under = held.pieces.map(boundOf).filter((b) => b[0][0] < o.x && o.x < b[1][0] && b[0][2] < o.z && o.z < b[1][2] && b[1][1] <= ceiling + 1e-9);

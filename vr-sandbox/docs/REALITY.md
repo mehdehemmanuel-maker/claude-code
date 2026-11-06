@@ -3001,3 +3001,61 @@ On 301365a, each request run once:
 
 One run of each request is too few to tell a change from chance. No report has come in from the page yet: the store's
 `reports` collection is empty.
+
+## 2026-11-06: decision 0028: an orchestrator that remembers, motion 2, 23 more assemblies (six agents, merged here), and what the runs found
+
+What landed, by builders in their own worktrees, merged and gated on c0b0a67 (`npm run gate`):
+- **Orchestrator.** `composeBuild` recalls remembered parts before its split, splits a part of several things again (two
+  levels), builds three parts at once, never skips a part with nothing to start from, joins what is left loose with
+  more calls, and ends with a check call that builds what is missing. Each part that runs with nothing failing and is
+  one group is remembered (`memory.ts`).
+- **Pages.** A Yours / Remembered aisle in the parts browser (place or delete), Keep this build, and the build's steps as
+  a tree in the chat and the dashboard. On claude.ai, parts are kept in the page's shared store (`parts`).
+- **Motion 2.** Slides, rack and pinion, belts, servo joints that hold (a robot arm posed stays put), Motor and Hold in
+  Move, unjoined bodies colliding. The motion builder's own test, on its branch: the rack moved within 3% of 15 mm a
+  radian, and the 20T and 40T pulleys turned at 0.498 (`npx vitest run tests/nexus/domains.test.ts -t movement`).
+- **Assemblies.**
+  - `things.ts`: wind turbine, boat, camera, tripod, leg, quadruped, hexapod, winch, pump, truck.
+  - `everyday.ts`: chair, desk, bed frame, door, window, stud wall, fence, go-kart, trailer, wheelbarrow, mast, solar
+    panel, satellite dish.
+  - Not built: bicycle, stairs, shed.
+- **Evaluations.** A kind is read by what a part is (its aisle and name). There are 25 more compound requests
+  (`EVAL_SET=more`) and a second run against the first (`EVAL_REPEAT=2`).
+
+Measured with real calls, each request once a run:
+- **Memory** (`EVAL_REPEAT=2 npm run eval:compose`). Run 1 got 16 of 25 right in 140 calls; run 2 got 18 of 25 in 107
+  calls. In run 2, 11 requests placed parts remembered from run 1, and 11 took fewer calls. Examples:
+  - a water tank on a trailer: 10 calls, then 3 (wrong, then right);
+  - a cart towed behind a robot car: 13 calls, then 3 (wrong, then right).
+  - One went the other way: a pump bolted next to a tank (right, then wrong).
+- **What the runs found.** Six of the nine wrong were parts placed against each other with no face between them.
+  `stack` (and `onto`) lifted a block until its lowest point cleared the highest piece anywhere under it, so a block
+  whose lowest piece was not the one over the host's highest stopped short and touched nothing. It now comes to rest
+  on the first pair of pieces in each other's path. An arm beside a conveyor was 2 groups and is now 1; the test fails
+  on the old rule (`npx vitest run tests/nexus/domains.test.ts -t "rests on its first contact"`).
+  - The rule moved one starter board: the cart's front axle had sat 91 mm off its frame rod's end. Touching it, at a
+    shorter wheelbase, the driven wheels slipped (27.15 m in 8 s, from 47.11). The rod is now 780 mm, which puts the
+    wheelbase back at 802 mm and gives 47.11 m again (a probe, deleted). The check is unchanged.
+  - A bolted joint on holes of one name facing different ways (the XY gantry's carriage mounts) turned for ever
+    ("Maximum call stack size exceeded"). It now turns once and is refused with why.
+  - A part the final check rebuilt in place of one not made was still counted as not made. It is no longer counted.
+- **With both fixes, a fresh run, nothing remembered** (`npm run eval:compose`): 22 of 25 right in 123 calls. Still
+  wrong:
+  - the tank on a trailer (2 groups);
+  - the boat (its motor's can had no bore to slide on);
+  - the bicycle with a basket (a wheel hub too small for the frame's line).
+- **25 more compound requests** (`EVAL_SET=more npm run eval:compose`, run before the two fixes): 8 of 25 right, in 268
+  calls.
+  - Nine failed on a kind's words. Some of those are the scorer: the chair's legs and back, and the wheelbarrow's
+    handles, are named on the operations that placed them ("chair legs"), not on the pieces. Others are real gaps: a
+    robot dog with no head, a desk with no monitor made.
+  - Four were loose groups: the forklift, an arm on a turntable, the toy train and the helicopter.
+  - Four had nodes not ok: the boat with an outboard, the 3D printer, the ceiling fan and the excavator.
+- **The forty single builds** (`npm run eval:builds`, with both fixes and the new kinds): 23 of 40 right, from 19. That
+  is 5,841 tokens in and out a right build, from 7,629.
+- **Correction.** The last entry said the flanged joint failed for a new flange family. Its plan used two plates named
+  flange A and B (the last run's kept plans, `EVAL_OUT`, replayed with no model by the evaluations builder), so it was rightly
+  wrong.
+
+No report has come in from the page: the store's `reports` and `parts` collections are both empty (read with
+ArtifactData).

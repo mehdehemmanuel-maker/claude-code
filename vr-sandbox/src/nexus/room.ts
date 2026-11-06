@@ -559,8 +559,13 @@ export class Block {
         // axis (a bolt's head on its own hole's plate, not on another joint's head beside it); none in its path, on all)
         const other = ([0, 1, 2] as const).filter((k) => k !== axis), sb = s.pieces.map(boundOf);
         const inPath = prev.map((k) => pieces[k]!).filter((p) => { const pb = boundOf(p); return sb.some((q) => other.every((k) => pb[0][k]! < q[1][k]! - 1e-12 && q[0][k]! < pb[1][k]! - 1e-12)); });
-        const A = inPath.length ? inPath : prev.map((k) => pieces[k]!), B = s.pieces, top = Math.max(...A.map((p) => (B.some((q) => !coMove(p, q)) ? boundOf(p) : primBox(p.solid.base))[1][axis]));
-        const bot = Math.min(...B.map((q) => (A.some((p) => !coMove(p, q)) ? boundOf(q) : primBox(q.solid.base))[0][axis])), d: V3 = [0, 0, 0]; d[axis] = top + gapOf(it.fit ?? 'touch') - bot;
+        const A = inPath.length ? inPath : prev.map((k) => pieces[k]!), B = s.pieces, d: V3 = [0, 0, 0];
+        // (pair by pair, decision 0028: it moves until the first pair in each other's path meets, so a tank whose outlet
+        // reaches over a trailer's side boards still comes down onto the bed; with none in its path, past all of them)
+        const box = (r: Piece, o: Piece) => (coMove(r, o) ? primBox(r.solid.base) : boundOf(r)), pairs = inPath.length ? inPath.flatMap((p) => B.filter((q) => { const pb = box(p, q), qb = box(q, p); return other.every((k) => pb[0][k]! < qb[1][k]! - 1e-12 && qb[0][k]! < pb[1][k]! - 1e-12); }).map((q) => box(p, q)[1][axis]! - box(q, p)[0][axis]!)) : [];
+        if (pairs.length) d[axis] = Math.max(...pairs) + gapOf(it.fit ?? 'touch');
+        else { const top = Math.max(...A.map((p) => (B.some((q) => !coMove(p, q)) ? boundOf(p) : primBox(p.solid.base))[1][axis]));
+          const bot = Math.min(...B.map((q) => (A.some((p) => !coMove(p, q)) ? boundOf(q) : primBox(q.solid.base))[0][axis])); d[axis] = top + gapOf(it.fit ?? 'touch') - bot; }
         s = Block.#shift(Block.#seal(it.b.name, s.pieces, s.faces, s.rooms), d);
       } else { const d: V3 = [0, 0, 0]; d[axis] = -it.b.lo[axis]!; s = Block.#shift(Block.#seal(it.b.name, s.pieces, s.faces, s.rooms), d); }
       const base = pieces.length; pieces.push(...s.pieces); faces.push(...s.faces.map((f) => ({ ...f, a: f.a + base, b: f.b + base })));

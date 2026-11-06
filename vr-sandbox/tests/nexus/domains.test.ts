@@ -2454,6 +2454,20 @@ describe('every domain, in one pass', () => {
     for (const k of [KINDS.flange, asNew]) expect(score(none.board, none.e, want(k)), 'no flange of any kind: plates named so, a gasket on the flanges\' aisle').toMatch(/^no a flange on the board/);
     expect(holds(KINDS.flange, ['piece.flangegasket', 'piece.oring', 'piece.plate', 'piece.gatevalve'], ['flange A', 'flange B', 'DN50 gate valve flange 1']), 'a gasket, an O-ring, plates named so, a flanged valve: none is a pipe flange').toBe(false);
   }, 60_000);
+  // decision 0028: a block laid on another comes to rest on the first pair of pieces in each other's path, not past the
+  // highest piece anywhere under it (the arm beside the conveyor, measured: two groups before, `npm run eval:compose`)
+  it('a block laid on another rests on its first contact, so the two are one thing; a bolt on holes facing different ways refused with why', async () => {
+    const { runPlan, groupsIn } = await import('../../src/nexus/agent');
+    for (const [host, child, face] of [['seed.conveyor', 'seed.robot-arm', '+x'], ['seed.xy-gantry', 'seed.linear-axis', '+x']] as const) {
+      const ran = await runPlan({ tool: 'change', input: { add: { host: { b: host }, child: { b: child }, on: { b: 'room.onto', s: { face, fit: 'touch' } } }, wires: ['host.block>on.host', 'child.block>on.child'] }, says: '' } as never, emptyBoard('rest'));
+      const e = new Engine(ran.board); await e.run(); const b = (e.state.get('on')!.out as { block: Parameters<typeof groupsIn>[0] }).block;
+      expect([ran.failing, groupsIn(b).length], `${child} onto ${face} of ${host}: nothing failing, one group by the faces written`).toEqual([[], 1]);
+    }
+    // (a bolted joint on holes of one name facing different ways is refused with why, once turned; it turned for ever)
+    const bolt = await runPlan({ tool: 'change', input: { add: { g: { b: 'seed.xy-gantry' }, bolt: { b: 'mate.bolted', s: { line: 'carriage mount/holes', size: 'M5' } } }, wires: ['g.block>bolt.held'] }, says: '' } as never, emptyBoard('bolt'));
+    expect(bolt.failing.join(' '), 'refused with why, not a stack overflow').toMatch(/face different ways/);
+  }, 120_000);
+
   it('plan/INDEX.md is what the plan compiles to', () => {
     const r = spawnSync('python3', ['plan/compile.py', '--check'], { cwd: root, encoding: 'utf8' });
     expect(r.status, r.stdout + r.stderr).toBe(0);

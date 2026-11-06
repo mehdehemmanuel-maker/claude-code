@@ -2,7 +2,7 @@
 
 Task in hand: 06.M2 (decision 0028: parts remembered, an orchestrator, more assemblies and movement; decision 0027: the app on claude.ai with reports, movement in general, compound builds, a thousand parts; decision 0026 before it); the phone page (decisions 0023, 0025, `npm run app`)
 Spec in hand: spec 06, the phone (`plan/specs/06-phone/`); spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 23d5d13 (2026-11-06)
+Last commit the gate passed: c0b0a67 (2026-11-06)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -22,7 +22,7 @@ Last commit the gate passed: 23d5d13 (2026-11-06)
   to its end. Mended since; five blind runs (decision 0018); it fails still on its blind clause (`docs/REALITY.md`).
 - 10.T23 and 10.T18 claimed in part: the kernel's first three kinds (every false certificate three red teams found refused, every check ending in time),
   and the AI's board taken only when it checks. 01.I1 claimed; 01.I2 in part (frames where the drawing tells them; every starter board's things not yet swept).
-- Decision 0026 run rough end to end (steps 1 to 4b): Assist 23 of 40 on the build set, Auto 5 of 10 (`npm run eval:builds`); what still fails, and the polish list, in `docs/REALITY.md`.
+- Decision 0028 run rough: compound 22 of 25 (`npm run eval:compose`), 8 of 25 more (`EVAL_SET=more`), Assist 23 of 40 (`npm run eval:builds`); a second run reuses remembered parts (`EVAL_REPEAT=2`: 140 calls, then 107); what still fails in `docs/REALITY.md`.
 - 10.T24 superseded by decision 0021 ("Gone now"). 11.LW12 and 10.T1 are claimed in part; their open parts are in `plan/DEFECTS.md` (D7) and the task rows.
 - The one test (`npm run eval:one`) passes 2 of its 18 lines; the rest wait on specs 01, 03, 04 and 06.
 
