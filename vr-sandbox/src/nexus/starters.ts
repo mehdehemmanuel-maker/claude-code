@@ -929,6 +929,22 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'quad', 'says', 'said', 'value');
     return b;
   }],
+  ['A drone with a robot arm attached: the X-frame quadcopter, the servo arm hanging under its payload mount plate', () => {
+    // (decision 0027: two library assemblies joined by the operations. The quadcopter of the DJI F450's class (its
+    // published wheelbase and props) and the four-joint servo arm with its gripper; the arm turned over (a half turn
+    // about x) so it hangs, its base mount plate against the drone's payload mount plate from below. Not bolted: the
+    // arm's M4 holes (64 mm square) and the mount plate's M3 (60 mm) are not one pattern yet)
+    const b = emptyBoard('A drone with a robot arm attached');
+    const put = (id: string, block: string, set: Record<string, unknown>, label: string) => { placeBlock(b, block, 0, 0, set, id); b.nodes[id]!.label = label; };
+    put('drone', 'seed.quadcopter', { size: '450', stack: 8 }, 'The quadcopter, 450 class (X frame, four motors and props, a payload mount plate under it)');
+    put('arm', 'seed.robot-arm', { joints: '4', link: 60, servo: 'SG90' }, 'The robot arm: four joints and a gripper');
+    put('hung', 'room.turn', { axis: 'x', degrees: 180 }, 'Turned over, to hang'); wire(b, 'arm', 'block', 'hung', 'block');
+    put('both', 'room.onto', { face: '-y', fit: 'touch' }, 'The arm under the drone\'s mount plate'); wire(b, 'drone', 'block', 'both', 'host'); wire(b, 'hung', 'block', 'both', 'child');
+    placeBlock(b, 'space.show', 0, 0, {}, 'show'); wire(b, 'both', 'thing', 'show', 'thing');
+    placeBlock(b, 'measure', 0, 0, {}, 'measure'); b.nodes.measure!.label = 'What it weighs and spans'; wire(b, 'both', 'thing', 'measure', 'thing');
+    placeBlock(b, 'view.show', 0, 0, {}, 'said'); b.nodes.said!.label = 'What it is'; wire(b, 'both', 'says', 'said', 'value');
+    return b;
+  }],
   ['Turned pieces: DIP ICs of 8 and 16 leads, a DC jack with its plug in, a copper tee, an L bracket bolted to a wall, a hinge opened square', () => {
     // (the third set of common pieces, each made upright and turned (decision 0024): a DIP's leads bent down outside its
     // body; the jack's bore laid along z and the plug passed along it over its pin; the tee's branch joined into its run's

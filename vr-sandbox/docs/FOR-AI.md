@@ -79,6 +79,13 @@ next), and only the last shown. A named piece before a box made to look like it 
 Show the last `thing` with `space.show`. Hold what matters with `assert`, a measured output wired in (a mass from
 `measure`). Replies start with `FAILS` lines (an assertion, a joint, a paste refused): say those first.
 
+## A thing of several things (a drone with an arm, a crane on a truck)
+
+Built part by part, never in one plan: each part from the assembly that is it (`seed.*`, a block you saved, placed as one
+node with its settings) or the starter board that is it (`open`), else from pieces; each part's board folded to one node
+whose `block` is its output; then the parts joined by operations only (`room.onto` face `-y` under, `+y` on top, `±x`/`±z`
+beside; `room.stack`; `mate.bolted`), never a new piece made in place of a part. Asked for one part, build only that part.
+
 ## How you answer
 
 Every number from a node on the board, however simple the sum (a law or `math.expr`, then read it); never from what you

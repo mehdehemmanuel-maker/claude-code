@@ -11,12 +11,10 @@ import { writeFileSync } from 'node:fs';
 import '../../src/nexus/seeds';
 import { agentBuild, agentPlan, runPlan, type AgentPlan } from '../../src/nexus/agent';
 import { Engine, emptyBoard } from '../../src/nexus/dataflow';
-import { block } from '../../src/nexus/blocks';
 import { nodesOf, type Board } from '../../src/nexus/boards';
+import { W, score, type Want } from './score';
+export { score };
 
-/** What a request asks for: the kinds of block its board must use (each a pattern on block ids), and its least pieces. */
-interface Want { uses: RegExp[]; pieces: number }
-const W = (pieces: number, ...uses: RegExp[]): Want => ({ uses, pieces });
 const FASTENER = /^piece\.(bolt|csk|buttonhead|panhead|woodscrew|shoulderscrew|carriagebolt|threadedrod|setscrew|deckscrew|nail)$|^mate\.(bolted|plate|lid)$/;
 export const BUILDS: [string, Want][] = [
   ['A desk lamp: an LED on top of a post standing on a round base.', W(3, /^piece\.led$/)],
@@ -60,25 +58,6 @@ export const BUILDS: [string, Want][] = [
   ['A steel I-beam bolted to two steel angles.', W(5, /^piece\.steelbeam$/, /^piece\.steelangle$/)],
   ['A water tank with an outlet pipe through its side wall and a valve on the pipe.', W(3, /^piece\.(tank|case)$/, /^piece\.(ballvalve|checkvalve|needlevalve)$/)],
 ];
-
-type RoomLike = { pieces: readonly { name: string }[]; faces: readonly { a: number; b: number }[] };
-/** How many groups a block's pieces fall in, joined by the faces the operations wrote. */
-const groups = (b: RoomLike) => { const up = b.pieces.map((_, i) => i), find = (i: number): number => (up[i] === i ? i : (up[i] = find(up[i]!)));
-  for (const f of b.faces) up[find(f.a)] = find(f.b); return new Set(b.pieces.map((_, i) => find(i))).size; };
-/** Why a board is not what was asked (null: it is). Its biggest block: the build. */
-export function score(board: Board, e: Engine, w: Want): string | null {
-  const ns = nodesOf(board); if (!ns.length) return 'the board is empty';
-  const bad = ns.filter((n) => e.state.get(n.id)?.status !== 'ok'); if (bad.length) return `${bad.length} nodes not ok: ${bad[0]!.id} ${e.state.get(bad[0]!.id)?.status ?? 'not run'} ${e.state.get(bad[0]!.id)?.error?.slice(0, 90) ?? ''}`;
-  const blocks = ns.map((n) => e.state.get(n.id)?.out?.block as RoomLike | undefined).filter((b): b is RoomLike => !!b?.pieces);
-  if (!blocks.length) return 'no block made';
-  const big = blocks.reduce((a, b) => (b.pieces.length > a.pieces.length ? b : a)), g = groups(big);
-  // (a folded block (a seed, a saved block) uses the kinds its own board holds: they count, read down to the bottom)
-  const inner = (b: Board | undefined, seen = new Set<string>()): string[] => Object.values(b?.nodes ?? {}).flatMap((n) => { const id = n.block ?? ''; if (!id || seen.has(id)) return [id]; seen.add(id); return [id, ...inner(n.inner ?? block(id)?.graph, seen)]; });
-  const used = [...inner(board), ...big.pieces.map((p) => p.name)], miss = w.uses.filter((u) => !used.some((b) => u.test(b)));
-  if (miss.length) return `no ${miss.map(String).join(', ')} on the board (it used ${[...new Set(used)].join(', ').slice(0, 160)})`;
-  if (big.pieces.length < w.pieces) return `its build has ${big.pieces.length} pieces, fewer than ${w.pieces}`;
-  return g === 1 ? null : `its build falls in ${g} groups, not one thing`;
-}
 
 it('the AI, on things to build', async () => {
   const auto = process.env.EVAL_MODE === 'auto', only = Number(process.env.EVAL_ONLY ?? BUILDS.length), pick = Number(process.env.EVAL_PICK ?? 0), model = process.env.EVAL_MODEL || undefined, rows: Record<string, unknown>[] = [];

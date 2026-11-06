@@ -23,7 +23,7 @@ const RUN_PINS: [string, string, string, string][] = [
   ['src/nexus/view/nodes.ts', '      const r = await res.json()', 'renderAll();', '98c38ebfaba4eed8'],
 ];
 /** The relay's handler, its whole text pinned (the test "an open andon stops the line…" says why). */
-const RELAY_PIN = 'f21e186a9eb82be9';
+const RELAY_PIN = '2d25484b473c12ca';
 /** agentBuild's whole text, pinned (the test "an open andon stops the line…" says why). */
 const AGENT_PIN = '61b9dd3bb311b681';
 /** The most laws the kernel may still leave undecided (erf and integrals: not in it yet). */
@@ -1271,6 +1271,51 @@ describe('every domain, in one pass', () => {
   // a build whose assertion fails answers FAILS first; a change that breaks a check that held is not taken, the board left as
   // it was and the change kept as a shadow read can read; a change that keeps every check is taken; a plan's s may give an
   // unwired input its value)
+  // (a thing of several things built from its parts (decision 0027, the user: "I asked for a drone with a robot arm
+  // attached ... it was spitting out randomness like a plate with a rod"): composeBuild's mechanics with no model, its
+  // ask answering each call as a model writes it (a split, a part's plan, a join that names an output wrong and then its
+  // mend): the split read, each part made (a starter board, or a library assembly by id where there is one, or one plan)
+  // and folded to one node, the join run and asked again with only what failed, the check said; a part that fails said)
+  it('a thing of several things: split, each part made and folded, joined, checked, what fails said', async () => {
+    const { composeBuild, splitOf, isCompound, PROMPT_CUT } = await import('../../src/nexus/agent');
+    const { score, W } = await import('../evals/score');
+    expect(['A drone with a robot arm attached', 'A crane on a truck', 'A desk lamp with an arm that bends', 'A quadcopter: four motors on the arms of a cross frame', 'Two steel plates bolted together'].map(isCompound), 'two or more things named, or one').toEqual([true, true, true, false, false]);
+    expect(() => splitOf('I would split it in two.'), 'no JSON').toThrow(/no split in the reply/);
+    expect(() => splitOf('{"parts": []}'), 'no parts').toThrow(/no parts in the split/);
+    // (the drone: the other wave's seed.quadcopter by id where it is in the library, else the starter board; the arm:
+    // seed.robot-arm by id where it is, else one plan of two small DC motors (seed.motor-dc standing in for the joints'
+    // motors), two links and a gripper, hanging)
+    const droneFrom = LIBRARY.has('seed.quadcopter') ? 'seed.quadcopter' : 'A quadcopter', armFrom = LIBRARY.has('seed.robot-arm') ? 'seed.robot-arm' : 'aisle motion';
+    const split = { parts: [{ name: 'drone', is: 'a quadcopter: four motors with props on a cross frame, a battery on top', from: droneFrom }, { name: 'arm', is: 'a robot arm: a shoulder motor, an upper arm, an elbow motor, a forearm and a two-finger gripper', from: armFrom }], joins: [{ part: 'arm', how: 'under', to: 'drone' }] };
+    const box = (name: string, a: number, b: number, c: number) => ({ b: 'room.make', s: { name, shape: 'box', mat: 'al-6061', a, b, c } });
+    const arm = { tool: 'build', nodes: { sh: { b: 'seed.motor-dc' }, up: box('upper arm', 10, 60, 6), el: { b: 'seed.motor-dc' }, fore: box('forearm', 10, 50, 6), f1: box('finger', 3, 20, 6), palm: box('palm', 16, 4, 6), f2: box('finger', 3, 20, 6), grip: { b: 'room.stack', s: { name: 'gripper', axis: 'x', order: 'f1,palm,f2' } }, armst: { b: 'room.stack', s: { name: 'robot arm', axis: 'y', order: 'grip,fore,el,up,sh' } }, show: { b: 'space.show' } }, wires: ['f1.block>grip.blocks', 'palm.block>grip.blocks', 'f2.block>grip.blocks', 'grip.block>armst.blocks', 'fore.block>armst.blocks', 'el.motor>armst.blocks', 'up.block>armst.blocks', 'sh.motor>armst.blocks', 'armst.thing>show.thing'], says: 'a robot arm hanging down: two motors, two links, a gripper' };
+    // (the arm's output named by what the drone part gives: its fold's block, or the assembly's own output)
+    const asked: string[] = []; let joins = 0;
+    const ask = async (prompt: string, tier: string) => { asked.push(`${tier} ${prompt.slice(prompt.indexOf(PROMPT_CUT) + PROMPT_CUT.length).slice(0, 400)}`);
+      if (prompt.includes('## Here: the parts of what is asked')) return `Here are the parts.\n\`\`\`json\n${JSON.stringify(split)}\n\`\`\``;
+      if (prompt.includes('## Here: join the parts')) { const outOf = (part: string) => new RegExp(`${part}\\.(\\w+): \\d+ pieces`).exec(prompt)![1]!;
+        return JSON.stringify(joins++ ? { tool: 'change', wires: [`drone.${outOf('drone')}>hang.host`], says: 'the drone wired as the host' } : { tool: 'change', add: { hang: { b: 'room.onto', s: { face: '-y' } }, see: { b: 'space.show' } }, wires: ['drone.blok>hang.host', `arm.${outOf('arm')}>hang.child`, 'hang.thing>see.thing'], says: 'the arm hung under the drone' }); }
+      return JSON.stringify(arm); };
+    const heard: string[] = [], r = await composeBuild('A drone with a robot arm attached', { ask, onStep: (s) => heard.push(`${s.stage} ${s.ok ? 'ok' : 'no'}: ${s.line}`) });
+    console.log(`composed: ${r.asks} calls\n${heard.join('\n')}\n${r.answer}`);
+    expect(asked[0], 'the split call: the menu of assemblies, starter boards and aisles, then the request').toMatch(/^quick Request: A drone with a robot arm attached$/);
+    expect(r.parts.map((p) => [p.name, p.by]), 'each part made from what it starts from').toEqual([['drone', LIBRARY.has('seed.quadcopter') ? 'assembly' : 'starter'], ['arm', LIBRARY.has('seed.robot-arm') ? 'assembly' : 'plan']]);
+    expect(r.asks, 'a split, the arm\'s one plan where no assembly is it, a join and its mend').toBe(LIBRARY.has('seed.robot-arm') ? 3 : 4);
+    expect(heard.filter((l) => l.startsWith('join')).map((l) => l.slice(0, 8)), 'the join failed once and was asked again with only what failed').toEqual(['join no:', 'join ok:']);
+    expect(asked.find((a) => a.includes('When the plan ran, these failed')), 'asked again with the failing line').toMatch(/drone \(a group\) has no output blok|has no output blok/);
+    expect(r.unmet, 'the check: nothing unmet').toEqual([]);
+    expect(heard.at(-1), 'the check said').toMatch(/^check ok: Checked: 2 parts in one thing of \d+ pieces, nothing failing$/);
+    // (the board: one node a part, the join and the show; what is inside each part read down to the bottom)
+    const e = new Engine(r.board); await e.run();
+    expect(nodesOf(r.board).map((n) => n.id).sort(), 'one node a part, plus the join').toEqual(['arm', 'drone', 'hang', 'see']);
+    expect(score(r.board, e, W(40, /^seed\.quadcopter$|prop/, /^seed\.robot-arm$|gripper|finger|^seed\.motor-dc$/)), 'scored as the compose evaluation scores it: one thing, its kinds inside the folded parts').toBeNull();
+    // (a part that fails twice is said, never hidden; a library assembly by id placed as one node and joined)
+    const bad = { parts: [{ name: 'motor', is: 'a small DC motor', from: 'seed.motor-dc' }, { name: 'gripper', is: 'a gripper', from: 'aisle motion' }], joins: [{ part: 'gripper', how: 'under', to: 'motor' }] };
+    const r2 = await composeBuild('A motor with a gripper', { ask: async (prompt) => prompt.includes('## Here: the parts of what is asked') ? JSON.stringify(bad) : '{"tool": "build", "nodes": {"g": {"b": "piece.nosuch"}}}' });
+    expect(r2.parts.map((p) => [p.name, p.by]), 'the assembly placed; the gripper not made').toEqual([['motor', 'assembly'], ['gripper', 'none']]);
+    expect(r2.unmet.join(' | '), 'said').toMatch(/^gripper not made: ! g: no block "piece\.nosuch"/);
+    expect(r2.answer, 'the answer says so').toMatch(/^Built in part: [^]*\nNot met: gripper not made/);
+  }, 120_000);
   it('the AI\'s tools lead with what fails, and take a change only when what held still holds', async () => {
     const t = await toolsFor(emptyBoard('asked')), plan = { nodes: { m: { b: 'part.family', s: { family: 'stepper' } }, p: { b: 'part.family', s: { family: 'motorplate' } }, j: { b: 'joint' }, w: { b: 'measure' }, a: { b: 'assert', s: { what: 'their mass', how: 'at most', target: 0.1 } } }, wires: ['p.part>j.a', 'm.part>j.b', 'j.together>w.thing', 'w.mass>a.value'] };
     const built = await t.doTool('build', plan), lines = built.split('\n');
@@ -1300,6 +1345,33 @@ describe('every domain, in one pass', () => {
   // as the model writes it (prose, a fence, the JSON) and run by runPlan as the page runs it; what is wrong in a reply said,
   // never guessed; by hand, a piece joined by an operation the room offers, step on step; asked again, only what failed;
   // and the cards and the board's listing sent with the guide, short)
+  // (decision 0027: robot and aircraft assemblies, each one library block of settings: placed at two settings it gives two
+  // builds, every node ok, its pieces one group (each joined to the rest by a face), no point in two pieces, and the counts
+  // a person reads it by (four motors and four props, so many servos and horns, two wheels or four); and the drone with
+  // the arm hanging under it, the starter board, runs as one thing of both)
+  it('robots and aircraft as blocks: two settings, two builds, each one group of pieces, apart, counted', async () => {
+    const built = async (id: string, set: Record<string, unknown>) => { const b = emptyBoard(id); placeBlock(b, id, 0, 0, set, 'x'); const e = new Engine(b, env, new Memo()); await e.run();
+      expect([...e.state].filter(([, s]) => s.status !== 'ok').map(([n, s]) => `${n}: ${s.error}`), `${id} at ${JSON.stringify(set)}: every node runs`).toEqual([]); return e.state.get('x')!.out!.block as RoomBlock; };
+    const groups = (b: RoomBlock) => { const up = b.pieces.map((_, i) => i), top = (i: number): number => (up[i] === i ? i : (up[i] = top(up[i]!))); for (const f of b.faces) up[top(f.a)] = top(f.b); return new Set(b.pieces.map((_, i) => top(i))).size; };
+    const n = (b: RoomBlock, re: RegExp) => b.pieces.filter((p) => re.test(p.name)).length;
+    const cases: [string, Record<string, unknown>[], (b: RoomBlock) => number[], number[][]][] = [
+      ['seed.quadcopter', [{ size: '250' }, { size: '450', stack: 10 }], (b) => [n(b, /^motor bell$/), n(b, /^prop hub$/), n(b, /^prop blade$/), n(b, /^flight controller$/), n(b, /^lipo battery$/), n(b, /^quadcopter mount$/)], [[4, 4, 8, 1, 1, 1], [4, 4, 8, 1, 1, 1]]],
+      ['seed.robot-arm', [{ joints: '4' }, { joints: '5', link: 80, servo: 'MG90S' }], (b) => [n(b, /case above$/), n(b, /^servo horn$/), n(b, /^arm link$/), n(b, /^gripper finger$/), n(b, /^arm base mount$/), n(b, /^arm tool flange$/)], [[5, 5, 3, 2, 1, 1], [6, 6, 3, 2, 1, 1]]],
+      ['seed.gripper', [{}, { servo: 'MG996R', R: 20, finger: 40 }], (b) => [n(b, /case above$/), n(b, /^servo horn$/), n(b, /^gripper finger$/)], [[1, 1, 2], [1, 1, 2]]],
+      ['seed.pan-tilt', [{}, { servo: 'MG90S' }], (b) => [n(b, /case above$/), n(b, /^servo horn$/), n(b, /^camera board$/)], [[2, 2, 1], [2, 2, 1]]],
+      ['seed.wheeled-base', [{}, { drive: '4WD', wheel: '80' }], (b) => [n(b, /gear motor can$/), n(b, /mm wheel hub$/), n(b, /castor plate$/), n(b, /^rover mount$/)], [[2, 2, 1, 1], [4, 4, 0, 1]]],
+    ];
+    for (const [id, sets, counts, want] of cases) {
+      const bs = await Promise.all(sets.map((s) => built(id, s)));
+      expect(digest(bs[0]) === digest(bs[1]), `${id}: two settings, two builds`).toBe(false);
+      bs.forEach((b, k) => { const at = `${id} at ${JSON.stringify(sets[k])}`;
+        expect(counts(b), `${at}: its counts`).toEqual(want[k]); expect(groups(b), `${at}: one group of pieces`).toBe(1); expect(sampleRoom(b, 5), `${at}: no point in two pieces`).toEqual(APART); });
+    }
+    const [, make] = [...new Map(starterBoards())].find(([t]) => t.startsWith('A drone with a robot arm attached'))!, board = make(), e = new Engine(board, env, new Memo()); await e.run();
+    expect([...e.state].filter(([, s]) => s.status !== 'ok').map(([id, s]) => `${id}: ${s.error}`), 'the drone with its arm: every node runs').toEqual([]);
+    const both = e.state.get('both')!.out!.block as RoomBlock;
+    expect([n(both, /^motor bell$/), n(both, /^prop hub$/), n(both, /case above$/), n(both, /^gripper finger$/), groups(both)], 'the drone with its arm: four motors and props, five servos, a gripper, one thing').toEqual([4, 4, 5, 2, 1]);
+  }, 120_000);
   it('the three ways to build: a plan read, run by the tools, joined by hand, asked again with only what failed', async () => {
     const { planOf, runPlan, joinPlan, failingOf, planAsk, boardBrief, piecesCard } = await import('../../src/nexus/agent');
     // (the fixed request, as a model would answer it: two plates stacked, four M5 bolts down the top one's holes)
@@ -1412,6 +1484,40 @@ describe('every domain, in one pass', () => {
   // (decision 0026: what the AI is shown: cards that say what each piece offers, which inputs take many wires, and the
   // mate blocks; an operation's run said by its pieces, mass and every offer, not the block's insides; the board's every
   // wire however long; worked plans after the cards, each running with nothing failing)
+  // (decision 0027: the machines people ask for by name, each one block of settings (src/nexus/assemblies/machines.ts): a
+  // linear axis, an XY gantry, a belt conveyor, a car chassis, a tower crane, a table, a shelf, a desk lamp arm. Each placed
+  // at two settings gives two builds, each running with every node ok, its pieces one group (each reached from the others
+  // through the faces the operations wrote), every pair apart, and the parts that make it that thing counted)
+  it('machine assemblies: each at two settings two builds, every node ok, one group, every pair apart, its parts counted', async () => {
+    const groupsOf = (b: RoomBlock) => { const up = b.pieces.map((_, i) => i), find = (i: number): number => (up[i] === i ? i : (up[i] = find(up[i]!))); for (const f of b.faces) up[find(f.a)] = find(f.b); return new Set(b.pieces.map((_, i) => find(i))).size; };
+    const cases: [string, Record<string, unknown>[], Record<string, RegExp>, Record<string, number>][] = [
+      ['seed.linear-axis', [{ travel: 300, stepper: '17' }, { travel: 200, stepper: '14' }], { stepper: /^NEMA 1[47] body$/, coupler: /coupler$/, screw: /lead screw$/, nut: /lead nut$/, bushings: /^LM8UU sleeve$/, rods: /^Ø8 shaft$/ }, { stepper: 1, coupler: 1, screw: 1, nut: 1, bushings: 2, rods: 2 }],
+      ['seed.xy-gantry', [{}, { x: 200, y: 250 }], { steppers: /^NEMA 17 body$/, screws: /lead screw$/, carriages: /^carriage mount$/, extrusions: /extrusion$/ }, { steppers: 2, screws: 2, carriages: 2, extrusions: 4 }],
+      ['seed.conveyor', [{}, { length: 400, width: 150, shaft: 180 }], { rollers: /^drive roller$/, bearings: /^6201 outer ring$/, belt: /^belt top run$/, pan: /^return pan$/, motor: /gear motor can$/, bed: /^slider bed$/ }, { rollers: 2, bearings: 4, belt: 1, pan: 1, motor: 1, bed: 1 }],
+      ['seed.car-chassis', [{}, { wheelbase: 120, frame: 100, wheel: '75', stub: 70 }], { wheels: /wheel tyre$/, bearings: /^626 outer ring$/, axles: /^stub axle /, rails: /rail$/ }, { wheels: 4, bearings: 4, axles: 4, rails: 2 }],
+      ['seed.crane', [{}, { height: 600, jib: 900 }], { mast: /^SHS /, jib: /^jib$/, hook: /^hook block$/, drum: /^winch drum$/, weight: /^counterweight$/ }, { mast: 1, jib: 1, hook: 1, drum: 1, weight: 1 }],
+      ['seed.table', [{}, { width: 1000, length: 1000, spread: 620 }], { legs: /^table leg$/, top: /sheet$/ }, { legs: 4, top: 1 }],
+      ['seed.shelf', [{}, { gap: 250, height: 554 }], { shelves: /^shelf$/, sides: /^side panel$/ }, { shelves: 3, sides: 2 }],
+      ['seed.lamp-arm', [{}, { lower: 250 }], { pivots: /^pivot pin$/, knuckles: /^knuckle$/, led: /LED lens$/, shade: /^lamp shade$/ }, { pivots: 2, knuckles: 2, led: 1, shade: 1 }],
+      ['seed.pump-loop', [{}, { tank: '25 L', pipe: 200, valve: 'G3/4' }], { tank: / tank$/, pump: /^pump head$/, motor: /motor can$/, valve: /ball valve body$/, pipe: /pipe$/ }, { tank: 1, pump: 1, motor: 1, valve: 1, pipe: 1 }],
+    ];
+    const bad: string[] = [];
+    for (const [id, sets, parts, want] of cases) {
+      const b = emptyBoard(`${id} twice`); sets.forEach((s, k) => placeBlock(b, id, 0, 0, s, `f${k}`));
+      const e = new Engine(b, env, new Memo()); await e.run();
+      const failed = [...e.state].filter(([, s]) => s.status !== 'ok').map(([n, s]) => `${id} ${n}: ${s.status} ${s.error ?? ''}`); if (failed.length) { bad.push(...failed); continue; }
+      const blks = sets.map((_, k) => e.state.get(`f${k}`)!.out!.block as RoomBlock);
+      if (digest(blks[0]) === digest(blks[1])) bad.push(`${id}: two settings, one build`);
+      blks.forEach((blk, k) => {
+        if (groupsOf(blk) !== 1) bad.push(`${id} #${k}: ${groupsOf(blk)} groups of pieces`);
+        const apart = sampleRoom(blk, 6); if (JSON.stringify(apart) !== JSON.stringify(APART)) bad.push(`${id} #${k}: not apart ${JSON.stringify(apart)}`);
+        const got = Object.fromEntries(Object.entries(parts).map(([k2, re]) => [k2, blk.pieces.filter((p) => re.test(p.name)).length]));
+        if (JSON.stringify(got) !== JSON.stringify(want)) bad.push(`${id} #${k}: its parts ${JSON.stringify(got)}, wanted ${JSON.stringify(want)}`);
+      });
+      expect(String(LIBRARY.get(id)!.says).length, `${id} says what it is and offers`).toBeGreaterThan(200);
+    }
+    expect(bad).toEqual([]);
+  }, 120_000);
   it('what the AI is shown: offers on the cards, operations by their pieces and offers, every wire, worked plans that run', async () => {
     const { piecesCard, cardOf, boardBrief, runPlan, WORKED, workedPlans } = await import('../../src/nexus/agent');
     const cards = piecesCard();

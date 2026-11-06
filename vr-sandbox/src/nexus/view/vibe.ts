@@ -25,7 +25,7 @@ import { starterBoards } from '../starters';
 import { boundsOfAll, isAssembly, isPart, massOfAll, placedCount } from '../assembly';
 import { LIBRARY, block, defaultsOf, portsOf, register, show, type BlockDef, type SettingDef } from '../blocks';
 import { DENSITY } from '../mass';
-import { TOOLS, boardBrief, gateOf, guideOf, joinPlan, planOf, planRequest, runPlan, setGuideMd, toolsFor, type AgentBlock, type AgentPlan, type AgentRun, type PlanRan, type PlanRun } from '../agent';
+import { TOOLS, boardBrief, composeBuild, gateOf, guideOf, isCompound, joinPlan, planOf, planRequest, runPlan, setGuideMd, toolsFor, type AgentBlock, type AgentPlan, type AgentRun, type ComposeRun, type ComposeStep, type PlanRan, type PlanRun } from '../agent';
 import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
 import { askClaude, inViewer, sendReport, whyNot, type Report } from './viewer';
 // (the guide bundled, for the page on claude.ai, which builds Assist's call itself: decision 0027)
@@ -464,10 +464,46 @@ async function autoByViewer(q: string): Promise<void> {
   } catch (e) { live.bad = true; live.html = md(`Could not: ${whyNot(e)}`); }
   finally { clearInterval(tick); busy = false; ($('go') as HTMLButtonElement).disabled = false; keepChat(); drawChat(); }
 }
+// ---- a thing of several things, built from its parts (decision 0027: composeBuild) ------------------------------------
+/** The request built from its parts: on claude.ai each call on the viewer's own account (askClaude), elsewhere through
+ *  the relay (mode compose, streamed); each step's line said as it comes, the board drawn as it grows. */
+async function composeShown(q: string, why: string): Promise<void> {
+  if (busy || !q.trim()) return; busy = true; ($('go') as HTMLButtonElement).disabled = true; $('sheet').classList.remove('low');
+  chat.push({ who: 'me', html: esc(q.trim()) }); keepChat();
+  const live: Said = { who: 'ai', html: '' }; chat.push(live);
+  const lines: string[] = [`<span>${esc(why)}</span>`], t0 = Date.now(), was = board; let note = 'Splitting it into its parts';
+  const paint = () => { live.html = `<div class="live"><span class="dots">${esc(note)}</span> · ${Math.round((Date.now() - t0) / 1000)} s</div><div class="steps">${lines.slice(-8).join('')}</div>`; drawChat(); };
+  const heard = (s: ComposeStep, b?: Board) => { lines.push(`<span${s.ok ? '' : ' class="f"'}>${s.ok ? '✓' : '✕'} ${esc(s.line.slice(0, 220))}</span>`); note = `${s.stage}: ${lines.length - 1} step${lines.length === 2 ? '' : 's'}`; if (b && nodesOf(b).length) void use(b, false); paint(); };
+  const tick = window.setInterval(paint, 1000); paint();
+  try {
+    let done: ComposeRun & { tokens?: Tok };
+    if (inViewer) done = await composeBuild(q.trim(), { ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: savedBlocks(), onStep: (s, b) => heard(s, structuredClone(b)) });
+    else {
+      const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'compose', request: q.trim(), blocks: savedBlocks() }) });
+      if (res.status === 404 || res.status === 405) throw new Error('this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand works without it; to build with Claude, open the app the session serves (npm run app), or the page on claude.ai.');
+      if (!res.ok || !res.body) throw new Error(`the relay answered ${res.status}`);
+      const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', got: (ComposeRun & { tokens?: Tok }) | null = null;
+      for (;;) { const { value, done: end } = await reader.read(); if (value) buf += dec.decode(value, { stream: true });
+        let k; while ((k = buf.indexOf('\n')) >= 0) { const l = buf.slice(0, k).trim(); buf = buf.slice(k + 1); if (!l) continue;
+          const o = JSON.parse(l) as { compose?: ComposeStep; board?: Board; done?: ComposeRun & { tokens?: Tok }; error?: string };
+          if (o.error) throw new Error(o.error); if (o.compose) heard(o.compose, o.board); if (o.done) got = o.done; }
+        if (end) break; }
+      if (!got) throw new Error('the relay stopped before the build ended'); done = got;
+    }
+    if (done.tokens) spent(done.tokens);
+    live.bad = !!done.unmet.length;
+    live.html = `${md(done.answer)}<details><summary>${done.steps.length} steps · ${done.asks} call${done.asks === 1 ? '' : 's'} · ${Math.round((Date.now() - t0) / 1000)} s</summary>${lines.join('<br>')}</details>${done.tokens ? tokLine(done.tokens) : '<div class="tok">on your claude.ai account</div>'}`;
+    if (nodesOf(done.board).length) { history.push(structuredClone(was)); await use(done.board); requestAnimationFrame(() => dock.fit()); }
+  } catch (e) { live.bad = true; live.html = md(`Could not: ${inViewer ? whyNot(e) : (e as Error).message}`); }
+  finally { clearInterval(tick); busy = false; ($('go') as HTMLButtonElement).disabled = false; keepChat(); drawChat(); }
+}
 let busy = false;
 async function ask(q: string): Promise<void> {
   if (/^\s*@?dev\s*[:,]/i.test(q)) return toDev(q.trim());
-  if (mode === 'assist') return askPlan(q);
+  // (Assist keeps its one call for a small request; one that names two or more things is built from its parts)
+  if (mode === 'assist') return isCompound(q) ? composeShown(q, 'It names two or more things: built from its parts (a call to split it, a call a part, a call to join them), not one plan.') : askPlan(q);
+  // (Auto: a new thing, or one of several things, from its parts; a change to the board open by the tool loop)
+  if (!nodesOf(board).length || isCompound(q)) return composeShown(q, 'Built from its parts: a call to split it, then each part, then a call to join them.');
   if (inViewer) return autoByViewer(q);
   if (busy || !q.trim()) return; busy = true; ($('go') as HTMLButtonElement).disabled = true; $('sheet').classList.remove('low');
   const request = before() + q.trim();

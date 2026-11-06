@@ -574,15 +574,19 @@ export interface PlanRun { plan?: AgentPlan; error?: string; text: string; model
 
 /** The plan in a model's reply: its first JSON object (fenced or not), held to the build or change tool's form; anything
  *  else said back as an error, never guessed at. */
-export function planOf(text: string): AgentPlan {
-  const s = text.replace(/```(?:json)?/g, ''), i = s.indexOf('{'); if (i < 0) throw new Error('no plan in the reply: it holds no JSON object');
-  // (from its first brace to the one that closes it, minding braces in strings)
+/** The first JSON object in a model's reply (fenced or not), from its first brace to the one that closes it, minding
+ *  braces in strings; none, one not closed, or one that is not JSON, said as `no <what> in the reply: …`. */
+export function firstJson(text: string, what = 'plan'): Record<string, unknown> {
+  const s = text.replace(/```(?:json)?/g, ''), i = s.indexOf('{'); if (i < 0) throw new Error(`no ${what} in the reply: it holds no JSON object`);
   let depth = 0, inStr = false, esc = false, j = -1;
   for (let k = i; k < s.length; k++) { const c = s[k];
     if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
     if (c === '"') inStr = true; else if (c === '{') depth++; else if (c === '}' && --depth === 0) { j = k; break; } }
-  if (j < 0) throw new Error('no plan in the reply: its JSON object is not closed (the reply was cut short?)');
-  let o: Record<string, unknown>; try { o = JSON.parse(s.slice(i, j + 1)) as Record<string, unknown>; } catch (e) { throw new Error(`no plan in the reply: ${(e as Error).message}`); }
+  if (j < 0) throw new Error(`no ${what} in the reply: its JSON object is not closed (the reply was cut short?)`);
+  try { return JSON.parse(s.slice(i, j + 1)) as Record<string, unknown>; } catch (e) { throw new Error(`no ${what} in the reply: ${(e as Error).message}`); }
+}
+export function planOf(text: string): AgentPlan {
+  const o = firstJson(text);
   const tool = o.tool === 'build' || o.tool === 'change' ? o.tool : o.nodes ? 'build' : 'change';
   const named = (v: unknown, what: string): PlanNodes | undefined => { if (v === undefined) return undefined;
     if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error(`${what}: write them as an object, {"name": {"b": "block id", "s": {…}}}`);
@@ -669,6 +673,212 @@ export async function agentPlan(request: string, o: { model?: string; effort?: '
   const tokens = { in: r.usage.input_tokens, out: r.usage.output_tokens, cached: r.usage.cache_read_input_tokens ?? 0, written: r.usage.cache_creation_input_tokens ?? 0 };
   try { return { plan: planOf(text), text: text.slice(0, 4000), model: r.model, tokens, ms: Date.now() - t0 }; }
   catch (e) { return { error: (e as Error).message, text: text.slice(0, 4000), model: r.model, tokens, ms: Date.now() - t0 }; }
+}
+
+// ---- composing a thing of several things (decision 0027) -------------------------------------------------------------
+// The user asked for "a drone with a robot arm attached" and got a plate with a rod: one call wrote a whole machine in one
+// plan. Here a compound request is built as a circuit of small calls, each with one task, each failure-aware:
+//   1. split (one call, quick): the request's parts, each with what it starts from (a library assembly, a starter board,
+//      or an aisle of pieces), and the joins between them in plain words. Waits for nothing; fails where no JSON comes back
+//      (said, nothing built).
+//   2. each part (no call where it starts from an assembly or a starter board; else one Assist call with the part alone as
+//      the request, run by the tools, asked again once with only its failing lines): a part that still fails is said.
+//   3. each part's board folded to one node (collapse), its block and thing its outputs: one node a part.
+//   4. join (one call, default): given each part's block (its pieces, its size and what it offers), a change of operations
+//      and joints that makes them one thing; run; asked again once with only what failed.
+//   5. check (no call): every part's pieces in the final block, one group by the faces the operations wrote, nothing
+//      failing; what is not met is said in the answer.
+// The caller gives `ask` (the Node SDK in the relay, sdkAsk; the viewer's account on claude.ai, askClaude), so one pipeline
+// runs in both. A prompt's head before PROMPT_CUT is the same every call (the guide and its cards): cached where it can be.
+
+/** One call to a model: the whole prompt in, its text out. `tier` how hard the task is (quick for a split or a part). */
+export type Ask = (prompt: string, tier: 'quick' | 'default' | 'complex') => Promise<string>;
+/** Where a prompt's fixed head ends and its one-off tail begins. */
+export const PROMPT_CUT = '\n\n---\n\n';
+/** A part of a compound request: as the split said it, then what was made of it. */
+export interface ComposePart { name: string; is: string; from: string; set?: Record<string, unknown>;
+  /** how it was made: placed from the library, a starter board opened, a plan by one call, or not made */ by?: 'assembly' | 'starter' | 'plan' | 'none';
+  /** its node on the final board, its pieces' names (each once a piece), and what still failed when it was made */ node?: string; names: string[]; failing: string[] }
+export interface ComposeJoin { part: string; how: string; to: string }
+/** One step of the pipeline, a line for the chat. */
+export interface ComposeStep { stage: 'split' | 'part' | 'fold' | 'join' | 'check'; line: string; ok: boolean }
+export interface ComposeRun { board: Board; parts: ComposePart[]; joins: ComposeJoin[]; steps: ComposeStep[]; unmet: string[]; answer: string; asks: number; plans: AgentPlan[] }
+
+/** A request that names two or more things (a drone and an arm, a crane and a truck): Assist hands it to composeBuild.
+ *  Words of machines, each counted once; a singular arm only ("the arms of a cross frame" is one thing). A guess from the
+ *  words, said as one: the split call says what the parts are. */
+const MACHINES: RegExp[] = [/\b(drone|quadcopter|quad ?copter|multirotor)\b/, /\b(robot(ic)? arm|arm)\b(?!s)/, /\bgripper\b/, /\b(robot|rover)\b/, /\b(car|truck|lorry|trailer|cart|wagon|tractor|forklift|excavator)\b/, /\bcrane\b/, /\bcamera\b/, /\bpan[- ]tilt\b/, /\bconveyor\b/, /\b(lamp|light)\b/, /\b(3d )?printer\b/, /\b(axis|axes|gantry)\b/, /\b(boat|ship|plane|aircraft|glider)\b/, /\bturret\b/, /\b(bike|bicycle|scooter)\b/, /\b(table|desk|chair|shelf)\b/, /\b(pump|tank)\b/, /\b(winch|hoist)\b/, /\b(legs?|walker)\b/];
+export const isCompound = (request: string): boolean => MACHINES.filter((re) => re.test(request.toLowerCase())).length >= 2;
+
+/** The short list the split chooses from: the assemblies (seed.*, and the blocks the person saved) by id and a few words,
+ *  the starter boards by the words before their colon, and the aisles of pieces by trade. */
+async function composeMenu(blocks?: AgentBlock[]): Promise<string> {
+  savedCards(blocks);
+  const { starterBoards } = await import('./starters');
+  const asm = [...LIBRARY.values()].filter((d) => d.id.startsWith('seed.') && d.id !== 'seed.spring-checked' || d.by === 'you').map((d) => `${d.id}: ${d.name}: ${(d.says ?? '').slice(0, 90)}`);
+  const starts = starterBoards().map(([t]) => t.split(':')[0]!.trim()).filter((t) => t.length >= 6);
+  const trades = new Map<string, number>(); for (const id of LIBRARY.keys()) if (id.startsWith('piece.')) { const t = block(id)!.domains?.[0] ?? 'other'; trades.set(t, (trades.get(t) ?? 0) + 1); }
+  return `Assemblies (from: the id):\n${asm.join('\n')}\nStarter boards (from: the title as written):\n${starts.join('; ')}\nAisles of pieces (from: "aisle <trade>"): ${[...trades].map(([t, n]) => `${t} (${n})`).join(', ')}`;
+}
+const SPLIT_RULE = `## Here: the parts of what is asked (one task: name the parts, build nothing)
+Reply with one JSON object and nothing else:
+{"parts": [{"name": "drone", "is": "a quadcopter: four motors on a cross frame", "from": "<an assembly's id, a starter board's title, or aisle <trade>>"}, …], "joins": [{"part": "arm", "how": "under", "to": "drone"}]}
+A part is a thing a person names (a drone, an arm, a camera, a truck, a lamp's base): one to five of them, never a bolt or
+a plate alone. name: one short word (letters, digits, _), each its own. is: what it is, in a few words, enough to build it
+from. from: the assembly or starter board that is that thing (as written in the lists), else the aisle its pieces come
+from. set: an assembly's settings only where asked. joins: each part but one goes onto, under, beside, through, into,
+around or bolted to another part.`;
+/** The split call's prompt: the menu, then the rule, then the request. */
+export async function splitAsk(request: string, blocks?: AgentBlock[]): Promise<string> {
+  return `${await composeMenu(blocks)}\n\n${SPLIT_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}`;
+}
+/** The split as a model answers it, held to its form: parts with names a wire can read, each once; joins between them. */
+export function splitOf(text: string): { parts: ComposePart[]; joins: ComposeJoin[] } {
+  const o = firstJson(text, 'split'), ps = o.parts;
+  if (!Array.isArray(ps) || !ps.length) throw new Error('no parts in the split: "parts" is a list of {name, is, from}');
+  const seen = new Set<string>(), parts: ComposePart[] = ps.slice(0, 6).map((p, k) => { const x = (p ?? {}) as Record<string, unknown>;
+    let name = String(x.name ?? `part${k + 1}`).toLowerCase().replace(/\W+/g, '_').replace(/^_+|_+$/g, '') || `part${k + 1}`; if (/^\d/.test(name)) name = `p${name}`;
+    while (seen.has(name)) name = `${name}${k + 1}`; seen.add(name);
+    return { name, is: String(x.is ?? x.what ?? name).slice(0, 300), from: String(x.from ?? '').slice(0, 120), ...(x.set && typeof x.set === 'object' && !Array.isArray(x.set) ? { set: x.set as Record<string, unknown> } : {}), names: [], failing: [] }; });
+  const named = (s: unknown) => { const t = String(s ?? '').toLowerCase().replace(/\W+/g, '_'); return parts.find((p) => p.name === t)?.name; };
+  const joins = (Array.isArray(o.joins) ? o.joins : []).map((j) => { const x = (j ?? {}) as Record<string, unknown>; return { part: named(x.part ?? x.a), how: String(x.how ?? 'onto').slice(0, 40), to: named(x.to ?? x.b) }; })
+    .filter((j): j is ComposeJoin => !!j.part && !!j.to && j.part !== j.to);
+  return { parts, joins };
+}
+
+/** The nodes that only show, weigh or check: taken off a part's board before it is folded (the final board shows the whole). */
+const SINKS = new Set(['space.show', 'measure', 'assert', 'view.show', 'view.table', 'view.chart', 'view.gauge']);
+type RoomOut = { name?: string; pieces: readonly { name: string }[]; faces: readonly { a: number; b: number }[]; lo?: readonly number[]; hi?: readonly number[]; rooms?: readonly { name: string }[] };
+const isRoom = (v: unknown): v is RoomOut => !!v && typeof v === 'object' && Array.isArray((v as RoomOut).pieces) && Array.isArray((v as RoomOut).faces);
+/** How many groups a block's pieces fall in, joined by the faces the operations wrote (one: one thing). */
+export function groupsOf(b: RoomOut): number { const up = b.pieces.map((_, i) => i), find = (i: number): number => (up[i] === i ? i : (up[i] = find(up[i]!)));
+  for (const f of b.faces) up[find(f.a)] = find(f.b); return new Set(b.pieces.map((_, i) => find(i))).size; }
+/** What a block offers by name: its pieces' lines and its rooms. */
+const offersIn = (b: RoomOut): string[] => [...new Set([...b.pieces.flatMap((p) => ((p as { lines?: { port: string }[] }).lines ?? []).map((l) => l.port)), ...(b.rooms ?? []).map((r) => r.name)])];
+/** A block said for the join call: its pieces, its size in mm (x by y by z) and what it offers. */
+const roomLine = (b: RoomOut): string => { const size = b.lo && b.hi ? ` ${[0, 1, 2].map((k) => Math.round((b.hi![k]! - b.lo![k]!) * 1000)).join(' x ')} mm (x by y by z)` : '', os = offersIn(b);
+  return `${b.pieces.length} pieces${size}, offers [${os.slice(0, 14).join('; ')}${os.length > 14 ? `; … ${os.length - 14} more` : ''}]`; };
+/** The biggest block a run board makes, on any output (a piece's or an operation's `block`, an assembly's `motor`): its
+ *  node, its output and the block: what a part, or the whole, is. */
+function biggest(b: Board, e: Engine): [string, string, RoomOut] | undefined {
+  let best: [string, string, RoomOut] | undefined;
+  for (const n of nodesOf(b)) { const st = e.state.get(n.id); if (st?.status !== 'ok') continue;
+    for (const [port, v] of Object.entries(st.out ?? {})) if (isRoom(v) && (!best || v.pieces.length > best[2].pieces.length)) best = [n.id, port, v]; }
+  return best;
+}
+/** A part's board folded to one node of the name given (dataflow's collapse): its show and check nodes taken off, its
+ *  biggest block and its thing the group's outputs. A board of one node (a library assembly placed) is that node. Undefined
+ *  where it makes no block. */
+async function foldPart(src: Board, name: string): Promise<{ node: Board['nodes'][string]; block: RoomOut; folded: boolean } | undefined> {
+  const b = structuredClone(src);
+  for (const n of nodesOf(b)) if (SINKS.has(b.nodes[n.id]!.block ?? '')) { b.nodes[n.id] = { ...b.nodes[n.id]!, deleted: true }; for (const x of edgesOf(b)) if (x.from === n.id || x.to === n.id) b.edges[x.id] = { ...b.edges[x.id]!, deleted: true }; }
+  const e = new Engine(b); await e.run(); const top = biggest(b, e); if (!top) return undefined;
+  const ids = nodesOf(b).map((n) => n.id); if (ids.length === 1) return { node: { ...b.nodes[ids[0]!]!, label: name }, block: top[2], folded: false };
+  for (const out of [top[1], 'thing']) { if (!(out in (e.state.get(top[0])?.out ?? {}))) continue; const r = `${name}__${out}`; placeBlock(b, 'view.show', 0, 0, {}, r); wire(b, top[0], out, r, 'value'); }
+  const f = collapse(b, ids, name, name), node = f.board.nodes[name]!;
+  return { node: { ...node, label: name }, block: top[2], folded: true };
+}
+/** The pieces' names of a block, each as often as it is a piece. */
+const namesOf = (b: RoomOut): string[] => b.pieces.map((p) => p.name);
+
+/** A compound request built from its parts (the steps above). `ask` makes each call; `onStep` hears each step's line and
+ *  the board as it stands. A new board: what was open before is the caller's to keep (the page's Undo). */
+export async function composeBuild(request: string, o: { ask: Ask; board?: Board; blocks?: AgentBlock[]; onStep?: (s: ComposeStep, board: Board) => void }): Promise<ComposeRun> {
+  const { starterBoards } = await import('./starters'), steps: ComposeStep[] = [], plans: AgentPlan[] = [], unmet: string[] = [];
+  let board: Board = emptyBoard(request.slice(0, 80)), asks = 0;
+  const say = (stage: ComposeStep['stage'], line: string, ok = true) => { const s = { stage, line, ok }; steps.push(s); o.onStep?.(s, board); };
+  const call = async (prompt: string, tier: Parameters<Ask>[1]) => { asks++; return o.ask(prompt, tier); };
+  // (1. split)
+  let parts: ComposePart[], joins: ComposeJoin[];
+  try { ({ parts, joins } = splitOf(await call(await splitAsk(request, o.blocks), 'quick'))); }
+  catch (e) { say('split', `Could not split it into parts: ${(e as Error).message}`, false); return { board, parts: [], joins: [], steps, unmet: ['no parts: the split failed'], answer: `Nothing built: the split failed (${(e as Error).message}).`, asks, plans }; }
+  say('split', `${parts.length} part${parts.length === 1 ? '' : 's'}: ${parts.map((p) => `${p.name} (${p.is.slice(0, 50)}; from ${p.from || 'pieces'})`).join(', ')}${joins.length ? `; ${joins.map((j) => `${j.part} ${j.how} ${j.to}`).join(', ')}` : ''}`);
+  // (2 and 3. each part made and folded to one node)
+  const guideHead = `${await guideOf()}\n\n${PLAN_RULE}`, asPrompt = (r: Awaited<ReturnType<typeof planRequest>>) => `${guideHead}${PROMPT_CUT}${String((r.messages[0] as { content: unknown }).content)}`;
+  for (const [k, p] of parts.entries()) {
+    const f = p.from.trim().replace(/^aisle\s+.*$/i, ''), id = f.replace(/^["'`]|["'`:]$/g, ''), d = id ? block(id) : undefined, low = id.toLowerCase();
+    const start = low.length >= 5 ? starterBoards().find(([t]) => t.toLowerCase().startsWith(low)) ?? starterBoards().find(([t]) => t.toLowerCase().split(':')[0]!.includes(low)) : undefined;
+    let made: Board | undefined;
+    if (d && buildsInSpace(d) && !OLD_BUILD.test(d.id)) {
+      // (a library assembly or piece: one node, its settings as the split gave them where it has them)
+      const b = emptyBoard(p.name), keys = new Set([...(d.settings ?? []).map((x) => x.key), ...portsOf(d, defaultsOf(d)).inputs.map((x) => x.name)]), set: Record<string, unknown> = {};
+      for (const [key, v] of Object.entries(p.set ?? {})) { const r = readSetting(d, keys, key, v); if (r.key) set[r.key] = r.value; }
+      placeBlock(b, d.id, 0, 0, { ...defaultsOf(d), ...set }, p.name); made = b; p.by = 'assembly';
+    } else if (start) { made = start[1](); p.by = 'starter'; }
+    else {
+      // (one Assist call with the part alone as the request; asked again once with only what failed)
+      const ask1 = `${p.name}: ${p.is} (one part of "${request.slice(0, 160)}")`;
+      try { const plan = planOf(await call(asPrompt(await planRequest(ask1, { blocks: o.blocks })), 'quick')); plans.push(plan);
+        let ran = await runPlan(plan, emptyBoard(p.name), o.blocks);
+        if (ran.failing.length) { say('part', `${p.name}: ${ran.failing.length} line(s) failed; asked again with only those`, false);
+          try { const mend = planOf(await call(asPrompt(await planRequest(ask1, { board: ran.board, failing: ran.failing, blocks: o.blocks })), 'quick')); plans.push(mend); const again = await runPlan(mend, ran.board, o.blocks); if (again.failing.length <= ran.failing.length) ran = again; }
+          catch (e) { ran = { ...ran, failing: [...ran.failing, `asked again: ${(e as Error).message}`] }; } }
+        made = ran.board; p.failing = ran.failing; p.by = 'plan';
+      } catch (e) { p.failing = [(e as Error).message]; p.by = 'none'; }
+    }
+    if (!made) { say('part', `${p.name}: not made (${p.failing[0] ?? 'nothing to start from'})`, false); continue; }
+    const folded = await foldPart(made, p.name);
+    if (!folded) { p.by = 'none'; say('part', `${p.name}: its board made no block${p.failing.length ? ` (${p.failing[0]!.slice(0, 120)})` : ''}`, false); continue; }
+    board.nodes[p.name] = { ...folded.node, x: k * 420, y: 0 }; p.node = p.name; p.names = namesOf(folded.block);
+    say('part', `${p.name}: ${p.by === 'assembly' ? `the assembly ${d!.id}` : p.by === 'starter' ? `the starter board "${start![0].split(':')[0]}"` : 'built by one plan'}, ${folded.block.pieces.length} pieces${p.failing.length ? `; still failing: ${p.failing[0]!.slice(0, 120)}` : ''}`, !p.failing.length);
+    say('fold', folded.folded ? `${p.name}: its board folded to one node` : `${p.name}: one node already`);
+  }
+  const made = parts.filter((p) => p.node);
+  if (!made.length) { unmet.push('no part was made'); return { board, parts, joins, steps, unmet, answer: `Nothing built: no part was made (${parts.map((p) => `${p.name}: ${p.failing[0] ?? 'not made'}`).join('; ').slice(0, 300)}).`, asks, plans }; }
+  // (4. join: each part's block said as runPlan's engine gives it, then one change that joins them)
+  let e = new Engine(board); await e.run();
+  if (made.length > 1) {
+    const offers = made.map((p) => { const st = e.state.get(p.node!), out = (st?.out ?? {}) as Record<string, unknown>; return `${p.node} (${p.is.slice(0, 80)}): ${Object.entries(out).filter(([, v]) => isRoom(v)).map(([port, v]) => `${p.node}.${port}: ${roomLine(v as RoomOut)}`).join(' | ') || `not run: ${st?.error ?? st?.status}`}`; });
+    const joinTask = `## Here: join the parts into one thing (one task)
+Asked: ${request.slice(0, 400)}
+Each part is one node on the board, by its name; what it gives (wire its block into an operation; name a line or room it offers):
+${offers.join('\n')}
+Joins asked: ${joins.map((j) => `${j.part} ${j.how} ${j.to}`).join(', ') || 'as the request says'}.
+Reply with one JSON object and nothing else, a change: {"tool": "change", "add": {…}, "wires": […], "says": "…"}. Add only operations and joints (room.onto with face -y for under, +y for on top, ±x or ±z for beside; room.stack; room.through; room.over; room.into; mate.bolted; mate.plate; room.turn) that put every part's block into one block, each operation's block into the next, and a space.show of the last one's thing. Never a new piece in place of a part.`;
+    try { const plan = planOf(await call(`${guideHead}${PROMPT_CUT}${boardBrief(board)}\n\n${joinTask}`, 'default')); plans.push(plan);
+      let ran = await runPlan(plan, board, o.blocks); board = ran.board;
+      say('join', `${plan.says || 'joined'}: ${Object.keys(plan.input.add ?? {}).length} node(s)${ran.failing.length ? `; ${ran.failing.length} line(s) failed: ${ran.failing[0]!.slice(0, 120)}` : ', nothing failed'}`, !ran.failing.length);
+      if (ran.failing.length) {
+        try { const mend = planOf(await call(`${guideHead}${PROMPT_CUT}${planAsk(request, ran.board, ran.failing)}\n\n${joinTask}`, 'default')); plans.push(mend);
+          const again = await runPlan(mend, ran.board, o.blocks); if (again.failing.length <= ran.failing.length) { ran = again; board = ran.board; }
+          say('join', `asked again with only what failed: ${ran.failing.length ? `${ran.failing.length} line(s) still fail: ${ran.failing[0]!.slice(0, 120)}` : 'nothing fails now'}`, !ran.failing.length); }
+        catch (x) { say('join', `asked again: ${(x as Error).message}`, false); } }
+    } catch (x) { say('join', `Could not join them: ${(x as Error).message}`, false); }
+  }
+  // (a show of the whole, where the plan put none)
+  e = new Engine(board); await e.run();
+  const top = biggest(board, e);
+  if (top && !nodesOf(board).some((n) => board.nodes[n.id]!.block === 'space.show') && 'thing' in (e.state.get(top[0])?.out ?? {})) { const sh = board.nodes.show ? 'show_whole' : 'show'; placeBlock(board, 'space.show', 0, 0, {}, sh); wire(board, top[0], 'thing', sh, 'thing'); e = new Engine(board); await e.run(); }
+  // (5. check: nothing failing, every part's pieces in the whole, one group)
+  const bad = nodesOf(board).filter((n) => e.state.get(n.id)?.status !== 'ok');
+  if (bad.length) unmet.push(`${bad.length} node(s) not ok: ${bad.slice(0, 3).map((n) => `${n.id} ${e.state.get(n.id)?.status ?? '?'} ${(e.state.get(n.id)?.error ?? '').slice(0, 100)}`).join('; ')}`);
+  const whole = biggest(board, e)?.[2];
+  for (const p of parts) {
+    if (!p.node) { unmet.push(`${p.name} not made: ${(p.failing[0] ?? 'nothing to start from').slice(0, 140)}`); continue; }
+    if (p.failing.length) unmet.push(`${p.name} still fails: ${p.failing[0]!.slice(0, 140)}`);
+    const left = new Map<string, number>(); for (const nm of whole ? namesOf(whole) : []) left.set(nm, (left.get(nm) ?? 0) + 1);
+    const miss = p.names.filter((nm) => { const n = left.get(nm) ?? 0; if (n > 0) { left.set(nm, n - 1); return false; } return true; }).length;
+    if (miss) unmet.push(`${p.name} is not in the build: ${miss} of its ${p.names.length} pieces missing from the whole`);
+  }
+  const g = whole ? groupsOf(whole) : 0;
+  if (!whole) unmet.push('no block made'); else if (g !== 1) unmet.push(`the build falls in ${g} groups, not one thing`);
+  say('check', unmet.length ? `Not met: ${unmet.join('; ')}` : `Checked: ${made.length} part${made.length === 1 ? '' : 's'} in one thing of ${whole!.pieces.length} pieces, nothing failing`, !unmet.length);
+  const answer = `${unmet.length ? 'Built in part' : 'Built'}: ${request.slice(0, 120)}, from ${made.map((p) => `${p.name} (${p.by === 'assembly' ? 'a library assembly' : p.by === 'starter' ? 'a starter board' : 'one plan'}, ${p.names.length} pieces)`).join(', ')}${whole ? `; the whole ${whole.pieces.length} pieces${g === 1 ? ', one thing' : ''}` : ''}.${unmet.length ? `\nNot met: ${unmet.join('; ')}` : ''}`;
+  board.title = request.replace(/^./, (c) => c.toUpperCase()).slice(0, 80);
+  return { board, parts, joins, steps, unmet, answer, asks, plans };
+}
+
+/** An Ask by the Node SDK (the relay): the prompt's head before PROMPT_CUT one cached system block, its tail the message;
+ *  each call's tokens added to `tokens`. Under Node, where ANTHROPIC_API_KEY is. */
+export function sdkAsk(o: { model?: string; signal?: AbortSignal; tokens?: AgentRun['tokens'] } = {}): Ask {
+  return async (prompt, tier) => {
+    if (typeof process === 'undefined' || !process.env?.ANTHROPIC_API_KEY) throw new Error('no ANTHROPIC_API_KEY where this runs: the relay runs under Node with it set (the environment\'s secrets); a page holds no keys');
+    const { default: Sdk } = await import('@anthropic-ai/sdk'), client = new Sdk({ baseURL: 'https://api.anthropic.com' }), k = prompt.indexOf(PROMPT_CUT);
+    const head = k >= 0 ? prompt.slice(0, k) : '', tail = k >= 0 ? prompt.slice(k + PROMPT_CUT.length) : prompt;
+    const r = await client.messages.create({ model: o.model ?? AGENT_MODEL, max_tokens: 6000, ...(head ? { system: cachedSystem(head) } : {}), output_config: { effort: tier === 'quick' ? 'low' : 'medium' }, messages: [{ role: 'user', content: tail }] }, { signal: o.signal ?? AbortSignal.timeout(90_000) });
+    if (o.tokens) { o.tokens.in += r.usage.input_tokens; o.tokens.out += r.usage.output_tokens; o.tokens.cached += r.usage.cache_read_input_tokens ?? 0; o.tokens.written += r.usage.cache_creation_input_tokens ?? 0; }
+    const turn = turnOf(r); return turn.ends ? turn.answer : '';
+  };
 }
 
 const P = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });

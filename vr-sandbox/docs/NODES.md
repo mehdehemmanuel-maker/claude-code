@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 721 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 735 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -40,11 +40,11 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 6 | typical values or an estimate, said so |
 | simplified | 39 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 192 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 206 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 679 tested here (their own tests: that they do what they say, not that the world does); 32 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 679 tested here (their own tests: that they do what they say, not that the world does); 46 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 128 of 721 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 128 of 735 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (15)
 
@@ -66,31 +66,36 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
 - **ZenRows: read a web page** (`api.zenrows`): A web page fetched through ZenRows (ZENROWS_API_KEY under Node): its scripts run where asked, its words back as Markdown or its HTML as it is. *given, untested*
 
-## 2 · Make: shapes, parts, things (45)
+## 2 · Make: shapes, parts, things (59)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
 - **Around** (`room.around`): A housing made round a block: its cavity is what the block takes (and sweeps as it moves) with the fit's gap, its wall and ends its own; the block inside, never through it *derived, tested here*
 - **Battery pack** (`battery.pack`): Cells in a pack: so many groups in series, each so many cells in parallel standing in staggered rows, a busbar over each group, the groups in modules, the modules in a tray. *hypothetical, tested here, before the update*
+- **Belt conveyor** (`seed.conveyor`): A slider-bed belt conveyor (sizes typical of a bench conveyor): two Ø50 aluminium rollers, each on a Ø12 shaft with a 6201 bearing over each end, a steel slider bed between them, the rubber belt's top run over them … *hypothetical, untested*
 - **Body** (`body`): A human body from its measured segments, not drawn by eye: laid out from its height by Drillis and Contini's proportions, its sixteen segments each the share of its mass de Leva measured (men and women apart), shaped … *estimated, tested here*
 - **Bolt circle** (`pattern.circle`): A bolt circle as one record: its count, its radius, its turn and its thread, the points round it; every part wired from it reads the same one, never a copy (R15) *hypothetical, tested here*
 - **Bolted at 2 holes** (`seed.bolted-two`): What it holds bolted through the first 2 holes of one line (plates stacked: "top plate/holes"), a bolt down each from above, its head on top, a washer and nut below: 2 bolted joints in a chain as one node. *hypothetical, untested*
 - **Bolted at 4 holes** (`seed.bolted-four`): What it holds bolted through the first 4 holes of one line (plates stacked: "top plate/holes"), a bolt down each from above, its head on top, a washer and nut below: 4 bolted joints in a chain as one node. *hypothetical, untested*
 - **Box** (`shape.box`): A block: width (x), height (y), depth (z) *hypothetical, tested here, before the update*
 - **Branch into a side** (`room.branch`): A branch (a run whose first piece is a hollow straight) joined square into the middle of a hollow straight its host offers by a line, toward that straight's +x, +z, -x or -z (or degrees): the straight's wall opened by … *derived, tested here*
+- **Car chassis** (`seed.car-chassis`): A small ladder-frame car chassis (sizes typical of a hobby car): two aluminium side rails and a cross member, a Ø6 stub axle out through each of the rails' four axle holes, a 626 bearing and a wheel over each stub, … *hypothetical, untested*
 - **Coil spring, made and loaded** (`seed.spring-checked`): A helical compression spring made from its wire and coils (the coil maker) and put under its working stroke (Spring under load): its mass, its rate, and its least factor of safety, wire stress and coil bind among them. *hypothetical, untested*
 - **Coiled spring** (`make.coil`): Wire coiled round a mandrel, its ends closed: a valve's spring, a clutch's, a pen's *hypothetical, tested here, before the update*
 - **Compile: start (inputs, requirements, parameters)** (`compile.start`): Stages 1, 3 and 8 of the compiler: a design record begun for a thing: what it came from, its requirements (a line each: "R1: rate = 40000 N/m ±2 %: what it is for"), its parameters with how each is known (verified, … *hypothetical, tested here*
 - **Cone** (`shape.cone`): A cone along y: base radius and height *hypothetical, tested here, before the update*
 - **Cylinder** (`shape.cyl`): A cylinder along y: its radius and height; a second radius at its top makes it a frustum *hypothetical, tested here, before the update*
+- **Desk lamp arm** (`seed.lamp-arm`): A desk lamp on its arm (sizes typical): a Ø150 steel base, a Ø12 aluminium lower arm, a pivot (a Ø6 pin with a knuckle over it, a clear fit: the joint), the upper arm, a second pivot and an aluminium shade with a 5 mm … *hypothetical, untested*
 - **Extrude** (`shape.extrude`): A profile drawn in x and y (mm), pushed out along z to a length: a bracket, a beam, a plate of any outline *hypothetical, tested here, before the update*
 - **fal.ai: draw from words (FLUX)** (`api.fal.draw`): Words sent to fal.ai's FLUX models (FAL_KEY under Node), a picture back; an account with no credit is said as fal says it *hypothetical, untested*
 - **Floor plan** (`plan.rooms`): A house's rooms laid out from its plan: rows of rooms split by "/", rooms in a row by ",", each "type W x D" in metres ("bedroom 4x4, bathroom 2.5x3 / kitchen 4x3.5, living 5x3.5"); or a plan by name. *hypothetical, tested here, before the update*
 - **Gemini: draw from words** (`api.gemini.draw`): Words sent to Gemini's image models (GEMINI_API_KEY under Node), a picture back; the image quota is the key's, and where it is spent the service says so *hypothetical, untested*
+- **Gripper (two-finger servo jaw)** (`seed.gripper`): A two-finger gripper: a mount plate (gripper mount/holes, four M3, for an arm's tool flange), the jaw servo on it, its horn over its spline (the jaw's joint), a palm on the horn and two fingers standing on it. *hypothetical, untested*
 - **Higgsfield: pictures and video** (`api.higgsfield`): A request to one of Higgsfield's models (its path, as its docs name it: higgsfield-ai/soul/v2/standard for pictures, a video model's for video), its words and any pictures' addresses, sent with HIGGSFIELD_KEY_ID and … *hypothetical, untested*
 - **Into a box, its lid on** (`seed.boxed`): What goes in (cells side by side, a board, a switch and a fuse stacked) into a hollow box's cavity, and a lid made for it on top: a box, Into a room and Close with a lid as one node. *hypothetical, untested*
 - **Into a room** (`room.into`): A block put into a room its host offers (a cup's cavity): standing on its floor on its axis, within it with the fit's gap, and the room then used. *derived, tested here*
 - **Joints solved together** (`joints.solve`): Every joint wired in, solved together by least squares (Levenberg–Marquardt): each part's pose found so that all hold, or as near as they let it; each joint's residual in mm and degrees, the parts turned end for end … *derived, tested here*
+- **Linear axis (lead screw)** (`seed.linear-axis`): A lead-screw linear axis standing up (a 3D printer's Z axis): a NEMA 17 (or 14) stepper, a rigid 5 × 8 coupler on its shaft, a T8 lead screw on the coupler, the carriage (an aluminium plate with the screw's brass nut … *hypothetical, untested*
 - **Lithium cell** (`battery.cell`): A cylindrical lithium-ion cell by its format (18650, 21700, 4680): can, sleeve, its jelly roll wound turn by turn (cathode, anode, separator), insulators, cap with its vent disc and gasket *specified, tested here, before the update*
 - **Loop round a block** (`path.loop`): A path round a rectangle, in its lane (inset from the road's middle), driven with the block on the right as traffic keeps right; and where it must stop: before each crossing it meets, every so many metres *hypothetical, tested here, before the update*
 - **Made whole (the attention-to-detail pass and its critic)** (`make.whole`): A thing taken through the make pipeline (make/pipeline.ts): its conditions, its details by rule (welds, screws, finishes; on a road vehicle its mirrors and number plates), and its critic, again until nothing more is … *derived, untested*
@@ -99,22 +104,31 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Onto a face** (`room.onto`): A block put against a face of another (its top, its side), in the space beyond that face, centred on it or flush with its low or high corner across it (end lo or hi: a corner bracket at an extrusion's end), with the … *derived, tested here*
 - **Over a shaft** (`room.over`): A sleeve (a washer, a nut, a coupling, a coil, a bobbin, a wheel) slid over a line its host offers (a shank, a pipe, a core): its bore round what is on the line with the fit's gap, at the line's piece's low end, high … *derived, tested here*
 - **Pack of two cells** (`seed.pack-two`): Two cells side by side in a hollow ABS box, its lid on: the pack upright, and laid flat. *hypothetical, untested*
+- **Pan-tilt head** (`seed.pan-tilt`): A pan-tilt head of two hobby servos: a mount plate (pan-tilt mount/holes, four M3), the pan servo and its horn (pan, about the upright), a bracket, the tilt servo on its end and its horn (tilt), a camera plate (camera … *hypothetical, untested*
 - **Picture from words (image model)** (`ai.draw`): Words sent to an image model (fal.ai's FLUX where FAL_KEY is set, else Gemini's), a picture back for each try: ideas to look at, judge, and model from. *hypothetical, untested*
+- **Pump loop** (`seed.pump-loop`): A small pump loop on the ground (sizes typical): a polyethylene tank (10 to 50 L, its two ports in its +x wall), a pump against its side (a 385 DC motor stood on an ABS pump head: an envelope, its impeller not drawn), … *hypothetical, untested*
+- **Quadcopter (X frame)** (`seed.quadcopter`): A quadcopter on an X frame: a hub of two plates on standoffs, the flight board on its own standoffs inside (30.5 mm holes), the battery strapped on top, four arms with an outrunner motor on each (its stator, bell and … *hypothetical, untested*
 - **Ring** (`shape.torus`): A ring round z: its radius to the middle of the tube, and the tube's radius *hypothetical, tested here, before the update*
 - **Ring of copies** (`room.ring`): So many copies of a block round the y axis at a radius, each in its own wedge with the fit's gap; with out, each copy turned about its own upright middle by its angle round the ring so its +x faces out (fan blades, … *derived, tested here*
+- **Robot arm (hobby servos)** (`seed.robot-arm`): A servo robot arm drawn standing straight up: a base mount plate (arm base mount/holes, four M4 on 64 mm), the base servo and its turntable (joint 1, about the upright), then pitch joints (a servo stood on its end, … *hypothetical, untested*
 - **Run of tube** (`room.run`): A tube, hose, cable or rod of any outside and bore (diameters, mm; bore 0: solid) laid with no coordinates: its steps in order, each from where the last one ended and turning with it: a straight's length in mm, or … *hypothetical, tested here*
+- **Shelf** (`seed.shelf`): A bookcase shelf (sizes typical): three 18 mm plywood shelves, a 6 mm hardboard back strip between each two (flush at the back) and an 18 mm plywood side against each end. *hypothetical, untested*
 - **Small DC motor** (`seed.motor-dc`): A small brushed DC motor put together by the operations (sizes typical of a 20 mm can): its wound rotor and commutator, a ring of magnets round them, the can made round all, the shaft along its axis, a nylon end bell … *hypothetical, untested*
 - **Sphere** (`shape.sphere`): A ball of one material: its radius, so its volume and its mass from its material *hypothetical, tested here, before the update*
 - **Stack** (`room.stack`): Blocks end to end along x, y or z, in the order of the names of the nodes they come from (a before b, s1 before s2: name them in the order they go), each starting where the last one ends (and past what it sweeps as it … *derived, tested here*
 - **Standard part by size** (`part.family`): A part drawn whole from its standard, its sizes set one by one: 41 families (bolts, nuts, bearings, steppers, rails, extrusions, beams, pipes…) *specified, tested here, before the update*
 - **Starting battery** (`battery.starter`): A 12 V lead-acid starting battery by its BCI group (its case is the standard): six cells of plates and separators, straps, joints through the partitions, electrolyte, vent caps and SAE posts. *specified, tested here, before the update*
 - **Stored part (the built-parts library)** (`stock.part`): A piece from the built-parts library, where every piece every build makes is stored once by its design, at every depth (a car, its engine, the head, the valve, its spring): taken out as it was made, with what it is … *hypothetical, untested*
+- **Table** (`seed.table`): A table (sizes typical): four Ø50 oak legs in a square under an 18 mm plywood top. *hypothetical, untested*
 - **Terrain** (`terrain`): Ground over w by d, its hills from a seeded noise (the same seed, the same land): relief is how high its highest is over its lowest, roughness how much small detail it has *hypothetical, tested here, before the update*
 - **Through a line** (`room.through`): A block (a bolt, a shaft) passed along a line its host offers (a hole's, an axis), from below or above: the room it takes, with the fit's gap, is cut from every solid it crosses, so it passes through holes, never … *derived, tested here*
+- **Tower crane** (`seed.crane`): A model tower crane (sizes typical): a steel base plate with four M12 holes, an SHS 50 × 50 mast, a capstan winch (a drum over a 37GB gear motor on its own plate) against the base, a 50 × 50 steel jib across the … *hypothetical, untested*
 - **Tube** (`shape.tube`): A straight tube along y: outside radius, wall and length *hypothetical, tested here, before the update*
 - **Turn** (`room.turn`): A whole block turned rigidly about its bound's middle, by any angle about x, y, z or a direction ("1,1,0"): a plate tilted, a pipe laid across. *derived, tested here*
 - **Turn (lathe)** (`shape.lathe`): A profile of radius and height (mm) spun about y: a propeller hub, a pulley, a knob, a vase *hypothetical, tested here, before the update*
 - **Wall with an opening** (`wall`): A wall along x, standing on y = 0, with an opening for a door or a window (or none) at an offset from its middle; gives the opening's middle, where a door or a window goes *hypothetical, tested here, before the update*
+- **Wheeled robot base** (`seed.wheeled-base`): A wheeled robot base: gear motors laid across, a wheel over each shaft (its joint), two back to back on an axle; 2WD with a castor in front, or 4WD on two axles; a deck on the motors and a mount plate on it (rover … *hypothetical, untested*
+- **XY gantry** (`seed.xy-gantry`): An XY gantry (a cross-slide stage): two lead-screw linear axes (seed.linear-axis) crossed, the Y axis laid between two 2020 T-slot frame rails with a cross rail at each end, an aluminium cross-slide plate over them … *hypothetical, untested*
 
 ## 3 · Arrange and mate (186)
 

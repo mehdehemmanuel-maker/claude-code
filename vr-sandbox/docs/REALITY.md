@@ -2928,3 +2928,31 @@ What still fails, by class:
 The app was rebuilt and restarted on port 5173 with the keys (`npm run app`). The phone page opened with no page error,
 and one Assist call through its relay came back with a plan in 10.8 s, reading 6,991 tokens from the cache and writing
 none (a scratch script, `node check.cjs`, in the session's scratch folder).
+
+## 2026-11-06: decision 0027: the app on claude.ai, and a thing of several things built from its parts
+
+- **On claude.ai.** The app is published as a private page on claude.ai (https://claude.ai/artifact/WAU1xtmeBYpVNVLHjEEpNF). The
+  node board is its main page and the phone page is beside it. The in-app AI runs on the viewer's own Claude account
+  (the page's `sample` capability), with no key in the page. A Report button takes a spot tapped in the 3D view and a
+  line of words. A chat line starting `dev:` does the same, and so does the in-app AI's `tell_developer` tool. Each
+  report is kept in the page's store and sent into the session that builds the app (send_message through the Claude
+  Code Remote connector). The exact-solids engine (23 MB of wasm) is over the page's 15 MB a file and is left out.
+- **The person's first test.** Asked for "a drone with a robot arm attached", the AI gave a plate and a rod, because it
+  wrote the whole machine in one plan with no drone or arm to start from.
+- **Now:**
+  - `composeBuild` splits a request into parts. It takes each from an assembly, a starter board, or one plan (asked again
+    once with what failed), folds each to one node, joins them by the operations, and checks every part is there, in
+    one group. Each step is a call of its own.
+  - Robot assemblies: `seed.quadcopter` (250 and 450 class), `seed.robot-arm` (3 to 5 servo joints and a gripper),
+    `seed.gripper`, `seed.pan-tilt`, `seed.wheeled-base`.
+  - Machine assemblies: `seed.linear-axis`, `seed.xy-gantry`, `seed.conveyor`, `seed.car-chassis`, `seed.crane`,
+    `seed.table`, `seed.shelf`, `seed.lamp-arm`, `seed.pump-loop`.
+  - A starter board, "A drone with a robot arm attached".
+- **Measured.** On 25 compound requests (`npm run eval:compose`, Claude on the relay, each once), 11 were right: a
+  drone with a robot arm, a crane on a truck, a robot base with an arm on top, a water tank on a trailer, a pump bolted
+  next to a tank, a robot arm on a linear rail, a table with a lamp, a rover with a solar panel and a camera mast, a
+  pan-tilt with a lamp, a shelf with a desk fan, and a drone with a camera and a gripper. The rest failed on:
+  - holes that are turned, which the bolted joint does not follow (3);
+  - parts left in separate groups (5);
+  - a part whose plan made no block, said as "nothing to start from" (it should say what the plan made);
+  - kinds missing (a camera, blades, wheels).

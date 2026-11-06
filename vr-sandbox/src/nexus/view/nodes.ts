@@ -19,8 +19,11 @@ import { edgesOf, nodesOf, uid, type Board, type LiveEdge } from '../boards';
 import { starterBoards } from '../starters';
 import { LIBRARY_TYPES, allLibraries, fieldOf, needsOf, nextFor, reachText, search, useOf, type Found } from '../navigate';
 import { fullScreen, shot } from './nodes3d';
-import { certifiedView, gateOf, nearMissesView, type AgentRun, type NearMiss } from '../agent';
-import { autoOnViewer, inViewer, whyNot } from './viewer';
+import { certifiedView, composeBuild, gateOf, isCompound, nearMissesView, setGuideMd, type AgentRun, type ComposeRun, type ComposeStep, type NearMiss } from '../agent';
+import { askClaude, autoOnViewer, inViewer, whyNot } from './viewer';
+import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
+// (the guide bundled, for the page on claude.ai, where no Node reads the file: decision 0027)
+setGuideMd(GUIDE_MD);
 import '../seeds';
 import type { Part } from '../kits';
 
@@ -643,11 +646,30 @@ function boardInspector(el: HTMLElement): void {
   document.getElementById('iAskGo')!.onclick = async () => {
     const q = (document.getElementById('iAsk') as HTMLTextAreaElement).value.trim(), out = document.getElementById('iAskOut')!; if (!q) return;
     out.textContent = 'Claude is working through the nodes…';
-    // (on claude.ai: the same tools on the viewer's own Claude, no relay, no key: decision 0027)
-    if (inViewer) { try { const saved = (() => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { return []; } })();
+    // (on claude.ai, a change to the board open: the same tools on the viewer's own Claude, no relay, no key: decision 0027)
+    if (inViewer && nodesOf(root).length && !isCompound(q)) { try { const saved = (() => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { return []; } })();
       const r = await autoOnViewer(q, root, saved, { onStep: (line) => { out.textContent = `Claude: ${line}`; } });
       askShown = `<b>${r.steps} steps</b> on your claude.ai account<br>${esc(r.answer).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}`; pushUndo(); useBoard(tidy(r.board)); save(); fit(); runSoon(); renderAll(); }
       catch (e) { out.textContent = `could not: ${whyNot(e)}`; } return; }
+    // (a new thing, or one of several things, built from its parts (decision 0027, composeBuild): on claude.ai each call on
+    // the viewer's own account, elsewhere through the relay; each step's line shown as it comes)
+    if (inViewer || !nodesOf(root).length || isCompound(q)) {
+      const lines: string[] = [], heard = (s: ComposeStep) => { lines.push(`${s.ok ? '✓' : '✕'} ${esc(s.line.slice(0, 220))}`); out.innerHTML = lines.join('<br>'); };
+      try { let done: ComposeRun | null = null;
+        if (inViewer) done = await composeBuild(q, { ask: (prompt, tier) => askClaude(prompt, { tier }), onStep: heard });
+        else { const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'compose', request: q }) });
+          if (res.status === 404 || !res.body) throw new Error('this page is served without the relay: run it with npm run app, or open it on claude.ai');
+          const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
+          for (;;) { const { value, done: end } = await reader.read(); if (value) buf += dec.decode(value, { stream: true });
+            let k; while ((k = buf.indexOf('\n')) >= 0) { const l = buf.slice(0, k).trim(); buf = buf.slice(k + 1); if (!l) continue; const o = JSON.parse(l) as { compose?: ComposeStep; done?: ComposeRun; error?: string }; if (o.error) throw new Error(o.error); if (o.compose) heard(o.compose); if (o.done) done = o.done; }
+            if (end) break; } }
+        if (!done) throw new Error('the build stopped before it ended');
+        askShown = `<b>${esc(done.answer).replace(/\n/g, '<br>')}</b><details><summary>${done.steps.length} steps, ${done.asks} calls</summary>${lines.join('<br>')}</details>`;
+        if (nodesOf(done.board).length) { pushUndo(); useBoard(tidy(done.board)); save(); fit(); runSoon(); }
+        renderAll();
+      } catch (e) { out.textContent = `could not: ${inViewer ? whyNot(e) : (e as Error).message}`; }
+      return;
+    }
     try { const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: q, board: root, blocks: (() => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { return []; } })() }) });
       if (res.status === 404) throw new Error('this page is served without the relay: run it with npm run app');
       const r = await res.json() as { board?: Board; steps?: { tool: string; result: string }[]; answer?: string; stopped?: string; error?: string; made?: Saved[]; checked?: string; nearMisses?: NearMiss[]; diff?: AgentRun['diff']; certificates?: AgentRun['certificates'] }; if (r.error || !r.board) throw new Error(r.error ?? 'no board came back');

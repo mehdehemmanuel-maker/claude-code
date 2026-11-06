@@ -13,6 +13,8 @@ import './compiler';
 import './fea';
 import './agent';
 import './controls';
+import './assemblies/robots';
+import './assemblies/machines';
 
 /** A board being built, a node at a time, and saved as a seed. */
 class Seed {

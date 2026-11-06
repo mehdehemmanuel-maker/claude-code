@@ -19,6 +19,22 @@ const relay = (): Plugin => {
       catch (e) { res.statusCode = 500; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ error: (e as Error).message })); }
       return;
     }
+    // (a thing of several things, built from its parts (decision 0027, composeBuild): a split call, a call a part that no
+    // library assembly or starter board gives, a join call; each step's line streamed with the board as it stands, then
+    // the run with what the calls cost)
+    if (mode === 'compose') {
+      res.setHeader('Content-Type', 'application/x-ndjson'); res.setHeader('Cache-Control', 'no-cache'); res.setHeader('X-Accel-Buffering', 'no');
+      const line = (o: unknown) => { if (!res.writableEnded) res.write(`${JSON.stringify(o)}\n`); }, t0 = Date.now(), gone = new AbortController();
+      res.on('close', () => { if (!res.writableEnded) gone.abort(); });
+      const alive = setInterval(() => line({ alive: Math.round((Date.now() - t0) / 1000) }), 10_000);
+      try { await load(seeds); const m = await load(agent), tokens = { in: 0, out: 0, cached: 0, written: 0 };
+        const r = await m.composeBuild(String(request ?? ''), { ask: m.sdkAsk({ model, tokens, signal: AbortSignal.any([gone.signal, AbortSignal.timeout(240_000)]) }), board, blocks,
+          onStep: (s: { stage: string; line: string; ok: boolean }, b: unknown) => line({ compose: s, board: b }) });
+        line({ done: { ...r, tokens } }); }
+      catch (e) { line({ error: (e as Error).message }); }
+      finally { clearInterval(alive); res.end(); }
+      return;
+    }
     // (streamed, as the phone page asks: a line of JSON for each step as it is taken, with the board as it stands, then the
     // run; a line every 10 s while nothing else is said, so nothing between drops a quiet wait; the page gone, the run stopped.
     // On a phone (decision 0025): at most 16 steps and 120 s, and the second model's check only when asked for)
