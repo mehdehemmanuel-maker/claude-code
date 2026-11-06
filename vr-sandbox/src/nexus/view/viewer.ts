@@ -54,3 +54,16 @@ export async function sendReport(r: Report): Promise<{ saved: boolean; sent: boo
   if (!db && !mcp) out.why = 'reports go out from the page on claude.ai; this copy has no store';
   return out;
 }
+
+/** Auto on the viewer's own Claude: the AI's own eight tools, run here in the page, each tool call a round of one call;
+ *  each step said as it runs. The dashboard's Ask Claude and the phone page's Auto use it on claude.ai. */
+export async function autoOnViewer(request: string, board: import('../boards').Board, blocks: import('../agent').AgentBlock[], o: { onStep?: (line: string, ok: boolean) => void; onBoard?: (b: import('../boards').Board) => void; extra?: SampleTool[] } = {}): Promise<{ answer: string; board: import('../boards').Board; steps: number }> {
+  const { TOOLS, boardBrief, guideOf, toolsFor } = await import('../agent'), { nodesOf } = await import('../boards');
+  const t = await toolsFor(structuredClone(board), blocks), guide = await guideOf(); let steps = 0;
+  const tools: SampleTool[] = [...TOOLS.map((d) => ({ name: d.name, description: d.description ?? d.name, inputSchema: d.input_schema as Record<string, unknown>, execute: async (a: Record<string, unknown>) => {
+    steps++; try { const out = await t.doTool(d.name, a), bad = /^(! |FAILS |NOT TAKEN)/m.test(out); o.onStep?.(`${d.name}${bad ? ': something failed, mending it' : ''}`, !bad);
+      if (['build', 'change', 'open'].includes(d.name)) o.onBoard?.(t.board()); return out.slice(0, 24000); }
+    catch (e) { o.onStep?.(`${d.name}: ${(e as Error).message.slice(0, 90)}`, false); throw e; } } })), ...(o.extra ?? [])];
+  const answer = await askClaude(`${guide}\n\n---\n\n${nodesOf(board).length ? `${boardBrief(board)}\n\n` : ''}Request: ${request}\n\nWork through the tools: build it, read what failed, change it until nothing fails, then answer in two or three short sentences what was built.`, { tier: 'default', tools });
+  return { answer, board: t.board(), steps };
+}

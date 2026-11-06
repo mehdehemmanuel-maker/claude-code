@@ -116,7 +116,7 @@ function listNodes(): void {
 }
 $('showBoard').onclick = () => { listNodes(); $('board').classList.add('on'); };
 $('hideBoard').onclick = () => $('board').classList.remove('on');
-$('toFull').onclick = () => { store.set(KEY, JSON.stringify(board)); location.href = './index.html?full'; };
+$('toFull').onclick = () => { store.set(KEY, JSON.stringify(board)); location.href = inViewer ? './#full' : './index.html?full'; };
 $('fit').onclick = () => dock.fit();
 $('cut').onclick = () => { const a = dock.nextSection(); $('cut').textContent = a ? `Cut ${a}` : 'Cut'; };
 $('undo').onclick = () => { const b = history.pop(); if (!b) return; say('Undone: the board as it was before the last step.'); void use(b); };
@@ -162,7 +162,7 @@ const tellDev = (sent: string[]) => ({ ...TELL_DEV, execute: async (a: Record<st
 async function planByViewer(request: string, failing: string[]): Promise<PlanRun & { error?: string; sent?: string[] }> {
   const t0 = Date.now(), req = await planRequest(request, { ...(nodesOf(board).length ? { board } : {}), ...(failing.length ? { failing } : {}), blocks: savedBlocks() });
   const sys = (req.system as { text: string }[]).map((b) => b.text).join('\n\n'), user = String((req.messages[0] as { content: unknown }).content), sent: string[] = [];
-  const text = await askClaude(`${sys}\n\n---\n\n${user}`, { tier: 'quick', tools: [tellDev(sent)] });
+  const text = await askClaude(`${sys}\n\n---\n\n${user}`, { tier: 'default', tools: [tellDev(sent)] });
   const base = { text: text.slice(0, 4000), model: 'claude.ai', tokens: { in: 0, out: 0, cached: 0, written: 0 }, ms: Date.now() - t0, sent };
   try { return { ...base, plan: planOf(text) }; } catch (e) { return { ...base, error: (e as Error).message }; }
 }

@@ -20,6 +20,7 @@ import { starterBoards } from '../starters';
 import { LIBRARY_TYPES, allLibraries, fieldOf, needsOf, nextFor, reachText, search, useOf, type Found } from '../navigate';
 import { fullScreen, shot } from './nodes3d';
 import { certifiedView, gateOf, nearMissesView, type AgentRun, type NearMiss } from '../agent';
+import { autoOnViewer, inViewer, whyNot } from './viewer';
 import '../seeds';
 import type { Part } from '../kits';
 
@@ -642,6 +643,11 @@ function boardInspector(el: HTMLElement): void {
   document.getElementById('iAskGo')!.onclick = async () => {
     const q = (document.getElementById('iAsk') as HTMLTextAreaElement).value.trim(), out = document.getElementById('iAskOut')!; if (!q) return;
     out.textContent = 'Claude is working through the nodes…';
+    // (on claude.ai: the same tools on the viewer's own Claude, no relay, no key: decision 0027)
+    if (inViewer) { try { const saved = (() => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { return []; } })();
+      const r = await autoOnViewer(q, root, saved, { onStep: (line) => { out.textContent = `Claude: ${line}`; } });
+      askShown = `<b>${r.steps} steps</b> on your claude.ai account<br>${esc(r.answer).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}`; pushUndo(); useBoard(tidy(r.board)); save(); fit(); runSoon(); renderAll(); }
+      catch (e) { out.textContent = `could not: ${whyNot(e)}`; } return; }
     try { const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: q, board: root, blocks: (() => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { return []; } })() }) });
       if (res.status === 404) throw new Error('this page is served without the relay: run it with npm run app');
       const r = await res.json() as { board?: Board; steps?: { tool: string; result: string }[]; answer?: string; stopped?: string; error?: string; made?: Saved[]; checked?: string; nearMisses?: NearMiss[]; diff?: AgentRun['diff']; certificates?: AgentRun['certificates'] }; if (r.error || !r.board) throw new Error(r.error ?? 'no board came back');
