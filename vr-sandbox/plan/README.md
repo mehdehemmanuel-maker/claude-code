@@ -4,7 +4,7 @@ The structured plan for what Nexus builds next, and how it is built so the work 
 Written 2026-10-31 from five research passes (kept in `research/`) and from what the code holds today (each spec says
 what it starts from, checked in the code). The user's words that started it are in `../docs/WANTED.md`, 2026-10-31.
 
-Nothing here is built yet. A phase starts when the user says so.
+The phases' state is in the table below (rewritten 2026-11-06; it had said every phase was not started while two had begun and four had parts built another way). A phase starts when the user says so.
 
 ## How this folder is laid out
 
@@ -75,18 +75,18 @@ each task here exists and comes after every task it waits on.
 
 | # | Phase | Spec | Starts when | State |
 | --- | --- | --- | --- | --- |
-| 0 | The structure: rules with checks, specs, decisions, evaluation sets, hooks | `specs/00-structure/` | now (the user's go) | not started |
-| 1 | Interfaces: parts that carry their negative; imprint onto any surface; changes that follow; placement by mating | `specs/01-interfaces/` | after 0 | not started |
-| 2 | Search in tiers and the names index | `specs/02-search-names/` | after 0 (beside 1) | not started |
-| 3 | Out of the container: the app on the web | `specs/03-web/` | after 0; the proposed host confirmed with the user (decision 0011) | not started |
-| 4 | Being in it: physics, ghost, scale, time, sight | `specs/04-being-in-it/` | after 1; real devices after 3 | not started |
+| 0 | The structure: rules with checks, specs, decisions, evaluation sets, hooks | `specs/00-structure/` | now (the user's go) | begun 2026-11-01: 8 of 14 tasks pass judging (`specs/00-structure/verdicts/`), 6 fail |
+| 1 | Interfaces: parts that carry their negative; imprint onto any surface; changes that follow; placement by mating | `specs/01-interfaces/` | after 0 | begun 2026-11-01: 14 of 27 tasks pass, 1 claimed in part, 12 fail; set aside 2026-11-02 for the operations (decision 0021) and the library (0026): the bolt still brings its hole (`nexus/mate.ts`), the rest of the phase waits |
+| 2 | Search in tiers and the names index | `specs/02-search-names/` | after 0 (beside 1) | in part, unplanned: the parts catalogue and search by size words (decision 0027); the tiers and the names index not started |
+| 3 | Out of the container: the app on the web | `specs/03-web/` | after 0; the proposed host confirmed with the user (decision 0011) | in part, another way: the app as a private page on claude.ai (decision 0027); a public host not chosen |
+| 4 | Being in it: physics, ghost, scale, time, sight | `specs/04-being-in-it/` | after 1; real devices after 3 | in part: physics live in the view (Move, decisions 0027 and 0028); ghost, scale and sight not started |
 | 5 | Civil engineering, populated | `specs/05-civil/` | after 1 and 2 (it needs both) | not started |
-| 6 | Nexus on the phone (JARVIS style) | `specs/06-phone/` | after 3 | not started |
+| 6 | Nexus on the phone (JARVIS style) | `specs/06-phone/` | after 3 | begun 2026-11-05: the phone page, a chat that builds (decision 0023); M2 and M3 open |
 | 9 | The physics core: ports that carry what flows, equations without direction, exact folding | `specs/09-physics-core/` | beside 1 | not started |
-| 10 | Trust in numbers: uncertainty, claim status, ensembles, sensitivities, the "cannot simulate" register | `specs/10-trust/` | after 0 (CODATA 2022 at once) | not started |
-| 11 | The living world: only the observed computed, replay, affordances, stigmergy, an umpire, a chronicle | `specs/11-living-world/` | with 4 | not started |
-| 13 | The node creator: what everyone does on a board recorded once, repeats found by code over the person's boards, made into nodes, node types and boards as one node, proved equal against the board's own run before they are offered | `specs/13-node-creator/` | when the user says go, as every phase (asked for 2026-11-02); its page tasks (NC8, NC10, NC13, NC14, NC15) after 01.I16, which each names in its after | not started |
-| 12 | Cost and carbon: money and CO₂e as quantities, carbon rolled up like mass, cost as a function of quantity and place, supply risk | `specs/12-cost-carbon/` | later (the user, 2026-11-01: "Later but keep it in mind") | not started |
+| 10 | Trust in numbers: uncertainty, claim status, ensembles, sensitivities, the "cannot simulate" register | `specs/10-trust/` | after 0 (CODATA 2022 at once) | in part: the kernel's first version and claim status (T3, T18, T23 claimed in part); the rest not started |
+| 11 | The living world: only the observed computed, replay, affordances, stigmergy, an umpire, a chronicle | `specs/11-living-world/` | with 4 | in part: LW15 passes; the rest not started |
+| 13 | The node creator: what everyone does on a board recorded once, repeats found by code over the person's boards, made into nodes, node types and boards as one node, proved equal against the board's own run before they are offered | `specs/13-node-creator/` | when the user says go, as every phase (asked for 2026-11-02); its page tasks (NC8, NC10, NC13, NC14, NC15) after 01.I16, which each names in its after | begun: the node creator's recording and mining built 2026-11-02, 0 of 15 tasks judged |
+| 12 | Cost and carbon: money and CO₂e as quantities, carbon rolled up like mass, cost as a function of quantity and place, supply risk | `specs/12-cost-carbon/` | later (the user, 2026-11-01: "Later but keep it in mind") | later (the user, 2026-11-01) |
 | 8 | A picture to a 3D profile (the AI draws, a parser with no AI copies) | `specs/08-sketch-to-3d/` | after 1; the brief after research 11 | not started |
 | 7 | Further (Evolve, lattices, schemas, USD, shared world) | `specs/07-later/` | after 1 to 6 hold | not started |
 
