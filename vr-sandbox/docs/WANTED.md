@@ -513,3 +513,5 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
 - 2026-11-06: "Okay so advance it make it so it can orchestrate and save for later use each part or whatever and much
   more" (the AI orchestrates a build of many parts and keeps each part it makes for later builds to use again; and more
   besides, in the same direction)
+- 2026-11-06: "What's taking so long And why tf isn't this on GitHub didn't we already build all of this shit" (rounds
+  that finish sooner; the work where the person looks for it on GitHub: on the main branch, not only on a work branch)
