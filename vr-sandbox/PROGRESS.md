@@ -1,8 +1,8 @@
 # Progress (rewritten each session, never appended; under 40 lines)
 
-Task in hand: 06.M2 (the library the AI builds a lot from, decision 0026: foundations, tables filled, assemblies and search, bootstrap); the phone page (decisions 0023, 0025, `npm run app`)
+Task in hand: 06.M2 (decision 0027: the app on claude.ai with reports, movement in general, compound builds, a thousand parts; decision 0026 before it); the phone page (decisions 0023, 0025, `npm run app`)
 Spec in hand: spec 06, the phone (`plan/specs/06-phone/`); spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: 4a2c1f9 (2026-11-05)
+Last commit the gate passed: 7aea409 (2026-11-06)
 
 ## Next three (from the start queue in `plan/README.md`)
 
