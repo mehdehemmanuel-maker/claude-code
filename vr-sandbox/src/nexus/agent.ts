@@ -165,7 +165,7 @@ export async function findLines(q: string, most = 10): Promise<string> {
 
 /** The agent's tools, each answering in as few words as will do (docs/FOR-AI.md says how they are used). */
 const plan = { nodes: { type: 'object', description: '{name:{"b":blockId,"s":{settings}}}' }, wires: { type: 'array', items: { type: 'string' }, description: '"a.out>b.in"' } };
-const TOOLS: Anthropic.Tool[] = [
+export const TOOLS: Anthropic.Tool[] = [
   { name: 'find', description: 'Blocks and starter boards matching words, one a line.', input_schema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] } },
   { name: 'card', description: 'One block on one line: in, out, set.', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
   { name: 'build', description: 'A new board from a plan, placed, wired and run; a line a node back.', input_schema: { type: 'object', properties: plan, required: ['nodes'] } },
@@ -186,7 +186,11 @@ let guide: string | undefined;
  *  request, after the request's own words: a new request then reads none of the guide back and writes all of it again
  *  (prompt caching, automatic vs explicit breakpoints). Whatever changes from call to call goes after it. */
 export const cachedSystem = (text: string): Anthropic.TextBlockParam[] => [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
-export const guideOf = async (): Promise<string> => { if (guide) return guide; const { readFileSync } = await import(/* @vite-ignore */ 'node:fs'); return (guide = `${readFileSync(new URL('../../docs/FOR-AI.md', import.meta.url), 'utf8')}\n\n${piecesCard()}\n\n${workedPlans()}`); };
+/** The guide's own text given by a page that bundles it (decision 0027: the app on claude.ai builds Assist's call itself,
+ *  with no Node to read the file). */
+let guideMd: string | undefined;
+export const setGuideMd = (md: string): void => { guideMd = md; guide = undefined; };
+export const guideOf = async (): Promise<string> => { if (guide) return guide; const md = guideMd ?? (await import(/* @vite-ignore */ 'node:fs')).readFileSync(new URL('../../docs/FOR-AI.md', import.meta.url), 'utf8'); return (guide = `${md}\n\n${piecesCard()}\n\n${workedPlans()}`); };
 
 /** Worked plans, each one that runs with nothing failing (the test runs every one): the hand plan of tests/evals/phone.cjs,
  *  and the starter boards built from pieces (two cells boxed, then a lid added by a change; a bolt and its nut through a

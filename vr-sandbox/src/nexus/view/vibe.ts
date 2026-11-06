@@ -25,7 +25,11 @@ import { starterBoards } from '../starters';
 import { boundsOfAll, isAssembly, isPart, massOfAll, placedCount } from '../assembly';
 import { LIBRARY, block, defaultsOf, portsOf, register, show, type BlockDef, type SettingDef } from '../blocks';
 import { DENSITY } from '../mass';
-import { gateOf, joinPlan, runPlan, type AgentBlock, type AgentPlan, type AgentRun, type PlanRan, type PlanRun } from '../agent';
+import { TOOLS, boardBrief, gateOf, guideOf, joinPlan, planOf, planRequest, runPlan, setGuideMd, toolsFor, type AgentBlock, type AgentPlan, type AgentRun, type PlanRan, type PlanRun } from '../agent';
+import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
+import { askClaude, inViewer, sendReport, whyNot, type Report } from './viewer';
+// (the guide bundled, for the page on claude.ai, which builds Assist's call itself: decision 0027)
+setGuideMd(GUIDE_MD);
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -123,10 +127,45 @@ let downAt: [number, number] | null = null;
 dock.canvas.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
 dock.canvas.addEventListener('pointerup', (e) => { if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return; downAt = null;
   const ray = dock.rayAt(e.clientX, e.clientY), h = dock.view.pieceAt(new THREE.Raycaster(ray.origin, ray.direction)), p = $('picked');
+  if (reporting) { repSpot = h ? { piece: h.name, point: [h.point.x * 1000, h.point.y * 1000, h.point.z * 1000] } : null; drawRep(); return; }
   if (!h) { p.style.display = 'none'; return; }
   const kind = h.leaf?.mat ? ` · ${h.leaf.mat}` : '', joins = picked && picked === h.key ? ' · the next piece joins this' : ''; picked = '';
   p.innerHTML = `<b>${esc(h.name)}</b>${esc(kind)}${joins}`; p.style.display = 'block'; clearTimeout(pickT); pickT = window.setTimeout(() => { p.style.display = 'none'; }, 3500); });
 let pickT = 0, picked = '';
+// ---- Report to the developer (decision 0027: the person is the check): a spot tapped in the view and what is wrong or
+// wanted there, kept in the page's store and sent into the session that builds the app ------------------------------------
+let reporting = false, repSpot: { piece: string; point: [number, number, number] } | null = null;
+const repEl = $('rep'), repText = $<HTMLTextAreaElement>('repText');
+function drawRep(): void {
+  repEl.hidden = !reporting; $('report').classList.toggle('on', reporting);
+  $('repWhere').textContent = repSpot ? `At ${repSpot.piece || 'a spot'} (${repSpot.point.map((v) => v.toFixed(0)).join(', ')} mm). Tap again to move it.` : 'Tap the spot in the view it is about, or just write.';
+}
+$('report').onclick = () => { reporting = !reporting; if (!reporting) repSpot = null; $('repSays').textContent = ''; drawRep(); if (reporting) repText.focus(); };
+$('repX').onclick = () => { reporting = false; repSpot = null; drawRep(); };
+$('repGo').onclick = async () => {
+  const text = repText.value.trim(); if (!text) { $('repSays').textContent = 'Say what is wrong or wanted first.'; return; }
+  ($('repGo') as HTMLButtonElement).disabled = true; $('repSays').textContent = 'Sending…';
+  const r: Report = { text, from: 'person', title: board.title, board: boardBrief(board), ...(repSpot ? { piece: repSpot.piece, point: repSpot.point } : {}) };
+  const s = await sendReport(r); ($('repGo') as HTMLButtonElement).disabled = false;
+  if (s.sent || s.saved) { repText.value = ''; reporting = false; repSpot = null; drawRep(); say(`Sent to the developer${s.sent ? '' : ' (kept in the page\'s store; it could not go straight to the session: ' + (s.why ?? '') + ')'}: "${text.slice(0, 160)}"`); }
+  else $('repSays').textContent = `Not sent: ${s.why ?? 'no way to send from this copy'}`;
+};
+/** A message to the developer typed in the chat ("dev: …"): sent as a report, no AI asked. */
+async function toDev(text: string): Promise<void> {
+  chat.push({ who: 'me', html: esc(text) }); keepChat(); drawChat();
+  const s = await sendReport({ text: text.replace(/^\s*(@?dev)\s*[:,]?\s*/i, ''), from: 'person', title: board.title, board: boardBrief(board) });
+  say(s.sent || s.saved ? `Sent to the developer${s.sent ? '' : ' (kept in the page\'s store only)'}.` : `Not sent: ${s.why ?? 'no way to send from this copy'}`, !(s.sent || s.saved));
+}
+const TELL_DEV = { name: 'tell_developer', description: 'Send the developer who builds this app (Claude Code) a report or a request from the person: a fault, a missing part or operation, something wanted. Use it when the person asks for that, or when what they ask cannot be built with the tools and blocks you have. Returns "sent" or why not.', inputSchema: { type: 'object', properties: { text: { type: 'string', description: 'the report or request: the person\'s words, and what you saw fail' } }, required: ['text'] } };
+const tellDev = (sent: string[]) => ({ ...TELL_DEV, execute: async (a: Record<string, unknown>) => { const text = String(a.text ?? '').slice(0, 2000); const s = await sendReport({ text, from: 'in-app AI', title: board.title, board: boardBrief(board) }); if (s.sent || s.saved) sent.push(text); return s.sent || s.saved ? 'sent' : `not sent: ${s.why}`; } });
+/** Assist's one call on the viewer's own Claude (the page on claude.ai): the same request the relay sends, as one prompt. */
+async function planByViewer(request: string, failing: string[]): Promise<PlanRun & { error?: string; sent?: string[] }> {
+  const t0 = Date.now(), req = await planRequest(request, { ...(nodesOf(board).length ? { board } : {}), ...(failing.length ? { failing } : {}), blocks: savedBlocks() });
+  const sys = (req.system as { text: string }[]).map((b) => b.text).join('\n\n'), user = String((req.messages[0] as { content: unknown }).content), sent: string[] = [];
+  const text = await askClaude(`${sys}\n\n---\n\n${user}`, { tier: 'quick', tools: [tellDev(sent)] });
+  const base = { text: text.slice(0, 4000), model: 'claude.ai', tokens: { in: 0, out: 0, cached: 0, written: 0 }, ms: Date.now() - t0, sent };
+  try { return { ...base, plan: planOf(text) }; } catch (e) { return { ...base, error: (e as Error).message }; }
+}
 /** By hand, a thing tapped in the view is what the next piece is joined to, when it is one of the ends. */
 function pickEnd(key: string): void {
   // (what a "Show in space" node draws is the thing wired into it: that node is the end)
@@ -371,11 +410,17 @@ async function askPlan(q: string, failing: string[] = []): Promise<void> {
   chat.push({ who: 'me', html: failing.length ? `<span class="k">✦</span> Ask again with the ${failing.length} line${failing.length === 1 ? '' : 's'} that failed` : esc(q.trim()) }); keepChat();
   const live: Said = { who: 'ai', html: '<div class="live"><span class="dots">One call: writing a plan</span></div>' }; chat.push(live); drawChat();
   try {
-    const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'plan', request: failing.length ? q : before() + q.trim(), board: nodesOf(board).length ? board : undefined, blocks: savedBlocks(), ...(failing.length ? { failing } : {}) }) });
-    if (res.status === 404 || res.status === 405) throw new Error('this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand works without it; to plan with Claude, open the app the session serves (npm run app).');
-    const r = await res.json() as PlanRun & { error?: string };
-    if (r.tokens) spent(r.tokens);
-    if (!r.plan) throw Object.assign(new Error(r.error ?? `the relay answered ${res.status}`), { tok: r.tokens });
+    let r: PlanRun & { error?: string; sent?: string[] }, status = 200;
+    if (inViewer) {
+      try { r = await planByViewer(failing.length ? q : before() + q.trim(), failing); } catch (e) { throw new Error(whyNot(e)); }
+      if (!r.plan && r.sent?.length) { live.html = md(`Sent to the developer: "${r.sent.join(' / ').slice(0, 240)}"`); return; }
+    } else {
+      const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'plan', request: failing.length ? q : before() + q.trim(), board: nodesOf(board).length ? board : undefined, blocks: savedBlocks(), ...(failing.length ? { failing } : {}) }) });
+      if (res.status === 404 || res.status === 405) throw new Error('this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand works without it; to plan with Claude, open the app the session serves (npm run app).');
+      status = res.status; r = await res.json() as PlanRun & { error?: string };
+    }
+    if (r.tokens && !inViewer) spent(r.tokens);
+    if (!r.plan) throw Object.assign(new Error(r.error ?? `the relay answered ${status}`), { tok: r.tokens });
     plan = { asked: failing.length ? q : q.trim(), plan: r.plan, failing: [], built: false };
     const n = Object.keys(r.plan.input.nodes ?? r.plan.input.add ?? {}).length;
     live.html = `${md(r.plan.says || 'A plan.')}<br>${r.plan.tool === 'build' ? 'A new board' : 'A change'} of ${n} node${n === 1 ? '' : 's'}${r.plan.input.wires?.length ? ` and ${r.plan.input.wires.length} wires` : ''}: check it below, change any setting, then Build. ${(r.ms / 1000).toFixed(1)} s.${tokLine(r.tokens)}`;
@@ -397,9 +442,33 @@ function headOf(answer: string): { head: string; hedges: string[]; rest: string 
   return k <= 0 ? { head: ps[0] ?? '', hedges: [], rest: ps.slice(1).join('\n\n') } : { head: ps[k]!, hedges: ps.slice(0, k), rest: ps.slice(k + 1).join('\n\n') };
 }
 const STEP_SAYS: Record<string, string> = { find: 'searched the library', card: 'read a block', build: 'built a board and ran it', open: 'opened a starter board', change: 'changed the board and ran it', read: 'read an output', fold: 'folded nodes into one block', docs: 'read the docs' };
+/** Auto on the viewer's own Claude (the page on claude.ai): the same eight tools, run here in the page, each a round of
+ *  the call; what it builds is drawn as it goes. */
+async function autoByViewer(q: string): Promise<void> {
+  if (busy || !q.trim()) return; busy = true; ($('go') as HTMLButtonElement).disabled = true; $('sheet').classList.remove('low');
+  chat.push({ who: 'me', html: esc(q.trim()) }); keepChat();
+  const live: Said = { who: 'ai', html: '' }; chat.push(live);
+  const steps: string[] = [], t0 = Date.now(), was = board, sent: string[] = []; let note = 'Claude is reading what you asked';
+  const paint = () => { live.html = `<div class="live"><span class="dots">${esc(note)}</span> · ${Math.round((Date.now() - t0) / 1000)} s</div>${steps.length ? `<div class="steps">${steps.slice(-6).join('')}</div>` : ''}`; drawChat(); };
+  const tick = window.setInterval(paint, 1000); paint();
+  try {
+    const t = await toolsFor(structuredClone(board), savedBlocks()), guide = await guideOf();
+    const tools = [...TOOLS.map((d) => ({ name: d.name, description: d.description ?? d.name, inputSchema: d.input_schema as Record<string, unknown>, execute: async (a: Record<string, unknown>) => {
+      try { const out = await t.doTool(d.name, a); const bad = /^(! |FAILS |NOT TAKEN)/m.test(out); steps.push(`<span${bad ? ' class="f"' : ''}>${bad ? '✕' : '✓'} ${esc(STEP_SAYS[d.name] ?? d.name)}</span>`); note = `${steps.length} step${steps.length === 1 ? '' : 's'} so far`;
+        if (['build', 'change', 'open'].includes(d.name)) void use(t.board(), false); return out.slice(0, 24000); }
+      catch (e) { steps.push(`<span class="f">✕ ${esc(STEP_SAYS[d.name] ?? d.name)}: ${esc((e as Error).message.slice(0, 90))}</span>`); throw e; } } })), tellDev(sent)];
+    const answer = await askClaude(`${guide}\n\n---\n\n${nodesOf(board).length ? `${boardBrief(board)}\n\n` : ''}Request: ${before() + q.trim()}\n\nWork through the tools: build it, read what failed, change it until nothing fails, then answer in two or three short sentences what was built.`, { tier: 'default', tools });
+    const { head, hedges, rest } = headOf(answer.trim());
+    live.html = `${md(head)}${hedges.length ? `<div class="note">${md(hedges.join(' '))}</div>` : ''}${rest ? `<details><summary>More</summary>${md(rest)}</details>` : ''}${sent.length ? `<br><b>Sent to the developer:</b> ${esc(sent.join(' / ').slice(0, 240))}` : ''}<div class="tok">${steps.length} steps, ${Math.round((Date.now() - t0) / 1000)} s, on your claude.ai account</div>`;
+    history.push(structuredClone(was)); await use(t.board());
+  } catch (e) { live.bad = true; live.html = md(`Could not: ${whyNot(e)}`); }
+  finally { clearInterval(tick); busy = false; ($('go') as HTMLButtonElement).disabled = false; keepChat(); drawChat(); }
+}
 let busy = false;
 async function ask(q: string): Promise<void> {
+  if (/^\s*@?dev\s*[:,]/i.test(q)) return toDev(q.trim());
   if (mode === 'assist') return askPlan(q);
+  if (inViewer) return autoByViewer(q);
   if (busy || !q.trim()) return; busy = true; ($('go') as HTMLButtonElement).disabled = true; $('sheet').classList.remove('low');
   const request = before() + q.trim();
   chat.push({ who: 'me', html: esc(q.trim()) }); keepChat();
