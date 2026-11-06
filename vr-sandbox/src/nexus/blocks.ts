@@ -219,6 +219,9 @@ export function specProblems(b: BlockDef): string[] {
 
 export interface BlockDef {
   id: string; name: string; kind: Kind; ability: Ability; domains: string[]; says: string;
+  /** Where a piece sits in the parts catalogue the app browses: its trade and category, `Fasteners / Nuts` (decision 0026:
+   *  the library organised for finding a part by what it is). */
+  aisle?: string;
   /** What it is, specified (docs/REALITY.md, phase 2): required of every node changed from `SPEC_FROM` on. */
   spec?: Spec;
   version: number;

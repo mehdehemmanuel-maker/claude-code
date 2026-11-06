@@ -15,6 +15,8 @@ export interface Expect { bound?: [number, number, number]; mass?: number; tol: 
 export interface PartFamily<R> {
   /** its node's id (`piece.…`) */
   id: string; name: string; gloss: string; says: string; domains: string[];
+  /** where it sits in the parts catalogue: its trade and category, `Fasteners / Nuts` */
+  aisle?: string;
   /** every row, by the size it is called by */
   rows: Record<string, R>;
   /** the size the node starts at */
@@ -69,7 +71,7 @@ export function familyNode<R>(f: PartFamily<R>): BlockDef {
   PART_FAMILIES.set(f.id, f as AnyFamily);
   const settings: SettingDef[] = [{ key: 'size', label: 'Size', type: 'choice', default: f.size, choices: Object.keys(f.rows) }, ...(f.settings ?? [])];
   const defaults = Object.fromEntries(settings.map((s) => [s.key, s.default]));
-  return { id: f.id, name: f.name, version: 1, by: 'built in', pure: true, kind: 'generator', ability: 'generate', domains: f.domains, says: cardOf(f as AnyFamily), spec: { gloss: f.gloss, ...ROOM_SPEC } as Spec,
+  return { id: f.id, name: f.name, version: 1, by: 'built in', pure: true, kind: 'generator', ability: 'generate', domains: f.domains, ...(f.aisle ? { aisle: f.aisle } : {}), says: cardOf(f as AnyFamily), spec: { gloss: f.gloss, ...ROOM_SPEC } as Spec,
     settings, ports: { inputs: [], outputs: PIECE_OUT }, sources: [{ cite: f.source, kind: 'standard' } as NonNullable<BlockDef['sources']>[number]],
     run: (_i, c) => { const set = { ...defaults, ...c.set }; return pieceOut(build(f, String(set.size), set), f.envelope); }, tests: f.tests };
 }

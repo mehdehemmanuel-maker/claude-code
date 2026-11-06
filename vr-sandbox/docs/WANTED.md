@@ -492,3 +492,16 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   run it and don't worry to hard on mistakes then bootstrap at the end" (the plan of decision 0026 run in the order its
   steps depend on each other, fast, no polish pass; faults found on the way noted, not chased; at the end the AI builds
   with what was made, and what it builds and where it fails feed back into the library)
+- 2026-11-06: "Okay send me the link so I can actually access and see, forget the blind check for now I'll be the check
+  just allow me to put a pointer somewhere and report something or type to the in app ai and the in app ai can send you
+  requests or something also mainly I just want things to work no polishing at all right now I don't care about things
+  like the battery's weight and polished metals right now I want moving joints and don't just code moving joints code
+  movement in general so you cans freeze things in the air like a rod then add a loose(none frozen gear to its and a
+  crank and crank it or just anything also with threads aren't drawn I need clarification before I say to work on it
+  but main things is make the builds more able and add more parts matter fact this run I want you to add 1000 new
+  working parts no mock shit though like really populate the library just populate it with peices and organize it
+  better for navigation along the way" (a link the user opens to see and use the app; the user is the check, not a blind
+  agent: a pointer put on a spot to report it, and the in-app AI able to send requests to the session building it;
+  things working before any polish; movement in general, not joints alone: any piece frozen in place or left loose, a
+  loose gear on a frozen rod turned by a crank by hand; threads explained before any work on them; builds able to do
+  more; a thousand new working parts, none mocked; the library organised for finding them)
