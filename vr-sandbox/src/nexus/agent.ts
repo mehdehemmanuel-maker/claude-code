@@ -223,6 +223,8 @@ export function stepOf(tool: string, input: unknown, out: string, ms: number, fa
 }
 /** A block the agent folded and saved: enough to register it again anywhere (a page keeps it with the blocks you saved). */
 export interface AgentBlock { id: string; name: string; says: string; domains: string[]; graph: Board }
+/** The parts remembered (decision 0028): what the AI and the person built, kept as blocks and recalled by their words. */
+export { recall, registerSaved, remember, savedParts, setRemote, syncRemote, used, type SavedPart } from './memory';
 /**
  * A near miss the run caught (spec 00, S10; no blame, each with its kind and the response it calls for): an `error` is a
  * slip the engine refused and said back (a wire into an input that is not there, a setting a block does not have), a tool
