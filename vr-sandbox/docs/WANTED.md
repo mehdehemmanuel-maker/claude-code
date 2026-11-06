@@ -525,3 +525,11 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   have a industry level ai engineer already made" (a plain account of where it stands, what is possible, and how often a
   random request comes out as asked, with why; the research and the plan read back against what was built, and whether
   the work restarted instead of carrying on)
+- 2026-11-06: "We need A but we need faster progress I want you to stop testing everything and just populate the library
+  and abilities and just get shit done and then at the end we will reveiw everything and create a fix plan because
+  instead of 1 by 1 we can find the same fixes in one place for some reason you get caught up in tunnel vision and start
+  trying to correct tiny peices in a build and then make the same type of mistake somewhere else because you didn't fix
+  the root you fixed the outcome so just do the whole app roughly really roughly like carelessly and then …" (the
+  engineering route kept (A); faster: no testing of each thing as it is built, no fixing one outcome at a time; the
+  library and the abilities populated roughly, the whole app, then one review at the end that finds the same faults in
+  one place and a fix plan by their roots)
