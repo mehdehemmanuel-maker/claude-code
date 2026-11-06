@@ -491,7 +491,7 @@ export class Block {
     if (base.k === 'box' && base.sect && 'section' in s) { const ox = -(Math.max(...sx) + Math.min(...sx)) / 2, oy = -(Math.max(...sy) + Math.min(...sy)) / 2, P = base.sect;
       const s0 = Math.min(...P.map((q, i) => segDist(ox, oy, q, P[(i + 1) % P.length]!)));
       if (o.boreTo !== undefined && !(Number.isFinite(o.boreTo) && o.boreTo > 0)) throw new Error(`${name}: the bore it may be opened to is finite and above zero (${o.boreTo})`);
-      const slot = o.boreTo !== undefined ? Math.max(s0, o.boreTo) : s0; if (slot > 1e-9) lines.push({ port: `${name}/axis`, x: ox, y: oy, z: 0, slot, dir: [0, 0, 1] }); }
+      const slot = o.boreTo !== undefined ? Math.max(s0, o.boreTo) : s0; if (slot > 1e-9) lines.push({ port: `${name}/axis`, x: ox, y: oy, z: 0, slot, ...(o.boreTo === undefined ? { opening: s0 } : {}), dir: [0, 0, 1] }); }
     // (its patterns: the one asked, and any more (decision 0026: a motor plate's screw holes and its pilot's hole, a block's
     // bore and its tapped holes), each named apart, each its own lines)
     for (const pat of [...(o.pattern ? [o.pattern] : []), ...(o.patterns ?? [])]) {
@@ -818,6 +818,79 @@ export class Block {
     const n = host.pieces.length, w = Math.min(A.z1 - A.z0, B.z1 - B.z0), face: Face = { a: A.k, b: n + B.k, kind: 'gap', patch: 'line', area: 0, length: w, at: [A.at[0] + (rA + g / 2) * t[0], A.at[1] + (rA + g / 2) * t[1], (A.z0 + A.z1) / 2], normal: t, gap: g, medium: MEDIUM, by: `${gear.pieces[B.k]!.name} meshes ${host.pieces[A.k]!.name}` };
     return Block.#seal(host.name, [...host.pieces, ...S.pieces], [...host.faces, ...S.faces.map((f) => ({ ...f, a: f.a + n, b: f.b + n })), face], [...host.rooms]);
   }
+  /** A rack put against the host's spur gear (decision 0028, motion 2: a rack and pinion): the rack block (piece.rack: ISO
+   *  53's basic rack along its x, its teeth up, so wide along z) laid under the gear (toward −y) or over it (+y, turned a
+   *  half about z), its pitch line tangent to the gear's pitch circle with the fit's gap (its backlash), its face level
+   *  with the gear's, slid along its length so a gap between its teeth stands under the gear's tooth nearest it (by the arc
+   *  of that tooth from the line of centres on the pitch circle, as mesh sets a gear); refused where its module is not the
+   *  gear's, where its tips would reach inside the gear's base circle (its flank drawn radial there: more teeth or a wider
+   *  fit), or where any piece of it would meet any of the host's but the gear. In Move the gear turning moves it by its
+   *  pitch radius times its turn. */
+  static rack(host: Block, port: string, rack: Block, toward: '-y' | '+y' = '-y', fit: Fit = 'slide'): Block {
+    Block.#is(host); Block.#is(rack); if (!(fit in FITS)) throw new Error('rack: a fit by name');
+    const g = gapOf(fit); if (!(g > 0)) throw new Error(`rack: a rack meshes with backlash: a fit with a gap (slide or clear), not ${fit}`);
+    const k = host.pieces.findIndex((q) => q.lines.some((l) => l.port === port)); if (k < 0) throw new Error(`rack: ${host.name} offers no line ${port} (it offers ${offered(host)})`);
+    const A = gearOf(host.pieces[k]!); if (!A) throw new Error(`rack: the ${host.pieces[k]!.name} is no spur gear of ISO 53's rack standing as made: refused`);
+    const ri = rack.pieces.findIndex((q) => rackOf(q)); if (ri < 0) throw new Error(`rack: ${rack.name} has no rack (piece.rack: ISO 53's teeth along x, standing as made)`);
+    const R0 = rackOf(rack.pieces[ri]!)!; if (Math.abs(R0.m - A.m) > 1e-9) throw new Error(`rack: a rack meshes only a gear of its own module (m${+(A.m * 1000).toPrecision(4)} and m${+(R0.m * 1000).toPrecision(4)})`);
+    const rA = (A.m * A.z) / 2, cos20 = Math.cos(Math.PI / 9);
+    if (rA + g - A.m < rA * cos20 - 1e-12) throw new Error(`no room for the rack: its tips reach ${((rA + g - A.m) * 1000).toFixed(2)} mm from the m${+(A.m * 1000).toPrecision(4)} z${A.z}'s axis, inside its base circle (${(rA * cos20 * 1000).toFixed(2)} mm), where its flank is drawn radial: a wider fit, or more teeth`);
+    const up = toward === '+y', T0 = up ? Block.#turned(rack, turnOf([0, 0, 1], 180), Block.#mid(rack), false) : rack, R = rackOf(T0.pieces[ri]!)!;
+    // (the gear's tooth nearest the line of centres, its arc from it on the pitch circle; a gap of the rack's under it)
+    const beta = up ? Math.PI / 2 : -Math.PI / 2, pz = (2 * Math.PI) / A.z, d0 = A.th - beta, dl = d0 - Math.round(d0 / pz) * pz, xs = A.at[0] + (up ? -1 : 1) * rA * dl;
+    const sx = up ? -1 : 1, gapX = R.lo + sx * Math.round(R.n / 2) * R.p, yPitch = A.at[1] + (up ? 1 : -1) * (rA + g);
+    const S = Block.#shift(T0, [xs - gapX, yPitch - R.pitchY, (A.z0 + A.z1) / 2 - R.zc]);
+    S.pieces.forEach((q, i) => host.pieces.forEach((s, j) => { if (!(i === ri && j === k) && meets(boundOf(q), boundOf(s))) throw new Error(`no room for the rack: the ${q.name} would meet the ${s.name}`); }));
+    const n = host.pieces.length, w = Math.min(A.z1 - A.z0, R.z1 - R.z0), face: Face = { a: k, b: n + ri, kind: 'gap', patch: 'line', area: 0, length: w, at: [A.at[0], A.at[1] + (up ? 1 : -1) * (rA + g / 2), (A.z0 + A.z1) / 2], normal: [0, up ? 1 : -1, 0], gap: g, medium: MEDIUM, by: `${rack.pieces[ri]!.name} meshes ${host.pieces[k]!.name}` };
+    return Block.#seal(host.name, [...host.pieces, ...S.pieces], [...host.faces, ...S.faces.map((f) => ({ ...f, a: f.a + n, b: f.b + n })), face], [...host.rooms]);
+  }
+  /** A belt (or a chain, drawn as a cord) laid round two pulleys or sprockets the host has (decision 0028, motion 2): their
+   *  axes along z, parallel, on the lines named; the cord's middle at each one's outside plus its own radius and the fit's
+   *  gap, level with the middle of each one's teeth, an open belt: two straights tangent to both circles, and round each
+   *  the arc between them (π ± 2α, sin α = (ρ₂ − ρ₁) / C). Drawn as a round cord of its section's area (width × thickness),
+   *  its teeth not drawn; laid as two runs (each a straight and its arc, the larger arc in two halves) end to end. Refused
+   *  where the axes are not along z and parallel, the cord is wider than either one's teeth, they stand too near for a
+   *  straight, or the cord would meet any piece of the host but the two and what is on their axes. In Move the two turn
+   *  together by their teeth (their outsides where they have none), the same way. */
+  static belt(host0: Block, portA: string, portB: string, o: { name?: string; width: number; thick: number; mat?: string; fit?: Fit }, other?: { block: Block; C: number; toward?: '+x' | '-x' | '+y' | '-y' }): Block {
+    Block.#is(host0); let host = host0; const fit = o.fit ?? 'clear'; if (!(fit in FITS)) throw new Error('belt: a fit by name'); sizes('belt', [o.width, o.thick]);
+    const name = o.name ?? 'belt', g = Math.max(gapOf(fit), 1e-4), rc = Math.sqrt((o.width * o.thick) / Math.PI);
+    const wheel = (port: string, host: Block) => { const k = host.pieces.findIndex((q) => q.lines.some((l) => l.port === port)); if (k < 0) throw new Error(`belt: ${host.name} offers no line ${port} (it offers ${offered(host)})`);
+      const l = host.pieces[k]!.lines.find((x) => x.port === port)!, d = l.dir ?? [0, 1, 0]; if (!(Math.abs(Math.abs(d[2]) - 1) < 1e-9)) throw new Error(`belt: ${port} is not along z (a belt is laid round pulleys standing as made, their axes along z)`);
+      const at: V3 = [l.x, l.y ?? host.pieces[k]!.solid.base.c[1], l.z], on = host.pieces.map((q, i) => i).filter((i) => { const c = host.pieces[i]!.solid.base.c; return Math.hypot(c[0] - at[0], c[1] - at[1]) < 1e-9; });
+      // (its teeth: the piece on its axis whose outline has the most points; else the widest round one on it)
+      const sects = on.filter((i) => { const B = host.pieces[i]!.solid.base; return B.k === 'box' && !!B.sect && (!B.frame || Math.abs(B.frame[8] - 1) < 1e-9); });
+      const sectLen = (P: Prim) => (P.k === "box" && P.sect ? P.sect.length : 0);
+      const t = sects.length ? sects.sort((a, b) => (sectLen(host.pieces[b]!.solid.base) - sectLen(host.pieces[a]!.solid.base)))[0]! : on.sort((a, b) => halfOf(host.pieces[b]!.solid.base)[0] - halfOf(host.pieces[a]!.solid.base)[0])[0];
+      if (t === undefined) throw new Error(`belt: nothing round on ${port}`);
+      const B = host.pieces[t]!.solid.base, [lo, hi] = primBox(B), Ro = B.k === 'box' && B.sect ? Math.max(...B.sect.map(([x, y]) => Math.hypot(x + B.c[0] - at[0], y + B.c[1] - at[1]))) : halfOf(B)[0];
+      if (2 * rc > hi[2] - lo[2] + 1e-12) throw new Error(`belt: the ${name} (${(2 * rc * 1000).toFixed(2)} mm across, drawn round) is wider than the ${host.pieces[t]!.name}'s teeth (${((hi[2] - lo[2]) * 1000).toFixed(2)} mm)`);
+      return { k: t, at, on, rho: Ro + g + rc, zc: (lo[2] + hi[2]) / 2 }; };
+    // (with another block: it is put first, its pulley's axis the centre distance C from the first's toward +x, −x, +y or −y,
+    // its teeth level with the first's; refused where any of its pieces would meet the host's)
+    if (other) { Block.#is(other.block); sizes('belt', [other.C]); const a0 = wheel(portA, host), b0 = wheel(portB, other.block), t = { '+x': [1, 0], '-x': [-1, 0], '+y': [0, 1], '-y': [0, -1] }[other.toward ?? '+x'];
+      if (!t) throw new Error(`belt: toward +x, -x, +y or -y (${String(other.toward)})`);
+      const S = Block.#shift(other.block, [a0.at[0] + other.C * t[0]! - b0.at[0], a0.at[1] + other.C * t[1]! - b0.at[1], a0.zc - b0.zc]);
+      S.pieces.forEach((q) => host.pieces.forEach((s) => { if (meets(boundOf(q), boundOf(s))) throw new Error(`no room for the second pulley: the ${q.name} would meet the ${s.name} (a longer centre distance)`); }));
+      const n0 = host.pieces.length; host = Block.#seal(host.name, [...host.pieces, ...S.pieces], [...host.faces, ...S.faces.map((f) => ({ ...f, a: f.a + n0, b: f.b + n0 }))], [...host.rooms]); }
+    const A = wheel(portA, host), B = wheel(portB, host), dx = B.at[0] - A.at[0], dy = B.at[1] - A.at[1], C = Math.hypot(dx, dy);
+    if (Math.abs(A.zc - B.zc) > 1e-9) throw new Error(`belt: the two stand at different heights along z (${(A.zc * 1000).toFixed(2)} and ${(B.zc * 1000).toFixed(2)} mm): their teeth level, for a belt`);
+    if (!(C > A.rho + B.rho + 2 * rc)) throw new Error(`no room for the ${name}: the two are ${(C * 1000).toFixed(2)} mm apart, it needs more than ${((A.rho + B.rho + 2 * rc) * 1000).toFixed(2)} mm for its straights`);
+    const al = Math.asin((B.rho - A.rho) / C), th = Math.atan2(dy, dx), L = C * Math.cos(al), deg = (r: number) => (r * 180) / Math.PI, tube = { name, mat: o.mat ?? 'nbr', ro: rc, color: 0x2a2a2a };
+    // (each run laid at the origin heading +y, bending toward its +x; then turned so its +y is its heading, its +x the side it bends to, and set at its start)
+    const lay = (segs: RunSeg[], h: number, at: V3) => { const ex: V3 = [Math.sin(h), -Math.cos(h), 0], ey: V3 = [Math.cos(h), Math.sin(h), 0], M: M3 = [ex[0], ey[0], 0, ex[1], ey[1], 0, 0, 0, 1];
+      return Block.#shift(Block.#turned(Block.run(name, segs), M, [0, 0, 0], false), at); };
+    const n1 = th + Math.PI / 2 + al, n2 = th - Math.PI / 2 - al, P = (c: V3, r: number, a: number): V3 => [c[0] + r * Math.cos(a), c[1] + r * Math.sin(a), A.zc];
+    const top = lay([{ ...tube, straight: L }, { ...tube, bend: deg(Math.PI / 2 + al), R: B.rho }, { ...tube, bend: deg(Math.PI / 2 + al), R: B.rho }], th + al, P(A.at, A.rho, n1));
+    const bot = lay([{ ...tube, straight: L }, { ...tube, bend: deg(Math.PI / 2 - al), R: A.rho }, { ...tube, bend: deg(Math.PI / 2 - al), R: A.rho }], th + Math.PI - al, P(B.at, B.rho, n2));
+    const n = host.pieces.length, m = top.pieces.length, cord = [...top.pieces, ...bot.pieces], skip = new Set([...A.on, ...B.on]);
+    cord.forEach((q) => host.pieces.forEach((s, j) => { if (!skip.has(j) && meets(boundOf(q), boundOf(s))) throw new Error(`no room for the ${name}: it would meet the ${s.name}`); }));
+    const end = (a: number, b: number, at: V3): Face => ({ a, b, kind: 'contact', patch: 'area', area: Math.PI * rc * rc, at, normal: [1, 0, 0], gap: 0, by: `${name}: end to end` });
+    const lap = (w: typeof A, k: number): Face => ({ a: w.k, b: k, kind: 'gap', patch: 'line', area: 0, length: 2 * rc, at: [w.at[0], w.at[1] + w.rho - rc, w.zc], normal: [0, 1, 0], gap: g, medium: MEDIUM, by: `${name} laid round ${host.pieces[w.k]!.name}` });
+    const faces: Face[] = [...host.faces, ...top.faces.map((f) => ({ ...f, a: f.a + n, b: f.b + n })), ...bot.faces.map((f) => ({ ...f, a: f.a + n + m, b: f.b + n + m })),
+      end(n + m - 1, n + m, P(B.at, B.rho, n2)), end(n + cord.length - 1, n, P(A.at, A.rho, n1)), lap(B, n + 1), lap(A, n + cord.length - 1)];
+    return Block.#seal(host.name, [...host.pieces, ...cord], faces, [...host.rooms]);
+  }
   /** n copies round the y axis at radius R, each in its own wedge: refused, with both numbers, where a copy and its gap
    *  need more than the pitch gives. Its copies stand apart: the fit leaves a gap. With `out`, each copy is turned about
    *  the upright line through its own middle by its angle round the ring, so its own +x faces out (fan blades, spokes,
@@ -829,6 +902,11 @@ export class Block {
     const j = out ? b.pieces.find((p) => p.joint) : undefined; if (j) throw new Error(`${name}: the ${j.name} is on a joint (${j.joint!.name}): copies turned to face out are not made on a joint yet`);
     const pieces: Piece[] = [], faces: Face[] = [], M: P3 = [cx, (b.lo[1] + b.hi[1]) / 2, cz];
     for (let i = 0; i < n; i++) { const a = (2 * Math.PI * i) / n, t = out && i ? Block.#turned(b, turnOf(1, (-360 * i) / n), M, false) : b, s = Block.#shift(t, [R * Math.cos(a) - cx, 0, R * Math.sin(a) - cz]), k = pieces.length; pieces.push(...s.pieces.map((p) => (p.joint ? { ...p, joint: p.joint } : p))); faces.push(...s.faces.map((f) => ({ ...f, a: f.a + k, b: f.b + k }))); }
+    // (the ring's own axis, offered as a line on its first piece (decision 0028): a ring of an odd number has no middle a
+    // stack can centre on, so a stack aligned on this line puts a hub on the ring's axis; its slot the room the copies
+    // leave free round it)
+    const slot = Math.min(...pieces.map((p) => freeRound(sweepOf(p), 0, 0)));
+    if (slot > 0) pieces[0] = { ...pieces[0]!, lines: [...pieces[0]!.lines, { port: `${name}/axis`, x: 0, z: 0, slot }] };
     return Block.#seal(name, pieces, faces);
   }
 
@@ -974,7 +1052,7 @@ function boxSide(s: Piece, q: Piece, g: number): { area: number; length: number;
   return n ? { area: (n / tot) * 2 * (B.size[0] + B.size[2]) * (y1 - y0), length: 0, at: [B.c[0], (y0 + y1) / 2, B.c[2]] } : { area: 0, length: 0, at: [0, 0, 0] };
 }
 export const made = Block.made, stack = Block.stack, around = Block.around, through = Block.through, into = Block.into, onto = Block.onto, ring = Block.ring, over = Block.over, turn = Block.turn, run = Block.run, branch = Block.branch;
-export const mesh = Block.mesh;
+export const mesh = Block.mesh, rack = Block.rack, belt = Block.belt;
 
 /** A spur gear's teeth read from its outline (ISO 53's rack, as piece.gear draws it: addendum m, dedendum 1.25 m): its
  *  module and teeth (m, from its tip and root circles; z, from its tip), the angle of a tooth's middle in the room, its
@@ -989,6 +1067,30 @@ export function gearOf(p: Piece): { m: number; z: number; ra: number; th: number
   const i = rho.findIndex((r, k) => Math.abs(r - ra) < 1e-9 * ra && Math.abs((rho[k + 1] ?? 0) - ra) < 1e-9 * ra); if (i < 0) return undefined;
   const p0 = B.sect[i]!, p1 = B.sect[i + 1]!, th = Math.atan2(p0[1] + p1[1] - 2 * o[1], p0[0] + p1[0] - 2 * o[0]) + Math.atan2(f[3], f[0]);
   return { m, z, ra, th, at, z0: B.c[2] - B.size[2] / 2, z1: B.c[2] + B.size[2] / 2 };
+}
+
+/** A rack's teeth read from its outline (ISO 53's basic rack, as piece.rack draws it: its teeth along its own x, up its y,
+ *  so wide along z), standing as made or turned about z only: its module (tip less root over 2.25), its teeth and pitch,
+ *  the room's x of its own −x end, the room's y of its pitch line (m below its tips), its length's direction in the room
+ *  and its face's ends along z. Read by rack (the operation) and by the motion of what is made. */
+export function rackOf(p: Piece): { m: number; n: number; p: number; lo: number; pitchY: number; dir: V3; zc: number; z0: number; z1: number; c: V3 } | undefined {
+  const B = p.solid.base; if (B.k !== 'box' || !B.sect || (B.frame && !(Math.abs(B.frame[8] - 1) < 1e-9))) return undefined;
+  const ys = [...new Set(B.sect.map(([, y]) => +y.toFixed(12)))].sort((a, b) => a - b); if (ys.length !== 3) return undefined;
+  const tip = ys[2]!, root = ys[1]!, m = (tip - root) / 2.25, tips = B.sect.filter(([, y]) => Math.abs(y - tip) < 1e-12).map(([x]) => x).sort((a, b) => a - b);
+  if (!(m > 0) || tips.length < 4 || tips.length % 2) return undefined;
+  const mids = Array.from({ length: tips.length / 2 }, (_, k) => (tips[2 * k]! + tips[2 * k + 1]!) / 2), pitch = Math.PI * m;
+  if (!mids.every((x, k) => !k || Math.abs(x - mids[k - 1]! - pitch) < 1e-6 * pitch)) return undefined;
+  const f = B.frame ?? I3, xl = Math.min(...B.sect.map(([x]) => x));
+  return { m, n: mids.length, p: pitch, lo: B.c[0] + f[0] * xl, pitchY: B.c[1] + f[4] * (tip - m), dir: [f[0], f[3], f[6]], zc: B.c[2], z0: B.c[2] - B.size[2] / 2, z1: B.c[2] + B.size[2] / 2, c: [B.c[0], B.c[1], B.c[2]] };
+}
+/** How many teeth a toothed wheel has (a gear, a timing pulley, a sprocket: a section drawn along its axis, z), read from
+ *  its outline: each run of its points out at its largest radius about the axis through `at` is one tooth's tip or land (its bore, well
+ *  within half its outside, left out). */
+export function teethOf(p: Piece, at: P3): number | undefined {
+  const B = p.solid.base; if (B.k !== 'box' || !B.sect) return undefined; const all = B.sect.map(([x, y]) => Math.hypot(x + B.c[0] - at[0], y + B.c[1] - at[1])), R = Math.max(...all);
+  // (its bore's points left out (well inside its teeth: within half its outside), so its outline runs round unbroken)
+  const rho = all.filter((r) => r > 0.55 * R), on = rho.map((r) => r > R * (1 - 1e-6));
+  const n = on.filter((x, i) => x && !on[(i - 1 + on.length) % on.length]).length; return n >= 3 ? n : undefined;
 }
 
 // ---- a block as the app draws it --------------------------------------------------------------------------------

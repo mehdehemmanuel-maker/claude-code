@@ -3,7 +3,9 @@
 // it moves (sim.ts motionOf: its bodies from the faces the operations wrote, the lines they turn about, the gears that
 // mesh); Jolt is stepped every frame with gravity on, frozen bodies held where they are, in the air too. A drag on a
 // loose piece turns it about its joint (a torque toward where the pointer is round its line, so a crank is cranked by
-// hand), or pulls a free one; a tap chooses a piece: Freeze, Loose, Spin (its joint driven at a turn a second). Stop
+// hand), or pulls a free one (or one that slides); a tap chooses a piece: Freeze, Loose, Motor (its joint driven at so many
+// rpm), Hold (held where it is); a joint its motor holds (a servo) lets go while it is dragged and holds again where it is
+// put, a pose (decision 0028, motion 2). Stop
 // puts it back as it was built. Nothing here is drawn from the board's own drawing: each piece's leaves, moved with its
 // body. (Rough, 2026-11-06: one block, the first shown; freezing or loosening starts it again from as built.)
 
@@ -41,7 +43,7 @@ export class MoveMode {
   /** Where the blocks shown come from (a page sets it; on the dashboard, its board's own). */
   source: () => Block[] = () => { const d = (globalThis as { dashboard?: { wall?: { board(): Board; outputsOf(id: string): Record<string, unknown> | undefined } } }).dashboard?.wall; return d ? blocksShown(d.board(), (id) => d.outputsOf(id)) : []; };
   live: LiveMotion | null = null;
-  private block: Block | null = null; private frozen: boolean[] | undefined; private sel = -1; private spinning = new Set<number>();
+  private block: Block | null = null; private frozen: boolean[] | undefined; private sel = -1; private spinning = new Map<number, number>(); private held = new Set<number>(); private rpm = 60;
   private readonly group = new THREE.Group(); private meshes: { mesh: THREE.Mesh; body: number; base: THREE.Matrix4 }[] = [];
   private readonly el: HTMLDivElement; private readonly btn: HTMLButtonElement; private readonly card: HTMLDivElement; private raf = 0; private last = 0;
   private drag: { body: number; made: THREE.Vector3; plane: THREE.Plane; to: THREE.Vector3; was: THREE.Vector3 | null } | null = null;
@@ -64,15 +66,16 @@ export class MoveMode {
   async start(frozen = this.frozen): Promise<string> {
     const b = this.source()[0]; if (!b) { this.say('Nothing shown here was made by the room\'s operations, so there is nothing to move yet.'); return 'nothing'; }
     // (what was frozen by hand holds while the same block is shown; a new one starts from its own defaults)
-    this.halt(); const J = await jolt(); if (b !== this.block) { frozen = undefined; this.spinning.clear(); } this.block = b;
+    this.halt(); const J = await jolt(); if (b !== this.block) { frozen = undefined; this.spinning.clear(); this.held.clear(); } this.block = b;
     let live: LiveMotion; try { live = new LiveMotion(J, b, frozen); } catch (e) { this.say(`It could not move: ${(e as Error).message}`); return 'failed'; }
     this.live = live; this.frozen = live.motion.bodies.map((x) => x.frozen); this.draw(); this.dock.view.group.visible = false; this.btn.textContent = '■ Stop'; this.btn.classList.add('on');
-    for (const k of this.spinning) live.spin(k, 2 * Math.PI);
+    for (const [k, w] of this.spinning) live.spin(k, w);
+    for (const k of this.held) if (!this.spinning.has(k)) live.hold(k, 0);
     this.last = performance.now(); const tick = (now: number) => { if (this.live !== live) return; this.frame(Math.min(1 / 30, (now - this.last) / 1000)); this.last = now; this.raf = requestAnimationFrame(tick); }; this.raf = requestAnimationFrame(tick);
     this.tell(); return live.motion.says;
   }
   /** Stopped: back as it was built. */
-  stop(): void { this.halt(); this.frozen = undefined; this.spinning.clear(); this.sel = -1; this.card.style.display = 'none'; this.dock.redraw(); }
+  stop(): void { this.halt(); this.frozen = undefined; this.spinning.clear(); this.held.clear(); this.sel = -1; this.card.style.display = 'none'; this.dock.redraw(); }
   private halt(): void { cancelAnimationFrame(this.raf); this.live?.destroy(); this.live = null; this.drag = null; this.dock.eyes.orbit.enabled = true; for (const m of this.meshes) this.group.remove(m.mesh); this.meshes = []; this.dock.view.group.visible = true; this.btn.textContent = '▶ Move'; this.btn.classList.remove('on'); }
   /** Each piece's leaves, where the block has them, a body's colour said by whether it is frozen. */
   private draw(): void {
@@ -85,7 +88,7 @@ export class MoveMode {
   private frame(dt: number): void {
     const live = this.live!; if (dt <= 0) return;
     if (this.drag) { const d = this.drag, k = d.body, now = new THREE.Vector3(...live.pointOf(k, [d.made.x, d.made.y, d.made.z])), j = live.jointOf(k);
-      if (j) { const u = new THREE.Vector3(...j.dir), c = new THREE.Vector3(...j.point), r1 = now.clone().sub(c).projectOnPlane(u), r2 = d.to.clone().sub(c).projectOnPlane(u);
+      if (j && j.kind !== 'slide') { const u = new THREE.Vector3(...j.dir), c = new THREE.Vector3(...j.point), r1 = now.clone().sub(c).projectOnPlane(u), r2 = d.to.clone().sub(c).projectOnPlane(u);
         if (r1.lengthSq() > 1e-12 && r2.lengthSq() > 1e-12) { const ang = Math.atan2(u.dot(r1.clone().cross(r2)), r1.dot(r2)), I = Math.min(live.inertiaAbout(k), 1e6); live.torque(k, I * (400 * ang - 36 * live.spinOf(k))); } }
       else { const m = live.massOf(k), v = d.was ? now.clone().sub(d.was).divideScalar(dt) : new THREE.Vector3(); const F = d.to.clone().sub(now).multiplyScalar(150 * m).addScaledVector(v, -20 * m); live.pull(k, [F.x, F.y, F.z], [now.x, now.y, now.z]); }
       d.was = now; }
@@ -105,7 +108,7 @@ export class MoveMode {
     const ray = this.dock.rayAt(e.clientX, e.clientY), rc = new THREE.Raycaster(ray.origin, ray.direction); this.group.updateMatrixWorld(true);
     const h = rc.intersectObjects(this.meshes.map((m) => m.mesh), false)[0]; return h ? { body: h.object.userData.body as number, point: h.point.clone() } : null;
   }
-  private downAt: [number, number] | null = null;
+  private downAt: [number, number] | null = null; private posing = -1;
   private down(e: PointerEvent): void {
     if (!this.live || (e.target as HTMLElement).closest?.('#move3d')) return; this.downAt = [e.clientX, e.clientY];
     const h = this.hit(e); if (!h) return; const live = this.live;
@@ -114,29 +117,33 @@ export class MoveMode {
     const made = h.point.clone().applyMatrix4(live.moved(h.body).invert()), j = live.jointOf(h.body), cam = this.dock.eyes.camera;
     const n = j ? new THREE.Vector3(...j.dir) : cam.getWorldDirection(new THREE.Vector3()).negate();
     this.drag = { body: h.body, made, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(n, h.point), to: h.point.clone(), was: null };
+    // (a joint its motor holds lets go while it is dragged, and holds again where it is put: a pose)
+    if (live.isHeld(h.body)) { live.hold(h.body, null); this.posing = h.body; }
     this.dock.eyes.orbit.enabled = false; e.stopPropagation(); e.preventDefault();
   }
   private moveTo(e: PointerEvent): void { if (!this.drag) return; const ray = this.dock.rayAt(e.clientX, e.clientY), p = ray.intersectPlane(this.drag.plane, new THREE.Vector3()); if (p) this.drag.to.copy(p); }
   private up(e: PointerEvent): void {
     const tap = this.downAt && Math.hypot(e.clientX - this.downAt[0], e.clientY - this.downAt[1]) < 6; this.downAt = null;
-    if (this.drag) { this.drag = null; this.dock.eyes.orbit.enabled = true; }
+    if (this.drag) { this.drag = null; this.dock.eyes.orbit.enabled = true; if (this.posing >= 0 && this.live) { this.live.hold(this.posing); this.held.add(this.posing); } this.posing = -1; }
     if (tap && this.live) { const h = this.hit(e); this.sel = h ? h.body : -1; this.tell(); }
   }
   private say(html: string): void { this.card.style.display = ''; this.card.innerHTML = html; }
   /** The card: what moves and how, and the piece chosen with its Freeze, Loose and Spin. */
   private tell(): void {
     const live = this.live; if (!live) return; const M = live.motion, esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-    const meshes = M.meshes.map((m) => `${esc(m.ga)} meshes ${esc(m.gb)} (${m.za}:${m.zb}, the other way)`).join('<br>');
+    const meshes = [...M.meshes.map((m) => `${esc(m.ga)} meshes ${esc(m.gb)} (${m.za}:${m.zb}, the other way)`), ...M.racks.map((r) => `${esc(r.gear)} drives ${esc(r.rack)} (${(r.r * 1000).toFixed(1)} mm a radian)`), ...M.belts.map((x) => `${esc(x.belt)} joins ${esc(x.pa)} and ${esc(x.pb)} (${x.za}:${x.zb}, the same way)`)].join('<br>');
     const s = this.sel >= 0 ? M.bodies[this.sel] : undefined, turns = s ? `${(live.angle(this.sel) / (2 * Math.PI)).toFixed(2)} turns` : '';
     this.say(`<b>Moving</b> <span class="dim">· gravity on · ${M.bodies.length} bodies, ${M.bodies.filter((b) => b.frozen).length} frozen (blue) · ${M.joints.length} joint${M.joints.length === 1 ? '' : 's'}</span>${meshes ? `<br>${meshes}` : ''}
-      <div class="dim">Drag a loose piece to turn it on its joint (a crank by its handle). Tap one to freeze it in the air or let it go. By default what turns on a shaft is loose; the shafts and the rest frozen.</div>
-      ${s ? `<div style="margin-top:6px"><b>${esc(s.name)}</b><br><span class="dim">${esc(s.why)}${turns && live.jointOf(this.sel) ? ` · ${turns}` : ''}</span></div><div class="row"><button data-a="freeze">Freeze</button><button data-a="loose">Loose</button>${live.jointOf(this.sel) ? `<button data-a="spin" class="${this.spinning.has(this.sel) ? 'on' : ''}">Spin</button>` : ''}</div>` : ''}
+      <div class="dim">Drag a loose piece to turn or slide it; a servo's joint stays where you put it. Tap one: Freeze, Loose, Motor (rpm), Hold.</div>
+      ${s ? `<div style="margin-top:6px"><b>${esc(s.name)}</b><br><span class="dim">${esc(s.why)}${turns && live.jointOf(this.sel) ? ` · ${live.jointOf(this.sel)!.kind === 'slide' ? `${(live.slid(this.sel) * 1000).toFixed(1)} mm` : turns}` : ''}${live.motorOf(this.sel) ? ` · a ${esc(live.motorOf(this.sel)!.kind)}, ${esc(live.motorOf(this.sel)!.from)}` : ''}</span></div><div class="row"><button data-a="freeze">Freeze</button><button data-a="loose">Loose</button>${live.jointOf(this.sel)?.kind === 'hinge' ? `<button data-a="spin" class="${this.spinning.has(this.sel) ? 'on' : ''}">Motor</button><input data-a="rpm" type="number" value="${this.rpm}" style="width:56px" title="its speed, turns a minute"> rpm<button data-a="hold" class="${live.isHeld(this.sel) ? 'on' : ''}">Hold</button>` : ''}</div>` : ''}
       <div class="row"><button data-a="all-frozen">Freeze all</button><button data-a="all-loose">Loose all</button></div>`);
     for (const b of this.card.querySelectorAll<HTMLButtonElement>('button[data-a]')) b.onclick = () => this.act(b.dataset.a!);
+    const r = this.card.querySelector<HTMLInputElement>('input[data-a="rpm"]'); if (r) r.onchange = () => { this.rpm = Number(r.value) || 0; const w = (this.rpm * 2 * Math.PI) / 60; if (this.spinning.has(this.sel)) { this.spinning.set(this.sel, w); live.spin(this.sel, w); } };
   }
   private act(a: string): void {
     const live = this.live; if (!live) return; const fr = live.motion.bodies.map((b) => b.frozen);
-    if (a === 'spin') { const on = !this.spinning.has(this.sel); if (on) this.spinning.add(this.sel); else this.spinning.delete(this.sel); live.spin(this.sel, on ? 2 * Math.PI : null); this.tell(); return; }
+    if (a === 'spin') { const on = !this.spinning.has(this.sel), w = (this.rpm * 2 * Math.PI) / 60; if (on) this.spinning.set(this.sel, w); else this.spinning.delete(this.sel); live.spin(this.sel, on ? w : null); this.tell(); return; }
+    if (a === 'hold') { const on = !live.isHeld(this.sel); this.spinning.delete(this.sel); if (on) { live.hold(this.sel); this.held.add(this.sel); } else { live.hold(this.sel, null); this.held.delete(this.sel); } this.tell(); return; }
     if (a === 'freeze' || a === 'loose') fr[this.sel] = a === 'freeze'; else fr.fill(a === 'all-frozen');
     const sel = this.sel; void this.start(fr).then(() => { this.sel = sel; this.tell(); });
   }

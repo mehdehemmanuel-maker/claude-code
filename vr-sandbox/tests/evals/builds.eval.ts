@@ -1,6 +1,7 @@
 // The AI on things to build (decision 0026, step 4: the bootstrap): forty requests across the library, each scored with
-// no model. A request is right when its board runs with every node ok, uses a block of each kind it names (its id, on the
-// board or inside a folded block on it, or a piece of its build by that name), and gives one
+// no model. A request is right when its board runs with every node ok, uses a block of each kind it names (score.ts KINDS:
+// a family by its id, or any family on the kind's aisle whose name says the kind, on the board or inside a folded block on
+// it; decision 0028), and gives one
 // thing (its pieces joined by the faces the operations wrote, one group) of at least so many pieces. Assist (one call, a
 // plan; asked once more with only the lines that failed) by default; `EVAL_MODE=auto` runs the tool loop instead.
 // Run: `npm run eval:builds` (needs ANTHROPIC_API_KEY; costs real tokens); `EVAL_ONLY=5` the first five; `EVAL_PICK=7`
@@ -12,51 +13,51 @@ import '../../src/nexus/seeds';
 import { agentBuild, agentPlan, runPlan, type AgentPlan } from '../../src/nexus/agent';
 import { Engine, emptyBoard } from '../../src/nexus/dataflow';
 import { nodesOf, type Board } from '../../src/nexus/boards';
-import { W, score, type Want } from './score';
+import { KINDS, W, either, score, type Want } from './score';
 export { score };
 
-const FASTENER = /^piece\.(bolt|csk|buttonhead|panhead|woodscrew|shoulderscrew|carriagebolt|threadedrod|setscrew|deckscrew|nail)$|^mate\.(bolted|plate|lid)$/;
+const K = KINDS;
 export const BUILDS: [string, Want][] = [
-  ['A desk lamp: an LED on top of a post standing on a round base.', W(3, /^piece\.led$/)],
-  ['Two steel plates 100 x 100 x 5 mm bolted together with four M6 bolts.', W(6, /^piece\.plate$/, FASTENER)],
-  ['A hollow box with its lid bolted on.', W(3, /^piece\.case$/, /^mate\.(lid|bolted)$|^piece\.(bolt|csk)$/)],
-  ['A NEMA 17 stepper on a motor plate, the plate bolted to a 2020 extrusion.', W(4, /^piece\.stepper$/, /^piece\.extrusion$/)],
-  ['An Arduino Uno on four standoffs on an acrylic plate.', W(6, /^piece\.devboard$/, /^piece\.(standoff|hexstandoff)$/)],
-  ['A Raspberry Pi 4 bolted to a plate with a 40 mm fan above it.', W(4, /^piece\.devboard$/, /^piece\.fan$/)],
-  ['A square frame of four 2020 extrusions joined by corner brackets.', W(8, /^piece\.extrusion$/, /^piece\.cornerbracket$/)],
-  ['An 8 mm shaft in two pillow blocks with a pulley between them.', W(4, /^piece\.shaft$/, /^piece\.pillowblock$/, /^piece\.pulley$/)],
-  ['A 608 bearing on an 8 mm shaft, the bearing in a housing plate.', W(3, /^piece\.bearing$/, /^piece\.(shaft|plate)$/)],
-  ['A wheel on the shaft of a DC gear motor.', W(2, /^piece\.wheel$/, /^piece\.(gearmotor|dcmotor)$/)],
-  ['A copper pipe run from a tank to a ball valve.', W(3, /^piece\.ballvalve$/, /^piece\.(tank|case)$/)],
-  ['A steel post on a base plate bolted to a concrete block.', W(6, /^piece\.(hollowsection|steelbeam|bar)$/, /^piece\.brick$/)],
-  ['A brick wall three courses high.', W(6, /^piece\.(wall|brick)$/)],
-  ['A timber frame: two 2x4 studs nailed to a bottom plate.', W(5, /^piece\.lumber$/, /^piece\.(nail|woodscrew|deckscrew)$/)],
-  ['A drawer front with a pull handle screwed on.', W(3, /^piece\.handle$/)],
-  ['Two plywood panels joined by a hinge.', W(3, /^piece\.(hinge|pianohinge)$/, /^piece\.sheet$|^piece\.plate$/)],
-  ['A hobby servo bolted to an L bracket.', W(3, /^piece\.servo$/, /^piece\.bracket$/)],
-  ['A breadboard with an LED, a resistor and a push button in it.', W(4, /^piece\.breadboard$/, /^piece\.led$/, /^piece\.resistor$/)],
-  ['A PVC pipe with an elbow on one end and a tee on the other.', W(3, /^piece\.pvcpipe$/, /^piece\.pvcfitting$/)],
-  ['A flanged pipe joint: two flanges, a gasket and four bolts with nuts.', W(8, /^piece\.(flange|asmeflange)$/, /^piece\.flangegasket$/)],
-  ['Two 8 mm shafts joined end to end by a shaft coupler.', W(3, /^piece\.shaft$/, /^piece\.coupler$/)],
-  ['A T8 lead screw with its brass nut, coupled to a NEMA 17 stepper.', W(4, /^piece\.leadscrew$/, /^piece\.leadnut$/, /^piece\.coupler$/)],
-  ['An MGN12 linear rail with its carriage and a plate bolted on the carriage.', W(3, /^piece\.mgn$/, /^piece\.plate$/)],
-  ['A castor bolted under a plywood board.', W(3, /^piece\.castor$/)],
-  ['An 80 mm fan screwed to a panel with four screws.', W(6, /^piece\.fan$/, FASTENER)],
-  ['A battery pack: four 18650 cells side by side in a box.', W(5, /^piece\.cell$/, /^piece\.case$/)],
-  ['A switch box: a toggle switch and a fuse holder in a hollow box with its lid.', W(4, /^piece\.case$/, /^piece\.(switch|toggle|fuse)$/)],
+  ['A desk lamp: an LED on top of a post standing on a round base.', W(3, K.led)],
+  ['Two steel plates 100 x 100 x 5 mm bolted together with four M6 bolts.', W(6, K.plate, K.fastener)],
+  ['A hollow box with its lid bolted on.', W(3, K.box, K.lidBolted)],
+  ['A NEMA 17 stepper on a motor plate, the plate bolted to a 2020 extrusion.', W(4, K.stepper, K.extrusion)],
+  ['An Arduino Uno on four standoffs on an acrylic plate.', W(6, K.devboard, K.standoff)],
+  ['A Raspberry Pi 4 bolted to a plate with a 40 mm fan above it.', W(4, K.devboard, K.fan)],
+  ['A square frame of four 2020 extrusions joined by corner brackets.', W(8, K.extrusion, K.cornerBracket)],
+  ['An 8 mm shaft in two pillow blocks with a pulley between them.', W(4, K.shaft, K.pillowBlock, K.pulley)],
+  ['A 608 bearing on an 8 mm shaft, the bearing in a housing plate.', W(3, K.ballBearing, either('a shaft or a plate', K.shaft, K.plate))],
+  ['A wheel on the shaft of a DC gear motor.', W(2, K.wheel, K.dcMotor)],
+  ['A copper pipe run from a tank to a ball valve.', W(3, K.ballValve, K.tankOrBox)],
+  ['A steel post on a base plate bolted to a concrete block.', W(6, K.steelPost, K.block)],
+  ['A brick wall three courses high.', W(6, K.wallOrBrick)],
+  ['A timber frame: two 2x4 studs nailed to a bottom plate.', W(5, K.timber, K.woodFixing)],
+  ['A drawer front with a pull handle screwed on.', W(3, K.handle)],
+  ['Two plywood panels joined by a hinge.', W(3, K.hinge, K.sheetOrPlate)],
+  ['A hobby servo bolted to an L bracket.', W(3, K.servo, K.lBracket)],
+  ['A breadboard with an LED, a resistor and a push button in it.', W(4, K.breadboard, K.led, K.resistor)],
+  ['A PVC pipe with an elbow on one end and a tee on the other.', W(3, K.pvcPipe, K.pvcFitting)],
+  ['A flanged pipe joint: two flanges, a gasket and four bolts with nuts.', W(8, K.flange, K.gasket)],
+  ['Two 8 mm shafts joined end to end by a shaft coupler.', W(3, K.shaft, K.coupler)],
+  ['A T8 lead screw with its brass nut, coupled to a NEMA 17 stepper.', W(4, K.leadScrew, K.leadNut, K.coupler)],
+  ['An MGN12 linear rail with its carriage and a plate bolted on the carriage.', W(3, K.rail, K.plate)],
+  ['A castor bolted under a plywood board.', W(3, K.castor)],
+  ['An 80 mm fan screwed to a panel with four screws.', W(6, K.fan, K.fastener)],
+  ['A battery pack: four 18650 cells side by side in a box.', W(5, K.cell, K.box)],
+  ['A switch box: a toggle switch and a fuse holder in a hollow box with its lid.', W(4, K.box, K.switchOrFuse)],
   ['A small robot base: two motors driving wheels, a battery and a castor on a plate.', W(8, /^piece\.wheel$|wheel/i, /^piece\.castor$|castor|caster/i)],
   ['A quadcopter: four motors on the arms of a cross frame.', W(8, /^room\.ring$|^piece\.(dcmotor|gearmotor|stepper)$|motor/i)],
   ['A desk fan: a motor with blades round its hub on a post and a base.', W(6, /^room\.ring$|blade/i)],
-  ['A wall shelf: a board on two angle brackets screwed into wall plugs.', W(5, /^piece\.(anglebracket|bracket)$/, /^piece\.wallplug$/)],
-  ['A gear on a shaft held by a shaft collar.', W(3, /^piece\.gear$/, /^piece\.collar$/)],
-  ['A gas strut between two brackets.', W(3, /^piece\.gasstrut$/)],
-  ['A heat-set insert in a plate with a screw in it.', W(3, /^piece\.heatset$/)],
-  ['A T-nut in a 2020 extrusion with a bracket bolted on.', W(3, /^piece\.tnut$/, /^piece\.extrusion$/)],
-  ['A 0.96 inch OLED display bolted to a front panel.', W(3, /^piece\.display$/)],
-  ['A threaded rod through two plates, a nut and washer each side of each plate.', W(8, /^piece\.threadedrod$/, /^piece\.(nut|nyloc)$/, /^piece\.washer$/)],
-  ['A disc magnet set in a pocket of a plate.', W(2, /^piece\.magnet$/)],
-  ['A steel I-beam bolted to two steel angles.', W(5, /^piece\.steelbeam$/, /^piece\.steelangle$/)],
-  ['A water tank with an outlet pipe through its side wall and a valve on the pipe.', W(3, /^piece\.(tank|case)$/, /^piece\.(ballvalve|checkvalve|needlevalve)$/)],
+  ['A wall shelf: a board on two angle brackets screwed into wall plugs.', W(5, K.bracket, K.wallPlug)],
+  ['A gear on a shaft held by a shaft collar.', W(3, K.gear, K.collar)],
+  ['A gas strut between two brackets.', W(3, K.gasStrut)],
+  ['A heat-set insert in a plate with a screw in it.', W(3, K.heatSet)],
+  ['A T-nut in a 2020 extrusion with a bracket bolted on.', W(3, K.tNut, K.extrusion)],
+  ['A 0.96 inch OLED display bolted to a front panel.', W(3, K.display)],
+  ['A threaded rod through two plates, a nut and washer each side of each plate.', W(8, K.threadedRod, K.nut, K.washer)],
+  ['A disc magnet set in a pocket of a plate.', W(2, K.magnet)],
+  ['A steel I-beam bolted to two steel angles.', W(5, K.iBeam, K.steelAngle)],
+  ['A water tank with an outlet pipe through its side wall and a valve on the pipe.', W(3, K.tankOrBox, K.valve)],
 ];
 
 it('the AI, on things to build', async () => {

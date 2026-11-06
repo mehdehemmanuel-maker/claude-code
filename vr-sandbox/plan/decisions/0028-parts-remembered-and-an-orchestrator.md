@@ -37,3 +37,10 @@ need fewer calls.
 
 - The library grows with use; a part the person likes can be folded into the repository as an assembly of its own.
 - A wrong part, once kept, is recalled until it is deleted: the parts browser shows them on an aisle of their own.
+- A repeat of the same request counts the whole already kept as used instead of keeping a second copy.
+- A change from the loose-join call is taken only where it leaves less loose and fails no more lines; pieces loose
+  inside a folded part are named but cannot be reached by it (a plan's own loose groups are mended once in its part).
+- The shared store on claude.ai has its own collection of parts (`parts`, one document a part), apart from `reports`.
+- Built with it (the same round, by six agents in their own worktrees, merged): motion 2 (slides, rack and pinion,
+  belts, motors that hold, poses), 23 more assemblies (`assemblies/things.ts`, `assemblies/everyday.ts`), and the
+  evaluations read a kind by what a part is (its aisle and name), with 25 more compound requests and a second run.

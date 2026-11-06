@@ -17,7 +17,8 @@ import { show, type PortDef } from '../blocks';
 import { boundsOfAll, isAssembly, isPart, leavesOf, massOfAll, matrixOf, placedCount, type Assembly } from '../assembly';
 import type { Part } from '../kits';
 import { massGauge } from '../parts/maker';
-import { addPiece, mountParts } from './parts';
+import { addPiece, mountParts, startRemembered } from './parts';
+import { inViewer } from './viewer';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -152,6 +153,11 @@ $('stripBtn').onclick = () => $('strip').classList.toggle('open');
 window.setInterval(metrics, 1000);
 drawClock(); void variations();
 // (the parts browser, by the board's name: every piece by trade, category and size; a size tapped is placed and shown)
-mountParts({ into: $('boardName').parentElement!, add: (id, set) => wall.change((b) => addPiece(b, id, set), `added ${id}${set.size ? ` ${String(set.size)}` : ''}`) });
+// (a part remembered is on its own aisle, Yours / Remembered, placed the same way and deleted there: decision 0028)
+const note = (s: string, bad = false) => { const t = $('toast'); t.textContent = s; t.className = bad ? 'bad' : ''; t.style.display = 'block'; window.setTimeout(() => (t.style.display = 'none'), 4200); };
+mountParts({ into: $('boardName').parentElement!, add: (id, set) => wall.change((b) => addPiece(b, id, set), `added ${id}${set.size ? ` ${String(set.size)}` : ''}`), said: note });
+// (where the page starts (decision 0028): every part remembered a block (nodes.ts registered them); on claude.ai the page's
+// shared store brought in, and how many came in said)
+void startRemembered().then((r) => { if (inViewer) note(r.shared ? `Parts remembered: ${r.kept} here, ${r.came} came in from the page's shared store${r.sent ? `, ${r.sent} sent to it` : ''}` : `Parts remembered: ${r.kept} here; the shared store was not reached (${r.why ?? 'not on this page'})`, !r.shared); });
 // what a browser test drives it by
 (window as unknown as { dashboard: object }).dashboard = { dock, wall, paste, verdictLines, variations: () => variations(true), enter };

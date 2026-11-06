@@ -448,6 +448,40 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     put('show', 'space.show', {}, 'Press Move: the rods frozen in the air, the gears loose; drag the handle round'); wire(b, 'meshed', 'thing', 'show', 'thing');
     return b;
   }],
+  ['Movement: a rack and pinion, an m1 30-tooth gear loose on a rod frozen in the air, a rack laid under it: press Move, then drag the gear round', () => {
+    // (decision 0028, motion 2) all of it by the operations: an m1 spur gear of 30 teeth (ISO 53's rack, a 10 mm face), a
+    // Ø10 steel rod through it with a clear fit (it turns on it), and an m1 rack 200 mm long (piece.rack: ISO 53's basic
+    // rack) laid under it, its pitch line on the gear's pitch circle and a slide fit's backlash (Rack against a gear). In
+    // Move the rod is frozen where it stands, the gear loose: turn it and the rack slides along under it, 15 mm a radian
+    // (its pitch radius m z / 2) (sizes typical)
+    const b = emptyBoard('A rack and pinion');
+    const put = (id: string, block: string, set: Record<string, unknown>, label?: string) => { placeBlock(b, block, 0, 0, set, id); if (label) b.nodes[id]!.label = label; };
+    put('pinion', 'piece.gear', { module: '1', teeth: 30, width: 10, bore: 10 }, 'An m1 spur gear, 30 teeth');
+    put('rod', 'room.make', { name: 'pinion rod', shape: 'rod', mat: 'steel-low', a: 5, b: 80 }, 'A steel rod, Ø10 × 80');
+    put('on', 'room.through', { line: 'm1 z30 spur gear/axis', from: 'below', fit: 'clear' }, 'The rod through the gear, a clear fit: it turns on it'); wire(b, 'pinion', 'block', 'on', 'host'); wire(b, 'rod', 'block', 'on', 'passer');
+    put('rack', 'piece.rack', { size: 'm1', length: 200 }, 'An m1 rack, 200 mm');
+    put('meshed', 'room.rack', { line: 'm1 z30 spur gear/axis', toward: '-y', fit: 'slide' }, 'The rack laid under the gear, meshing'); wire(b, 'on', 'block', 'meshed', 'host'); wire(b, 'rack', 'block', 'meshed', 'rack');
+    put('show', 'space.show', {}, 'Press Move: the rod frozen, the gear loose; turn it and the rack slides'); wire(b, 'meshed', 'thing', 'show', 'thing');
+    return b;
+  }],
+  ['Movement: a belt round two pulleys, a 20-tooth and a 40-tooth HTD 5M, each loose on a shaft frozen in the air: press Move, then drag a pulley round', () => {
+    // (decision 0028, motion 2) all of it by the operations: an HTD 5M 20-tooth pulley with a Ø6 steel shaft through it and
+    // a 40-tooth with a Ø16 shaft through it (each in its pilot bore, a clear fit) (they turn on them), the second put 120 mm from the first
+    // (centre to centre, typical) and a belt 9 mm wide and 3.8 mm thick (Gates HTD 5M's, typical) laid round both (Belt
+    // round two pulleys). In Move the shafts are frozen in the air, the pulleys loose: turn one and the other turns the
+    // same way, at 20:40 of its speed
+    const b = emptyBoard('A belt round two pulleys');
+    const put = (id: string, block: string, set: Record<string, unknown>, label?: string) => { placeBlock(b, block, 0, 0, set, id); if (label) b.nodes[id]!.label = label; };
+    put('small', 'piece.htdpulley', { size: '5M 20T', width: 9 }, 'An HTD 5M pulley, 20 teeth');
+    put('shaftA', 'room.make', { name: 'shaft A', shape: 'rod', mat: 'steel-low', a: 3, b: 60 }, 'A shaft, Ø6 × 60, in its pilot bore');
+    put('onA', 'room.through', { line: '5M 20T pulley teeth/axis', from: 'below', fit: 'clear' }, 'The shaft through the small pulley, a clear fit: it turns on it'); wire(b, 'small', 'block', 'onA', 'host'); wire(b, 'shaftA', 'block', 'onA', 'passer');
+    put('big', 'piece.htdpulley', { size: '5M 40T', width: 9 }, 'An HTD 5M pulley, 40 teeth');
+    put('shaftB', 'room.make', { name: 'shaft B', shape: 'rod', mat: 'steel-low', a: 8, b: 60 }, 'A shaft, Ø16 × 60, in its pilot bore');
+    put('onB', 'room.through', { line: '5M 40T pulley teeth/axis', from: 'below', fit: 'clear' }, 'The shaft through the big pulley'); wire(b, 'big', 'block', 'onB', 'host'); wire(b, 'shaftB', 'block', 'onB', 'passer');
+    put('belt', 'room.belt', { a: '5M 20T pulley teeth/axis', b: '5M 40T pulley teeth/axis', name: '5M belt', width: 9, thick: 3.8, C: 120, toward: '+x' }, 'The big one 120 mm off, a 5M belt laid round both'); wire(b, 'onA', 'block', 'belt', 'host'); wire(b, 'onB', 'block', 'belt', 'other');
+    put('show', 'space.show', {}, 'Press Move: the shafts frozen, the pulleys loose; turn one and both turn, 20:40'); wire(b, 'belt', 'thing', 'show', 'thing');
+    return b;
+  }],
   ['Parts in 3D: a bolt sized from its load, drawn whole', () => {
     // the load picks the bolt: the shank area its shear needs, the next ISO 262 size up, and that bolt made by the
     // operations from its standard's row (ISO 4014's hex bolt: its head and shank), its size along a wire into the piece's family (piece.sized)

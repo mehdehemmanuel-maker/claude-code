@@ -31,7 +31,8 @@ import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
 import { askClaude, inViewer, sendReport, whyNot, type Report } from './viewer';
 // (the guide bundled, for the page on claude.ai, which builds Assist's call itself: decision 0027)
 setGuideMd(GUIDE_MD);
-import { mountParts } from './parts';
+import { YOURS, askName, keepBuild, mountParts, orchestration, orchestrationHtml, startRemembered } from './parts';
+import { registerSaved } from '../memory';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -42,7 +43,8 @@ const md = (s: string) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(
 const KEY = 'nexus.nodeboard.v1', BLOCKS_KEY = 'nexus.nodeblocks.v1', CHAT_KEY = 'nexus.vibe.chat.v1', MODE_KEY = 'nexus.vibe.mode.v1', TOK_KEY = 'nexus.vibe.tokens.v1', CHECK_KEY = 'nexus.vibe.check.v1';
 const store = { get(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }, set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* a private window: kept for this visit only */ } } };
 const savedBlocks = (): AgentBlock[] => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as AgentBlock[]; } catch { return []; } };
-for (const s of savedBlocks()) { try { register(groupBlock(s.graph, { id: s.id, name: s.name, says: s.says, domains: s.domains, by: 'you' })); } catch { /* one that no longer opens is left out */ } }
+// (every block saved and every part remembered (decision 0028, memory.ts: the same store) put in the library as a block)
+registerSaved();
 
 // ---- code blocks run off the page, as on the dashboard ---------------------------------------------------------------
 let worker: Worker | null = null, seq = 0;
@@ -250,7 +252,8 @@ const JOINS: { op: string; says: string }[] = [
   { op: 'room.into', says: 'Into a room' }, { op: 'room.stack', says: 'Stacked beside' },
 ];
 const pieces = (): BlockDef[] => [...LIBRARY.values()].filter((d) => d.id.startsWith('piece.') || d.id === 'room.make').sort((a, b) => a.name.localeCompare(b.name));
-const isPiece = (id: string) => id.startsWith('piece.') || id === 'room.make';
+// (a part remembered (my.*, decision 0028) is a thing like a piece: joined to what is there, or the first on its own)
+const isPiece = (id: string) => id.startsWith('piece.') || id === 'room.make' || id.startsWith('my.');
 /** The steps on what is there that bring no piece of the palette: each operation that takes one block (a bolted joint
  *  through a hole, bolt, washer and nut in one step; a lid on a box; bolted down to a plate; turned; a ring of copies; a
  *  housing round it), read from the library. Stack, which takes many, is a join. */
@@ -475,9 +478,11 @@ async function composeShown(q: string, why: string): Promise<void> {
   if (busy || !q.trim()) return; busy = true; ($('go') as HTMLButtonElement).disabled = true; $('sheet').classList.remove('low');
   chat.push({ who: 'me', html: esc(q.trim()) }); keepChat();
   const live: Said = { who: 'ai', html: '' }; chat.push(live);
-  const lines: string[] = [`<span>${esc(why)}</span>`], t0 = Date.now(), was = board; let note = 'Splitting it into its parts';
-  const paint = () => { live.html = `<div class="live"><span class="dots">${esc(note)}</span> · ${Math.round((Date.now() - t0) / 1000)} s</div><div class="steps">${lines.slice(-8).join('')}</div>`; drawChat(); };
-  const heard = (s: ComposeStep, b?: Board) => { lines.push(`<span${s.ok ? '' : ' class="f"'}>${s.ok ? '✓' : '✕'} ${esc(s.line.slice(0, 220))}</span>`); note = `${s.stage}: ${lines.length - 1} step${lines.length === 2 ? '' : 's'}`; if (b && nodesOf(b).length) void use(b, false); paint(); };
+  // (the orchestration as a tree as it runs (decision 0028): the split, each part under it, how it was made, ✓ or ✕, what
+  // it was kept as; then the join and the check)
+  const steps: ComposeStep[] = [], t0 = Date.now(), was = board; let note = 'Splitting it into its parts'; lastAsked = q.trim();
+  const paint = () => { live.html = `<div class="live"><span class="dots">${esc(note)}</span> · ${Math.round((Date.now() - t0) / 1000)} s</div><div class="note">${esc(why)}</div>${orchestrationHtml(orchestration(steps), 110)}`; drawChat(); };
+  const heard = (s: ComposeStep, b?: Board) => { steps.push(s); note = `${s.stage}: ${steps.length} step${steps.length === 1 ? '' : 's'}`; if (b && nodesOf(b).length) void use(b, false); paint(); };
   const tick = window.setInterval(paint, 1000); paint();
   try {
     let done: ComposeRun & { tokens?: Tok };
@@ -496,14 +501,36 @@ async function composeShown(q: string, why: string): Promise<void> {
     }
     if (done.tokens) spent(done.tokens);
     live.bad = !!done.unmet.length;
-    live.html = `${md(done.answer)}<details><summary>${done.steps.length} steps · ${done.asks} call${done.asks === 1 ? '' : 's'} · ${Math.round((Date.now() - t0) / 1000)} s</summary>${lines.join('<br>')}</details>${done.tokens ? tokLine(done.tokens) : '<div class="tok">on your claude.ai account</div>'}`;
+    live.html = composedHtml(done, Math.round((Date.now() - t0) / 1000));
     if (nodesOf(done.board).length) { history.push(structuredClone(was)); await use(done.board); requestAnimationFrame(() => dock.fit()); }
   } catch (e) { live.bad = true; live.html = md(`Could not: ${inViewer ? whyNot(e) : (e as Error).message}`); }
   finally { clearInterval(tick); busy = false; ($('go') as HTMLButtonElement).disabled = false; keepChat(); drawChat(); }
 }
+/** A compound build's answer: what was built, its orchestration as a tree (the run's own where it gives one), what it
+ *  cost, and the press that keeps it as one part. */
+function composedHtml(done: ComposeRun & { tokens?: Tok }, secs: number): string {
+  return `${md(done.answer)}<details open><summary>${done.steps.length} steps · ${done.asks} call${done.asks === 1 ? '' : 's'} · ${secs} s</summary>${orchestrationHtml(orchestration(done.steps, done), 110)}</details>${done.tokens ? tokLine(done.tokens) : '<div class="tok">on your claude.ai account</div>'}${nodesOf(done.board).length ? '<button class="keepb" data-keep="1">★ Keep this build</button>' : ''}`;
+}
+/** The request the board open was last built for: what a part kept from it says it was made for. */
+let lastAsked = '';
+// ---- Keep this build (decision 0028): the board open folded and remembered as one part, named by the person -------------
+async function keepShown(): Promise<void> {
+  if (busy) return; if (!nodesOf(board).length) { say('Nothing to keep yet: build something first.', true); return; }
+  const name = await askName({ title: 'Keep this build as one part, named', value: (board.title && board.title !== 'Nothing yet' ? board.title : lastAsked || 'my build').slice(0, 60) }); if (!name) return;
+  try { const { part, again } = await keepBuild(board, name, lastAsked || board.title || name), c = part.checked;
+    say(again ? `Already kept as **${part.name}** (\`${part.id}\`): that one is used again (${part.uses} use${part.uses === 1 ? '' : 's'}).`
+      : `Kept as **${part.name}** (\`${part.id}\`): one part of ${c.pieces} pieces, ${c.groups} group${c.groups === 1 ? '' : 's'}, ${c.failing} node${c.failing === 1 ? '' : 's'} failing when kept. It is in the parts (＋) under ${YOURS}, placed like any piece${inViewer ? ', and in the page\'s shared store' : ''}.`, c.failing > 0 || c.groups > 1); }
+  catch (e) { say(`Not kept: ${(e as Error).message}`, true); }
+}
+// (the press is a chip at the head of the chips, in the nodes' panel, and under each compound build's answer: in the bar
+// it pushed "Nodes" off a phone's width, 2026-11-06)
+const KEEP_SAYS = 'Keep this build: the board open folded into one part, named by you, kept with the parts (Yours / Remembered)';
+{ const k = document.createElement('button'); k.id = 'keep'; k.textContent = '★ Keep'; k.title = KEEP_SAYS; k.onclick = () => void keepShown(); $('toFull').before(k); }
+$('msgs').addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('[data-keep]')) void keepShown(); });
 let busy = false;
 async function ask(q: string): Promise<void> {
   if (/^\s*@?dev\s*[:,]/i.test(q)) return toDev(q.trim());
+  if (q.trim() && !busy) lastAsked = q.trim();
   // (Assist keeps its one call for a small request; one that names two or more things is built from its parts)
   if (mode === 'assist') return isCompound(q) ? composeShown(q, 'It names two or more things: built from its parts (a call to split it, a call a part, a call to join them), not one plan.') : askPlan(q);
   // (Auto: a new thing, or one of several things, from its parts; a change to the board open by the tool loop)
@@ -574,6 +601,7 @@ function drawChips(): void {
     if (!rows.length) { chips.appendChild(b); return; } const i = long[0]! <= long[1]! ? 0 : 1; long[i]! += label.length + 4; rows[i]!.appendChild(b); };
   // (by hand, two rows: the joints made on what is there (⊕), then every piece of the library, each as its block names it)
   const take = (d: BlockDef) => () => { if (!isPiece(d.id) && !endsOf().length) { say(`${d.name} is made on what is there: add a piece first (a plate, a box).`); return; } handPiece = d.id; drawHand(); $('sheet').classList.remove('low'); };
+  add('keepc', '★', 'Keep this build', KEEP_SAYS, () => void keepShown());
   if (mode === 'hand') { for (const d of stepsOn()) add('step', '⊕', d.name, d.says ?? '', take(d)); for (const d of pieces()) add('piece', '＋', d.name.replace(/^Bar of a section$/, 'Section'), d.says ?? '', take(d)); }
   else for (const q of ASK) add('ask', '✦', q, mode === 'assist' ? 'One call plans this' : 'Ask Claude to build this', () => void ask(q));
   for (const [label, title] of OPEN) add('open', '▦', label, 'Open it now (no AI needed)', () => { const hit = starterBoards().find(([t]) => t.startsWith(title)); if (!hit) { say(`No board "${title}" in this copy of the app.`, true); return; } chat.push({ who: 'me', html: `<span class="k">▦</span> ${esc(label)}` }); say(`Opened: ${hit[0].split(':')[0]}. ${mode === 'hand' ? 'Add pieces to it below.' : 'Ask me to change it: bigger, another material, more of them.'}`); void step(hit[1]()); });
@@ -583,7 +611,14 @@ drawChat(); drawTok(); setMode(mode);
 void use(board);
 // (the parts browser on the '+': every piece by trade, category and size; a size tapped is the by-hand step's piece, set to
 // it, joined to what is there as the form says, or built at once on an empty board; starting again is in it)
-mountParts({ trigger: $('fresh'), keepAs: 'Start again', add: (id, set) => { handPiece = id; for (const [k, v] of Object.entries(set)) handVals.set(`${id}.${k}`, String(v)); setMode('hand'); $('sheet').classList.remove('low'); if (!endsOf().length) void handAdd(); } });
+const parts = mountParts({ trigger: $('fresh'), keepAs: 'Start again', add: (id, set) => { handPiece = id; for (const [k, v] of Object.entries(set)) handVals.set(`${id}.${k}`, String(v)); setMode('hand'); $('sheet').classList.remove('low'); if (!endsOf().length) void handAdd(); }, said: (t, bad) => say(t, bad) });
+// (the parts remembered (decision 0028): on claude.ai the page's shared store brought in, and how many came in said, the
+// line said once (the last start's is replaced, not added to))
+void startRemembered().then((r) => { if (!inViewer) return;
+  chat = chat.filter((m) => !m.html.startsWith('<span class="mem">'));
+  chat.push({ who: 'ai', html: `<span class="mem">${esc(r.shared ? `Parts remembered: ${r.kept} here, ${r.came} came in from the page's shared store${r.sent ? `, ${r.sent} sent to it` : ''}.` : `Parts remembered: ${r.kept} in this browser; the page's shared store was not reached (${r.why ?? 'not on this page'}).`)}</span>`, ...(r.shared ? {} : { bad: true }) }); keepChat(); drawChat(); });
 // what a browser test drives it by
 (window as unknown as { nexusVibe: object }).nexusVibe = { board: () => board, ask, open: (title: string) => { const hit = starterBoards().find(([t]) => t.startsWith(title)); return hit ? step(hit[1]()) : Promise.reject(new Error(`no board ${title}`)); }, busy: () => busy, mode: setMode, tokens: () => total, plan: () => plan, headOf, ends: () => endsOf().map((e) => e.name),
-  /** a plan, as the model would write it, shown in Assist's panel to be built (the browser test builds one by its own hand) */ showPlan: (p: AgentPlan, asked = 'a plan') => { plan = { asked, plan: p, failing: [], built: false }; drawPlan(); } };
+  /** a plan, as the model would write it, shown in Assist's panel to be built (the browser test builds one by its own hand) */ showPlan: (p: AgentPlan, asked = 'a plan') => { plan = { asked, plan: p, failing: [], built: false }; drawPlan(); },
+  /** the steps of a compound build as a run streamed them (a recorded run's: no call), shown as its tree in the chat */ showSteps: (asked: string, steps: ComposeStep[], answer = '') => { chat.push({ who: 'me', html: esc(asked) }); chat.push({ who: 'ai', html: `${md(answer || `The steps of a run of "${asked}", as it streamed them:`)}${orchestrationHtml(orchestration(steps), 110)}`, ...(steps.some((s) => !s.ok) ? { bad: true } : {}) }); drawChat(); },
+  keep: keepShown, parts };

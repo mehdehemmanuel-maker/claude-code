@@ -24,7 +24,8 @@ import { boundsOfAll, flatten, isAssembly, massOfAll, matrixOf, place, type Asse
 import { massOf } from './mass';
 import type { Part } from './kits';
 import type { Material } from '../data/materials';
-import { gearOf, partOfBlock, primBox, type Block } from './room';
+import { FITS, boundOf, gearOf, partOfBlock, primBox, rackOf, teethOf, type Block } from './room';
+import { SERVOS } from './families';
 
 
 /** A piece of a body; with its own mass where it is known (what it is made of times its volume), so a body of a steel
@@ -435,50 +436,117 @@ function mPlace(of: Part | Assembly, m: THREE.Matrix4): Assembly['items'][number
 // the shafts with it, frozen. The live motion steps Jolt each frame; a hand's drag gives a torque about a body's joint,
 // or a pull on a body with none. Each piece collides as its own shape (a box, a cylinder round a round one, a gear's tip
 // circle as a cylinder: an envelope), save the pieces of two bodies that touch, turn on each other or mesh.
-// (Cut, for a later round: a sleeve sliding along its shaft (it only turns), a room joint's own slide or turn, gears whose
-// axes are not along their own z as made, racks, belts.)
+// Decision 0028, motion 2: a sleeve with a slide fit slides along its shaft as it turns (within the room its ends leave),
+// a carriage on two parallel slide fits only slides, a rack meshed by a gear slides r a radian of it (Jolt's rack and
+// pinion), two pulleys a belt is laid round turn together by their teeth, the same way; a joint a servo's or a gear
+// motor's holds where it is put (a position motor, to a servo's stall torque), and is driven at a speed when asked; a
+// touch that would lock a joint gives way to it; bodies not joined collide.
+// (Cut, for a later round: a room joint's own slide or turn, gears whose axes are not along their own z as made, a keyed
+// sleeve (it turns too), a lead screw driving its nut, sliders driven by a motor.)
 
 /** A body of what is made: its pieces (by their index in the block), whether it is frozen, and why. */
 export interface MoveBody { name: string; pieces: number[]; frozen: boolean; why: string }
-/** A body that turns (a) on another (b, the shaft's) about a line through `point` along `dir`, from the faces that say so. */
-export interface MoveJoint { a: number; b: number; point: V3; dir: V3; by: string[] }
+/** What drives a joint: a hobby servo (its stall torque, vendor figures, typical) or a gear motor or stepper (its torque
+ *  not known here: held stiff), and whether it holds where it is put by default. */
+export interface MoveMotor { kind: 'servo' | 'gear motor' | 'stepper'; torque?: number; from: string }
+/** A body that turns (a) on another (b, the shaft's) about a line through `point` along `dir`, from the faces that say so;
+ *  with `slide`, it slides along that line too (a slide fit), within `range` (m from where it stands: its ends' room on the
+ *  shaft); with `turns` false, it only slides (two parallel lines, a carriage on its rods; a rack); a motor where one
+ *  drives it (a servo's spline, a gear motor's shaft). */
+export interface MoveJoint { a: number; b: number; point: V3; dir: V3; by: string[]; turns: boolean; slide?: boolean; range?: [number, number]; motor?: MoveMotor }
 /** Two meshing gears: their bodies, pieces, teeth. */
 export interface MoveMesh { a: number; b: number; ga: string; gb: string; za: number; zb: number; m: number }
-export interface Motion { bodies: MoveBody[]; joints: MoveJoint[]; meshes: MoveMesh[]; says: string }
+/** A gear (its body a) moving a rack (body b) along `dir` by its pitch radius r times its turn. */
+export interface MoveRack { a: number; b: number; gear: string; rack: string; r: number; z: number; m: number; dir: V3 }
+/** Two pulleys or sprockets (bodies a and b) a belt or chain turns together, the same way, by their teeth (or radii). */
+export interface MoveBelt { a: number; b: number; pa: string; pb: string; za: number; zb: number; belt: string; teeth: boolean }
+export interface Motion { bodies: MoveBody[]; joints: MoveJoint[]; meshes: MoveMesh[]; racks: MoveRack[]; belts: MoveBelt[]; says: string }
 
-const TURNS = / over | through |in the bore of /;
-/** How what is made moves: its bodies, the lines they turn about, and which gears mesh, all read from its faces. */
+const TURNS = / over | through |in the bore of /, IN_HOLE = / in the hole of /;
+/** Hobby servos' stall torque, N·m (families.ts SERVOS: SG90 1.8 kg·cm, MG996R 9.4 kg·cm at 4.8 V, vendor figures, typical;
+ *  1 kg·cm = 0.0980665 N·m); the MG90S taken as the micro class, a guess. */
+const SERVO_NM = (name: string): number | undefined => { const k = /MG996|standard/i.test(name) ? SERVOS.standard : /SG90|MG90|micro/i.test(name) ? SERVOS.micro : undefined; const t = k ? /([\d.]+) kg·cm/.exec(k.torque) : null; return t ? Number(t[1]) * 0.0980665 : undefined; };
+const motorOf = (names: string): MoveMotor | undefined => /servo|spline/i.test(names) ? { kind: 'servo', ...(SERVO_NM(names) !== undefined ? { torque: SERVO_NM(names)! } : {}), from: SERVO_NM(names) !== undefined ? 'its stall torque (families.ts SERVOS, vendor, typical)' : 'its torque not known here: held stiff' }
+  : /gear motor/i.test(names) ? { kind: 'gear motor', from: 'its torque not known here: held stiff' } : /stepper|NEMA/i.test(names) ? { kind: 'stepper', from: 'its holding torque not known here: held stiff' } : undefined;
+/** How what is made moves: its bodies, the lines they turn or slide along, which gears mesh, which racks they drive and
+ *  which pulleys a belt joins, all read from its faces. Pieces touching join one body, the largest faces first, save a
+ *  touch that would lock a joint (a spline's tip against the plate on its horn): that one gives way to the joint. */
 export function motionOf(b: Block): Motion {
   const n = b.pieces.length, up = Array.from({ length: n }, (_, i) => i), find = (i: number): number => (up[i] === i ? i : (up[i] = find(up[i]!)));
   const join = (i: number, j: number) => { up[find(i)] = find(j); };
-  const turns: { shaft: number; on: number; point: V3; dir: V3; by: string }[] = [];
+  const turns: { shaft: number; on: number; point: V3; dir: V3; by: string; slide: boolean }[] = [], touches: typeof b.faces[number][] = [];
   for (const f of b.faces) {
-    if (/ meshes /.test(f.by)) continue;
+    if (/ meshes | laid round /.test(f.by)) continue;
     // (the round one of the two is round about the line: the sleeve over it, or the passer along it)
     const round = b.pieces[f.b]!.solid.base;
-    if (f.gap > 0 && !f.gate && TURNS.test(f.by) && round.k !== 'box' && round.k !== 'bend') {
+    // (or a shaft in the hole of a section: a gear's or a pulley's pilot bore, wider than it; not a bolt in a plate's hole)
+    const sectHole = IN_HOLE.test(f.by) && b.pieces[f.a]!.solid.base.k === 'box' && !!(b.pieces[f.a]!.solid.base as { sect?: unknown }).sect;
+    if (f.gap > 0 && !f.gate && (TURNS.test(f.by) || sectHole) && round.k !== 'box' && round.k !== 'bend') {
       const over = / over /.test(f.by), d = round.frame ? [round.frame[1], round.frame[4], round.frame[7]] as V3 : [0, 1, 0] as V3;
-      turns.push({ shaft: over ? f.a : f.b, on: over ? f.b : f.a, point: [round.c[0], round.c[1], round.c[2]], dir: d, by: f.by }); continue; }
-    if (f.gap === 0 || f.kind === 'contact') join(f.a, f.b);
+      turns.push({ shaft: over ? f.a : f.b, on: over ? f.b : f.a, point: [round.c[0], round.c[1], round.c[2]], dir: d, by: f.by, slide: Math.abs(f.gap - FITS.slide.gap) < 1e-9 }); continue; }
+    if (f.gap === 0 || f.kind === 'contact') touches.push(f);
   }
+  const weight = (f: typeof b.faces[number]) => f.area || (f.length ?? 0) * 1e-3;
+  const said: string[] = [];
+  for (const f of touches.sort((p, q) => weight(q) - weight(p))) { const A = find(f.a), B = find(f.b); if (A === B) continue;
+    const locks = turns.some((t) => { const o = find(t.on), s = find(t.shaft); return (o === A && s === B) || (o === B && s === A); });
+    if (locks) { said.push(`the ${b.pieces[f.a]!.name} touching the ${b.pieces[f.b]!.name} gives way to the joint`); continue; } join(f.a, f.b); }
   const same = (p: { point: V3; dir: V3 }, q: { point: V3; dir: V3 }) => { const c = cross(p.dir, q.dir), d: V3 = [q.point[0] - p.point[0], q.point[1] - p.point[1], q.point[2] - p.point[2]], off = cross(d, p.dir); return Math.hypot(...c) < 1e-6 && Math.hypot(...off) < 1e-6; };
-  // (two lines between the same two bodies that are not one line lock them: one body; until nothing more joins)
+  const parallel = (p: { dir: V3 }, q: { dir: V3 }) => Math.hypot(...cross(p.dir, q.dir)) < 1e-6;
+  // (two lines between the same two bodies that are not one line lock them, save parallel slide fits (a carriage on two
+  // rods: it slides along them); until nothing more joins)
+  const pairOf = (t: typeof turns[number]) => { const a = find(t.on), s = find(t.shaft); return a < s ? `${a},${s}` : `${s},${a}`; };
   for (let again = true; again;) { again = false; const by = new Map<string, typeof turns>();
-    for (const t of turns) { const a = find(t.on), s = find(t.shaft); if (a === s) continue; const k = a < s ? `${a},${s}` : `${s},${a}`; by.set(k, [...(by.get(k) ?? []), t]); }
-    for (const ts of by.values()) if (ts.some((t) => !same(ts[0]!, t))) { join(ts[0]!.on, ts[0]!.shaft); again = true; } }
+    for (const t of turns) { if (find(t.on) === find(t.shaft)) continue; const k = pairOf(t); by.set(k, [...(by.get(k) ?? []), t]); }
+    for (const ts of by.values()) if (ts.some((t) => !same(ts[0]!, t)) && !ts.every((t) => t.slide && parallel(ts[0]!, t))) { join(ts[0]!.on, ts[0]!.shaft); again = true; } }
   const roots = [...new Set(up.map((_, i) => find(i)))], of = new Map(roots.map((r, k) => [r, k]));
   const bodies: MoveBody[] = roots.map((r) => { const ps = up.map((_, i) => i).filter((i) => find(i) === r), names = ps.map((i) => b.pieces[i]!.name); return { name: names.length > 2 ? `${names[0]} and ${names.length - 1} more` : names.join(' and '), pieces: ps, frozen: true, why: 'held: it turns on nothing' }; });
+  const bodyOf = (i: number) => of.get(find(i))!, boxes = b.pieces.map((p) => boundOf(p));
   const joints: MoveJoint[] = [];
-  for (const t of turns) { const a = of.get(find(t.on))!, s = of.get(find(t.shaft))!; if (a === s) continue; const j = joints.find((x) => (x.a === a && x.b === s) || (x.a === s && x.b === a)); if (j) j.by.push(t.by); else joints.push({ a, b: s, point: t.point, dir: t.dir, by: [t.by] }); }
-  // (by default what turns on a shaft is loose; the shafts, and all that turns on nothing, frozen where they stand)
+  for (const t of turns) { const a = of.get(find(t.on))!, s = of.get(find(t.shaft))!; if (a === s) continue; const j = joints.find((x) => (x.a === a && x.b === s) || (x.a === s && x.b === a));
+    if (j) { j.by.push(t.by); if (!same(j, t)) j.turns = false; j.slide = j.slide && t.slide; } else joints.push({ a, b: s, point: t.point, dir: t.dir, by: [t.by], turns: true, slide: t.slide }); }
+  // (a slide's room: along its line, to the nearest piece of another body in its way, and never off the ends of what it is on)
+  const rangeOf = (j: MoveJoint, onto: number[]): [number, number] | undefined => { const k = j.dir.findIndex((x) => Math.abs(Math.abs(x) - 1) < 1e-9); if (k < 0) return undefined;
+    const mine = bodies[j.a]!.pieces, lo = Math.min(...mine.map((i) => boxes[i]![0][k]!)), hi = Math.max(...mine.map((i) => boxes[i]![1][k]!)), o = [0, 1, 2].filter((x) => x !== k);
+    const L0 = o.map((x) => Math.min(...mine.map((i) => boxes[i]![0][x]!))), H0 = o.map((x) => Math.max(...mine.map((i) => boxes[i]![1][x]!)));
+    let r0 = -Infinity, r1 = Infinity; for (const i of onto) { r0 = Math.max(r0, boxes[i]![0][k]! - lo); r1 = Math.min(r1, boxes[i]![1][k]! - hi); }
+    for (let i = 0; i < n; i++) { if (bodyOf(i) === j.a || onto.includes(i)) continue; const q = boxes[i]!; if (!o.every((x, m) => q[0][x]! < H0[m]! - 1e-9 && q[1][x]! > L0[m]! + 1e-9)) continue;
+      if (q[1][k]! <= lo + 1e-9) r0 = Math.max(r0, q[1][k]! - lo); else if (q[0][k]! >= hi - 1e-9) r1 = Math.min(r1, q[0][k]! - hi); }
+    if (!Number.isFinite(r0) || !Number.isFinite(r1)) return undefined; const s = Math.sign(j.dir[k]!); return s > 0 ? [Math.min(0, r0), Math.max(0, r1)] : [-Math.max(0, r1), -Math.min(0, r0)]; };
+  for (const j of joints) if (j.slide) { const onto = turns.filter((t) => bodyOf(t.on) === j.a && bodyOf(t.shaft) === j.b).map((t) => t.shaft), r = rangeOf(j, onto);
+    if (r && r[1] - r[0] > 1e-6) j.range = r; else { j.slide = false; said.push(`${bodies[j.a]!.name}: its ends held, it only turns`); }
+    if (!j.slide && !j.turns) j.turns = true; }
+  // (a motor where one drives the joint: the shaft's body a servo's or a gear motor's)
+  for (const j of joints) { const m = motorOf([...bodies[j.b]!.pieces.map((i) => b.pieces[i]!.name), ...j.by].join(' ')); if (m) j.motor = m; }
+  // (a rack meshed by a gear: it slides along its length, on what its gear turns on, the gear driving it)
+  const racks: MoveRack[] = [];
+  for (const f of b.faces) { if (!/ meshes /.test(f.by)) continue; const [ri, gi] = rackOf(b.pieces[f.a]!) ? [f.a, f.b] : rackOf(b.pieces[f.b]!) ? [f.b, f.a] : [-1, -1]; if (ri < 0) continue;
+    const R = rackOf(b.pieces[ri]!)!, G = gearOf(b.pieces[gi]!); if (!G) continue; const a = bodyOf(gi), r = bodyOf(ri); if (a === r) continue;
+    const base = joints.find((j) => j.a === a)?.b ?? a; racks.push({ a, b: r, gear: b.pieces[gi]!.name, rack: b.pieces[ri]!.name, r: (G.m * G.z) / 2, z: G.z, m: G.m, dir: R.dir });
+    const ax = R.dir.findIndex((x) => Math.abs(Math.abs(x) - 1) < 1e-9), lo = boxes[ri]![0][ax] ?? 0, hi = boxes[ri]![1][ax] ?? 0, at = G.at[ax] ?? 0, s = Math.sign(R.dir[ax] ?? 1);
+    const rg: [number, number] = [at - hi + G.ra, at - lo - G.ra]; joints.push({ a: r, b: base, point: R.c, dir: R.dir, by: [f.by], turns: false, slide: true, ...(rg[1] > rg[0] ? { range: s > 0 ? rg : [-rg[1], -rg[0]] } : {}) }); }
+  // (pulleys a belt is laid round: their bodies turn together by their teeth)
+  const belts: MoveBelt[] = [], laps = b.faces.filter((f) => / laid round /.test(f.by));
+  for (let i = 0; i < laps.length; i++) for (let k = i + 1; k < laps.length; k++) { const p = laps[i]!, q = laps[k]!; if (bodyOf(p.b) !== bodyOf(q.b)) continue;
+    const ax = (f: typeof p) => { const l = b.pieces[f.a]!.lines[0], c = b.pieces[f.a]!.solid.base.c; return l ? [l.x, l.y ?? c[1], l.z] as V3 : [c[0], c[1], c[2]] as V3; };
+    const tz = (f: typeof p) => teethOf(b.pieces[f.a]!, ax(f)), za = tz(p), zb = tz(q), teeth = za !== undefined && zb !== undefined, rad = (f: typeof p) => Math.hypot(f.at[0] - ax(f)[0], f.at[1] - ax(f)[1]);
+    belts.push({ a: bodyOf(p.a), b: bodyOf(q.a), pa: b.pieces[p.a]!.name, pb: b.pieces[q.a]!.name, za: teeth ? za! : rad(p), zb: teeth ? zb! : rad(q), belt: bodies[bodyOf(p.b)]!.name, teeth }); }
+  // (by default what turns on a shaft is loose; the shafts, and all that turns on nothing, frozen where they stand; but where
+  // motors drive the joints (a servo arm, a rover's wheels) only what it stands on is frozen, the motors holding the rest)
   for (const j of joints) { if (!bodies[j.b]!.why.startsWith('loose')) { bodies[j.b]!.frozen = true; bodies[j.b]!.why = 'held: a shaft'; } }
-  for (const j of joints) if (bodies[j.a]!.why !== 'held: a shaft') { bodies[j.a]!.frozen = false; bodies[j.a]!.why = `loose: turns on ${bodies[j.b]!.name}`; }
+  for (const j of joints) if (bodies[j.a]!.why !== 'held: a shaft') { bodies[j.a]!.frozen = false; bodies[j.a]!.why = `loose: ${j.turns ? 'turns' : 'slides'} on ${bodies[j.b]!.name}${j.turns && j.slide ? ' and slides along it' : ''}`; }
+  if (joints.some((j) => j.motor)) { const parts = partOfBlock(b).parts ?? [], mass = bodies.map((x) => x.pieces.reduce((t, i) => t + (parts[i] ? massOfAll(parts[i]!) : 0), 0));
+    const driven = new Set(joints.filter((j) => j.motor).flatMap((j) => [j.a, j.b])), low = bodies.map((x) => Math.min(...x.pieces.map((i) => boxes[i]![0][1]!)));
+    // (what it stands on: the lowest of them (an arm's base plate), the heavier where two are as low)
+    const root = [...driven].sort((p, q) => (Math.abs(low[p]! - low[q]!) > 1e-6 ? low[p]! - low[q]! : mass[q]! - mass[p]!))[0]!;
+    for (const k of driven) { const j = joints.find((x) => x.a === k && x.motor) ?? joints.find((x) => x.b === k && x.motor)!; bodies[k]!.frozen = k === root; bodies[k]!.why = k === root ? 'held: what it stands on (its lowest), its motors holding the rest' : `loose: held by its ${j.motor!.kind}`; } }
   const meshes: MoveMesh[] = [], gears = b.pieces.map((p) => gearOf(p));
   for (let i = 0; i < n; i++) for (let k = i + 1; k < n; k++) { const A = gears[i], B = gears[k]; if (!A || !B || Math.abs(A.m - B.m) > 1e-9 || find(i) === find(k)) continue;
     const d = Math.hypot(A.at[0] - B.at[0], A.at[1] - B.at[1]), a0 = (A.m * (A.z + B.z)) / 2;
     if (d > a0 - 1e-9 && d < a0 + 0.25 * A.m && A.z0 < B.z1 && B.z0 < A.z1) meshes.push({ a: of.get(find(i))!, b: of.get(find(k))!, ga: b.pieces[i]!.name, gb: b.pieces[k]!.name, za: A.z, zb: B.z, m: A.m }); }
-  const says = [`${bodies.length} bod${bodies.length === 1 ? 'y' : 'ies'} (${bodies.filter((x) => x.frozen).length} frozen)`, ...joints.map((j) => `${bodies[j.a]!.name} turns on ${bodies[j.b]!.name}`), ...meshes.map((m) => `${m.ga} meshes ${m.gb}: ${m.zb}:${m.za}, the other way`)].join('; ');
-  return { bodies, joints, meshes, says };
+  const says = [`${bodies.length} bod${bodies.length === 1 ? 'y' : 'ies'} (${bodies.filter((x) => x.frozen).length} frozen)`, ...joints.map((j) => `${bodies[j.a]!.name} ${j.turns ? 'turns' : 'slides'} on ${bodies[j.b]!.name}${j.turns && j.slide ? ', sliding along it' : ''}${j.motor ? ` (a ${j.motor.kind}: it holds)` : ''}`),
+    ...meshes.map((m) => `${m.ga} meshes ${m.gb}: ${m.zb}:${m.za}, the other way`), ...racks.map((r) => `${r.gear} drives ${r.rack}: ${(r.r * 1000).toFixed(2)} mm a radian`), ...belts.map((x) => `${x.belt} joins ${x.pa} and ${x.pb}: ${x.zb}:${x.za}, the same way`), ...said].join('; ');
+  return { bodies, joints, meshes, racks, belts, says };
 }
 const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
@@ -491,7 +559,8 @@ export class LiveMotion {
   readonly floor: number;
   private readonly J: Jolt; private readonly jolt: InstanceType<Jolt['JoltInterface']>; private readonly bi: InstanceType<Jolt['BodyInterface']>;
   private readonly live: { body: InstanceType<Jolt['Body']>; p0: V3; q0: Q4; mass: number }[] = [];
-  private readonly hinge = new Map<number, { c: InstanceType<Jolt['HingeConstraint']>; dir: V3; point: V3; last: number; add: number }>();
+  private readonly joint = new Map<number, { kind: 'hinge' | 'slide' | 'six'; c: InstanceType<Jolt['TwoBodyConstraint']>; dir: V3; point: V3; last: number; add: number; s0: number }>();
+  private readonly held = new Set<number>();
   private readonly pending = new Map<number, { T?: number; F?: V3; point?: V3 }>();
   constructor(J: Jolt, readonly block: Block, frozen?: boolean[]) {
     this.J = J; this.floor = block.lo[1] - 0.5 * Math.max(block.hi[0] - block.lo[0], block.hi[1] - block.lo[1], block.hi[2] - block.lo[2]); const m0 = motionOf(block); this.motion = { ...m0, bodies: m0.bodies.map((x, i) => (frozen && frozen[i] !== undefined ? { ...x, frozen: frozen[i]!, why: frozen[i] ? 'held: frozen by hand' : 'loose: set by hand' } : x)) };
@@ -526,18 +595,40 @@ export class LiveMotion {
       const bd = bi.CreateBody(cs); J.destroy(cs); bi.AddBody(bd.GetID(), body.frozen ? J.EActivation_DontActivate : J.EActivation_Activate);
       this.live.push({ body: bd, p0: at, q0: q, mass });
     });
-    // (two bodies that touch, turn on each other or mesh do not collide: what holds them is the face or the joint)
-    const touch = new Set<string>(), bodyOf = new Map<number, number>(); B.forEach((x, k) => x.pieces.forEach((i) => bodyOf.set(i, k)));
-    for (const f of block.faces) { const a = bodyOf.get(f.a)!, c = bodyOf.get(f.b)!; if (a !== c) touch.add(`${Math.min(a, c)},${Math.max(a, c)}`); }
-    for (const m of this.motion.meshes) touch.add(`${Math.min(m.a, m.b)},${Math.max(m.a, m.b)}`);
+    // (two bodies that turn or slide on each other, mesh, are joined by a belt or a rack, or touch with no gap do not
+    // collide: what holds them is the joint or the face; two that are not joined do (a gripper's fingers hit what they
+    // close on), what stands a gap apart included)
+    const touch = new Set<string>(), bodyOf = new Map<number, number>(), pair = (a: number, c: number) => touch.add(`${Math.min(a, c)},${Math.max(a, c)}`); B.forEach((x, k) => x.pieces.forEach((i) => bodyOf.set(i, k)));
+    for (const f of block.faces) { const a = bodyOf.get(f.a)!, c = bodyOf.get(f.b)!; if (a !== c && (f.gap === 0 || / meshes | laid round /.test(f.by))) pair(a, c); }
+    for (const m of this.motion.meshes) pair(m.a, m.b);
+    for (const j of this.motion.joints) pair(j.a, j.b);
+    for (const r of this.motion.racks) pair(r.a, r.b);
+    for (const x of this.motion.belts) { pair(x.a, x.b); for (const k of B.keys()) if (B[k]!.name === x.belt) { pair(k, x.a); pair(k, x.b); } }
     for (const k of touch) { const [a, c] = k.split(',').map(Number); filter.DisableCollision(a!, c!); }
+    const unit = (d: V3): V3 => { const n = Math.hypot(...d); return [d[0] / n, d[1] / n, d[2] / n]; }, normalOf = (u: V3): V3 => { const e: V3 = Math.abs(u[0]) < 0.6 ? [1, 0, 0] : [0, 1, 0], c0 = cross(u, e); return unit(c0); };
     for (const j of this.motion.joints) {
       const A = B[j.a]!, S = B[j.b]!; if (A.frozen && S.frozen) continue;
-      const n = Math.hypot(...j.dir), u: V3 = [j.dir[0] / n, j.dir[1] / n, j.dir[2] / n], e: V3 = Math.abs(u[0]) < 0.6 ? [1, 0, 0] : [0, 1, 0], c0 = cross(u, e), cn = Math.hypot(...c0), nr: V3 = [c0[0] / cn, c0[1] / cn, c0[2] / cn];
-      const st = new J.HingeConstraintSettings(); st.mPoint1 = R(j.point); st.mPoint2 = R(j.point); st.mHingeAxis1 = V(u); st.mHingeAxis2 = V(u); st.mNormalAxis1 = V(nr); st.mNormalAxis2 = V(nr); st.mNumVelocityStepsOverride = 30; st.mNumPositionStepsOverride = 10;
-      // (the loose one is what turns: the hinge's second body; a shaft loose on a frozen sleeve turns in it the same way)
+      const u = unit(j.dir), nr = normalOf(u);
+      // (the loose one is what moves: the constraint's second body; a shaft loose on a frozen sleeve turns in it the same way)
       const [b1, b2, who] = A.frozen ? [this.live[j.a]!.body, this.live[j.b]!.body, j.b] : [this.live[j.b]!.body, this.live[j.a]!.body, j.a];
-      const c = J.castObject(st.Create(b1, b2), J.HingeConstraint); J.destroy(st); ps.AddConstraint(c); this.hinge.set(who, { c, dir: u, point: j.point, last: 0, add: 0 });
+      const sgn = A.frozen ? -1 : 1, rg = j.range ? (sgn > 0 ? j.range : [-j.range[1], -j.range[0]] as [number, number]) : undefined;
+      if (j.turns && !j.slide) {
+        const st = new J.HingeConstraintSettings(); st.mPoint1 = R(j.point); st.mPoint2 = R(j.point); st.mHingeAxis1 = V(u); st.mHingeAxis2 = V(u); st.mNormalAxis1 = V(nr); st.mNormalAxis2 = V(nr); st.mNumVelocityStepsOverride = 30; st.mNumPositionStepsOverride = 10;
+        // (a motor's: it drives to an angle on a stiff spring (20 Hz, critically damped, a guess for a servo's loop), no more
+        // than its torque where that is known)
+        if (j.motor) { const ms = st.mMotorSettings; ms.mSpringSettings.mFrequency = 20; ms.mSpringSettings.mDamping = 1; if (j.motor.torque) { ms.mMinTorqueLimit = -j.motor.torque; ms.mMaxTorqueLimit = j.motor.torque; } }
+        const c = J.castObject(st.Create(b1, b2), J.HingeConstraint); J.destroy(st); ps.AddConstraint(c); this.joint.set(who, { kind: 'hinge', c, dir: u, point: j.point, last: 0, add: 0, s0: 0 });
+        if (j.motor) { c.SetMotorState(J.EMotorState_Position); c.SetTargetAngle(0); this.held.add(who); }
+      } else if (!j.turns) {
+        const st = new J.SliderConstraintSettings(); st.mAutoDetectPoint = false; st.mPoint1 = R(j.point); st.mPoint2 = R(j.point); st.mSliderAxis1 = V(u); st.mSliderAxis2 = V(u); st.mNormalAxis1 = V(nr); st.mNormalAxis2 = V(nr);
+        if (rg) { st.mLimitsMin = rg[0]; st.mLimitsMax = rg[1]; }
+        const c = J.castObject(st.Create(b1, b2), J.SliderConstraint); J.destroy(st); ps.AddConstraint(c); this.joint.set(who, { kind: 'slide', c, dir: u, point: j.point, last: 0, add: 0, s0: 0 });
+      } else {
+        // (it turns and slides: a six-axis constraint with its own x along the line free to slide (within its room) and turn)
+        const st = new J.SixDOFConstraintSettings(); st.mPosition1 = R(j.point); st.mPosition2 = R(j.point); st.mAxisX1 = V(u); st.mAxisX2 = V(u); st.mAxisY1 = V(nr); st.mAxisY2 = V(nr);
+        st.MakeFreeAxis(J.SixDOFConstraintSettings_EAxis_RotationX); if (rg) st.SetLimitedAxis(J.SixDOFConstraintSettings_EAxis_TranslationX, rg[0], rg[1]); else st.MakeFreeAxis(J.SixDOFConstraintSettings_EAxis_TranslationX);
+        const c = J.castObject(st.Create(b1, b2), J.SixDOFConstraint); J.destroy(st); ps.AddConstraint(c); this.joint.set(who, { kind: 'six', c, dir: u, point: j.point, last: 0, add: 0, s0: 0 });
+      }
     }
     for (const m of this.motion.meshes) {
       const st = new J.GearConstraintSettings(); st.mHingeAxis1 = V([0, 0, 1]); st.mHingeAxis2 = V([0, 0, 1]); st.SetRatio(m.za, m.zb);
@@ -546,20 +637,44 @@ export class LiveMotion {
       // any ratio but a whole one it pulls them off their ratio at every wrap (measured: 40:30 turned at 0.99, not 1.33))
       ps.AddConstraint(c);
     }
+    // (a belt or chain: its two wheels the same way, by their teeth: a gear constraint with the second one's axis reversed)
+    for (const x of this.motion.belts) { const ja = this.joint.get(x.a), jb = this.joint.get(x.b); if (!ja || !jb) continue;
+      const st = new J.GearConstraintSettings(); st.mHingeAxis1 = V(ja.dir); st.mHingeAxis2 = V([-jb.dir[0], -jb.dir[1], -jb.dir[2]]); st.SetRatio(x.za, x.zb);
+      const c = J.castObject(st.Create(this.live[x.a]!.body, this.live[x.b]!.body), J.GearConstraint); J.destroy(st); ps.AddConstraint(c); }
+    // (a rack and its pinion: Jolt's rack-and-pinion constraint, the rack moved r a radian of its pinion's turn, its teeth
+    // and length as drawn (n teeth, n π m long), the pinion's z)
+    for (const r of this.motion.racks) { const jp = this.joint.get(r.a), jr = this.joint.get(r.b); if (!jp || !jr) continue;
+      const st = new J.RackAndPinionConstraintSettings(); st.mHingeAxis = V(jp.dir); st.mSliderAxis = V(jr.dir); st.SetRatio(r.z, r.z * Math.PI * r.m, r.z);
+      const c = J.castObject(st.Create(this.live[r.a]!.body, this.live[r.b]!.body), J.RackAndPinionConstraint); J.destroy(st); ps.AddConstraint(c); }
   }
   /** A torque about a body's joint, N·m (or, with none, nothing), held until the next step ends. */
   torque(body: number, T: number): void { this.pending.set(body, { ...this.pending.get(body), T }); }
   /** A pull on a body at a point of it, N (a body with no joint dragged by hand). */
   pull(body: number, F: V3, point: V3): void { this.pending.set(body, { ...this.pending.get(body), F, point }); }
-  /** A body's joint driven at so many rad/s (a crank turned at a speed, a motor); null lets it go. */
-  spin(body: number, w: number | null): void { const h = this.hinge.get(body); if (!h) return; h.c.SetMotorState(w === null ? this.J.EMotorState_Off : this.J.EMotorState_Velocity); if (w !== null) h.c.SetTargetAngularVelocity(w); this.bi.ActivateBody(this.live[body]!.body.GetID()); }
-  /** Whether a body turns about a joint, and the line it turns about. */
-  jointOf(body: number): { point: V3; dir: V3 } | undefined { const h = this.hinge.get(body); return h ? { point: h.point, dir: h.dir } : undefined; }
+  /** A body's joint driven at so many rad/s (a crank turned at a speed, a motor), to its motor's torque where it has one;
+   *  null lets it go (or, for a motor's joint, holds it where it is). */
+  spin(body: number, w: number | null): void { const h = this.joint.get(body); if (!h || h.kind !== 'hinge') return; const c = h.c as InstanceType<Jolt['HingeConstraint']>;
+    if (w === null) { if (this.motorOf(body)) return this.hold(body); c.SetMotorState(this.J.EMotorState_Off); this.held.delete(body); }
+    else { c.SetMotorState(this.J.EMotorState_Velocity); c.SetTargetAngularVelocity(w); this.held.delete(body); } this.bi.ActivateBody(this.live[body]!.body.GetID()); }
+  /** A body's joint held at an angle (rad, as made 0; by default where it is now): a servo holding its horn where it is put.
+   *  null lets it go. */
+  hold(body: number, angle?: number | null): void { const h = this.joint.get(body); if (!h || h.kind !== 'hinge') return; const c = h.c as InstanceType<Jolt['HingeConstraint']>;
+    if (angle === null) { c.SetMotorState(this.J.EMotorState_Off); this.held.delete(body); return; }
+    // (Jolt's target is within a half turn of zero: the hinge's own angle, not counting whole turns)
+    c.SetTargetAngle(angle ?? c.GetCurrentAngle()); c.SetMotorState(this.J.EMotorState_Position); this.held.add(body); this.bi.ActivateBody(this.live[body]!.body.GetID()); }
+  /** Whether a body's joint is held at an angle now. */
+  isHeld(body: number): boolean { return this.held.has(body); }
+  /** The motor that drives a body's joint, if one does. */
+  motorOf(body: number): MoveMotor | undefined { return this.motion.joints.find((j) => (j.a === body || j.b === body) && j.motor && this.joint.has(body))?.motor; }
+  /** Whether a body turns (or slides) about a joint, and the line it moves about; what kind. */
+  jointOf(body: number): { point: V3; dir: V3; kind: 'hinge' | 'slide' | 'six' } | undefined { const h = this.joint.get(body); return h ? { point: h.point, dir: h.dir, kind: h.kind } : undefined; }
   /** How far a body has turned about its joint since it began, rad (counting whole turns). */
-  angle(body: number): number { const h = this.hinge.get(body); return h ? h.last + h.add : 0; }
+  angle(body: number): number { const h = this.joint.get(body); return h ? h.last + h.add : 0; }
+  /** How far a body has slid along its joint's line since it began, m. */
+  slid(body: number): number { const h = this.joint.get(body), l = this.live[body]!; if (!h) return 0; const p = l.body.GetPosition(); return (p.GetX() - l.p0[0]) * h.dir[0] + (p.GetY() - l.p0[1]) * h.dir[1] + (p.GetZ() - l.p0[2]) * h.dir[2]; }
   /** How fast a body turns about its joint, rad/s; and its inertia about it, kg m². */
-  spinOf(body: number): number { const h = this.hinge.get(body); if (!h) return 0; const w = this.live[body]!.body.GetAngularVelocity(); return w.GetX() * h.dir[0] + w.GetY() * h.dir[1] + w.GetZ() * h.dir[2]; }
-  inertiaAbout(body: number): number { const h = this.hinge.get(body), b = this.live[body]!.body, mp = b.GetMotionProperties(); if (!h || !(mp.GetInverseMass() > 0)) return Infinity;
+  spinOf(body: number): number { const h = this.joint.get(body); if (!h) return 0; const w = this.live[body]!.body.GetAngularVelocity(); return w.GetX() * h.dir[0] + w.GetY() * h.dir[1] + w.GetZ() * h.dir[2]; }
+  inertiaAbout(body: number): number { const h = this.joint.get(body), b = this.live[body]!.body, mp = b.GetMotionProperties(); if (!h || !(mp.GetInverseMass() > 0)) return Infinity;
     const dv = mp.GetInverseInertiaDiagonal(), d: V3 = [dv.GetX(), dv.GetY(), dv.GetZ()], iq = mp.GetInertiaRotation(), r = b.GetRotation(), l = apply(T(matQ([r.GetX(), r.GetY(), r.GetZ(), r.GetW()])), h.dir), p = apply(T(matQ([iq.GetX(), iq.GetY(), iq.GetZ(), iq.GetW()])), l), inv = d[0] * p[0] ** 2 + d[1] * p[1] ** 2 + d[2] * p[2] ** 2; return inv > 0 ? 1 / inv : Infinity; }
   /** A body's mass, kg. */
   massOf(body: number): number { return this.live[body]!.mass; }
@@ -573,14 +688,17 @@ export class LiveMotion {
   step(dt: number): void {
     const J = this.J, n = Math.max(1, Math.ceil(dt / (1 / 240) - 1e-9)), h = dt / n;
     for (let k = 0; k < n; k++) {
-      for (const [i, f] of this.pending) { const b = this.live[i]!.body, hj = this.hinge.get(i); if (this.motion.bodies[i]!.frozen) continue; this.bi.ActivateBody(b.GetID());
+      for (const [i, f] of this.pending) { const b = this.live[i]!.body, hj = this.joint.get(i); if (this.motion.bodies[i]!.frozen) continue; this.bi.ActivateBody(b.GetID());
         if (f.T !== undefined && hj) this.bi.AddTorque(b.GetID(), new J.Vec3(hj.dir[0] * f.T, hj.dir[1] * f.T, hj.dir[2] * f.T), J.EActivation_Activate);
         if (f.F && f.point) this.bi.AddForce(b.GetID(), new J.Vec3(...f.F), new J.RVec3(...f.point), J.EActivation_Activate); }
       this.jolt.Step(h, 1); this.t += h;
-      for (const hj of this.hinge.values()) { const v = hj.c.GetCurrentAngle(); if (v - hj.last > Math.PI) hj.add -= 2 * Math.PI; else if (hj.last - v > Math.PI) hj.add += 2 * Math.PI; hj.last = v; }
+      for (const [i, hj] of this.joint) { const v = hj.kind === 'hinge' ? (hj.c as InstanceType<Jolt['HingeConstraint']>).GetCurrentAngle() : this.twist(i, hj.dir); if (v - hj.last > Math.PI) hj.add -= 2 * Math.PI; else if (hj.last - v > Math.PI) hj.add += 2 * Math.PI; hj.last = v; }
     }
     this.pending.clear();
   }
+  /** A body's turn about a line since it began, within a half turn (its rotation's twist about the line). */
+  private twist(body: number, u: V3): number { const l = this.live[body]!, r = l.body.GetRotation(), q = new THREE.Quaternion(r.GetX(), r.GetY(), r.GetZ(), r.GetW()).multiply(new THREE.Quaternion(...l.q0).invert());
+    return 2 * Math.atan2(q.x * u[0] + q.y * u[1] + q.z * u[2], q.w); }
   /** Stopped: the engine let go of. What is drawn goes back to how it was made. */
   destroy(): void { this.J.destroy(this.jolt); }
 }

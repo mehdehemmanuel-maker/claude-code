@@ -15,6 +15,8 @@ import './agent';
 import './controls';
 import './assemblies/robots';
 import './assemblies/machines';
+import './assemblies/things';
+import './assemblies/everyday';
 
 /** A board being built, a node at a time, and saved as a seed. */
 class Seed {

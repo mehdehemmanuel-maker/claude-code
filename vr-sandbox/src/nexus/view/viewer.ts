@@ -22,7 +22,8 @@ export const SESSION = 'session_01L1AsfYyW1V3TvafPzcALqj';
 type SampleTool = { name: string; description: string; inputSchema?: Record<string, unknown>; execute: (input: Record<string, unknown>) => unknown };
 type Sample = ((input: string, o?: { modelTier?: 'quick' | 'default' | 'complex'; cache?: boolean; tools?: SampleTool[]; onText?: (u: { text: string }) => void; signal?: AbortSignal }) => Promise<{ text: string; truncated: boolean }>);
 type Mcp = { callTool: (server: string, tool: string, input?: unknown) => Promise<{ payload?: unknown }> };
-type Db = { collection: (path: string) => { add: (data: Record<string, unknown>) => Promise<{ id: string }> } };
+type DocSnap = { id: string; exists: boolean; data: () => Record<string, unknown> | undefined };
+type Db = { collection: (path: string) => { add: (data: Record<string, unknown>) => Promise<{ id: string }>; get: () => Promise<{ docs: DocSnap[] }>; doc: (id: string) => { set: (data: Record<string, unknown>) => Promise<void>; delete: () => Promise<void> } } };
 type User = { id?: () => Promise<string> };
 
 /** What a refused call means for the person, by its code (never its message). */
@@ -36,6 +37,22 @@ export async function askClaude(prompt: string, o: { tier?: 'quick' | 'default' 
   const sample = await cap<Sample>('sample'); if (!sample) throw new Error('Claude is not reachable from this view');
   const r = await sample(prompt, { modelTier: o.tier ?? 'quick', ...(o.tools ? { tools: o.tools } : { cache: false }), ...(o.onText ? { onText: (u) => o.onText!(u.text) } : {}), ...(o.signal ? { signal: o.signal } : {}) });
   return r.text;
+}
+
+/** The parts remembered as the page's shared store keeps them (decision 0028): memory.ts's remote, and a part taken out. */
+export type PartsStore = import('../memory').Remote & { drop: (id: string) => Promise<void> };
+/** The page's shared store of parts remembered: the db capability's collection 'parts', one document a part under its
+ *  id, its graph as JSON text (a board nests deeper than a document may, and is read back whole). Null outside claude.ai
+ *  or where this view cannot run db. A document that no longer reads as a part is left out. */
+export async function partsStore(): Promise<PartsStore | null> {
+  const db = await cap<Db>('db'); if (!db) return null;
+  const parts = db.collection('parts');
+  return {
+    all: async () => (await parts.get()).docs.filter((d) => d.exists).flatMap((d) => { const x = d.data() ?? {};
+      try { const graph = typeof x.graph === 'string' ? JSON.parse(x.graph) as unknown : x.graph; return graph && typeof graph === 'object' ? [{ ...x, id: String(x.id ?? d.id), graph } as import('../memory').SavedPart] : []; } catch { return []; } }),
+    put: async (p) => { await parts.doc(p.id).set({ ...p, graph: JSON.stringify(p.graph) } as unknown as Record<string, unknown>); },
+    drop: async (id) => { await parts.doc(id).delete(); },
+  };
 }
 
 /** A report: the words, and where (the piece tapped and the point on it, in mm), with the board it was on. */

@@ -4,7 +4,7 @@
 // across devices and reaches the session that builds the app; under Node (the relay, the evaluations) for the run. The
 // next build recalls them by their words before it builds anything again.
 import type { Board } from './boards';
-import { block, register } from './blocks';
+import { LIBRARY, block, register } from './blocks';
 import { groupBlock } from './dataflow';
 
 /** A part remembered: a saved block (as the AI's tools and the pages already keep one) and what it was made for. */
@@ -20,18 +20,26 @@ export interface SavedPart {
   uses: number;
   tags: string[];
   by: 'ai' | 'you';
+  /** the lines and rooms its block offers by name (what a join wires to), as read when it was kept */
+  offers?: string[];
 }
 /** A store kept apart from the page (the page's shared store on claude.ai): every part, and one put. */
 export interface Remote { all(): Promise<SavedPart[]>; put(p: SavedPart): Promise<void> }
 
 const KEY = 'nexus.nodeblocks.v1';
 let mem: SavedPart[] = [], remote: Remote | null = null;
-const local = (): Storage | null => { try { return typeof localStorage === 'undefined' ? null : localStorage; } catch { return null; } };
+/** Under Node with NEXUS_MEMORY naming a file (an evaluation run twice in a row uses the first run's parts, decision 0028):
+ *  that file, the list as JSON, as the store; else the run's memory. */
+type Store = Pick<Storage, 'getItem' | 'setItem'>;
+const file = (): Store | null => { const at = typeof process === 'undefined' ? '' : process.env?.NEXUS_MEMORY ?? ''; if (!at) return null;
+  const fs = (process as unknown as { getBuiltinModule?: (m: string) => unknown }).getBuiltinModule?.('node:fs') as typeof import('node:fs') | undefined; if (!fs) return null;
+  return { getItem: () => { try { return fs.readFileSync(at, 'utf8'); } catch { return null; } }, setItem: (_k, v) => fs.writeFileSync(at, v) }; };
+const local = (): Store | null => { try { return typeof localStorage === 'undefined' ? file() : localStorage; } catch { return null; } };
 const read = (): SavedPart[] => { const s = local(); if (!s) return mem; try { return (JSON.parse(s.getItem(KEY) ?? '[]') as Partial<SavedPart>[]).map(full); } catch { return []; } };
 const write = (all: SavedPart[]): void => { const s = local(); if (!s) { mem = all; return; } try { s.setItem(KEY, JSON.stringify(all)); } catch { mem = all; } };
 /** A block saved before this module (an id, a name, says, domains and a board) read as a part, its other fields filled. */
 const full = (p: Partial<SavedPart>): SavedPart => ({ id: String(p.id), name: String(p.name ?? p.id), says: String(p.says ?? ''), domains: p.domains ?? ['mechanical'], graph: p.graph as Board,
-  from: p.from ?? '', made: p.made ?? '', checked: p.checked ?? { pieces: 0, groups: 0, failing: 0 }, uses: p.uses ?? 0, tags: p.tags ?? [], by: p.by ?? 'you' });
+  from: p.from ?? '', made: p.made ?? '', checked: p.checked ?? { pieces: 0, groups: 0, failing: 0 }, uses: p.uses ?? 0, tags: p.tags ?? [], by: p.by ?? 'you', ...(p.offers ? { offers: p.offers } : {}) });
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'part';
 /** Two boards the same thing: their nodes' blocks, settings and wires, ids and places aside. */
 const digest = (g: Board): string => JSON.stringify(Object.values(g.nodes ?? {}).filter((n) => !n.deleted).map((n) => [n.block, n.set ?? {}]).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))))
@@ -40,21 +48,27 @@ const digest = (g: Board): string => JSON.stringify(Object.values(g.nodes ?? {})
 const registerOne = (p: SavedPart): void => { if (block(p.id) || !p.graph) return; try { register(groupBlock(p.graph, { id: p.id, name: p.name, says: p.says, domains: p.domains, by: 'you' })); } catch { /* one that no longer opens is left out */ } };
 
 /** Every part remembered here. */
-export function savedParts(): SavedPart[] { return read(); }
+export function savedParts(): SavedPart[] { return [...read()]; }
 /** Every remembered part put in the library as a block: called once where the app starts. */
 export function registerSaved(): number { const all = read(); for (const p of all) registerOne(p); return all.length; }
 /** Remember a part: one already kept with the same board is used again (its uses counted), else it is kept under a new id
  *  (`my.<name>`), registered as a block, and sent to the remote store when there is one. */
-export function remember(p: { name: string; says: string; domains?: string[]; graph: Board; from: string; checked: SavedPart['checked']; tags?: string[]; by?: 'ai' | 'you' }): SavedPart {
+export function remember(p: { name: string; says: string; domains?: string[]; graph: Board; from: string; checked: SavedPart['checked']; tags?: string[]; by?: 'ai' | 'you'; offers?: string[] }): SavedPart {
   const all = read(), d = digest(p.graph), same = all.find((x) => x.graph && digest(x.graph) === d);
   if (same) { same.uses++; write(all); return same; }
   let id = `my.${slug(p.name)}`, k = 2; while (all.some((x) => x.id === id) || (block(id) && !all.some((x) => x.id === id))) id = `my.${slug(p.name)}-${k++}`;
-  const part: SavedPart = { id, name: p.name, says: p.says, domains: p.domains ?? ['mechanical'], graph: p.graph, from: p.from, made: new Date().toISOString(), checked: p.checked, uses: 0, tags: p.tags ?? [], by: p.by ?? 'ai' };
+  const part: SavedPart = { id, name: p.name, says: p.says, domains: p.domains ?? ['mechanical'], graph: p.graph, from: p.from, made: new Date().toISOString(), checked: p.checked, uses: 0, tags: p.tags ?? [], by: p.by ?? 'ai', ...(p.offers ? { offers: p.offers } : {}) };
   all.push(part); write(all); registerOne(part); void remote?.put(part).catch(() => undefined);
   return part;
 }
-/** A part used by a build: counted. */
-export function used(id: string): void { const all = read(), p = all.find((x) => x.id === id); if (p) { p.uses++; write(all); } }
+/** A part used by a build: counted; a library assembly (not a part kept here) counted apart, for the run. */
+const assemblyUses = new Map<string, number>();
+export function used(id: string): void { const all = read(), p = all.find((x) => x.id === id); if (p) { p.uses++; write(all); } else assemblyUses.set(id, (assemblyUses.get(id) ?? 0) + 1); }
+/** How many builds have used it: a part kept here (since it was kept), or an assembly (in this run of the app). */
+export function usesOf(id: string): number { return read().find((x) => x.id === id)?.uses ?? assemblyUses.get(id) ?? 0; }
+/** A part forgotten (the person deletes a wrong one, decision 0028): out of the store and the library. The page's shared
+ *  store keeps its copy until it is removed there (it has no delete yet). */
+export function forget(id: string): boolean { const all = read(), k = all.findIndex((x) => x.id === id); if (k < 0) return false; all.splice(k, 1); write(all); if (block(id)?.by === 'you') LIBRARY.delete(id); return true; }
 /** The parts that match these words, best first: by the words of their name, tags, what they say and what they were
  *  made for; a part that was used more ranks first among equals. */
 export function recall(words: string, n = 8): SavedPart[] {

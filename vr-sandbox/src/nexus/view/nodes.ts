@@ -21,6 +21,8 @@ import { LIBRARY_TYPES, allLibraries, fieldOf, needsOf, nextFor, reachText, sear
 import { fullScreen, shot } from './nodes3d';
 import { certifiedView, composeBuild, gateOf, isCompound, nearMissesView, setGuideMd, type AgentRun, type ComposeRun, type ComposeStep, type NearMiss } from '../agent';
 import { askClaude, autoOnViewer, inViewer, whyNot } from './viewer';
+import { YOURS, askName, keepBuild, orchestration, orchestrationHtml } from './parts';
+import { registerSaved } from '../memory';
 import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
 // (the guide bundled, for the page on claude.ai, where no Node reads the file: decision 0027)
 setGuideMd(GUIDE_MD);
@@ -37,7 +39,8 @@ function savedBoards(): SavedBoard[] { try { return JSON.parse(store.get(BOARDS_
 /** The current board kept in the library's Boards, under its title and a field. */
 function keepBoard(field: string): void { const all = savedBoards().filter((x) => x.title !== (root.title || 'My board')); all.push({ title: root.title || 'My board', field, board: JSON.parse(JSON.stringify(root)) as Board }); store.set(BOARDS_KEY, JSON.stringify(all)); }
 function forgetBoard(title: string): void { store.set(BOARDS_KEY, JSON.stringify(savedBoards().filter((x) => x.title !== title))); }
-function loadBlocks(): void { try { for (const s of JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]) register(groupBlock(s.graph, { id: s.id, name: s.name, says: s.says, domains: s.domains, by: 'you' })); } catch { /* none kept */ } }
+/** Every block saved and every part remembered (decision 0028: memory.ts reads the same store) put in the library. */
+function loadBlocks(): void { registerSaved(); }
 function keepBlock(d: BlockDef): void { let all: Saved[] = []; try { all = JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { /* start again */ } all = all.filter((s) => s.id !== d.id); all.push({ id: d.id, name: d.name, says: d.says, domains: d.domains, graph: d.graph! }); store.set(BLOCKS_KEY, JSON.stringify(all)); }
 
 // ---- code, off the page ---------------------------------------------------------------------------------------------
@@ -616,8 +619,8 @@ if (PAGE) document.getElementById('libQ')!.addEventListener('input', renderLibra
 for (const t of document.querySelectorAll<HTMLButtonElement>('#libTop .tabs button')) t.onclick = () => { libBy = t.dataset.by as typeof libBy; for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x === t); renderLibrary(); };
 
 // ---- the inspector: each block's own calculator ---------------------------------------------------------------------
-/** Claude's last answer here, kept across redraws. */
-let askShown = '';
+/** Claude's last answer here, kept across redraws; and what it was asked (what a part kept from the board was made for). */
+let askShown = '', lastAsked = '';
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 function renderInspector(full: boolean): void {
   wall.changed?.(); if (!PAGE) return;
@@ -636,11 +639,19 @@ function boardInspector(el: HTMLElement): void {
   el.innerHTML = `<div class="ititle"><input id="iTitle" value="${esc(b.title ?? '')}" /></div>
     <p class="says">${n} block${n === 1 ? '' : 's'} · last change: ${lastReport.ran} block${lastReport.ran === 1 ? '' : 's'} ran, ${lastReport.cached} reused (nothing they read changed)${lastReport.failed ? `, ${lastReport.failed} failed` : ''}${lastReport.waiting ? `, ${lastReport.waiting} waiting` : ''}, in ${lastReport.ms.toFixed(1)} ms</p>
     <h3>Suggestions</h3><div id="iSug">${sg.length || needs.length ? '' : '<p class="says">Nothing: no dead branches, no twins, no repeated wiring, and nothing its work leaves out.</p>'}</div>
-    <h3>Ask Claude</h3><div class="row"><textarea id="iAsk" rows="3" placeholder="Build … (Claude works through the nodes: it searches, reads, places, wires, runs and checks, then answers)"></textarea></div><div class="row"><button id="iAskGo">Build it</button></div><div id="iAskOut" class="says">${askShown}</div>
+    <h3>Ask Claude</h3><div class="row"><textarea id="iAsk" rows="3" placeholder="Build … (Claude works through the nodes: it searches, reads, places, wires, runs and checks, then answers)"></textarea></div><div class="row"><button id="iAskGo">Build it</button><button id="iKeepBuild" title="The board open folded into one part, named by you, kept with the parts (${YOURS})">★ Keep this build</button></div><div id="iAskOut" class="says">${askShown}</div>
     <h3>Start from</h3><div id="iDemos"></div>
     <h3>This board</h3><div class="row"><label>Its field</label><select id="iField">${DOMAINS.map((d) => `<option value="${d.id}" ${d.id === (savedBoards().find((x) => x.title === b.title)?.field ?? fieldOf(b)) ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div><div class="btns"><button id="iKeep" class="hot">Save to the library's Boards</button><button id="iExport">Export JSON</button><button id="iImport">Import JSON</button><button id="iTidy">Tidy</button><button id="iFresh">Run all afresh</button><button id="iClear">Clear</button></div>
     <h3>How</h3><div class="kbd"><b>Drag</b> from an output to an input to wire · <b>drag</b> an input's wire off to move it · <b>double-click</b> empty space to add, a group to open · <b>shift-drag</b> to choose many · <b>Ctrl G</b> fold into a group · <b>Del</b> delete · <b>Ctrl Z</b> undo · <b>F</b> fit · <b>Ctrl K</b> commands · a list wired into one value runs the block once for each item</div>`;
   (document.getElementById('iTitle') as HTMLInputElement).onchange = (e) => edit((x) => { x.title = (e.target as HTMLInputElement).value; });
+  // (Keep this build (decision 0028): the board open folded and remembered as one part, named by the person)
+  document.getElementById('iKeepBuild')!.onclick = async () => {
+    if (!nodesOf(root).length) { toast('nothing to keep yet: build something first', true); return; }
+    const name = await askName({ title: 'Keep this build as one part, named', value: (root.title || lastAsked || 'my build').slice(0, 60) }); if (!name) return;
+    try { const { part, again } = await keepBuild(root, name, lastAsked || root.title || name), c = part.checked;
+      toast(again ? `already kept as ${part.name} (${part.id}): used again` : `kept as ${part.name} (${part.id}): ${c.pieces} pieces, ${c.groups} group${c.groups === 1 ? '' : 's'}, ${c.failing} failing; in the parts under ${YOURS}`, c.failing > 0 || c.groups > 1); renderLibrary(); }
+    catch (e) { toast(`not kept: ${(e as Error).message}`, true); }
+  };
   // (asking Claude: the relay this page is served with runs it under Node, where the key is; its board opened as an
   // imported one is, undoable; its steps and its answer shown under the box)
   document.getElementById('iAskGo')!.onclick = async () => {
@@ -654,17 +665,20 @@ function boardInspector(el: HTMLElement): void {
     // (a new thing, or one of several things, built from its parts (decision 0027, composeBuild): on claude.ai each call on
     // the viewer's own account, elsewhere through the relay; each step's line shown as it comes)
     if (inViewer || !nodesOf(root).length || isCompound(q)) {
-      const lines: string[] = [], heard = (s: ComposeStep) => { lines.push(`${s.ok ? '✓' : '✕'} ${esc(s.line.slice(0, 220))}`); out.innerHTML = lines.join('<br>'); };
+      // (its orchestration as a tree as it runs (decision 0028): the split, each part, how it was made, ✓ or ✕, what it was
+      // kept as; then the join and the check)
+      const steps: ComposeStep[] = [], heard = (s: ComposeStep) => { steps.push(s); out.innerHTML = orchestrationHtml(orchestration(steps)); };
+      const saved = (() => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { return []; } })(); lastAsked = q;
       try { let done: ComposeRun | null = null;
-        if (inViewer) done = await composeBuild(q, { ask: (prompt, tier) => askClaude(prompt, { tier }), onStep: heard });
-        else { const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'compose', request: q }) });
+        if (inViewer) done = await composeBuild(q, { ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: saved, onStep: heard });
+        else { const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'compose', request: q, blocks: saved }) });
           if (res.status === 404 || !res.body) throw new Error('this page is served without the relay: run it with npm run app, or open it on claude.ai');
           const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
           for (;;) { const { value, done: end } = await reader.read(); if (value) buf += dec.decode(value, { stream: true });
             let k; while ((k = buf.indexOf('\n')) >= 0) { const l = buf.slice(0, k).trim(); buf = buf.slice(k + 1); if (!l) continue; const o = JSON.parse(l) as { compose?: ComposeStep; done?: ComposeRun; error?: string }; if (o.error) throw new Error(o.error); if (o.compose) heard(o.compose); if (o.done) done = o.done; }
             if (end) break; } }
         if (!done) throw new Error('the build stopped before it ended');
-        askShown = `<b>${esc(done.answer).replace(/\n/g, '<br>')}</b><details><summary>${done.steps.length} steps, ${done.asks} calls</summary>${lines.join('<br>')}</details>`;
+        askShown = `<b>${esc(done.answer).replace(/\n/g, '<br>')}</b><details open><summary>${done.steps.length} steps, ${done.asks} calls</summary>${orchestrationHtml(orchestration(done.steps, done))}</details>`;
         if (nodesOf(done.board).length) { pushUndo(); useBoard(tidy(done.board)); save(); fit(); runSoon(); }
         renderAll();
       } catch (e) { out.textContent = `could not: ${inViewer ? whyNot(e) : (e as Error).message}`; }

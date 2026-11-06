@@ -1346,13 +1346,75 @@ describe('every domain, in one pass', () => {
   // a build whose assertion fails answers FAILS first; a change that breaks a check that held is not taken, the board left as
   // it was and the change kept as a shadow read can read; a change that keeps every check is taken; a plan's s may give an
   // unwired input its value)
+  // (parts remembered and an orchestrator (decision 0028, the user: "make it so it can orchestrate and save for later use
+  // each part"): composeBuild with no model, its ask answering each call as a model writes it: a part built by one plan,
+  // checked (nothing failing, one group), kept with remember() and the whole with it; the same request again offers the
+  // split the parts recalled for its words, the part named is placed as one node, its use counted, with fewer calls; a
+  // part of several things split again and its parts joined; a part the first join left out named and joined by one
+  // more call; the final check's call finds a part missing, built and joined; the run as a tree; forget() clears them)
+  it('parts remembered and an orchestrator: a plan\'s part kept and recalled, a part of several things split again, what is missing found and added, what is loose joined', async () => {
+    const { composeBuild, savedParts, forget, usesOf, groupsOf, PROMPT_CUT } = await import('../../src/nexus/agent');
+    for (const p of savedParts()) forget(p.id);
+    const tail = (p: string) => p.slice(p.indexOf(PROMPT_CUT) + PROMPT_CUT.length), outOf = (prompt: string, part: string) => new RegExp(`\\b${part}\\.(\\w+): \\d+ pieces`).exec(prompt)?.[1] ?? 'block';
+    const onto = (host: string, hostOut: string, child: string, childOut: string, nm: string) => ({ tool: 'change', add: { [nm]: { b: 'room.onto', s: { face: '+y' } }, [`${nm}_see`]: { b: 'space.show' } }, wires: [`${host}.${hostOut}>${nm}.host`, `${child}.${childOut}>${nm}.child`, `${nm}.thing>${nm}_see.thing`], says: `${child} on top of ${host}` });
+    const t0 = Date.now(), timed: string[] = [];
+    // (1. a rover with a mast: the rover an assembly, the mast by one plan (a pole stacked on a foot plate), joined: the
+    // mast kept for later with what it was made for and what was checked, and the whole kept too)
+    const mast = { tool: 'build', nodes: { foot: { b: 'room.make', s: { name: 'mast foot', shape: 'box', mat: 'al-6061', a: 40, b: 4, c: 40 } }, pole: { b: 'room.make', s: { name: 'mast pole', shape: 'rod', mat: 'al-6061', a: 6, b: 120 } }, st: { b: 'room.stack', s: { name: 'mast', axis: 'y', order: 'foot,pole' } } }, wires: ['foot.block>st.blocks', 'pole.block>st.blocks'], says: 'a mast: a pole on a foot plate' };
+    const asked1: string[] = [];
+    const ask1 = async (prompt: string, tier: string) => { asked1.push(`${tier} ${tail(prompt).slice(0, 3000)}`);
+      if (prompt.includes('## Here: the parts of what is asked')) return JSON.stringify({ parts: [{ name: 'rover', is: 'a wheeled robot base', from: 'seed.wheeled-base' }, { name: 'mast', is: 'a mast: a pole on a foot plate', from: tail(prompt).includes('my.mast:') ? 'my.mast' : 'aisle structure' }], joins: [{ part: 'mast', how: 'on top of', to: 'rover' }] });
+      if (prompt.includes('## Here: join the parts')) return JSON.stringify(onto('rover', outOf(prompt, 'rover'), 'mast', outOf(prompt, 'mast'), 'up'));
+      if (prompt.includes('## Here: what is missing')) return '{"missing": []}';
+      return JSON.stringify(mast); };
+    const r1 = await composeBuild('A rover with a mast', { ask: ask1 }); timed.push(`run 1 ${Date.now() - t0} ms`);
+    console.log(`run 1: ${r1.asks} calls\n${r1.steps.map((s) => `${s.stage} ${s.ok ? 'ok' : 'no'}: ${s.line}`).join('\n')}\n${r1.answer}`);
+    expect([r1.unmet, r1.parts.map((p) => [p.name, p.by])], 'built: the rover an assembly, the mast by a plan').toEqual([[], [['rover', 'assembly'], ['mast', 'plan']]]);
+    const kept = savedParts().find((p) => p.id === 'my.mast');
+    expect(kept && [kept.name, kept.from, kept.checked.groups, kept.checked.failing, kept.checked.pieces, kept.tags.includes('mast'), !!LIBRARY.get('my.mast')], 'the mast kept: its name, the request, its check, its tags, a block in the library').toEqual(['mast', 'A rover with a mast', 1, 0, 2, true, true]);
+    expect(r1.remembered, 'the mast and the whole kept for later').toEqual(['my.mast', expect.stringMatching(/^my\.a-rover-with-a-mast/)]);
+    expect(r1.asks, 'a split, the mast\'s plan, a join, the final check').toBe(4);
+    // (2. the same request again: the split is offered the parts remembered for its words, names the mast, and it is
+    // placed as one node like an assembly, its use counted, with one call fewer)
+    asked1.length = 0;
+    const r2 = await composeBuild('A rover with a mast', { ask: ask1 }); timed.push(`run 2 ${Date.now() - t0} ms`);
+    expect(asked1[0], 'the split offered the mast remembered: its id, what it says, what it was made for, its uses').toMatch(/^quick Parts remembered [^]*my\.mast: mast: a mast: a pole on a foot plate[^]*made for "A rover with a mast"; 2 pieces; used 0 times\)[^]*\n\nRequest: A rover with a mast$/);
+    expect([r2.unmet, r2.parts.map((p) => [p.name, p.by, p.saved]), r2.recalled, usesOf('my.mast')], 'recalled: placed again, its use counted').toEqual([[], [['rover', 'assembly', undefined], ['mast', 'remembered', 'my.mast']], ['my.mast'], 1]);
+    expect([r2.asks, r2.asks < r1.asks], 'fewer calls: no plan for the mast').toEqual([3, true]);
+    expect([r2.remembered, usesOf(r1.remembered[1]!)], 'the whole kept for this request counted as used, not kept twice').toEqual([[], 1]);
+    // (3. a part of several things split again, its parts joined into one; the first join leaves a part out, and the
+    // loose one is named and joined by one more call; the final check finds the lamp missing, and it is built and joined)
+    const asked3: string[] = []; let gates = 0;
+    const ask3 = async (prompt: string, tier: string) => { const t = tail(prompt); asked3.push(`${tier} ${t.slice(0, 300)}`);
+      if (prompt.includes('## Here: the parts of what is asked')) return JSON.stringify(t.includes('the part "rig"')
+        ? { parts: [{ name: 'car', is: 'a wheeled robot base', from: 'seed.wheeled-base' }, { name: 'head', is: 'a pan-tilt head with a camera', from: 'seed.pan-tilt' }], joins: [{ part: 'head', how: 'on top of', to: 'car' }] }
+        : { parts: [{ name: 'rig', is: 'a robot rover with a camera on a pan-tilt head', from: 'none' }, { name: 'arm', is: 'a robot arm', from: 'seed.robot-arm' }], joins: [{ part: 'arm', how: 'on top of', to: 'rig' }] });
+      if (prompt.includes('what is left loose')) { const host = /The whole so far: (\w+)\.(\w+):/.exec(t)!, loose = /^(\w+): not in the whole/m.exec(t)![1]!;
+        // (the arm stands on the rig, whichever is the whole so far: a rover set on an arm's gripper touches nothing)
+        return JSON.stringify(host[1] === 'arm' ? onto(loose, outOf(t, loose), 'arm', host[2]!, 'on2') : onto(host[1]!, host[2]!, loose, outOf(t, loose), 'on2')); }
+      if (prompt.includes('is the whole built so far')) { const host = /\((\w+) is the whole built so far/.exec(t)![1]!; return JSON.stringify(onto(host, outOf(t, host), 'light', outOf(t, 'light'), 'on3')); }
+      if (prompt.includes('## Here: join the parts')) return t.includes('Asked: rig:') ? JSON.stringify(onto('car', outOf(t, 'car'), 'head', outOf(t, 'head'), 'up')) : JSON.stringify({ tool: 'change', add: { see: { b: 'space.show' } }, wires: ['rig.thing>see.thing'], says: 'the rig shown' });
+      if (prompt.includes('## Here: what is missing')) return JSON.stringify({ missing: gates++ ? [] : [{ name: 'light', is: 'a desk lamp', joins: 'on top of the rig', from: 'seed.lamp-arm' }] });
+      return '{}'; };
+    const heard: string[] = [], r3 = await composeBuild('A rover with a camera head and an arm, lit', { ask: ask3, onStep: (s) => heard.push(`${s.stage} ${s.ok ? 'ok' : 'no'}: ${s.line}`) }); timed.push(`run 3 ${Date.now() - t0} ms`);
+    console.log(`run 3: ${r3.asks} calls\n${heard.join('\n')}\n${r3.answer}\n${timed.join(', ')}`);
+    const brief = (n: { name: string; by: string; saved?: string; children: unknown[] }): unknown => [n.name, n.by, n.saved ?? '', (n.children as typeof n[]).map(brief)];
+    expect(r3.tree.map(brief), 'the run as a tree: the rig split into the car and the head, the arm, the lamp the check found').toEqual([['rig', 'split', 'my.rig', [['car', 'assembly', '', []], ['head', 'assembly', '', []]]], ['arm', 'assembly', '', []], ['light', 'assembly', '', []]]);
+    expect(heard.filter((l) => /^join/.test(l)).map((l) => l.slice(0, 40)), 'the rig\'s join; the first join leaves the arm or the rig loose, named and joined by one more call; the lamp joined').toEqual([expect.stringMatching(/^join ok: head on top of car/), expect.stringMatching(/^join ok: the rig shown/), expect.stringMatching(/^join no: not joined to the rest: (arm|rig)/), expect.stringMatching(/^join ok: (arm|rig) on top of (arm|rig)/), expect.stringMatching(/^join ok: light on top of on2/)]);
+    expect([r3.missing, heard.filter((l) => l.startsWith('gate')).map((l) => l.slice(0, 16))], 'the final check: the lamp missing, then nothing').toEqual([['light'], ['gate no: missing', 'gate ok: nothing']]);
+    expect([r3.unmet, r3.asks], 'nothing unmet; calls: a split, the rig\'s split and join, the join, the loose one, a check, the lamp\'s join, a check').toEqual([[], 8]);
+    const e = new Engine(r3.board); await e.run(); const top = nodesOf(r3.board).map((n) => e.state.get(n.id)?.out?.block).filter(Boolean).sort((a, b) => (b as { pieces: unknown[] }).pieces.length - (a as { pieces: unknown[] }).pieces.length)[0] as Parameters<typeof groupsOf>[0];
+    expect([groupsOf(top), top.pieces.some((p) => /^lamp shade$/.test(p.name)), top.pieces.some((p) => /^gripper finger$/.test(p.name)), top.pieces.some((p) => /^camera board$/.test(p.name))], 'one thing with the lamp, the arm and the camera in it').toEqual([1, true, true, true]);
+    for (const p of savedParts()) forget(p.id);
+    expect([savedParts().length, LIBRARY.has('my.mast')], 'forgotten: out of the store and the library').toEqual([0, false]);
+  }, 120_000);
   // (a thing of several things built from its parts (decision 0027, the user: "I asked for a drone with a robot arm
   // attached ... it was spitting out randomness like a plate with a rod"): composeBuild's mechanics with no model, its
   // ask answering each call as a model writes it (a split, a part's plan, a join that names an output wrong and then its
   // mend): the split read, each part made (a starter board, or a library assembly by id where there is one, or one plan)
   // and folded to one node, the join run and asked again with only what failed, the check said; a part that fails said)
   it('a thing of several things: split, each part made and folded, joined, checked, what fails said', async () => {
-    const { composeBuild, splitOf, isCompound, PROMPT_CUT } = await import('../../src/nexus/agent');
+    const { composeBuild, splitOf, isCompound, PROMPT_CUT, savedParts, forget } = await import('../../src/nexus/agent');
     const { score, W } = await import('../evals/score');
     expect(['A drone with a robot arm attached', 'A crane on a truck', 'A desk lamp with an arm that bends', 'A quadcopter: four motors on the arms of a cross frame', 'Two steel plates bolted together'].map(isCompound), 'two or more things named, or one').toEqual([true, true, true, false, false]);
     expect(() => splitOf('I would split it in two.'), 'no JSON').toThrow(/no split in the reply/);
@@ -1375,7 +1437,7 @@ describe('every domain, in one pass', () => {
     console.log(`composed: ${r.asks} calls\n${heard.join('\n')}\n${r.answer}`);
     expect(asked[0], 'the split call: the menu of assemblies, starter boards and aisles, then the request').toMatch(/^quick Request: A drone with a robot arm attached$/);
     expect(r.parts.map((p) => [p.name, p.by]), 'each part made from what it starts from').toEqual([['drone', LIBRARY.has('seed.quadcopter') ? 'assembly' : 'starter'], ['arm', LIBRARY.has('seed.robot-arm') ? 'assembly' : 'plan']]);
-    expect(r.asks, 'a split, the arm\'s one plan where no assembly is it, a join and its mend').toBe(LIBRARY.has('seed.robot-arm') ? 3 : 4);
+    expect(r.asks, 'a split, the arm\'s one plan where no assembly is it, a join and its mend, the final check (decision 0028)').toBe(LIBRARY.has('seed.robot-arm') ? 4 : 5);
     expect(heard.filter((l) => l.startsWith('join')).map((l) => l.slice(0, 8)), 'the join failed once and was asked again with only what failed').toEqual(['join no:', 'join ok:']);
     expect(asked.find((a) => a.includes('When the plan ran, these failed')), 'asked again with the failing line').toMatch(/drone \(a group\) has no output blok|has no output blok/);
     expect(r.unmet, 'the check: nothing unmet').toEqual([]);
@@ -1390,6 +1452,7 @@ describe('every domain, in one pass', () => {
     expect(r2.parts.map((p) => [p.name, p.by]), 'the assembly placed; the gripper not made').toEqual([['motor', 'assembly'], ['gripper', 'none']]);
     expect(r2.unmet.join(' | '), 'said').toMatch(/^gripper not made: ! g: no block "piece\.nosuch"/);
     expect(r2.answer, 'the answer says so').toMatch(/^Built in part: [^]*\nNot met: gripper not made/);
+    for (const p of savedParts()) forget(p.id); // (what it kept for later, out of the library the tests after it read)
   }, 120_000);
   it('the AI\'s tools lead with what fails, and take a change only when what held still holds', async () => {
     const t = await toolsFor(emptyBoard('asked')), plan = { nodes: { m: { b: 'part.family', s: { family: 'stepper' } }, p: { b: 'part.family', s: { family: 'motorplate' } }, j: { b: 'joint' }, w: { b: 'measure' }, a: { b: 'assert', s: { what: 'their mass', how: 'at most', target: 0.1 } } }, wires: ['p.part>j.a', 'm.part>j.b', 'j.together>w.thing', 'w.mass>a.value'] };
@@ -1420,6 +1483,42 @@ describe('every domain, in one pass', () => {
   // as the model writes it (prose, a fence, the JSON) and run by runPlan as the page runs it; what is wrong in a reply said,
   // never guessed; by hand, a piece joined by an operation the room offers, step on step; asked again, only what failed;
   // and the cards and the board's listing sent with the guide, short)
+  // (decision 0028: the things the compound requests failed for want of (assemblies/things.ts): a wind turbine, a boat, a
+  // camera, a tripod, a leg, a quadruped and a hexapod on it, a winch, a centrifugal pump, a truck. Each placed at two
+  // settings gives two builds, every node ok, its pieces one group, no point in two pieces, the counts a person reads it by;
+  // a ring of three (blades, legs) centred on its own axis; and what should turn (a rotor, a prop, a drum, wheels) found
+  // turning by the movement work)
+  it('things as blocks: a turbine, a boat, a camera, a tripod, legs and walkers, a winch, a pump, a truck: two builds each, one group, apart, counted, turning', async () => {
+    const { motionOf } = await import('../../src/nexus/sim');
+    const built = async (id: string, set: Record<string, unknown>) => { const b = emptyBoard(id); placeBlock(b, id, 0, 0, set, 'x'); const e = new Engine(b, env, new Memo()); await e.run();
+      expect([...e.state].filter(([, s]) => s.status !== 'ok').map(([n, s]) => `${n}: ${s.error}`), `${id} at ${JSON.stringify(set)}: every node runs`).toEqual([]); return e.state.get('x')!.out!.block as RoomBlock; };
+    const groups = (b: RoomBlock) => { const up = b.pieces.map((_, i) => i), top = (i: number): number => (up[i] === i ? i : (up[i] = top(up[i]!))); for (const f of b.faces) up[top(f.a)] = top(f.b); return new Set(b.pieces.map((_, i) => top(i))).size; };
+    const n = (b: RoomBlock, re: RegExp) => b.pieces.filter((p) => re.test(p.name)).length;
+    // (id, two settings, the counts, what each gives, whether something turns on a joint)
+    const cases: [string, Record<string, unknown>[], (b: RoomBlock) => number[], number[][], boolean][] = [
+      ['seed.wind-turbine', [{}, { height: 4000 }], (b) => [n(b, /^turbine blade$/), n(b, /^turbine blade root$/), n(b, /^turbine hub$/), n(b, /^nacelle$/), n(b, /^CHS /)], [[3, 3, 2, 1, 1], [3, 3, 2, 1, 1]], true],
+      ['seed.boat', [{}, { length: 3000 }], (b) => [n(b, /^hull$/), n(b, /^transom$/), n(b, /^prop blade$/), n(b, /^motor pod$/), n(b, /^rudder$/)], [[1, 1, 3, 1, 1], [1, 1, 3, 1, 1]], true],
+      ['seed.camera', [{}, { lens: 80 }], (b) => [n(b, /^camera body$/), n(b, /^lens barrel$/), n(b, /^lens glass$/)], [[1, 1, 1], [1, 1, 1]], false],
+      ['seed.tripod', [{}, { legs: '1500', screw: 22 }], (b) => [n(b, /^tripod leg$/), n(b, /^tripod head$/), n(b, /^mount screw$/)], [[3, 1, 1], [3, 1, 1]], false],
+      ['seed.leg', [{}, { joints: '3', link: 60 }], (b) => [n(b, /case above$/), n(b, /^servo horn$/), n(b, /^leg link$/), n(b, /rubber foot$/)], [[2, 2, 2, 1], [3, 3, 2, 1]], false],
+      ['seed.quadruped', [{}, { joints: '3', spread: 120 }], (b) => [n(b, /^hip mount$/), n(b, /case above$/), n(b, /rubber foot$/), n(b, /^robot body$/)], [[4, 8, 4, 1], [4, 12, 4, 1]], false],
+      ['seed.hexapod', [{}, { spread: 160 }], (b) => [n(b, /^hip mount$/), n(b, /case above$/), n(b, /rubber foot$/), n(b, /^robot body$/)], [[6, 12, 6, 1], [6, 12, 6, 1]], false],
+      ['seed.winch', [{}, { turns: 10 }], (b) => [n(b, /^winch drum$/), n(b, /^drum flange$/), n(b, /^winch rope$/), n(b, /^winch side plate$/), n(b, /gear motor can$/)], [[1, 2, 1, 2, 1], [1, 2, 1, 2, 1]], true],
+      ['seed.pump', [{}, { inlet: 150 }], (b) => [n(b, /^pump volute$/), n(b, /^impeller vane$/), n(b, /^pump motor$/), n(b, /PVC pipe$/)], [[1, 6, 1, 2], [1, 6, 1, 2]], false],
+      ['seed.truck', [{}, { wheels: '6' }], (b) => [n(b, /^truck tyre$/), n(b, /^truck rim$/), n(b, /^truck cab$/), n(b, /^truck bed$/), n(b, /rail$/)], [[4, 4, 1, 1, 2], [6, 6, 1, 1, 2]], true],
+    ];
+    for (const [id, sets, counts, want, turns] of cases) {
+      const bs = await Promise.all(sets.map((s) => built(id, s)));
+      expect(digest(bs[0]) === digest(bs[1]), `${id}: two settings, two builds`).toBe(false);
+      bs.forEach((b, k) => { const at = `${id} at ${JSON.stringify(sets[k])}`;
+        expect(counts(b), `${at}: its counts`).toEqual(want[k]); expect(groups(b), `${at}: one group of pieces`).toBe(1); expect(sampleRoom(b, 5), `${at}: no point in two pieces`).toEqual(APART);
+        if (turns) expect(motionOf(b).joints.length, `${at}: what should turn, turning`).toBeGreaterThan(0); });
+    }
+    // (a ring of three, centred on its own axis: the turbine's hub plates on the line its blades' ring offers)
+    const wt = await built('seed.wind-turbine', {}), hc = wt.pieces.find((p) => p.name === 'turbine hub')!.solid.base.c;
+    const reach = wt.pieces.filter((p) => p.name === 'turbine blade').map((p) => Math.round(Math.hypot(p.solid.base.c[1] - hc[1], p.solid.base.c[2] - hc[2]) * 1e6));
+    expect(new Set(reach).size, `the three blades as far from the hub's axis each (the rotor laid along x): ${reach.join(', ')} µm`).toBe(1);
+  }, 120_000);
   // (decision 0027: robot and aircraft assemblies, each one library block of settings: placed at two settings it gives two
   // builds, every node ok, its pieces one group (each joined to the rest by a face), no point in two pieces, and the counts
   // a person reads it by (four motors and four props, so many servos and horns, two wheels or four); and the drone with
@@ -1570,6 +1669,47 @@ describe('every domain, in one pass', () => {
   // (decision 0026: what the AI is shown: cards that say what each piece offers, which inputs take many wires, and the
   // mate blocks; an operation's run said by its pieces, mass and every offer, not the block's insides; the board's every
   // wire however long; worked plans after the cards, each running with nothing failing)
+  // (decision 0028: the everyday, building and vehicle things asked for by name, each one block of settings
+  // (src/nexus/assemblies/everyday.ts): a school chair, a desk, a bed frame, a door on its hinge, a window, a stud wall, a
+  // fence, a go-kart, a trailer, a wheelbarrow, a mast, a solar panel, a satellite dish. Each placed at two settings gives
+  // two builds, every node ok, one group of pieces by the faces, every pair apart, its parts counted; and what should move
+  // moves: the door's leaf and every wheel turn on a joint motionOf finds)
+  it('everyday assemblies: each at two settings two builds, every node ok, one group, every pair apart, its parts counted, its joints found', async () => {
+    const { motionOf } = await import('../../src/nexus/sim');
+    const groupsOf = (b: RoomBlock) => { const up = b.pieces.map((_, i) => i), find = (i: number): number => (up[i] === i ? i : (up[i] = find(up[i]!))); for (const f of b.faces) up[find(f.a)] = find(f.b); return new Set(b.pieces.map((_, i) => find(i))).size; };
+    const cases: [string, Record<string, unknown>[], Record<string, RegExp>, Record<string, number>, number][] = [
+      ['seed.chair', [{}, { height: 371, width: 340, depth: 340, spread: 210 }], { tubes: /^CHS 21\.3x2\.6$/, seat: /^plywood 9 sheet$/ }, { tubes: 6, seat: 2 }, 0],
+      ['seed.desk', [{}, { height: 695, width: 1400, span: 1200 }], { frame: /^SHS 50x50x3$/, top: /^MDF 25 sheet$/, drawer: /^drawer box$/, handle: /^pull handle/ }, { frame: 7, top: 1, drawer: 1, handle: 1 }, 0],
+      ['seed.bed-frame', [{}, { width: 1350, deck: 675, headboard: 1488 }], { legs: /^PAR 69x69 timber$/, rails: /^C24 47x150 timber$/, deck: /^plywood 18 sheet$/, mattress: /^mattress$/ }, { legs: 4, rails: 4, deck: 3, mattress: 1 }, 0],
+      ['seed.door', [{}, { width: 738, head: 906 }], { leaf: /^door leaf$/, pin: /^hinge pin$/, knuckle: /^hinge knuckle$/, latch: /^latch bolt$/, handle: /^pull handle/, lining: /^PAR 21x144 timber$/ }, { leaf: 1, pin: 1, knuckle: 1, latch: 1, handle: 1, lining: 3 }, 1],
+      ['seed.window', [{}, { width: 600, wide: 776 }], { glass: /^glass pane$/, sash: /^PAR 44x44 timber$/, frame: /^PAR 44x69 timber$/ }, { glass: 1, sash: 4, frame: 4 }, 0],
+      ['seed.stud-wall', [{}, { height: 2124, tall: 2200 }], { timber: /^CLS 38x89 timber$/, osb: /^OSB 11 sheet$/ }, { timber: 9, osb: 2 }, 0],
+      ['seed.fence', [{}, { height: 1500, posts: 1600 }], { boards: /^PAR 21x144 timber$/, rails: /^C24 47x100 timber$/, posts: /^C24 100x100 timber$/ }, { boards: 12, rails: 2, posts: 2 }, 0],
+      ['seed.kart', [{}, { width: 450 }], { tyres: /wheel tyre$/, stubs: /stub axle$/, seat: /^kart seat$/, engine: /^engine/, steering: /^steering wheel$/, rails: / rail$/ }, { tyres: 4, stubs: 4, seat: 1, engine: 1, steering: 1, rails: 2 }, 4],
+      ['seed.trailer', [{}, { length: 1500 }], { tyres: /^trailer wheel tyre$/, axle: /^trailer axle$/, hitch: /^hitch coupling$/, bed: /^plywood 18 sheet$/, sides: /^plywood 12 sheet$/ }, { tyres: 2, axle: 1, hitch: 1, bed: 1, sides: 2 }, 2],
+      ['seed.wheelbarrow', [{}, { handles: 1300, legs: 200 }], { tyre: /^barrow wheel tyre$/, axle: /^barrow axle$/, tray: /^barrow tray$/, tube: /^SHS 30x30x3$/, forks: / fork$/ }, { tyre: 1, axle: 1, tray: 1, tube: 6, forks: 2 }, 1],
+      ['seed.mast', [{}, { section: 1500 }], { sections: /^CHS 48\.3x3\.2$/, sleeves: /^mast sleeve$/, lugs: /^guy lug$/, base: /^mast base$/ }, { sections: 3, sleeves: 3, lugs: 3, base: 1 }, 0],
+      ['seed.solar-panel', [{}, { cell: 158.75, glass: 963, long: 1597 }], { cells: /^solar cell$/, glass: /^module glass$/, back: /^backsheet$/, frame: /^frame (side|end)$/ }, { cells: 60, glass: 1, back: 1, frame: 4 }, 0],
+      ['seed.satellite-dish', [{}, { pole: 800 }], { dish: /^dish reflector$/, lnb: /^LNB$/, feed: /^feed rod$/, pole: /^CHS 48\.3x3\.2$/ }, { dish: 1, lnb: 1, feed: 1, pole: 1 }, 0],
+    ];
+    const bad: string[] = [];
+    for (const [id, sets, parts, want, joints] of cases) {
+      const b = emptyBoard(`${id} twice`); sets.forEach((s, k) => placeBlock(b, id, 0, 0, s, `f${k}`));
+      const e = new Engine(b, env, new Memo()); await e.run();
+      const failed = [...e.state].filter(([, s]) => s.status !== 'ok').map(([n, s]) => `${id} ${n}: ${s.status} ${s.error ?? ''}`); if (failed.length) { bad.push(...failed); continue; }
+      const blks = sets.map((_, k) => e.state.get(`f${k}`)!.out!.block as RoomBlock);
+      if (digest(blks[0]) === digest(blks[1])) bad.push(`${id}: two settings, one build`);
+      blks.forEach((blk, k) => {
+        if (groupsOf(blk) !== 1) bad.push(`${id} #${k}: ${groupsOf(blk)} groups of pieces`);
+        const apart = sampleRoom(blk, 6); if (JSON.stringify(apart) !== JSON.stringify(APART)) bad.push(`${id} #${k}: not apart ${JSON.stringify(apart)}`);
+        const got = Object.fromEntries(Object.entries(parts).map(([k2, re]) => [k2, blk.pieces.filter((p) => re.test(p.name)).length]));
+        if (JSON.stringify(got) !== JSON.stringify(want)) bad.push(`${id} #${k}: its parts ${JSON.stringify(got)}, wanted ${JSON.stringify(want)}`);
+        const m = motionOf(blk); if (m.joints.length < joints) bad.push(`${id} #${k}: ${m.joints.length} joints, wanted ${joints} at least (${m.says})`);
+      });
+      expect(String(LIBRARY.get(id)!.says).length, `${id} says what it is and offers`).toBeGreaterThan(200);
+    }
+    expect(bad).toEqual([]);
+  }, 120_000);
   // (decision 0027: the machines people ask for by name, each one block of settings (src/nexus/assemblies/machines.ts): a
   // linear axis, an XY gantry, a belt conveyor, a car chassis, a tower crane, a table, a shelf, a desk lamp arm. Each placed
   // at two settings gives two builds, each running with every node ok, its pieces one group (each reached from the others
@@ -1616,6 +1756,31 @@ describe('every domain, in one pass', () => {
     expect(first.out, 'an operation by its pieces, mass and offers').toMatch(/^j1 ok pieces=10 mass=0\.09\d+ kg offers=\[M8 head 2\/axis; [^\]]*top plate\/holes\]$/m);
     const quad = starterBoards().find(([t]) => t.startsWith('A quadcopter'))![1](), brief = boardBrief(quad);
     expect([brief.length > 1600, /\nwires: /.test(brief), brief.includes('… (cut)')], 'the quadcopter\'s brief whole, its wires kept').toEqual([true, true, false]);
+  }, 60_000);
+  // (decision 0028, the pages show and keep what the orchestrator remembers: the board open kept as one part ("Keep this
+  // build": folded whole, remembered with what it was made for and what was checked, a block of the library, its block
+  // and its thing its outputs); the parts browser's tree holds it on its own aisle, Yours / Remembered, apart from the
+  // trades, placed like any part; a build's steps (a real run's, compose-2 of 2026-11-06) read as a tree, each part under
+  // the split with how it was made and whether it came out; a part deleted is gone from the parts remembered and the library)
+  it('the pages keep what is remembered: a build kept as one part, on its own aisle, placed, its steps a tree, deleted', async () => {
+    const { YOURS, addPiece, forgetPart, keepBuild, orchestration, orchestrationHtml, partsTree } = await import('../../src/nexus/view/parts'), { savedParts } = await import('../../src/nexus/memory');
+    const { WORKED, runPlan } = await import('../../src/nexus/agent'), w = WORKED[0]!, { tool, ...input } = w.plan, src = (await runPlan({ tool, input, says: w.says }, emptyBoard(w.says))).board;
+    const { part, again } = await keepBuild(src, 'Two plates bolted', w.says);
+    const outs = portsOf(LIBRARY.get(part.id)!).outputs.map((p) => p.name).sort();
+    expect([again, /^my\.two-plates-bolted/.test(part.id), part.by, part.checked.failing, part.checked.groups, part.checked.pieces > 2, LIBRARY.get(part.id)?.by, outs], 'kept: one part, checked, a block of the library').toEqual([false, true, 'you', 0, 1, true, 'you', ['block', 'thing']]);
+    const tree = partsTree({ trade: YOURS }), row = tree.categories.flatMap((c) => c.families).find((f) => f.id === part.id);
+    expect([tree.trade, tree.yours.parts >= 1, row?.name, row?.kept?.from, row?.kept?.checked.pieces, partsTree({ trade: 'Motion' }).trades.some((t) => t.name === YOURS)], 'the browser\'s tree: on Yours / Remembered with what it was made for, apart from the trades').toEqual([YOURS, true, 'Two plates bolted', w.says, part.checked.pieces, false]);
+    const b = emptyBoard('placed'), n = addPiece(b, part.id, {}), e = new Engine(b); await e.run();
+    expect([e.state.get(n)?.status, edgesOf(b).map((w) => `${w.out}>${b.nodes[w.to]!.block}`)], 'placed like any part, and shown').toEqual(['ok', ['thing>space.show']]);
+    const steps = [{ stage: 'split', line: '3 parts: pump (a small pump on a base, pushing fluid through a pi; from aisle pipelines), tank (a polyethylene tank, 10 to 50 L, with two ports; from seed.pump-loop), pipe (a length of pipe carrying fluid between the pump a; from aisle pipelines); pump beside tank, pipe into tank, pipe bolted to pump', ok: true },
+      { stage: 'part', line: 'pump: 3 line(s) failed; asked again with only those', ok: false }, { stage: 'part', line: 'pump: its board made no block (pump failed: no Bought part (its envelope) pump diaphragm 1l/min: its sizes are screw, nut, washer, bearing, gear, sprin)', ok: false },
+      { stage: 'part', line: 'tank: the assembly seed.pump-loop, 10 pieces', ok: true }, { stage: 'fold', line: 'tank: one node already', ok: true }, { stage: 'part', line: 'pipe: built by one plan, 3 pieces', ok: true }, { stage: 'fold', line: 'pipe: its board folded to one node', ok: true },
+      { stage: 'join', line: 'asked again with only what failed: nothing fails now', ok: true }, { stage: 'check', line: 'Not met: pump not made: pump failed: no Bought part (its envelope) pump diaphragm 1l/min', ok: false }] as const;
+    const o = orchestration(steps.map((s) => ({ ...s })));
+    expect([o.parts.map((p) => `${p.name} ${p.how} ${p.ok}`), o.after.map((s) => s.stage), !!o.split], 'a run\'s steps as a tree').toEqual([['pump none false', 'tank assembly true', 'pipe plan true'], ['join', 'check'], true]);
+    expect(orchestrationHtml(o), 'drawn with each part under the split').toMatch(/<ul><li>.*<b>pump<\/b> <i class="ot-by ot-none">not made<\/i>.*<b>tank<\/b> <i class="ot-by ot-assembly">assembly<\/i>/s);
+    const gone = await forgetPart(part.id);
+    expect([gone.gone, savedParts().some((p) => p.id === part.id), LIBRARY.has(part.id), partsTree({ trade: YOURS }).categories.flatMap((c) => c.families).some((f) => f.id === part.id)], 'deleted: gone from the parts remembered, the library and the aisle').toEqual([true, false, false, false]);
   }, 60_000);
   // (ISO 286 classes as limits (spec 01, I17): H, h and JS from the IT grade alone, other letters from ISO 286-2's
   // fundamental deviations; each of the evaluation set's waiting cases' limits as the app now works them out, offset and
@@ -2261,6 +2426,34 @@ describe('every domain, in one pass', () => {
     ];
     for (const [what, b] of joined) expect(sampleRoom(b, 6), what).toEqual(APART);
   });
+  // (decision 0028, the evaluations fair: a kind asked for is read by what a part is, not by one id. A flanged joint made
+  // of a family the kind's ids do not name (ASME B16.5 flanges, read by a kind naming only the EN 1092-1 family) is a
+  // flanged joint by the family's aisle and name; a board with no flange of any kind (the last run's plan: two plates the
+  // model named "flange A" and "flange B", a gasket that sits on the flanges' aisle, four bolts) is still wrong)
+  it('the scorer reads a part by what it is: a flange of a new family is a flange by its aisle; a board with no flange is still wrong', async () => {
+    const { KINDS, W, holds, kind, score } = await import('../evals/score');
+    const { planOf, runPlan } = await import('../../src/nexus/agent');
+    const asNew = kind('a flange', /^piece\.flange$/, KINDS.flange.aisle, KINDS.flange.named), want = (f: Parameters<typeof W>[1]) => W(8, f, KINDS.gasket);
+    const run = async (o: object) => { const ran = await runPlan(planOf(JSON.stringify(o)), emptyBoard('a flanged joint')), e = new Engine(ran.board); await e.run(); return { ...ran, e }; };
+    const bolts = (line: string, size: string) => Object.fromEntries([0, 1, 2, 3].map((i) => [`j${i}`, { b: 'mate.bolted', s: { line, which: i, size } }]));
+    const asme = await run({ tool: 'build', says: 'An NPS 2 pipe through an ASME B16.5 slip-on flange, a gasket and a blind on it, four bolts', nodes: {
+      fl: { b: 'piece.asmeflange', s: { size: '2' } }, pp: { b: 'piece.npspipe', s: { size: '2 steel 40', length: 200 } }, t: { b: 'room.through', s: { line: 'NPS 2 class 150 slip-on flange/axis', from: 'above', fit: 'tight' } },
+      g: { b: 'piece.flangegasket', s: { size: 'DN50' } }, bl: { b: 'piece.asmeflange', s: { size: '2', type: 'blind' } }, st: { b: 'room.stack', s: { axis: 'y', order: 't,g,bl' } }, ...bolts('NPS 2 class 150 blind flange/holes', 'M16') },
+      wires: ['fl.block>t.host', 'pp.block>t.passer', 't.block>st.blocks', 'g.block>st.blocks', 'bl.block>st.blocks', 'st.block>j0.held', 'j0.block>j1.held', 'j1.block>j2.held', 'j2.block>j3.held'] });
+    expect(asme.failing, 'the ASME joint runs').toEqual([]);
+    expect(score(asme.board, asme.e, want(asNew)), 'a flange of a family the kind does not name, read by its aisle').toBeNull();
+    expect(score(asme.board, asme.e, want(KINDS.flange)), 'and by the forty builds\' own kind').toBeNull();
+    expect(score(asme.board, asme.e, want(/^piece\.flange$/)), 'read by the one id alone it was wrong').toMatch(/^no \/\^piece\\\.flange\$\//);
+    // (the last run's plan for "a flanged pipe joint", as the model wrote it: plates, not flanges)
+    const plates = (name: string) => ({ b: 'piece.plate', s: { name, mat: 'steel-low', w: 165, t: 16, d: 165, holes: '-44.2,-44.2; 44.2,-44.2; -44.2,44.2; 44.2,44.2', hole: 18 } });
+    const none = await run({ tool: 'build', says: 'a DN50 flanged joint: flange A, a flat gasket, flange B on top, four M16 bolts', nodes: {
+      fa: plates('flange A'), fb: plates('flange B'), g: { b: 'piece.flangegasket', s: { size: 'DN50' } }, ga: { b: 'room.onto', s: { face: '+y', fit: 'touch' } }, onb: { b: 'room.onto', s: { face: '+y', fit: 'touch' } },
+      ...Object.fromEntries([0, 1, 2, 3].map((i) => [`j${i}`, { b: 'mate.bolted', s: { line: 'flange B/holes', which: i, size: 'M16' } }])), m: { b: 'measure' }, show: { b: 'space.show' } },
+      wires: ['fa.block>ga.host', 'g.block>ga.child', 'ga.block>onb.host', 'fb.block>onb.child', 'onb.block>j0.held', 'j0.block>j1.held', 'j1.block>j2.held', 'j2.block>j3.held', 'j3.thing>m.thing', 'j3.thing>show.thing'] });
+    expect(none.failing, 'the plates\' joint runs').toEqual([]);
+    for (const k of [KINDS.flange, asNew]) expect(score(none.board, none.e, want(k)), 'no flange of any kind: plates named so, a gasket on the flanges\' aisle').toMatch(/^no a flange on the board/);
+    expect(holds(KINDS.flange, ['piece.flangegasket', 'piece.oring', 'piece.plate', 'piece.gatevalve'], ['flange A', 'flange B', 'DN50 gate valve flange 1']), 'a gasket, an O-ring, plates named so, a flanged valve: none is a pipe flange').toBe(false);
+  }, 60_000);
   it('plan/INDEX.md is what the plan compiles to', () => {
     const r = spawnSync('python3', ['plan/compile.py', '--check'], { cwd: root, encoding: 'utf8' });
     expect(r.status, r.stdout + r.stderr).toBe(0);
@@ -2380,6 +2573,34 @@ describe('every domain, in one pass', () => {
       expect([one.wide, one.results.slice(1).every((r) => r instanceof Error && /no block/.test(r.message))], 'only the outer carried: the workers find no inner block').toEqual([true, true]);
     } finally { for (const t of ['a', 'b']) { LIBRARY.delete(`zz.twice-${t}`); LIBRARY.delete(`zz.twice-and-one-${t}`); } }
   }, 120_000);
+  it('movement 2 (decision 0028): a rack moved by its pinion its pitch radius a radian, belted pulleys by their teeth, a motor at its speed, a servo held under gravity', async () => {
+    const { LiveMotion, motionOf } = await import('../../src/nexus/sim'), J = (await (await import('jolt-physics/wasm-compat')).default()) as never;
+    const boardOf = async (re: RegExp, out: string) => { const [, make] = starterBoards().find(([t]) => re.test(t))!, e = new Engine(make()); await e.run(); return e.state.get(out)?.out?.block as RoomBlock; };
+    const named = (blk: RoomBlock, m: ReturnType<typeof motionOf>, re: RegExp) => m.bodies.findIndex((x) => x.pieces.some((i) => re.test(blk.pieces[i]!.name)));
+    // (a rack and pinion, by Rack against a gear: the m1 z30's turn slides the rack m z / 2 = 15 mm a radian)
+    const rp = await boardOf(/^Movement: a rack/, 'meshed'), mr = motionOf(rp), gear = named(rp, mr, /z30 spur gear/), rk = named(rp, mr, /rack/);
+    expect(mr.racks.map((r) => [r.a, r.b, +(r.r * 1000).toFixed(6)])).toEqual([[gear, rk, 15]]);
+    const l1 = new LiveMotion(J, rp); for (let k = 0; k < 240; k++) { l1.torque(gear, 0.004); l1.step(1 / 240); }
+    expect(l1.angle(gear)).toBeGreaterThan(0.5); expect(l1.slid(rk) / l1.angle(gear)).toBeGreaterThan(0.015 * 0.97); expect(l1.slid(rk) / l1.angle(gear)).toBeLessThan(0.015 * 1.03); l1.destroy();
+    // (two pulleys, 20 and 40 teeth, a belt laid round them by Belt round two pulleys: the same way, at 20:40)
+    const bp = await boardOf(/^Movement: a belt/, 'belt'), mb = motionOf(bp), pa = named(bp, mb, /20T pulley/), pb = named(bp, mb, /40T pulley/);
+    expect(mb.belts.map((x) => [x.za, x.zb, x.teeth])).toEqual([[40, 20, true]]);
+    const l2 = new LiveMotion(J, bp); for (let k = 0; k < 240; k++) { l2.torque(pa, 0.002); l2.step(1 / 240); }
+    expect(l2.angle(pa)).toBeGreaterThan(1); expect(l2.angle(pb) / l2.angle(pa)).toBeGreaterThan(0.5 * 0.97); expect(l2.angle(pb) / l2.angle(pa)).toBeLessThan(0.5 * 1.03); l2.destroy();
+    // (a motor at a set speed: the crank's gear driven at 2 rad/s keeps it while turning its mesh)
+    const cb = await boardOf(/^Movement: a crank/, 'meshed'), mc = motionOf(cb), cg = named(cb, mc, /crank arm/), l0 = new LiveMotion(J, cb), w = 2; l0.spin(cg, w); l0.step(0.5);
+    const a0 = l0.angle(cg); l0.step(0.5); expect((l0.angle(cg) - a0) / 0.5).toBeGreaterThan(w * 0.97); expect((l0.angle(cg) - a0) / 0.5).toBeLessThan(w * 1.03); l0.destroy();
+    // (the robot arm's servos: each joint a motor that holds, what it stands on frozen, the rest held up by them: after a
+    // second under gravity each held joint is still at its angle as made)
+    const arm = emptyBoard('arm'); placeBlock(arm, 'seed.robot-arm', 0, 0, { joints: '3' }, 'a'); const ea = new Engine(arm); await ea.run();
+    const ab = ea.state.get('a')?.out?.block as RoomBlock, ma = motionOf(ab);
+    expect(ma.joints.filter((j) => j.motor?.kind === 'servo').length, ma.says).toBeGreaterThanOrEqual(3);
+    expect(ma.bodies.filter((x) => x.frozen).map((x) => x.name), ma.says).toEqual([expect.stringMatching(/arm base mount/)]);
+    const l3 = new LiveMotion(J, ab); l3.step(1);
+    const held = ma.joints.filter((j) => j.motor && !ma.bodies[j.a]!.frozen).map((j) => j.a); expect(held.length).toBeGreaterThanOrEqual(3);
+    for (const k of held) { expect(l3.isHeld(k)).toBe(true); expect(Math.abs(l3.angle(k)), `${ma.bodies[k]!.name} held at its angle as made`).toBeLessThan(0.02); }
+    l3.destroy();
+  }, 60000);
   // (keys tell apart what the old writing could not (spec 11, LW15; fault D6): two Maps, two Sets, NaN and null, −0 and 0,
   // two functions, a typed array's kind; and the same value, built in another order, keys the same)
   // (the engine's keys use it: a node fed a Map changed to another Map, which the old writing wrote the same ({}), runs
