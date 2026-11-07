@@ -7,7 +7,6 @@ import { PI, add, and, cells, div, ge, gt, integral, k, le, leaf, lt, max, mul, 
 export const SHIGLEY = { cite: 'Budynas & Nisbett, Shigley\'s Mechanical Engineering Design, 10th ed., McGraw-Hill 2015', kind: 'textbook' as const };
 export const ROARK = { cite: 'Young & Budynas, Roark\'s Formulas for Stress and Strain, 7th ed., McGraw-Hill 2002, table 8.1', kind: 'handbook' as const };
 export const PHYSICS = { cite: 'Young & Freedman, University Physics, 15th ed., Pearson 2019', kind: 'textbook' as const };
-export const NDS = { cite: 'AWC, National Design Specification for Wood Construction, 2018, §4.4.1.2 (beam stability: sawn lumber, d/b ≤ 2 needs no lateral support)', kind: 'standard' as const };
 export const SUPERPOSITION = { cite: 'Derived by superposition of the point-load influence line of a simply supported beam (Roark table 8.1 case 1e) over a central patch; the two limits (a point, the whole span) are the book\'s own cases', kind: 'derivation' as const };
 
 const m = variable('m', 'kg', 'mass'), g = variable('g', 'm/s^2', 'gravity');
@@ -73,13 +72,13 @@ export const RECT_AREA = law({
 export const RECT_MODULUS = law({
   id: 'section.rect.modulus', name: 'Section modulus of a rectangle', statement: 'About its breadth axis a rectangle has section modulus b h² / 6.', formula: 'S = b h² / 6',
   inputs: [{ sym: 'b', unit: 'm', name: 'breadth' }, { sym: 'h', unit: 'm', name: 'depth' }], output: { sym: 'S', unit: 'm^3', name: 'section modulus' },
-  term: div(mul(b, pow(h, 2)), k(6)), domain: [], source: { ...SHIGLEY, cite: `${SHIGLEY.cite}, table A-18` }, example: { inputs: { b: 0.02, h: 0.04 }, output: (0.02 * 0.04 ** 2) / 6, from: 'ganglia/laws.ts stress.bending example' },
+  term: div(mul(b, pow(h, 2)), k(6)), domain: [], source: { ...SHIGLEY, cite: `${SHIGLEY.cite}, table A-18` }, example: { inputs: { b: 0.02, h: 0.04 }, output: (0.02 * 0.04 ** 2) / 6, from: 'the kept example of stress.bending example' },
 });
 
 export const RECT_I = law({
   id: 'section.rect.second-moment', name: 'Second moment of a rectangle', statement: 'About its breadth axis a rectangle has second moment b h³ / 12.', formula: 'I = b h³ / 12',
   inputs: [{ sym: 'b', unit: 'm', name: 'breadth' }, { sym: 'h', unit: 'm', name: 'depth' }], output: { sym: 'I', unit: 'm^4', name: 'second moment' },
-  term: div(mul(b, pow(h, 3)), k(12)), domain: [], source: { ...SHIGLEY, cite: `${SHIGLEY.cite}, table A-18` }, example: { inputs: { b: 0.02, h: 0.04 }, output: (0.02 * 0.04 ** 3) / 12, from: 'ganglia/laws.ts beam examples' },
+  term: div(mul(b, pow(h, 3)), k(12)), domain: [], source: { ...SHIGLEY, cite: `${SHIGLEY.cite}, table A-18` }, example: { inputs: { b: 0.02, h: 0.04 }, output: (0.02 * 0.04 ** 3) / 12, from: 'the kept example of beam examples' },
 });
 
 export const PATCH_SAG = law({
@@ -87,7 +86,7 @@ export const PATCH_SAG = law({
   inputs: [{ sym: 'P', unit: 'N', name: 'load' }, { sym: 'L', unit: 'm', name: 'span' }, { sym: 'w', unit: 'm', name: 'patch width' }, { sym: 'E', unit: 'Pa', name: 'modulus' }, { sym: 'I', unit: 'm^4', name: 'second moment' }, { sym: 'h', unit: 'm', name: 'depth' }], output: { sym: 'delta', unit: 'm', name: 'mid-span sag' },
   term: div(mul(P, add(sub(pow(L, 3), div(mul(L, pow(w, 2)), k(2))), div(pow(w, 3), k(8)))), mul(k(48), E, I)),
   domain: [{ says: 'the patch lies within the span: w ≤ L', holds: le(w, L) }, slender], source: SUPERPOSITION,
-  example: { inputs: { P: 1000, L: 2, w: 0, E: 200e9, I: (0.02 * 0.04 ** 3) / 12, h: 0.04 }, output: 0.0078125, from: 'ganglia/laws.ts beam.simply-supported.point (the point limit)' },
+  example: { inputs: { P: 1000, L: 2, w: 0, E: 200e9, I: (0.02 * 0.04 ** 3) / 12, h: 0.04 }, output: 0.0078125, from: 'the kept example of beam.simply-supported.point (the point limit)' },
 });
 
 export const SELF_SAG = law({
@@ -95,7 +94,7 @@ export const SELF_SAG = law({
   inputs: [{ sym: 'q', unit: 'N/m', name: 'weight per length' }, { sym: 'L', unit: 'm', name: 'span' }, { sym: 'Lt', unit: 'm', name: 'total length' }, { sym: 'E', unit: 'Pa', name: 'modulus' }, { sym: 'I', unit: 'm^4', name: 'second moment' }, { sym: 'h', unit: 'm', name: 'depth' }], output: { sym: 'delta', unit: 'm', name: 'mid-span sag' },
   term: sub(div(mul(k(5), q, pow(L, 4)), mul(k(384), E, I)), div(mul(q, pow(div(sub(Lt, L), k(2)), 2), pow(L, 2)), mul(k(16), E, I))),
   domain: [{ says: 'the beam reaches both supports: Lt ≥ L', holds: ge(Lt, L) }, slender], source: { cite: `${ROARK.cite}, cases 2e (uniform load) and 1c (end moment), superposed`, kind: 'derivation' },
-  example: { inputs: { q: 1000, L: 2, Lt: 2, E: 200e9, I: (0.02 * 0.04 ** 3) / 12, h: 0.04 }, output: 0.009765625, from: 'ganglia/laws.ts beam.simply-supported.udl (no overhang)' },
+  example: { inputs: { q: 1000, L: 2, Lt: 2, E: 200e9, I: (0.02 * 0.04 ** 3) / 12, h: 0.04 }, output: 0.009765625, from: 'the kept example of beam.simply-supported.udl (no overhang)' },
 });
 
 export const FIRST_PERIOD = law({
@@ -137,7 +136,7 @@ export const CANTILEVER_TIP_SAG = law({
 export const STRESS_AREA = law({
   id: 'bolt.tensile-stress-area', name: 'Tensile stress area of a metric thread', statement: 'The area that carries a bolt\'s tension is a circle of diameter (d₂ + d₃)/2, with d₂ = d − 0.6495 p and d₃ = d − 1.2269 p.', formula: 'A_s = (π/4) ((d − 0.9382 p)/1)²',
   inputs: [{ sym: 'd', unit: 'm', name: 'nominal diameter' }, { sym: 'p', unit: 'm', name: 'thread pitch' }], output: { sym: 'As', unit: 'm^2', name: 'tensile stress area' },
-  term: mul(div(PI(), k(4)), pow(sub(d, mul(k(0.9381940, '(0.649519 + 1.226869)/2'), pitch)), 2)), domain: [], source: ISO898,
+  term: mul(div(PI(), k(4)), pow(sub(d, mul(k(0.9381940, '(0.649519 + 1.226869)/2'), pitch)), 2)), domain: [{ says: 'a pitch finer than the diameter: 0 < p < d', holds: and(gt(pitch, zero('m')), lt(pitch, d)) }], source: ISO898,
   example: { inputs: { d: 0.008, p: 0.00125 }, output: (Math.PI / 4) * ((0.008 - 0.649519 * 0.00125 + 0.008 - 1.226869 * 0.00125) / 2) ** 2, from: 'ISO 898-1 A_s for M8: 36.6 mm²' },
 });
 

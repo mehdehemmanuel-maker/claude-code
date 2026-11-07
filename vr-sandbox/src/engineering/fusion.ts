@@ -60,6 +60,7 @@ export const FUSION: Record<string, FusionProps> = {
   'steel.a36': F('metallic', 1425, 2061, MN, 11.7e-6, { base: 'Fe' }, 'MatWeb ASTM A36: alpha 11.7 µm/m·K; solidus typical of low-carbon steel, 1425-1540 °C (ASM Handbook vol. 1)'),
   'steel.1018-cd': F('metallic', 1425, 2061, MN, 11.5e-6, { base: 'Fe' }, 'MatWeb AISI 1018: alpha 11.5 µm/m·K (0-100 °C); solidus typical of low-carbon steel (ASM vol. 1)'),
   'steel.4140-ann': F('metallic', 1416, 2061, MN, 12.2e-6, { base: 'Fe' }, 'MatWeb AISI 4140: solidus 1416 °C, alpha 12.2 µm/m·K'),
+  'steel.4140-qt': F('metallic', 1416, 2061, MN, 12.2e-6, { base: 'Fe' }, 'MatWeb AISI 4140: solidus 1416 °C, alpha 12.2 µm/m·K'),
   'steel.52100': F('metallic', 1424, 2061, MN, 11.9e-6, { base: 'Fe' }, 'MatWeb AISI 52100: melting 1424 °C, alpha 11.9 µm/m·K'),
   'steel.music-wire': F('metallic', 1400, 2061, MN, 11.7e-6, { base: 'Fe' }, 'estimated: 0.7-1.0 % carbon lowers the solidus to about 1400 °C (Fe-C diagram); alpha as carbon steel'),
   'stainless.304': F('metallic', 1400, 2061, MN, 17.3e-6, { base: 'Fe' }, 'MatWeb 304: melting 1400-1455 °C, alpha 17.3 µm/m·K (0-100 °C)'),

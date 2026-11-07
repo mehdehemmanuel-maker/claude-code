@@ -132,7 +132,7 @@ export const FASTENERS: KindDef[] = [
     id: 'circlipint', name: 'retaining ring (circlip), internal', path: 'Hardware/Fasteners/Retaining rings', says: 'a spring-steel ring that snaps into a groove inside a bore, to hold a bearing in', std: 'DIN 472, bores 8–100 mm',
     axes: [ax('d', 'bore', 'mm', [8, 10, 12, 14, 15, 16, 18, 19, 20, 22, 24, 25, 26, 28, 30, 32, 35, 37, 40, 42, 47, 52, 62, 72, 80, 90, 100])],
     title: (p) => `internal circlip for a ${p.d} mm bore`, of: () => 'steel-spring', make: 'stamp', how: 'stamped from spring-steel strip with its two eyes, hardened, phosphated', spec: (p) => { const d = Number(p.d), s = d < 10 ? 0.8 : d <= 22 ? 1 : d <= 32 ? 1.2 : d <= 37 ? 1.5 : d <= 48 ? 1.75 : d <= 68 ? 2 : d <= 85 ? 2.5 : 3; return `${s} mm thick; groove about ${(d * 1.04 + 0.2).toFixed(1)} mm (DIN 472)`; },
-    box: (p) => [Number(p.d) * 1.1, Number(p.d) * 1.1, 1.5], g: (p) => gOf(ring(Number(p.d) * 1.08, Number(p.d) * 0.88, Number(p.d) < 22 ? 1 : 1.5) * 0.9, 7.85),
+    box: (p) => [Number(p.d) * 1.1, Number(p.d) * 1.1, 1.5], g: (p) => { const d = Number(p.d), s = d < 10 ? 0.8 : d <= 22 ? 1 : d <= 32 ? 1.2 : d <= 37 ? 1.5 : d <= 48 ? 1.75 : d <= 68 ? 2 : d <= 85 ? 2.5 : 3; return gOf(ring(d * 1.08, d * 0.88, s) * 0.9, 7.85); }, // (its thickness DIN 472's, as its spec says)
   },
   {
     id: 'eclip', name: 'E-clip', path: 'Hardware/Fasteners/Retaining rings', says: 'an E-shaped spring ring pushed sideways onto a groove in a shaft', std: 'DIN 6799, grooves 1.2–24 mm',

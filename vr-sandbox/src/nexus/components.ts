@@ -14,16 +14,20 @@
 // down -y; stock and profiles are centred, their length along y.
 
 import { FAMILIES, callFamily } from './families';
-import { BEARINGS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, gt2Dims, mgnDims, stepperDims } from './families';
+import { BEARINGS, CHAINS, CIRCLIPS, HEX_K, IPE, METRIC, NEMA, NEMA_FACE, NPS40, ballsOf, gt2Dims, mgnDims, stepperDims } from './families';
 import { tubeLength } from './form';
 import { CLEAR } from './kinds/motion';
 import { SOCKET_HEAD } from './embody/stock';
 import { BUTTON, PAN, SETSCREW_KEY } from './threads';
 import { UPN } from './kinds/stock';
 import { WHEEL } from './kinds/fasteners';
-import { itemOf, type Item } from './inventory';
+import { INVENTORY, inventoryRev, itemOf, type Item } from './inventory';
 import type { Cut, Iface, Part, Port, V3 } from './kits';
 import { DENSITY, massOf } from './mass';
+import { boundsOfAll, frame, partOf, place, type Assembly, type Placed } from './assembly';
+import * as THREE from 'three';
+import { BCI_GROUPS, CELL_FORMATS } from '../data/batteries';
+import { chainRun, coated, coil, enclosure, fillCells, gridPlate, intoCells, ringClip, stackOf, strapsOver, toothed, wound, woundRoll, wrapped } from './makers';
 
 const PI = Math.PI, mm = 1e-3;
 /** A design: its part in its own frame, from its family's numbers and its item. */
@@ -70,11 +74,11 @@ const threadFill = (d: number, P0: number) => ((d - 0.6495 * P0) / d) ** 2;
  *  root's bore. */
 const nutFill = (s: number, d: number, P0: number) => { const A = ((3 * Math.sqrt(3)) / 2) * (s / Math.sqrt(3)) ** 2, r1 = (d - 1.0825 * P0) / 2, r2 = (d - 0.6495 * P0) / 2; return (A - PI * r2 * r2) / (A - PI * r1 * r1); };
 /** A shank: plain under the head for a, then its thread to its end, the end chamfered to the thread's root. The thread is
- *  drawn as its major cylinder (its helix not drawn) and finished as a rolled thread. */
+ *  its major cylinder and its pitch: the renderer cuts its helix where it is drawn close, and finishes it as rolled. */
 const shank = (name: string, d: number, P0: number, L: number, a: number, at: Partial<Part>): Part[] => {
   const root = (d - 1.0825 * P0) / 2, out: Part[] = [];
   if (a > 0) out.push(P(name, lathe([[0, 0], [d / 2, 0], [d / 2, -a], [0, -a]]), at));
-  out.push(P(name, lathe([[0, -a], [d / 2, -a], [d / 2, -L + P0], [root, -L], [0, -L]]), { ...at, finish: 'thread', fill: threadFill(d, P0) }));
+  out.push(P(name, lathe([[0, -a], [d / 2, -a], [d / 2, -L + P0], [root, -L], [0, -L]]), { ...at, finish: 'thread', fill: threadFill(d, P0), pitch: P0 * mm }));
   return out;
 };
 const P = (name: string, shape: Part['shape'], more: Partial<Part> = {}): Part => ({ name, shape, at: [0, 0, 0], ...more });
@@ -91,6 +95,23 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     make: (p, it) => stepperParts(p, it.name),
     iface: (p) => [{ kind: 'shaft', role: 'provides', d: NEMA_FACE[String(p.nema)]!.shaft * mm }],
     ports: (p) => { const f = NEMA_FACE[String(p.nema)]!, d = stepperDims(p); return [port('front face', f.through ? 'holes' : 'threads', f.thread, sq(f.holes * mm), [0, 0, 0], [0, 1, 0], [1, 0, 0], f.through ? d.tf * mm : 0.0045, { pilot: f.pilot * mm, std: `NEMA ${p.nema}` })]; },
+  },
+  led: {
+    says: 'a through-hole LED: its die on the cathode lead\'s reflector cup (the anvil), a bond wire from the die to the anode lead\'s post, cast in an epoxy body domed into its lens, a flange at its foot with a flat on the cathode side; the anode lead the longer',
+    leaves: 'its body as tall as makers\' drawings give (5.3, 8.6 and 13.8 mm for 3, 5 and 10 mm, typical), its leads 0.5 mm square and 25 / 27 mm long, its die 0.25 mm square, its cup and post typical of a 5 mm package\'s drawing (proportional for 3 and 10 mm)',
+    make: (p) => {
+      const D = Number(p.size) * mm, r = D / 2, h = (({ 3: 5.3, 5: 8.6, 10: 13.8 } as Record<number, number>)[Number(p.size)] ?? Number(p.size) * 1.72) * mm, lead = 0.5 * mm, c = String(p.colour), tint = ({ red: 0xff6a5a, yellow: 0xffd84a, green: 0x6aff8a, blue: 0x6aa8ff, white: 0xf4f6ff } as Record<string, number>)[c] ?? 0xffffff, k = D / (5 * mm);
+      const die = c === 'red' || c === 'yellow' ? 'si-die' : 'gan';
+      return [
+        P('LED body', { cyl: [r, h - r] }, { at: [0, (h - r) / 2, 0], mat: 'epoxy', color: tint, finish: 'gloss', says: 'cast epoxy, tinted to its colour' }),
+        P('LED lens', { sphere: r }, { at: [0, h - r, 0], mat: 'epoxy', color: tint, finish: 'gloss' }),
+        P('LED flange', { cyl: [r + 0.4 * mm * k, 1 * mm * k] }, { at: [0, 0.5 * mm * k, 0], mat: 'epoxy', color: tint, finish: 'gloss' }),
+        P('cathode lead (anvil)', { box: [lead, 25 * mm + 4 * mm * k, lead] }, { at: [-1.27 * mm, (4 * mm * k - 25 * mm) / 2, 0], item: 'lead-frame', mat: 'copper', color: 0xc8ccd2, finish: 'plate' }),
+        P('anode lead (post)', { box: [lead, 27 * mm + 3 * mm * k, lead] }, { at: [1.27 * mm, (3 * mm * k - 27 * mm) / 2, 0], item: 'lead-frame', mat: 'copper', color: 0xc8ccd2, finish: 'plate' }),
+        P('LED die', { box: [0.25 * mm, 0.1 * mm, 0.25 * mm] }, { at: [-1.0 * mm, 4.1 * mm * k, 0], ...(die === 'si-die' ? { item: 'si-die' } : {}), mat: 'silicon', color: 0x2a2a3a }),
+        P('bond wire', { tube: { r: 0.0125 * mm, pts: [[-1.0 * mm, 4.15 * mm * k, 0], [0, 4.8 * mm * k, 0], [1.27 * mm, 3.2 * mm * k, 0]], wall: 0.0125 * mm } }, { item: 'bond-wire', mat: 'gold', color: 0xd4af37 }),
+      ];
+    },
   },
   bearing: {
     says: 'a deep-groove ball bearing (ISO 15): its outer and inner rings, each with its raceway ground into a groove 0.52 of a ball across (a typical conformity), its balls on the pitch circle between them, the two pressed halves of its cage riveted between the balls, and its shields (ZZ, pressed steel) or seals (2RS, rubber) set in recesses in its outer ring',
@@ -180,7 +201,7 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
   },
   threadedrod: {
     says: 'DIN 976: threaded its whole length', leaves: 'the thread drawn as its major cylinder',
-    make: (p, it) => { const { d, P: P0 } = thr(p), L = Number(p.length), mat = matIn(it), root = (d - 1.0825 * P0) / 2; return [P(it.name, lathe([[0, -L / 2], [root, -L / 2], [d / 2, -L / 2 + P0], [d / 2, L / 2 - P0], [root, L / 2], [0, L / 2]]), { mat, ...looks(it, mat), finish: 'thread', fill: threadFill(d, P0) })]; },
+    make: (p, it) => { const { d, P: P0 } = thr(p), L = Number(p.length), mat = matIn(it), root = (d - 1.0825 * P0) / 2; return [P(it.name, lathe([[0, -L / 2], [root, -L / 2], [d / 2, -L / 2 + P0], [d / 2, L / 2 - P0], [root, L / 2], [0, L / 2]]), { mat, ...looks(it, mat), finish: 'thread', fill: threadFill(d, P0), pitch: P0 * mm })]; },
     iface: (p) => [{ kind: 'studs', role: 'provides', d: thr(p).d * mm, n: 1 }],
   },
   dowel: {
@@ -248,15 +269,43 @@ const DESIGNS: Record<string, { says: string; leaves: string; make: Design; ifac
     says: 'a T-slot aluminium extrusion: a slot down the middle of each face of each cell, its centre bored for a tapped end', leaves: 'its slots\' undercut chamfers and its inner webs drawn square (a typical outline, not one maker\'s die)',
     make: (p, it) => { const s = String(p.series), cell = Number(s.slice(0, 2)), n = Math.max(1, Number(s.slice(2)) / cell), L = Number(p.length), mat = 'al-6063'; return [P(it.name, section(tslot(cell, n), tslotHollows(cell, n), L), { mat, color: 0xc9ced3, finish: 'brushed', rot: ALONG_Y })]; },
   },
+  // (springs, gears, clips, rings and chain: drawn by the general makers (makers.ts) to their standards' sizes)
+  spring: {
+    says: 'a compression spring: music wire coiled on a mandrel, its ends closed', leaves: 'its ends closed but not ground flat',
+    make: (p, it) => [coil({ name: it.name, d: Number(p.d) * mm, D: Number(p.D) * mm, L: Number(p.L) * mm, n: Number(p.n) })],
+  },
+  gear: {
+    says: 'a spur gear: its teeth cut round its bore, module × teeth across its pitch circle', leaves: 'its teeth straight-sided from root to tip (the involute not drawn); its bore about 0.3 of its pitch circle (typical of a plain gear blank)',
+    make: (p, it) => { const m = Number(p.m) * mm, z = Number(p.z), mat = ({ pla: 'pla', pom: 'pom', steel: 'steel-alloy', brass: 'brass', aluminium: 'al-6061' } as Record<string, string>)[String(p.matter)] ?? 'steel-alloy'; return [toothed({ name: it.name, m, z, b: Number(p.b) * mm, bore: Math.max(1 * mm, Math.round(m * z * 0.3 * 1000) / 1000), mat })]; },
+    iface: (p) => [{ kind: 'shaft', role: 'requires', d: Math.max(1 * mm, Math.round(Number(p.m) * Number(p.z) * 0.3) * mm) }],
+  },
+  helicalgear: {
+    says: 'a helical gear: its teeth cut at its helix angle round its bore', leaves: 'its teeth drawn straight across its face (their helix not drawn); its face 10 modules wide and its bore 0.3 of its pitch circle (typical)',
+    make: (p, it) => { const m = Number(p.m) * mm, z = Number(p.z); return [toothed({ name: it.name, m: m / Math.cos((Number(p.b) * PI) / 180), z, b: 10 * m, bore: Math.round(m * z * 0.3 * 1000) / 1000, mat: 'steel-alloy' })]; },
+  },
+  circlip: {
+    says: 'DIN 471: a stamped spring-steel ring with its two lug eyes, in a groove on a shaft', leaves: 'its band drawn of even width (it tapers to its ends)',
+    make: (p, it) => { const d = Number(p.d), [t, g] = CIRCLIPS[d]!, b = 0.1 * d + 1; return [ringClip({ name: it.name, ri: (g / 2) * mm, w: 0.8 * b * mm, t: t * mm, says: 'its band drawn at its mean width (it tapers from its lugs to its back)' })]; },
+  },
+  circlipint: {
+    says: 'DIN 472: a stamped spring-steel ring with its two lug eyes, in a groove in a bore', leaves: 'its band drawn of even width',
+    make: (p, it) => { const d = Number(p.d), t = d < 10 ? 0.8 : d <= 22 ? 1 : d <= 32 ? 1.2 : d <= 37 ? 1.5 : d <= 48 ? 1.75 : d <= 68 ? 2 : d <= 85 ? 2.5 : 3, b = 0.1 * d; return [ringClip({ name: it.name, ri: 0.44 * d * mm, w: 0.9 * b * mm, t: t * mm, says: 'its band drawn at its mean width, about a tenth of its bore (it tapers to its lugs)' })]; },
+  },
+  oring: {
+    says: 'an O-ring: a ring of round section moulded in rubber', leaves: 'nothing: a torus',
+    make: (p, it) => { const d1 = Number(p.id), cs = Number(p.cs), mat = String(p.matter); return [P(it.name, { torus: [((d1 + cs) / 2) * mm, (cs / 2) * mm] }, { mat, color: mat === 'nbr' ? 0x1a1a1a : mat === 'fkm' ? 0x5a3020 : 0xc84030, finish: 'matte', rot: [PI / 2, 0, 0] })]; },
+  },
+  chain: {
+    says: 'roller chain (ISO 606 / ANSI B29.1): inner links of two plates on two bushes with a roller on each, outer links of two plates riveted on two pins, turn and turn about', leaves: 'its plates drawn as rectangles (their waisted outline not drawn); laid out straight',
+    make: (p, it) => { const C = CHAINS[String(p.series)]!, L = Number(p.length), links = Math.max(2, Math.round((L * 1000) / C.p / 2) * 2); return [partOf(chainRun({ name: it.name, p: C.p * mm, roller: C.roller * mm, width: C.width * mm, path: [[0, 0, 0], [links * C.p * mm + 1e-6, 0, 0]] }))]; },
+  },
+
 };
 /** A section drawn along z, its length L mm, turned so its length runs along y. */
 const ALONG_Y: V3 = [-PI / 2, 0, 0];
 const section = (outer: [number, number][], holes: [number, number][][], L: number): Part['shape'] => ({ prism: { pts: outer.map(([x, y]) => [x * mm, y * mm] as [number, number]), ...(holes.length ? { holes: holes.map((h) => h.map(([x, y]) => [x * mm, y * mm] as [number, number])) } : {}), L: L * mm } });
 const box = (w: number, h: number): [number, number][] => [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]];
 const circle = (r: number, x0: number, y0: number, n = 16): [number, number][] => Array.from({ length: n }, (_, i) => [x0 + r * Math.cos((2 * PI * i) / n), y0 + r * Math.sin((2 * PI * i) / n)] as [number, number]);
-/** A T-slot profile of n cells side by side (a 2040 is two 20 mm cells): each face of each cell has its slot, an opening
- *  0.31 of the cell wide through a lip 0.09 deep, opening to a cavity 0.43 wide and 0.19 deep (typical of 20 to 40 mm
- *  series, scaled), drawn square. */
 /** Its hollows: each cell's centre bore (0.21 of the cell across, for a tapped end), a hollow in each of its corners
  *  (0.25 to 0.425 of the cell out from its middle each way, leaving walls about 0.035 of the cell to the slots and 0.075
  *  to the faces), and one where two cells meet (0.34 by 0.5 of a cell). Typical of the 20 to 40 mm series; each drawn
@@ -426,7 +475,8 @@ function stepperParts(p: Record<string, string | number>, nm: string): Part[] {
   const yS = -L + rb, yF = -fb, mid = (yS + yF) / 2;
   const stack = slab(`${nm} stator`, through ? body : body.map(([x, z]) => [x * 0.985, z * 0.985] as [number, number]), [S(statorBore(d)), ...d.ties.map(([x, z]) => hole(clear / 2, x, z, 12))], yS, yF, { mat: 'steel-electrical', color: 0x6a6e72, finish: 'texture', fill: 0.95, item: 'lamination-stack', fixed: 'clamped between its end bells by its tie screws', passes });
   const coil = (k: number) => { const a = (k * PI) / 4, w2 = d.wp / 2 + d.g, Lz = d.r2 - d.r1, rc = (d.r1 + d.r2) / 2, hy = d.Ls / 2 + d.g, [x, z] = polar(rc, a);
-    return P(`${nm} winding`, section([[-d.w, -hy - d.tc], [d.w, -hy - d.tc], [d.w, hy + d.tc], [-d.w, hy + d.tc]], [[[-w2, -hy], [w2, -hy], [w2, hy], [-w2, hy]]], Lz), { rot: [0, PI / 2 - a, 0], at: [x * mm, mid * mm, z * mm], mat: 'magnet-wire', color: 0xb4643c, finish: 'plate', fill: 0.6, item: 'winding', fixed: 'wound round a pole of its stator' }); };
+    // (about 0.25 mm wire, typical of a NEMA 17's coils: its turns drawn round the pole, its layers under them)
+    return { ...wound({ name: `${nm} winding`, kind: 'pole', iw: w2 * mm, ih: hy * mm, ow: d.w * mm, oh: (hy + d.tc) * mm, L: Lz * mm, d: 0.00025, color: 0xb4643c }), rot: [0, PI / 2 - a, 0] as V3, at: [x * mm, mid * mm, z * mm] as V3, fixed: 'wound round a pole of its stator' }; };
   const stator = group(`${nm} stator`, 'stator-stepper', [stack, ...Array.from({ length: 8 }, (_, k) => coil(k))]);
   // the rotor: on its shaft, two toothed cups half a tooth apart either side of its magnet; the shaft in its bearings
   const rj = d.db / 2, rs = f.shaft / 2, yR0 = -L + rb - Bb, yr0 = yS + 0.5, yr1 = yF - 0.5, tm = Math.max(1, 0.1 * d.Ls), lc = (yr1 - yr0 - tm) / 2, rotor = { link: `${nm} rotor` };
@@ -465,7 +515,9 @@ function stepperParts(p: Record<string, string | number>, nm: string): Part[] {
  *  any seal), and so on in each of those, all the way down. Empty when it is whole. */
 export function missingIn(p: Part, it: Item | null | undefined = p.item ? itemOf(p.item) ?? keptByItem.get(p.item) ?? null : null, where = p.name): string[] {
   const out: string[] = [], is = (got: string, want: string) => got === want || (got.startsWith(want) && !/\d/.test(got[want.length] ?? ''));
-  if (it) {
+  // (a part is made from what its recipe lists, by one process: the tube a handlebar is bent from becomes it, so only an
+  // assembly or a product is held to having its recipe's things in it)
+  if (it && it.kind !== 'part') {
     const found = (q: Part, want: string): number => (q.item && is(q.item, want) ? 1 : (q.parts ?? []).reduce((a, r) => a + found(r, want), 0));
     for (const c of it.of) { const ci = itemOf(c.id); if (ci && (ci.kind === 'material' || ci.kind === 'element')) continue; if (!ci && DENSITY_KNOWN.has(c.id)) continue;
       const got = (p.parts ?? []).reduce((a, r) => a + found(r, c.id), 0); if (got < c.n) out.push(`${where}: ${c.n - got} of ${c.n} ${ci?.name ?? c.id} not drawn in it`); }
@@ -480,6 +532,9 @@ const kept = new Map<string, Component | string>();
 const byItem = new Map<string, Component>();
 /** Each made component by its item's id, so what is in a drawn part can be found where the inventory has no entry for its size. */
 const keptByItem = new Map<string, Item>();
+/** A size made by its family for a build and kept with its drawing (a wheel stud of the length a hub asks): the library's,
+ *  by its item's id. */
+export const keptItem = (id: string): Item | undefined => keptByItem.get(id);
 /** Materials the drawing knows by density, though the inventory may not list them. */
 const DENSITY_KNOWN = new Set(Object.keys(DENSITY));
 /** The families drawn here (every size each family makes). */
@@ -494,12 +549,27 @@ export function component(words: string): Component | string {
   else out = byItem.get(r.id) ?? designed(r, words);
   kept.set(k, out); return out;
 }
+/** A component by its family and sizes as values (a node's settings), not words: the same part `component` gives for
+ *  the words that say those sizes, checked against the family's limits. */
+export function componentFromParams(family: string, params: Record<string, string | number>): Component | string {
+  const f = FAMILIES.find((x) => x.id === family); if (!f) return `no family "${family}"`;
+  if (!DESIGNS[f.id]) return `${f.name} is known but not drawn yet: its family has no design.`;
+  // (sizes not given are its first example's, which says every size, where its defaults leave some blank)
+  const ex = f.examples[0] ? f.read(f.examples[0].replace(new RegExp(`^${f.id}s?\\b`, 'i'), '').trim()) : null, base = ex && typeof ex === 'object' ? ex : {};
+  const p: Record<string, string | number> = {};
+  for (const q of f.params) { const given = params[q.key], v = given !== undefined && given !== '' ? given : base[q.key] ?? q.default; p[q.key] = typeof q.default === 'number' && v !== '' && Number.isFinite(Number(v)) ? Number(v) : v; }
+  for (const q of f.params) if (q.min !== undefined && typeof p[q.key] === 'number' && ((p[q.key] as number) < q.min || (p[q.key] as number) > q.max!)) return `${q.says} must be ${q.min}–${q.max} ${q.unit}.`;
+  if (q0(f, p)) return q0(f, p)!;
+  const r = { ...f.make(p), sized: { family: f.id, params: p } };
+  return byItem.get(r.id) ?? designed(r, r.name);
+}
+/** A value not among those a family offers (a thread it has no size for). */
+function q0(f: { params: { key: string; says: string; values?: (string | number)[] }[] }, p: Record<string, string | number>): string | null {
+  for (const q of f.params) if (q.values?.length && !q.values.map(String).includes(String(p[q.key]))) return `${q.says} must be one of ${q.values.slice(0, 12).join(', ')}${q.values.length > 12 ? ', …' : ''}`;
+  return null;
+}
 /** The component an item is drawn as, by its id (an item made to sizes by a family the library draws, in the inventory or
  *  drawn inside another component), or null: so what the inventory lists, and what is inside a drawn part, opens as drawn. */
-export function componentOf(id: string): Component | null {
-  const was = byItem.get(id); if (was) return was;
-  const r = itemOf(id) ?? keptByItem.get(id); return r?.sized && DESIGNS[r.sized.family] ? designed(r, r.name) : null;
-}
 function designed(r: Item, words: string): Component {
   // (drawn under its name up to its first comma, the thing it is ("M8 × 30 hex bolt"), so what is said of it by name
   // reads its head noun; its class and its make in what it says)
@@ -551,4 +621,183 @@ export function boltedJoint(thread: string, grip: number, o: { class?: string; l
     use(`washer ${thread}`, [0, -(T.h + grip + T.h) * mm, 0], { name: `${thread} washer under the nut`, passes: [bName], fixed: 'under its nut' }),
     use(nut, [0, -(T.h + grip + T.h) * mm, 0], { rot: [PI, 0, 0], passes: [bName], fixed: `run onto its bolt and torqued` }),
   ] };
+}
+
+// ---- batteries: a starting battery by its BCI group, a lithium cell by its format, a pack of them -------------------------
+// (Each built once and shared: every car that takes a group 35 fits the same one, every pack of 21700s places the same
+// cell. Their frames: a starting battery stands on its tray, its length along x, its posts on its +z side, its foot at
+// y = 0; a cell stands on its negative end, its axis y, its middle at the origin.)
+const madeBatteries = new Map<string, Part | Assembly>();
+/** A part placed where it says it is (a placed part's own place is otherwise its placement's). */
+const put = (p: Part): Placed => place(p, p.at ?? [0, 0, 0], p.rot ?? [0, 0, 0]);
+const boxPart = (name: string, s: V3, at: V3, more: Partial<Part> = {}): Part => ({ name, shape: { box: s }, at, ...more });
+/** A flooded lead-acid starting battery of a BCI group, built as it is made, by the general makers (makers.ts) the
+ *  board's nodes use too: a cast lead grid for each plate, pasted (lead dioxide on the positives, sponge lead on the
+ *  negatives); each positive wrapped in a polyethylene separator envelope; the plates stacked alternately, a strap cast
+ *  across each sign's lugs, making a 2 V cell; six cells in a moulded case of five partitions, alternate cells turned so
+ *  each one's plus lies beside the next one's minus, joined in series through the partitions; its electrolyte, its lid,
+ *  its vent caps and its two posts at the chain's free ends (SAE J537: the positive 17.5 mm across at its top, the
+ *  negative 15.9 mm). */
+export function starterBattery(group: string): Assembly {
+  const g = BCI_GROUPS[group]; if (!g) throw new Error(`no BCI group "${group}" (there are ${Object.keys(BCI_GROUPS).join(', ')})`);
+  const key = `bci ${group}`, was = madeBatteries.get(key); if (was) return was as Assembly;
+  const [L, W, H] = g.dims, post = 0.018, lidT = 0.012, Hc = H - post - lidT, wall = 0.0025, rib = 0.012;
+  const en = enclosure({ L, W, H: Hc, wall, floor: 0.003, cells: 6, partition: 0.0015, lid: lidT, ribs: rib, item: 'battery-case', lidItem: 'battery-lid' }), [c, ch, cw] = en.cell;
+  const pw = cw - 0.006, ph = ch * 0.72, nPos = Math.floor(g.plates / 2);
+  // (a grid 1.1 mm thick, its paste 0.35 mm proud each side on the positives and 0.2 mm on the negatives; the paste about
+  // a third of its volume as lead by mass, being porous and lighter oxide: typical, so a group's mass comes to its typical)
+  const grid = (lug: 'left' | 'right') => gridPlate({ w: pw, h: ph, t: 0.0011, bars: 7, wires: 9, rim: 0.003, lug });
+  const pos = coated(grid('right'), { name: 'positive plate', item: 'plate-positive', t: 0.00035, mat: 'lead', fill: 0.2, color: 0x4a2c1c, layer: 'positive paste', layerItem: 'paste-positive', says: 'lead dioxide paste pressed into its grid' });
+  const neg = coated(grid('left'), { name: 'negative plate', item: 'plate-negative', t: 0.0002, mat: 'lead', fill: 0.2, color: 0x6a6d72, layer: 'negative paste', layerItem: 'paste-negative', says: 'sponge lead paste pressed into its grid' });
+  const posWrapped = wrapped(pos, { name: 'separator envelope', t: 0.0006, mat: 'pe', fill: 0.4, color: 0xd9dad2, item: 'plate-separator', says: 'a ribbed microporous polyethylene envelope (0.6 mm, typical)' });
+  const n = 2 * nPos + 1, stack = stackOf([neg, posWrapped], n, (c - 0.002) / n, `${n} plates`), inner: Assembly = { name: 'plates', items: [place(stack, [0, ph / 2, 0])] };
+  const { straps } = strapsOver(inner, '^lug$', { name: 'strap', item: 'la-strap' }), level = 0.012;
+  const cellVol = c * cw * (ph + level), plateVol = n * pw * ph * 0.0016, wet = Math.max(0, cellVol - plateVol * 0.6);
+  const cell: Assembly = { name: `cell (${n} plates)`, item: 'la-cell', items: [...inner.items, ...straps.map((s) => place(s, s.at ?? [0, 0, 0]))] };
+  // (its electrolyte by the general filling maker, as a tank's fuel is: dilute sulphuric acid, 1.28 specific gravity charged)
+  const acid = fillCells(en.case, { name: 'electrolyte', L: c, W: cw, h: ph + level, mat: 'acid', rho: 1280, share: wet / cellVol, item: 'acid-electrolyte' });
+  const cells = intoCells(cell, en.case, true), joints = strapsOver(cells, '^strap \\d+$', { name: 'intercell connector', item: 'la-intercell', series: true, h: 0.014 });
+  const yLid = Hc + lidT / 2, out: Placed[] = [place(en.case), place(cells), place(acid), ...joints.straps.map((s) => place(s, s.at ?? [0, 0, 0])), place(en.lid, [0, yLid, 0])];
+  const caps = (en.case.ports ?? []).filter((q) => /^cell/.test(q.name));
+  for (const q of caps) out.push(place(boxPart('vent cap', [0.02, 0.006, 0.02], [0, 0, 0], { item: 'battery-vent-cap', mat: 'pp', color: 0x2a2b2e }), [q.at[0], Hc + lidT + 0.003, 0]));
+  const [pe, ne] = joints.ends, postOf = (name: string, r: number, r2: number, e: V3, says: string): Placed => { const h = H - e[1]; return place({ name, shape: { cyl: [r, h, r2] }, at: [0, 0, 0], item: 'battery-post', mat: 'lead', color: 0x9a9da2, finish: 'satin', says }, [e[0], e[1] + h / 2, e[2]]); };
+  if (pe) out.push(postOf('positive post (SAE)', 0.0098, 0.00875, pe, '17.5 mm across at its top, tapering out 1 in 9 (SAE J537)'));
+  if (ne) out.push(postOf('negative post (SAE)', 0.0089, 0.00795, ne, '15.9 mm across at its top (SAE J537)'));
+  const bat: Assembly = { name: `12 V battery, BCI group ${g.group}`, item: 'battery-sli', items: out, ports: [frame('base', [0, 0, 0], [0, -1, 0], [1, 0, 0]), ...(pe ? [frame('positive', [pe[0], H, pe[2]], [0, 1, 0], [1, 0, 0])] : []), ...(ne ? [frame('negative', [ne[0], H, ne[2]], [0, 1, 0], [1, 0, 0])] : [])] };
+  madeBatteries.set(key, bat); return bat;
+}
+/** A cylindrical lithium-ion cell of a format: its can (nickel-plated steel) in its sleeve, its wound jelly roll (cathode,
+ *  anode and separator spiralled round a centre hole: their layers about 0.36 mm a turn together, typical of NMC
+ *  cells), insulating discs over and under the roll, its cap (the positive button over a vent disc that breaks the
+ *  circuit if it swells) sealed in a gasket. The roll's mass is the datasheet's less the can and cap drawn. */
+export function liCell(format: string): Part {
+  const f = CELL_FORMATS[format]; if (!f) throw new Error(`no cell format "${format}" (there are ${Object.keys(CELL_FORMATS).join(', ')})`);
+  const key = `cell ${format}`, was = madeBatteries.get(key); if (was) return was as Part;
+  const r = f.d / 2, L = f.L, w = f.wall, capH = Math.max(0.002, L * 0.04), sleeve = format === '4680' ? 0 : 0.00008, rIn = r - w - sleeve - 0.0003, core = Math.max(0.001, r * 0.11), rollH = L - capH - 0.004;
+  const pitch = 0.00036, turns = Math.max(3, Math.floor((rIn - core) / pitch));
+  const can: Part = { name: 'can', shape: { cyl: [r - sleeve, L - capH * 0.5] }, at: [0, -capH * 0.25, 0], item: 'cell-can', mat: 'steel-low', shell: w, color: 0x9a9ea4, finish: 'satin', says: `deep-drawn nickel-plated steel, ${(w * 1000).toFixed(2)} mm wall (typical): its negative terminal` };
+  const parts: Part[] = [can];
+  if (sleeve) parts.push({ name: 'sleeve', shape: { cyl: [r, L - 0.0006] }, at: [0, 0, 0], mat: 'pe', shell: sleeve, color: format === '18650' ? 0x2a5fb0 : 0x2f7a52, finish: 'gloss', says: 'a printed PET shrink sleeve, insulating the can' });
+  const canKg = massOf(can), capKg = 0.0025 * PI * r * r * 2 * 7850 * 0.25, roll = Math.max(0.2 * f.kg, f.kg - canKg - capKg - (sleeve ? 0.001 : 0));
+  // (its jelly roll by the general winding maker, as a coil's wire and a capacitor's film are wound)
+  parts.push({ ...woundRoll({ name: 'jelly roll', core, turns, h: rollH, item: 'jelly-roll', says: `${turns} turns of cathode, separator and anode wound round a ${(core * 2000).toFixed(1)} mm centre hole (layers typical of NMC cells: an estimate)`, strips: [
+    { name: 'cathode (NMC on aluminium foil)', t: 0.00013, color: 0x2b2d33, kg: roll * 0.45, item: 'cathode-sheet', says: 'NMC oxide coated both sides of a 15 µm aluminium foil (typical): 45 % of the roll\'s mass (an estimate)' },
+    { name: 'separator, soaked in electrolyte', t: 0.000015, color: 0xe6e6e0, kg: roll * 0.085, item: 'separator-film', says: 'a porous polyolefin film, about 15 µm, holding the electrolyte (LiPF₆ in carbonates): weighed with it, the two films 17 % of the roll (an estimate)' },
+    { name: 'anode (graphite on copper foil)', t: 0.00017, color: 0x111214, kg: roll * 0.38, item: 'anode-sheet', says: 'graphite coated both sides of an 8 µm copper foil (typical): 38 % of the roll\'s mass (an estimate)' },
+    { name: 'separator, soaked in electrolyte', t: 0.000015, color: 0xe6e6e0, kg: roll * 0.085, item: 'separator-film', says: 'the second separator film, between the anode and the next turn\'s cathode' },
+  ] }), at: [0, -capH / 2, 0] });
+  parts.push({ name: 'insulator (under the roll)', shape: { cyl: [rIn, 0.0003] }, at: [0, -L / 2 + 0.0008, 0], mat: 'pc', color: 0xd8c890 }, { name: 'insulator (over the roll)', shape: { cyl: [rIn, 0.0003] }, at: [0, L / 2 - capH - 0.0012, 0], mat: 'pc', color: 0xd8c890 });
+  parts.push({ name: 'cap', at: [0, L / 2 - capH / 2, 0], item: 'cell-cap', says: format === '4680' ? 'its top: the 4680 is tabless, its electrode edges welded to its ends (reported in teardowns)' : 'its top: a nickel tab from the cathode welded under it (typical)', parts: [
+    { name: 'gasket', item: 'cap-gasket', shape: { lathe: [[r * 0.72, -capH / 2], [r - w, -capH / 2], [r - w, capH / 2], [r * 0.72, capH / 2], [r * 0.72, -capH / 2]] }, at: [0, 0, 0], mat: 'pp', color: 0x1a1a1a, says: 'polypropylene, sealing the cap in the can\'s crimp' },
+    { name: 'vent disc (current interrupt)', item: 'vent-disc', shape: { cyl: [r * 0.72, 0.0004] }, at: [0, -capH * 0.2, 0], mat: 'al-6061', color: 0xc8ccd2, finish: 'brushed', says: 'scored aluminium: pressure pushes it up and breaks the circuit, then it vents' },
+    { name: 'positive button', item: 'cap-plate', shape: { cyl: [r * 0.6, capH * 0.5, r * 0.45] }, at: [0, capH * 0.25, 0], mat: 'steel-low', color: 0xb8bcc2, finish: 'satin', says: 'nickel-plated steel, the positive terminal' },
+  ] });
+  const fam = callFamily(`cell ${format}`), cellItem = fam && typeof fam !== 'string' ? fam.id : undefined;
+  const cell: Part = { name: `lithium-ion cell ${format}`, at: [0, 0, 0], ...(cellItem ? { item: cellItem } : {}), says: `${(f.d * 1000).toFixed(1)} × ${(f.L * 1000).toFixed(1)} mm, ${f.V} V, ${f.Ah} Ah, ${(f.kg * 1000).toFixed(0)} g: ${f.source}`, parts, ports: [frame('negative', [0, -L / 2, 0], [0, -1, 0], [1, 0, 0]), frame('positive', [0, L / 2, 0], [0, 1, 0], [1, 0, 0])] };
+  madeBatteries.set(key, cell); return cell;
+}
+/** A pack of cells: `s` groups in series, each `p` cells in parallel standing in `rows` staggered rows (so a group is a
+ *  narrow band across the module), a busbar over each group, the groups side by side in modules (`modules` gives how
+ *  many groups each holds), the modules in a tray. One cell is stored, however many are placed. */
+export function cellPack(o: { format: string; s: number; p: number; rows?: number; modules?: number[]; name?: string }): Assembly {
+  const f = CELL_FORMATS[o.format]; if (!f) throw new Error(`no cell format "${o.format}"`);
+  const mods = o.modules?.length ? o.modules : [o.s], s = mods.reduce((a, b) => a + b, 0); if (s !== o.s) throw new Error(`its modules hold ${s} groups, not ${o.s}`);
+  const key = JSON.stringify(o), was = madeBatteries.get(key); if (was) return was as Assembly;
+  const cell = liCell(o.format), rows = Math.max(1, o.rows ?? 4), per = Math.ceil(o.p / rows), pitch = f.d + 0.0015, dx = pitch * 0.866;
+  const gi: Placed[] = []; for (let i = 0; i < o.p; i++) { const row = i % rows, k = Math.floor(i / rows); gi.push(place(cell, [row * dx, f.L / 2, (k + (row % 2 ? 0.5 : 0) - per / 2) * pitch])); }
+  const gw = (rows - 1) * dx + f.d, gz = per * pitch + f.d;
+  gi.push(put(boxPart('busbar', [gw, 0.0015, gz * 0.98], [gw / 2 - f.d / 2, f.L + 0.002, 0], { mat: 'al-6061', color: 0xc8ccd2, finish: 'brushed', says: 'joins the group\'s cells in parallel and on to the next group (aluminium, typical)' })));
+  const group: Assembly = { name: `${o.p} cells in parallel`, items: gi }, gl = gw + 0.003;
+  const modOf = new Map<number, Assembly>(), items: Placed[] = []; let x = 0;
+  for (const n of mods) {
+    let m = modOf.get(n);
+    if (!m) { m = { name: `module of ${n} groups`, items: [...Array.from({ length: n }, (_, i) => place(group, [i * gl, 0, 0])), put(boxPart('module side plate', [n * gl, f.L * 0.8, 0.002], [(n * gl) / 2 - f.d, f.L * 0.45, -gz / 2 - 0.003], { mat: 'pc', color: 0x30343a })), put(boxPart('module side plate', [n * gl, f.L * 0.8, 0.002], [(n * gl) / 2 - f.d, f.L * 0.45, gz / 2 + 0.003], { mat: 'pc', color: 0x30343a })),
+      // (under its cells, a brazed aluminium cold plate with glycol in its channels, glued to the cells' ends: liquid-cooled
+      // packs carry one under each module, about 3–5 mm deep, typical)
+      put(boxPart('cold plate', [n * gl, 0.004, gz], [(n * gl) / 2 - f.d, -0.002, 0], { mat: 'al-6063', color: 0xb4b8be, finish: 'brushed', item: 'cold-plate', says: 'brazed aluminium, glycol in its channels', parts: [boxPart('coolant', [n * gl, 0.0012, gz * 0.8], [0, 0, 0], { mat: 'glycol-50', color: 0x3fa0d0, says: '50/50 glycol and water in its channels (about 1.07 kg/L)' })] }))] }; modOf.set(n, m); }
+    items.push(place(m, [-(n * gl) / 2, 0.01, x])); x += gz + 0.03;
+  }
+  const len = Math.max(...mods) * gl + 0.04, wide = x + 0.01;
+  items.push(put(boxPart('tray floor', [len, 0.006, wide], [0, 0.003, x / 2 - gz / 2 - 0.015], { mat: 'al-6061', color: 0x8a8e94, finish: 'satin', says: 'its lid not drawn, so its cells can be seen' })));
+  // (round it, its tray's walls: extruded aluminium, 8 mm of metal in its hollow section (typical of a pack frame, which
+  // also takes a side crash), as tall as its cells)
+  const wh = f.L + 0.01, cz = x / 2 - gz / 2 - 0.015;
+  for (const sd of [-1, 1]) items.push(put(boxPart('tray wall', [len, wh, 0.008], [0, 0.006 + wh / 2, cz + sd * (wide / 2 + 0.004)], { mat: 'al-6063', color: 0x8a8e94, finish: 'satin', item: 'tray-wall' })));
+  for (const sd of [-1, 1]) items.push(put(boxPart('tray wall', [0.008, wh, wide + 0.016], [sd * (len / 2 + 0.004), 0.006 + wh / 2, cz], { mat: 'al-6063', color: 0x8a8e94, finish: 'satin', item: 'tray-wall' })));
+  const kWh = (o.s * f.V * o.p * f.Ah) / 1000;
+  // (its middle at its origin, as the box that stood for it had its)
+  const inner: Assembly = { name: 'modules and tray', items }, mid = boundsOfAll(inner).getCenter(new THREE.Vector3());
+  const pack: Assembly = { name: o.name ?? `${o.s}s${o.p}p pack of ${o.format} cells (${kWh.toFixed(1)} kWh)`, items: [place(inner, [-mid.x, -mid.y, -mid.z])] };
+  madeBatteries.set(key, pack); return pack;
+}
+
+// ---- how far down a build comes apart ----------------------------------------------------------------------------------------
+/** Words a maker names a piece by that the inventory files under another name. */
+const NAMED_AS: Record<string, string> = { headlight: 'headlamp', lamp: 'headlamp', 'door window': 'door glass', 'exhaust': 'exhaust stack' };
+const bareName = (name: string): string => {
+  // (its sizes and codes off too: "brake disc 274 mm", "axle sprocket 49T", "tyre 315/80R22.5" are named a brake disc, a sprocket, a tyre)
+  const b = name.toLowerCase().replace(/\(.*?\)/g, ' ').replace(/\b[\d.]+\s*(mm|cm|in|kwh|kw|l|t|cc)\b/g, ' ').replace(/\b[\d.]+\/[\d.]+[a-z]*[\d.]*|\b\d+[x×][\d.x×-]+\b/g, ' ').replace(/\b(left|right|front|rear|inner|outer|upper|lower|middle|top|bottom|axle \d+|\d+)\b/g, ' ').replace(/\s+/g, ' ').trim();
+  const one = b.endsWith('s') && !b.endsWith('ss') ? b.slice(0, -1) : b;
+  return NAMED_AS[one] ?? NAMED_AS[b] ?? one;
+};
+let assemblyNamesAt = -1, assemblyNames = new Map<string, Item>();
+/** The inventory's assemblies by their names: what a piece named so is really made of. */
+function assembliesByName(): Map<string, Item> {
+  if (assemblyNamesAt !== inventoryRev()) {
+    assemblyNames = new Map(); assemblyNamesAt = inventoryRev();
+    for (const it of INVENTORY.values()) if ((it.kind === 'assembly' || it.kind === 'product') && it.of.some((c) => { const ci = itemOf(c.id); return ci && ci.kind !== 'material' && ci.kind !== 'element'; })) { const k = it.name.toLowerCase(); if (!assemblyNames.has(k)) assemblyNames.set(k, it); }
+  }
+  return assemblyNames;
+}
+export interface ExplodeAudit {
+  /** the share of its mass that is lumps */ lumps: number; pieces: number; /** pieces that are one part made one way (not an assembly drawn as a lump) */ whole: number; tagged: number; faked: { name: string; is: string; of: string[] }[]; missing: string[];
+  /** the share of its mass only said (a mass given for what is not built: its "rest", a part weighed by a figure) */ unbuilt: number; said: { name: string; kg: number }[];
+  /** the share of its mass in pieces nothing says what they are: not tagged with an item, not named as one, not made in
+   *  one with a tagged part, not a piece of a bought one */ unknown: number; unnamed: { name: string; kg: number }[];
+  score: number; says: string;
+}
+/** How far a build comes apart into what it is really made of: each drawn piece that is a single part (one material,
+ *  one process: a pressing, a casting, a moulding, a bolt) counts whole; a piece drawn as one lump though what it is named
+ *  for is an assembly in the inventory (a headlamp, a door, a fuel tank) is faked, and said with what it should come apart
+ *  into; every tagged assembly is held to its recipe (`missingIn`). And what is not built at all is said: mass only given
+ *  as a figure (unbuilt), and pieces nothing identifies (unknown). Scored by mass, not by count: a cab drawn as one lump
+ *  outweighs a hundred real wheel nuts. The design rule it keeps: build from the first parts up, explode to the bottom. */
+export function explodeAudit(p: Part): ExplodeAudit {
+  const names = assembliesByName(), known = partNames(), faked: ExplodeAudit['faked'] = [], said: ExplodeAudit['said'] = [], unnamed: ExplodeAudit['unnamed'] = [];
+  let pieces = 0, tagged = 0, kg = 0, lumpKg = 0, saidKg = 0, unknownKg = 0;
+  // (`held`: it is a piece of a tagged part or assembly: what it is, its owner says, and its owner's recipe holds it)
+  const walk = (q: Part, held: boolean) => {
+    if (q.kg !== undefined) { saidKg += q.kg; said.push({ name: q.name, kg: q.kg }); if (!q.shape) kg += q.kg; }
+    if (q.shape) {
+      const own = massOf({ ...q, parts: [] }); pieces++; kg += own; if (q.item) tagged++;
+      if (!q.parts?.length) {
+        const it = q.item ? itemOf(q.item) ?? keptByItem.get(q.item) ?? null : null, as = it && (it.kind === 'assembly' || it.kind === 'product') ? it : !q.item ? names.get(bareName(q.name)) : undefined;
+        if (as && as.of.some((c) => { const ci = itemOf(c.id); return ci && ci.kind !== 'material' && ci.kind !== 'element'; })) { lumpKg += own; faked.push({ name: q.name, is: as.name, of: as.of.map((c) => `${c.n > 1 ? `${c.n} × ` : ''}${itemOf(c.id)?.name ?? c.id}`) }); }
+        else if (!q.item && !held && !known.has(bareName(q.name)) && q.kg === undefined) { unknownKg += own; unnamed.push({ name: q.name, kg: own }); }
+      }
+    }
+    for (const c of q.parts ?? []) walk(c, held || !!q.item);
+  };
+  walk(p, false);
+  const missing = missingIn(p), whole = pieces - faked.length, lumps = kg > 0 ? lumpKg / kg : 0, unbuilt = kg > 0 ? saidKg / kg : 0, unknown = kg > 0 ? unknownKg / kg : 0, score = Math.max(0, 1 - lumps - unbuilt - unknown);
+  said.sort((a, b) => b.kg - a.kg); unnamed.sort((a, b) => b.kg - a.kg);
+  const top = (xs: { name: string; kg: number }[]) => [...new Map(xs.map((x) => [bareName(x.name), x])).values()].slice(0, 6).map((x) => `${x.name} ${x.kg >= 1 ? x.kg.toFixed(0) : x.kg.toFixed(2)} kg`).join(', ');
+  return { lumps, pieces, whole, tagged, faked, missing, unbuilt, said, unknown, unnamed, score, says: `${pieces} pieces; ${(lumps * 100).toFixed(1)} % of its mass in ${faked.length} lumps, each an assembly drawn as one piece${faked.length ? ` (${[...new Set(faked.map((f) => f.is))].slice(0, 6).join(', ')})` : ''}; ${(unbuilt * 100).toFixed(1)} % only said, not built${said.length ? ` (${top(said)})` : ''}; ${(unknown * 100).toFixed(1)} % in pieces nothing identifies${unnamed.length ? ` (${top(unnamed)})` : ''}; ${missing.length} recipe${missing.length === 1 ? '' : 's'} not met; ${tagged} tagged with what they are` };
+}
+let partNamesAt = -1, partNamesMap = new Set<string>();
+/** Every inventory item's name, as a piece is named (so a piece named as a part is identified by its name). */
+function partNames(): Set<string> {
+  if (partNamesAt !== inventoryRev()) { partNamesMap = new Set([...INVENTORY.values()].filter((it) => it.kind === 'part' || it.kind === 'material').map((it) => bareName(it.name))); partNamesAt = inventoryRev(); }
+  return partNamesMap;
+}
+/** The biggest pack of a cell format that fits a space (its length along x, height, width along z), `s` groups in
+ *  series: as many cells in parallel as fit, in modules side by side across it. */
+export function packToFit(len: number, h: number, wide: number, format: string, s: number): { pack: Assembly; p: number; kWh: number } {
+  const f = CELL_FORMATS[format]!; if (f.L + 0.01 > h) throw new Error(`a ${format} stands ${(f.L * 1000).toFixed(0)} mm tall: more than the ${(h * 1000).toFixed(0)} mm there is`);
+  const pitch = f.d + 0.0015, dx = pitch * 0.866;
+  for (let p = 80; p >= 1; p--) for (const rows of [4, 5, 6, 3, 2, 1]) {
+    const per = Math.ceil(p / rows), gz = per * pitch + f.d, gl = (rows - 1) * dx + f.d + 0.003, M = Math.max(1, Math.floor((wide + 0.03) / (gz + 0.03))), n = Math.ceil(s / M);
+    if (n * gl + 0.04 <= len && M * (gz + 0.03) - 0.03 <= wide) { const mods = Array.from({ length: M }, (_, i) => Math.floor(s / M) + (i < s % M ? 1 : 0)).filter((x) => x > 0); return { pack: cellPack({ format, s, p, rows, modules: mods }), p, kWh: (s * p * f.V * f.Ah) / 1000 }; }
+  }
+  throw new Error(`no pack of ${format} cells fits ${len} × ${wide} m`);
 }

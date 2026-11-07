@@ -1,53 +1,104 @@
 // Units and dimensions. Every quantity the ganglia handle has a dimension in the SI base quantities (mass, length,
 // time, current, temperature), and a unit is a scale (and, for Celsius, an offset) onto SI. Two uses:
-//   - checking laws: a law is dimensionally homogeneous when changing the size of any base unit rescales its output
-//     exactly as its output's dimension says (dimensionsOf + the scaling test in ganglia.test.ts); a misplaced power
-//     (d^2 for d^3) fails it
+//   - checking laws: every law's terms carry units, and a law is checked by their dimensions (`parseUnit`, used by
+//     `src/nexus/dimension.ts` and the law tests in `tests/nexus/domains.test.ts`)
+//   - checking wires (`relate`): a value goes into another unit only where both are the same kind of quantity, not only
+//     the same dimension (spec 10, T11): a turn is a cycle (60 rpm is 1 Hz), an energy is not a torque, an absorbed
+//     dose is not a dose equivalent, a level in dB goes only into dB, a temperature is not a temperature difference
 //   - reading what is said: "a 265 lb kart at 8 mph", "20 N·m", "3/4 in": every number with its unit, in SI, with its
 //     dimension, so a request is understood whatever units it comes in (findQuantities)
 
-/** Exponents of mass, length, time, current, temperature. */
-export type Dim = [number, number, number, number, number];
-export const DIMLESS: Dim = [0, 0, 0, 0, 0];
+/** Exponents of mass, length, time, current, temperature, amount of substance. */
+export type Dim = [number, number, number, number, number, number];
+export const DIMLESS: Dim = [0, 0, 0, 0, 0, 0];
 
 interface UnitDef { dim: Dim; scale: number; offset?: number }
 const u = (dim: Dim, scale = 1, offset?: number): UnitDef => ({ dim, scale, ...(offset === undefined ? {} : { offset }) });
 
-const M: Dim = [1, 0, 0, 0, 0], L: Dim = [0, 1, 0, 0, 0], T: Dim = [0, 0, 1, 0, 0], I: Dim = [0, 0, 0, 1, 0], K: Dim = [0, 0, 0, 0, 1];
-const N: Dim = [1, 1, -2, 0, 0], PA: Dim = [1, -1, -2, 0, 0], J: Dim = [1, 2, -2, 0, 0], W: Dim = [1, 2, -3, 0, 0];
-const V: Dim = [1, 2, -3, -1, 0], OHM: Dim = [1, 2, -3, -2, 0];
+const M: Dim = [1, 0, 0, 0, 0, 0], L: Dim = [0, 1, 0, 0, 0, 0], T: Dim = [0, 0, 1, 0, 0, 0], I: Dim = [0, 0, 0, 1, 0, 0], K: Dim = [0, 0, 0, 0, 1, 0];
+const N: Dim = [1, 1, -2, 0, 0, 0], PA: Dim = [1, -1, -2, 0, 0, 0], J: Dim = [1, 2, -2, 0, 0, 0], W: Dim = [1, 2, -3, 0, 0, 0];
+const V: Dim = [1, 2, -3, -1, 0, 0], OHM: Dim = [1, 2, -3, -2, 0, 0];
 
 /** Units by symbol (as the laws write them, and as people say them). */
 export const UNITS: Record<string, UnitDef> = {
-  '-': u(DIMLESS), '1': u(DIMLESS), mol: u(DIMLESS), dB: u(DIMLESS), rad: u(DIMLESS), rev: u(DIMLESS, 2 * Math.PI), deg: u(DIMLESS, Math.PI / 180), '%': u(DIMLESS, 0.01),
+  '-': u(DIMLESS), '1': u(DIMLESS), dB: u(DIMLESS), rad: u(DIMLESS), rev: u(DIMLESS, 2 * Math.PI), deg: u(DIMLESS, Math.PI / 180), '%': u(DIMLESS, 0.01),
   kg: u(M), g: u(M, 1e-3), t: u(M, 1000), lb: u(M, 0.45359237), lbs: u(M, 0.45359237), oz: u(M, 0.028349523125),
   m: u(L), mm: u(L, 1e-3), cm: u(L, 1e-2), km: u(L, 1e3), um: u(L, 1e-6), 'µm': u(L, 1e-6), nm: u(L, 1e-9), in: u(L, 0.0254), inch: u(L, 0.0254), ft: u(L, 0.3048), mi: u(L, 1609.344),
   // the astronomical unit, exactly (IAU 2012 Resolution B2)
   au: u(L, 149597870700),
   // a rack unit, 1.75 in (EIA-310); a knot, a nautical mile (1852 m, exactly) an hour; a hectare, 10 000 m²
-  U: u(L, 0.04445), kn: u([0, 1, -1, 0, 0], 1852 / 3600), ha: u([0, 2, 0, 0, 0], 1e4),
+  U: u(L, 0.04445), kn: u([0, 1, -1, 0, 0, 0], 1852 / 3600), ha: u([0, 2, 0, 0, 0, 0], 1e4),
   mg: u(M, 1e-6), ug: u(M, 1e-9), ng: u(M, 1e-12),
   // volumes: the litre is a cubic decimetre (SI Brochure, 9th ed., Table 8); the US gallon 231 cubic inches exactly
-  'm^3': u([0, 3, 0, 0, 0]), L: u([0, 3, 0, 0, 0], 1e-3), mL: u([0, 3, 0, 0, 0], 1e-6), uL: u([0, 3, 0, 0, 0], 1e-9), nL: u([0, 3, 0, 0, 0], 1e-12), cL: u([0, 3, 0, 0, 0], 1e-5), gal: u([0, 3, 0, 0, 0], 231 * 0.0254 ** 3),
+  'm^3': u([0, 3, 0, 0, 0, 0]), L: u([0, 3, 0, 0, 0, 0], 1e-3), mL: u([0, 3, 0, 0, 0, 0], 1e-6), uL: u([0, 3, 0, 0, 0, 0], 1e-9), nL: u([0, 3, 0, 0, 0, 0], 1e-12), cL: u([0, 3, 0, 0, 0, 0], 1e-5), gal: u([0, 3, 0, 0, 0, 0], 231 * 0.0254 ** 3),
   s: u(T), ms: u(T, 1e-3), min: u(T, 60), h: u(T, 3600), hr: u(T, 3600), d: u(T, 86400), wk: u(T, 604800),
   // a month and a year on average in the Gregorian calendar (365.2425 days)
   mo: u(T, 2629746), yr: u(T, 31556952),
   A: u(I), mA: u(I, 1e-3),
+  // amount of substance: the mole, 6.02214076e23 entities exactly (SI 2019)
+  mol: u([0, 0, 0, 0, 0, 1]), mmol: u([0, 0, 0, 0, 0, 1], 1e-3), kmol: u([0, 0, 0, 0, 0, 1], 1e3),
   K: u(K), degC: u(K, 1, 273.15), degF: u(K, 5 / 9, 255.3722222222222),
+  // a temperature difference, a kind of its own (a rise of 10 °C is 10 K, never 283.15 K): no offset
+  'ΔK': u(K), 'ΔdegC': u(K), 'ΔdegF': u(K, 5 / 9),
   N: u(N), kN: u(N, 1e3), mN: u(N, 1e-3), uN: u(N, 1e-6), lbf: u(N, 4.4482216152605), kgf: u(N, 9.80665),
   // a millimetre of mercury, as medicine writes pressure: 133.322387415 Pa (ISO 80000-4 Annex)
   mmHg: u(PA, 133.322387415),
   Pa: u(PA), hPa: u(PA, 100), kPa: u(PA, 1e3), MPa: u(PA, 1e6), GPa: u(PA, 1e9), bar: u(PA, 1e5), psi: u(PA, 6894.757293168), psf: u(PA, 47.88025898),
   J: u(J), kJ: u(J, 1e3), MJ: u(J, 1e6), Wh: u(J, 3600), kWh: u(J, 3.6e6),
+  // the electronvolt: the energy an electron gains across a volt, e × 1 V, exact since the 2019 SI
+  eV: u(J, 1.602176634e-19), keV: u(J, 1.602176634e-16), MeV: u(J, 1.602176634e-13),
   // a dose of radiation: energy absorbed per kilogram (the gray), weighed for harm (the sievert): J/kg (SI Brochure, 9th ed., Table 4)
-  Gy: u([0, 2, -2, 0, 0]), Sv: u([0, 2, -2, 0, 0]), krad: u([0, 2, -2, 0, 0], 10), mSv: u([0, 2, -2, 0, 0], 1e-3), uSv: u([0, 2, -2, 0, 0], 1e-6),
+  Gy: u([0, 2, -2, 0, 0, 0]), Sv: u([0, 2, -2, 0, 0, 0]), krad: u([0, 2, -2, 0, 0, 0], 10), mSv: u([0, 2, -2, 0, 0, 0], 1e-3), uSv: u([0, 2, -2, 0, 0, 0], 1e-6),
   W: u(W), kW: u(W, 1e3), hp: u(W, 745.69987158227), mW: u(W, 1e-3), uW: u(W, 1e-6), MW: u(W, 1e6), GW: u(W, 1e9), TW: u(W, 1e12),
   V: u(V), kV: u(V, 1e3), mV: u(V, 1e-3),
   ohm: u(OHM), mohm: u(OHM, 1e-3), 'Ω': u(OHM), 'mΩ': u(OHM, 1e-3),
-  Ah: u([0, 0, 1, 1, 0], 3600), mAh: u([0, 0, 1, 1, 0], 3.6),
-  Hz: u([0, 0, -1, 0, 0]), kHz: u([0, 0, -1, 0, 0], 1e3), MHz: u([0, 0, -1, 0, 0], 1e6), GHz: u([0, 0, -1, 0, 0], 1e9), rpm: u([0, 0, -1, 0, 0], (2 * Math.PI) / 60),
-  T: u([1, 0, -2, -1, 0]), mT: u([1, 0, -2, -1, 0], 1e-3), F: u([-1, -2, 4, 2, 0]), uF: u([-1, -2, 4, 2, 0], 1e-6), C: u([0, 0, 1, 1, 0]), S: u([-1, -2, 3, 2, 0]), H: u([1, 2, -2, -2, 0]), mH: u([1, 2, -2, -2, 0], 1e-3),
+  Ah: u([0, 0, 1, 1, 0, 0], 3600), mAh: u([0, 0, 1, 1, 0, 0], 3.6),
+  Hz: u([0, 0, -1, 0, 0, 0]), kHz: u([0, 0, -1, 0, 0, 0], 1e3), MHz: u([0, 0, -1, 0, 0, 0], 1e6), GHz: u([0, 0, -1, 0, 0, 0], 1e9), rpm: u([0, 0, -1, 0, 0, 0], (2 * Math.PI) / 60),
+  T: u([1, 0, -2, -1, 0, 0]), mT: u([1, 0, -2, -1, 0, 0], 1e-3), F: u([-1, -2, 4, 2, 0, 0]), uF: u([-1, -2, 4, 2, 0, 0], 1e-6), C: u([0, 0, 1, 1, 0, 0]), S: u([-1, -2, 3, 2, 0, 0]), H: u([1, 2, -2, -2, 0, 0]), mH: u([1, 2, -2, -2, 0, 0], 1e-3),
 };
+
+// ------------------------------------------------------------------------------------------------ kinds on wires
+// What a unit counts of a turn: an angle (rad, deg, rev, and a turning speed in rpm) counts radians; a frequency (Hz)
+// counts cycles, and a cycle is one turn. So between the two a turn is 2π radians; where only one side says angle, the
+// SI's own reading (a radian is 1) is kept.
+const ANGLE = new Set(['rad', 'deg', 'rev', 'rpm']), CYCLE = new Set(['Hz', 'kHz', 'MHz', 'GHz']);
+// Units that name a kind their dimension does not: an energy, a dose absorbed, a dose weighed for harm. A force times a
+// length is a torque (or a moment), never an energy, though both are N·m.
+const KIND_OF: Record<string, string> = Object.fromEntries([
+  ...['J', 'kJ', 'MJ', 'Wh', 'kWh', 'eV', 'keV', 'MeV'].map((x) => [x, 'energy']),
+  ...['Gy', 'krad'].map((x) => [x, 'absorbed dose']), ...['Sv', 'mSv', 'uSv'].map((x) => [x, 'dose equivalent']),
+]);
+const FORCE = new Set(['N', 'kN', 'mN', 'uN', 'lbf', 'kgf']), LENGTH = new Set(['m', 'mm', 'cm', 'km', 'um', 'µm', 'nm', 'in', 'inch', 'ft', 'mi']);
+const POINT = new Set(['K', 'degC', 'degF']), DIFFERENCE = new Set(['ΔK', 'ΔdegC', 'ΔdegF']);
+const base = (t: string) => t.replace(/\^.*$/, '');
+/** What a unit says of its kind beyond its dimension. */
+function kindOfUnit(unit: string): { turn: number; cycle: number; kinds: string[]; level: boolean; temp?: 'point' | 'difference' } {
+  const s = unit.replace(/·/g, ' ').replace(/\*/g, ' ').trim(), [num, ...rest] = s.split('/');
+  const nt = num!.trim().split(/\s+/).filter(Boolean), dt = rest.join(' ').trim().split(/\s+/).filter(Boolean);
+  const pow = (t: string) => { const m = /\^(-?\d+(?:\.\d+)?)$/.exec(t); return m ? Number(m[1]) : 1; };
+  let turn = 0, cycle = 0; for (const [ts, k] of [[nt, 1], [dt, -1]] as const) for (const t of ts) { if (ANGLE.has(base(t))) turn += k * pow(t); if (CYCLE.has(base(t))) cycle += k * pow(t); }
+  const side = (ts: string[]) => (ts.length === 1 && KIND_OF[base(ts[0]!)] && pow(ts[0]!) === 1 ? KIND_OF[base(ts[0]!)]! : ts.length === 2 && ts.every((t) => pow(t) === 1) && ((FORCE.has(ts[0]!) && LENGTH.has(ts[1]!)) || (LENGTH.has(ts[0]!) && FORCE.has(ts[1]!))) ? 'torque' : '');
+  const whole = !dt.length && nt.length === 1 ? nt[0]! : '';
+  return { turn, cycle, kinds: [side(nt), side(dt)], level: [...nt, ...dt].some((t) => base(t) === 'dB'), ...(POINT.has(whole) ? { temp: 'point' as const } : DIFFERENCE.has(whole) ? { temp: 'difference' as const } : {}) };
+}
+/**
+ * Whether a value in one unit may go into another, and how it converts (spec 10, T11): the same dimension, and the same
+ * kind. Refused, with the reason, where the kinds differ; a turn counted as a cycle where one side counts turns and the
+ * other cycles.
+ */
+export function relate(from: string, to: string): { ok: true; convert: (v: number) => number; how: string } | { ok: false; why: string } {
+  if (from === to) return { ok: true, convert: (v) => v, how: 'the same unit' };
+  let a, b; try { a = parseUnit(from); b = parseUnit(to); } catch (e) { return { ok: false, why: `${from} into ${to}: ${(e as Error).message}` }; }
+  if (!sameDim(a.dim, b.dim)) return { ok: false, why: `${from} is not ${to}: not the same dimension` };
+  const ka = kindOfUnit(from), kb = kindOfUnit(to);
+  if (ka.level || kb.level) return { ok: false, why: `${from} into ${to}: a level in dB goes only into dB (into anything else it needs its reference)` };
+  for (const i of [0, 1]) { const x = ka.kinds[i], y = kb.kinds[i]; if (x && y && x !== y) return { ok: false, why: `${from} is ${i ? 'per ' : ''}${x} and ${to} is ${i ? 'per ' : ''}${y}: not the same kind, though the same dimension` }; }
+  if ((ka.temp === 'point' && kb.temp === 'difference') || (ka.temp === 'difference' && kb.temp === 'point')) return { ok: false, why: `${from} is a ${ka.temp === 'point' ? 'temperature' : 'temperature difference'} and ${to} a ${kb.temp === 'point' ? 'temperature' : 'temperature difference'}: one is not the other` };
+  // a turn is a cycle: from radians counted to cycles counted, over 2π, and back
+  const k = ka.turn !== kb.turn && ka.turn + ka.cycle === kb.turn + kb.cycle ? (2 * Math.PI) ** (kb.cycle - ka.cycle) : 1;
+  const off = ka.temp === 'difference' || kb.temp === 'difference' ? 0 : 1;
+  return { ok: true, convert: (v) => ((v * a.scale + off * (a.offset ?? 0)) / k - off * (b.offset ?? 0)) / b.scale, how: `${from} → ${to}${k !== 1 ? ' (a turn is a cycle)' : ''}` };
+}
 
 const add = (a: Dim, b: Dim, k = 1): Dim => a.map((x, i) => x + k * b[i]!) as Dim;
 export const sameDim = (a: Dim, b: Dim) => a.every((x, i) => Math.abs(x - b[i]!) < 1e-9);
@@ -151,4 +202,3 @@ export function findQuantities(text: string): Said[] {
   return out;
 }
 
-export const DIMS = { volume: [0, 3, 0, 0, 0] as Dim, mass: M, length: L, time: T, current: I, temperature: K, force: N, pressure: PA, energy: J, power: W, voltage: V, resistance: OHM, speed: [0, 1, -1, 0, 0] as Dim, accel: [0, 1, -2, 0, 0] as Dim, torque: [1, 2, -2, 0, 0] as Dim, frequency: [0, 0, -1, 0, 0] as Dim, charge: [0, 0, 1, 1, 0] as Dim };

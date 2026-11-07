@@ -41,9 +41,6 @@ export interface Part {
 
 export interface Assembly { id: string; name: string; category: string; from: string | null; parts: Part[]; values: Value[] }
 
-/** A flaw a check found: what law was broken, by how much, and what remedy the rules hold for it. */
-export interface Flaw { check: string; where: string; says: string; law: string; value: number; limit: number; remedy: string | null; /** The parts it lies in, where a check can name them. */ parts?: string[] }
-
 const vol = (s: Shape): number => {
   switch (s.kind) {
     case 'block': return s.size[0] * s.size[1] * s.size[2];
@@ -57,42 +54,13 @@ export function part(p: Omit<Part, 'mass'> & { mass?: number }, density: number)
   return { ...p, mass: p.mass ?? vol(p.shape) * density };
 }
 
-type M3 = [V3, V3, V3];
 /** Where each of an assembly's own axes goes when its +z is turned to point along a world axis. */
-const BASE: Record<`${'' | '-'}${Axis}`, M3> = {
-  z: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], '-z': [[-1, 0, 0], [0, 1, 0], [0, 0, -1]],
-  x: [[0, 0, 1], [0, 1, 0], [-1, 0, 0]], '-x': [[0, 0, -1], [0, 1, 0], [1, 0, 0]],
-  y: [[1, 0, 0], [0, 0, 1], [0, -1, 0]], '-y': [[1, 0, 0], [0, 0, -1], [0, 1, 0]],
-};
-const apply = (m: M3, v: V3): V3 => m.map((r) => r[0] * v[0] + r[1] * v[1] + r[2] * v[2]) as V3;
-const mul = (a: M3, b: M3): M3 => a.map((r) => [0, 1, 2].map((j) => r[0] * b[0]![j]! + r[1] * b[1]![j]! + r[2] * b[2]![j]!)) as M3;
 /** A quarter turn `q` times about a world axis, right-handed. */
-function roll(axis: Axis, q: number): M3 {
-  const t = (((q % 4) + 4) % 4) * (Math.PI / 2), c = Math.round(Math.cos(t)), s = Math.round(Math.sin(t));
-  if (axis === 'x') return [[1, 0, 0], [0, c, -s], [0, s, c]];
-  if (axis === 'y') return [[c, 0, s], [0, 1, 0], [-s, 0, c]];
-  return [[c, -s, 0], [s, c, 0], [0, 0, 1]];
-}
-const unit = (a: Axis): V3 => (a === 'x' ? [1, 0, 0] : a === 'y' ? [0, 1, 0] : [0, 0, 1]);
 
 /**
  * Turn an assembly's frame so its +z points along `to` (one of ±x, ±y, ±z), then roll it `q` quarter turns about that
  * world axis (so its own +y, where a carriage faces and opposite where it mounts, can face any side), and move it by `by`.
  */
-export function placeParts(parts: Part[], to: `${'' | '-'}${Axis}`, by: V3, q = 0): Part[] {
-  const m = mul(roll(to.replace('-', '') as Axis, q), BASE[to]);
-  const axisOf = (a: Axis): { axis: Axis; sign: 1 | -1 } => { const w = apply(m, unit(a)); const i = w.findIndex((x) => Math.abs(x) > 0.5); return { axis: (['x', 'y', 'z'] as const)[i]!, sign: w[i]! < 0 ? -1 : 1 }; };
-  return parts.map((p) => {
-    const at = apply(m, p.at).map((x, i) => x + by[i]!) as V3;
-    let shape: Shape = p.shape;
-    if (shape.kind === 'block') shape = { ...shape, size: apply(m, shape.size).map(Math.abs) as V3 };
-    else if (shape.kind === 'round' || shape.kind === 'nut') shape = { ...shape, axis: axisOf(shape.axis).axis };
-    else if (shape.kind === 'screw') { const a = axisOf(shape.axis); shape = { ...shape, axis: a.axis, head: (shape.head * a.sign) as 1 | -1 }; }
-    else if (shape.kind === 'wire') shape = { ...shape, points: shape.points.map((v) => apply(m, v).map((x, i) => x + by[i]!) as V3) };
-    const turn = p.turn ? (() => { const a = axisOf(p.turn.axis); return { axis: a.axis, angle: p.turn.angle * a.sign }; })() : undefined;
-    return { ...p, at, shape, ...(turn ? { turn } : {}) };
-  });
-}
 
 /** The box a set of parts fills: its low and high corners. */
 export function extentOf(parts: Part[]): { lo: V3; hi: V3 } {

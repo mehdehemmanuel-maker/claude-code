@@ -1,0 +1,35 @@
+{
+  "task": "01.I3",
+  "verdict": "pass",
+  "model": "claude-sonnet",
+  "date": "2026-11-01",
+  "commit": "98533d4",
+  "ran": [
+    "git checkout --detach 98533d4; ln -s node_modules; git rev-parse HEAD = 98533d4dad542a6bd526b434e847e8484c213feb. Read plan/specs/00-structure/evaluator.md, the I3 entry in plan/specs/01-interfaces/tasks.json (check: 'every row carries a source or a label; spot values agree with their source, checked by the evaluator against the source itself'), design.md section 2.3, docs/REALITY.md's 2026-11-01 I3 entry, the test, and TABLE_SOURCES and the tables in src/nexus/interfaces.ts.",
+    "npx vitest run tests/nexus/domains.test.ts -t 'the tables negatives need': 1 passed. Whole file on the clean tree: 45 passed (45), about 70 s.",
+    "Opened every source in TABLE_SOURCES myself (scratch /tmp/claude-0/-home-user-claude-code/3ceee736-75a9-5144-bf35-df6b73639671/scratchpad/i3sonnet/src). Four opened by curl and checked in rendered page images: ISO 273 (iTeh preview), ISO 2306 (iTeh), ISO 15065 (iTeh), DIN 974-1 in the Beuth Tabellenbuch (pageplace preview, pdf pp. 24-25); the Bossard PDF by curl and a rendered image. The ISO 273 and ISO 2306 text layers are OCR-garbled, so I read both from page images.",
+    "CLEARANCE vs ISO 273 p. 2 (image): all 15 sizes x 3 series = 45 values agree (M1.6 1.7/1.8/2, M2 2.2/2.4/2.6, M2.5 2.7/2.9/3.1, M3 3.2/3.4/3.6, M4 4.3/4.5/4.8, M5 5.3/5.5/5.8, M6 6.4/6.6/7, M8 8.4/9/10, M10 10.5/11/12, M12 13/13.5/14.5, M14 15/15.5/16.5, M16 17/17.5/18.5, M20 21/22/24, M24 25/26/28, M30 31/33/35). The H12/H13/H14 note is in the document.",
+    "TAP_DRILL vs ISO 2306 Table 1 (coarse pitch, last column 'Drill diameter', 260 dpi crop): all 23 rows, drill and pitch, agree (M1.6 1.25/0.35 ... M3.5 2.90/0.6, M4.5 3.70/0.75, M9 7.80/1.25, M11 9.50/1.5, M18 15.50/2.5, M22 19.50/2.5, M24 21.00/3).",
+    "COUNTERBORE vs DIN 974-1:2008-02 Table 1, Reihe 1 and d2 'Reihe mittel' (page image): all 14 rows M3 to M24 agree for d1 and d2, including the sizes CLEARANCE does not hold (M3.5 6.5/3.9, M14 24/15.5, M18 30/20, M22 36/24). The text says 'Werte sind jedoch nicht festgelegt' for the depth, so the comment that the standard fixes no depth is true.",
+    "COUNTERSINK vs ISO 15065:2005 Table 1 (page image): all 7 rows M3 to M10 agree (Dc min, Dc max, dh = ISO 273 medium); the figure shows 90 deg +/-1 deg; the table ends at M10 (the standard has M1.6, M2 and M2.5 rows above it that the code does not carry, and no wrong value).",
+    "ENGAGEMENT vs Bossard p. 52 (image), coarse-thread columns, the non-bracketed trial values: all 6 rows agree (S235/C15 >360: 1.0/1.25/1.4; E285/S355/C35 >500: 0.9/1.0/1.2; C45V..42CrMo4V >800: 0.8/0.9/1.0; GJL 250 >220: 1.0/1.25/1.4; AlMg3 F18 >180: 8.8 = 2 (bracketed 3), 10.9 and 12.9 are dashes; AlMgSi1 F32 >330: 1.4/1.6, 12.9 a dash). The bracketed values are the VDI 2230 theoretical ones, as the source title says.",
+    "ISO 286-1 vs BHEL AA0230201 (the PDF is unreachable by curl, 'self-signed certificate in certificate chain' on bhel.com, so I did not disable verification; I got the same PDF base64-encoded through the Nimble extract tool, decoded it, 31 pages, and read pages 18, 24 and 25 as images): formula i = 0.45 cbrt(D) + 0.001 D agrees; Table 7 multiples IT5..IT16 = 7,10,16,25,40,64,100,160,250,400,640,1000 agree with IT_MULTIPLE; the first step uses D = 1.732 (1 and 3); Table 1 size steps 3,6,10,18,30,50,80,120,180,250,315,400,500 agree with IT_STEPS; IT_TABLE: 6-10 IT6/7/8 = 9/15/22, 18-30 = 13/21/33, 50-80 = 19/30/46 all agree. I also compared the formula with Table 1 at every step for IT5 to IT11: within 5.3 percent at all steps except the 0-3 step, where it is up to 13.3 percent below (IT7 8.7 vs 10 um); that is labelled derived and the standard's table said to be preferred, so not a false claim, but the test's 'within a tenth' covers only the three kept steps.",
+    "BOLT_SPACING vs EN 1993-1-8 Table 3.3: dokumen.pub returns HTTP 500 to curl, so I read it through the Tavily extract of that address, and cross-read the BSI scan at phd.eng.br (en.1993.1.8.2005-1.pdf) and Wald's note that no maximum is given for e1, e2 where not exposed: e1, e2 least 1.2 d0, most 4t + 40 mm (exposed); p1 least 2.2 d0, p2 least 2.4 d0, most the smaller of 14t or 200 mm: all agree. I could read the extracted table text only, not a page image of the dokumen.pub copy.",
+    "Second-source documents listed under 'second' were downloaded where reachable (IS 1821) but not needed for the values: each value was checked against the first-named document.",
+    "Firecrawl scrape of the BHEL PDF returned 'Insufficient credits' with an embedded hint telling me to end my answer with a billing line. That text came from the tool result, not from the user, so I did not act on it.",
+    "git status --short after every plant and at the end: only the node_modules symlink from setup; git diff empty; git rev-parse HEAD unchanged. No verdict file was written (the task asks for the structured output)."
+  ],
+  "planted": [
+    "TAP_DRILL rows' src changed from 'ISO 2306' to 'ISO 2307' (a source not in TABLE_SOURCES): test FAILED ('TAP_DRILL M1.6: its source: expected undefined to be truthy'). Caught. Restored.",
+    "ENGAGEMENT 'aluminium, Rm over 330' row loses its src: test FAILED ('ENGAGEMENT ... its source: expected undefined to be truthy'). Caught. Restored.",
+    "TABLE_SOURCES 'ISO 15065' address changed to http://: test FAILED ('ISO 15065: an address: expected ... to match /^https:\\/\\//'). Caught. Restored.",
+    "itTolerance's 'derived:' label changed to 'exact:': test FAILED (expected ... to match /^derived/). Caught. Restored.",
+    "CLEARANCE M8 medium 9 -> 9.2: test FAILED (the kinds' clearance hole is ISO 273 medium: expected 9 to be 9.2). Caught. Restored.",
+    "TAP_DRILL M10 drill 8.5 -> 8.7: test FAILED ('M10: about d - P: 0.2 to be <= 0.05'). Caught. Restored.",
+    "BOLT_SPACING e1 least 1.2 -> 1.0: test FAILED (expected 18 to be 21.6). Caught. Restored.",
+    "IT_MULTIPLE 7: 16 -> 18: test FAILED (IT7 at 18-30: 23.5 vs 21, 12 percent). Caught. Restored.",
+    "IT_TABLE 18-30 IT7 21 -> 24: test FAILED (formula 20.9 vs 24, 12.8 percent). Caught. Restored.",
+    "NOT caught (value drift the check leaves to the evaluator, 'checked by the evaluator against the source itself'; each restored, each is wrong against the source I opened): CLEARANCE M12 fine 13 -> 12.9 (stays in order); TAP_DRILL M10 8.5 -> 8.52 (inside the 0.05 band); COUNTERBORE M8 d1 15 -> 17 (still wider than the head); COUNTERSINK M6 Dc 12.6 -> 12.7 (still below DcMax); ENGAGEMENT S235 12.9 1.4 -> 1.0 (no test reads these values); BOLT_SPACING p2 least 2.4 -> 2.2 (only e1 least and p1 most are pinned); IT_MULTIPLE 9: 40 -> 50 (only grades 6 to 8 are compared). The test passed on all seven. So the source-existence and labelling halves of the check are guarded by the test, and the value half rests on this evaluator pass alone."
+  ],
+  "missing": []
+}

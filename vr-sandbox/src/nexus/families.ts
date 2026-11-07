@@ -11,6 +11,7 @@ import { KINDS } from './kinds';
 import { CLEAR, NEMA, NEMA_FACE } from './kinds/motion';
 export { NEMA, NEMA_FACE };
 import { familyOf, partsOf, useFamilies } from './kinds/core';
+import { BEARINGS_BOSL2 } from './parts/bosl2';
 
 export { METRIC };
 
@@ -50,7 +51,7 @@ const washer: Family = {
   make(p) { const t = String(p.thread), T = METRIC[t]!, v = Math.PI * ((T.d2 / 2) ** 2 - (T.d1 / 2) ** 2) * T.h; return item(`washer-${t.toLowerCase()}`, `${t} washer`, 'Hardware/Fasteners/Washers', 'product', 'stamp', 'steel-low', 'a ring stamped from sheet', `ISO 7089: ${T.d1} × ${T.d2} × ${T.h} mm`, [T.d2, T.d2, T.h], mm3g(v, RHO.steel)); },
 };
 // ---- deep-groove ball bearings by their number (ISO 15 boundary dimensions) -------------------------------------------
-export const BEARINGS: Record<string, [number, number, number]> = {
+const BEARINGS_ISO15: Record<string, [number, number, number]> = {
   '623': [3, 10, 4], '624': [4, 13, 5], '625': [5, 16, 5], '626': [6, 19, 6], '608': [8, 22, 7], '6000': [10, 26, 8], '6001': [12, 28, 8], '6002': [15, 32, 9], '6003': [17, 35, 10], '6004': [20, 42, 12],
   '6200': [10, 30, 9], '6201': [12, 32, 10], '6202': [15, 35, 11], '6203': [17, 40, 12], '6204': [20, 47, 14], '6205': [25, 52, 15],
   '606': [6, 17, 6], '607': [7, 19, 6], '609': [9, 24, 7], '627': [7, 22, 7], '629': [9, 26, 8], '6005': [25, 47, 12], '6006': [30, 55, 13], '6206': [30, 62, 16], '6207': [35, 72, 17],
@@ -61,6 +62,9 @@ export const BEARINGS: Record<string, [number, number, number]> = {
   // ABMA, for a 1/4 in shaft)
   '684': [4, 9, 4], '685': [5, 11, 5], 'R4': [6.35, 15.875, 4.978],
 };
+/** The one bearing table (decision 0026): the rows above, and every open, unflanged row of BOSL2's table not among them,
+ *  each from the maker's page it names (src/nexus/parts/bosl2.ts). */
+export const BEARINGS: Record<string, [number, number, number]> = { ...Object.fromEntries(Object.entries(BEARINGS_BOSL2).map(([k, r]) => [k, [r.d, r.D, r.B] as [number, number, number]])), ...BEARINGS_ISO15 };
 /** A deep-groove bearing's balls: each about 0.3 of its rings' section across (typical), on the pitch circle midway
  *  between its bore and its outside, as many as its rings take when they are pushed eccentric to put them in (the Conrad
  *  assembly: about half the pitch circle full, and one more; typical, within one of makers' counts). */
@@ -112,7 +116,7 @@ const wire: Family = {
     return item(`wire-${n}awg-${L}m`, `${n} AWG hook-up wire, ${L} m`, 'Electrical/Wiring and connectors/Wire', 'product', 'extrude', 'conductor-strand wire-insulation', 'copper strands in PVC insulation', `${d.toFixed(3)} mm copper (${A.toFixed(3)} mm²); ${(R * 1000).toFixed(1)} mΩ over ${L} m at 20 °C (ρ 1.72 × 10⁻⁸ Ω·m)`, [d + 1.2, d + 1.2, L * 1000], mm3g(A * L * 1000, RHO.copper) + mm3g(Math.PI * (((d + 1.2) / 2) ** 2 - (d / 2) ** 2) * L * 1000, 1.4)); },
 };
 // ---- aluminium extrusions by series and length ---------------------------------------------------------------------------
-const EXTRUSIONS: Record<string, { w: number; h: number; kgm: number }> = { '2020': { w: 20, h: 20, kgm: 0.5 }, '2040': { w: 20, h: 40, kgm: 0.8 }, '3030': { w: 30, h: 30, kgm: 0.9 }, '4040': { w: 40, h: 40, kgm: 1.5 } };
+export const EXTRUSIONS: Record<string, { w: number; h: number; kgm: number }> = { '2020': { w: 20, h: 20, kgm: 0.5 }, '2040': { w: 20, h: 40, kgm: 0.8 }, '3030': { w: 30, h: 30, kgm: 0.9 }, '4040': { w: 40, h: 40, kgm: 1.5 } };
 const extrusion: Family = {
   id: 'extrusion', name: 'T-slot aluminium extrusion', path: ['Hardware', 'Structural', 'Extrusions'], says: 'any series and length', params: [{ key: 'series', says: 'profile', unit: '', values: Object.keys(EXTRUSIONS), default: '2020' }, { key: 'length', says: 'length', unit: 'mm', min: 10, max: 6000, default: 500 }],
   examples: ['extrusion 2020 500', 'extrusion 2040 1000', 'extrusion 4040 300'],
@@ -210,10 +214,10 @@ const leadscrew: Family = {
   make(p) { const d = Number(p.d), pi = Number(p.pitch), s = Number(p.starts), L = Number(p.length), lead = pi * s; return item(`leadscrew-t${d}-p${pi}-s${s}-${L}`, `T${d} lead screw, lead ${lead} mm, ${L} mm`, 'Mechanical/Linear motion/Screws', 'product', 'roll-thread', 'lead-screw lead-nut', 'a rolled-thread stainless screw with its brass nut', `lead ${lead} mm a turn (pitch ${pi} × ${s} start${s > 1 ? 's' : ''}); on a 1.8° stepper ${(lead / 200).toFixed(3)} mm a full step; ${s === 1 ? 'self-locking: it does not back-drive' : 'fast, and it can back-drive'}`, [d, d, L], mm3g(Math.PI * (d / 2) ** 2 * L * 0.8, RHO.stainless)); },
 };
 const led: Family = {
-  id: 'led', name: 'LED', path: ['Electrical', 'Semiconductors', 'LEDs'], says: 'any colour and size; its forward voltage typical of its die', params: [{ key: 'colour', says: 'colour', unit: '', values: ['red', 'yellow', 'green', 'blue', 'white'], default: 'red' }, { key: 'size', says: 'size', unit: 'mm', values: [3, 5, 10], default: 5 }],
+  id: 'led', name: 'LED', path: ['Electrical', 'Semiconductors', 'LEDs'], says: 'any colour and size; its forward voltage typical of its die; its mass typical of its size (about 0.2, 0.35 and 1.7 g for 3, 5 and 10 mm)', params: [{ key: 'colour', says: 'colour', unit: '', values: ['red', 'yellow', 'green', 'blue', 'white'], default: 'red' }, { key: 'size', says: 'size', unit: 'mm', values: [3, 5, 10], default: 5 }],
   examples: ['led red 5mm', 'led white 3mm', 'led blue 10mm'],
   read(w) { const c = /(red|yellow|green|blue|white)/i.exec(w)?.[1]?.toLowerCase() ?? 'red', s = num(/(\d+)\s*mm/i.exec(w)?.[1]) || 5; return { colour: c, size: s }; },
-  make(p) { const c = String(p.colour), s = Number(p.size), vf = c === 'red' || c === 'yellow' ? 2 : 3.1, die = c === 'red' || c === 'yellow' ? 'si-die' : 'gan'; return item(`led-${c}-${s}mm`, `${c} LED, ${s} mm`, 'Electrical/Semiconductors/LEDs', 'product', 'assemble', `${die} lead-frame bond-wire epoxy`, `a ${c === 'red' || c === 'yellow' ? 'AlGaInP' : 'InGaN'} die in a reflector cup, a bond wire to the other lead, cast in an epoxy lens`, `about ${vf} V forward at 20 mA (typical); a series resistor of (V − ${vf}) / 0.02 Ω`, [s, s, s * 1.7], 0.3); },
+  make(p) { const c = String(p.colour), s = Number(p.size), vf = c === 'red' || c === 'yellow' ? 2 : 3.1, die = c === 'red' || c === 'yellow' ? 'si-die' : 'gan'; return item(`led-${c}-${s}mm`, `${c} LED, ${s} mm`, 'Electrical/Semiconductors/LEDs', 'product', 'assemble', `${die} lead-frame bond-wire epoxy`, `a ${c === 'red' || c === 'yellow' ? 'AlGaInP' : 'InGaN'} die in a reflector cup, a bond wire to the other lead, cast in an epoxy lens`, `about ${vf} V forward at 20 mA (typical); a series resistor of (V − ${vf}) / 0.02 Ω`, [s, s, s * 1.7], ({ 3: 0.2, 5: 0.35, 10: 1.7 } as Record<number, number>)[s] ?? 0.35); },
 };
 
 // ---- O-rings by inside diameter and cross-section ---------------------------------------------------------------------
@@ -221,10 +225,10 @@ const oring: Family = {
   id: 'oring', name: 'O-ring', path: ['Mechanical', 'Seals', 'O-rings'], says: 'any inside diameter and cross-section, in nitrile, silicone or FKM', params: [{ key: 'id', says: 'inside diameter', unit: 'mm', min: 1, max: 500, default: 10 }, { key: 'cs', says: 'cross-section', unit: 'mm', min: 0.5, max: 12, default: 2 }, { key: 'matter', says: 'rubber', unit: '', values: ['nbr', 'silicone', 'fkm'], default: 'nbr' }],
   examples: ['oring 10x2', 'oring 25x3 silicone', 'oring 6x1.5'],
   read(w) { const m = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/.exec(w); if (!m) return 'Give it as inside × section, e.g. 10x2.'; return { id: num(m[1]), cs: num(m[2]), matter: /silicone/i.test(w) ? 'silicone' : /fkm|viton/i.test(w) ? 'fkm' : 'nbr' }; },
-  make(p) { const d1 = Number(p.id), d2 = Number(p.cs), D = d1 + d2, v = (Math.PI ** 2 * D * d2 ** 2) / 4; return item(`oring-${d1}x${d2}-${p.matter}`, `O-ring ${d1} × ${d2} mm, ${p.matter}`, 'Mechanical/Seals/O-rings', 'product', 'mould', p.matter === 'silicone' ? 'silicone' : 'nbr', 'a ring of rubber squeezed in a groove to seal', `${d1} mm inside, ${d2} mm section; groove depth about 0.75–0.8 × section for a static seal (typical)`, [D + d2, D + d2, d2], mm3g(v, 1.25)); },
+  make(p) { const d1 = Number(p.id), d2 = Number(p.cs), D = d1 + d2, v = (Math.PI ** 2 * D * d2 ** 2) / 4; return item(`oring-${d1}x${d2}-${p.matter}`, `O-ring ${d1} × ${d2} mm, ${p.matter}`, 'Mechanical/Seals/O-rings', 'product', 'mould', p.matter === 'silicone' ? 'silicone' : 'nbr', 'a ring of rubber squeezed in a groove to seal', `${d1} mm inside, ${d2} mm section; groove depth about 0.75–0.8 × section for a static seal (typical)`, [D + d2, D + d2, d2], mm3g(v, ({ nbr: 1.2, silicone: 1.15, fkm: 1.8 } as Record<string, number>)[String(p.matter)] ?? 1.2)); }, // (each rubber at its own density, typical: FKM is half again as dense as nitrile)
 };
 // ---- brushed DC motors by can size ---------------------------------------------------------------------------------------
-const DCM: Record<string, [number, number, number]> = { '130': [20, 25, 18], '180': [20, 32, 25], '280': [24, 30, 35], '370': [24, 30, 40], '385': [28, 38, 60], '540': [36, 50, 160], '550': [36, 57, 190], '775': [42, 66, 330] };
+export const DCM: Record<string, [number, number, number]> = { '130': [20, 25, 18], '180': [20, 32, 25], '280': [24, 30, 35], '370': [24, 30, 40], '385': [28, 38, 60], '540': [36, 50, 160], '550': [36, 57, 190], '775': [42, 66, 330] };
 const dcmotor: Family = {
   id: 'dcmotor', name: 'brushed DC motor', path: ['Electrical', 'Motors and actuators', 'DC motors'], says: 'any can size code (130, 280, 370, 540, 775, …) and voltage', params: [{ key: 'size', says: 'can size', unit: '', values: Object.keys(DCM), default: '130' }, { key: 'volts', says: 'voltage', unit: 'V', min: 1.5, max: 48, default: 6 }],
   examples: ['dcmotor 130 6V', 'dcmotor 540 12V', 'dcmotor 775 24V'],
@@ -232,7 +236,7 @@ const dcmotor: Family = {
   make(p) { const sz = String(p.size), [d, L, g] = DCM[sz]!; return item(`dcmotor-${sz}-${p.volts}v`, `brushed DC motor ${sz}, ${p.volts} V`, 'Electrical/Motors and actuators/DC motors', 'product', 'assemble', 'motor-can magnet-ferrite-arc*2 armature end-cap-motor carbon-brush*2 brush-spring*2 sleeve-bearing*2', 'a wound rotor in the field of ferrite magnets, its current switched by brushes on a commutator', `can about ${d} mm across, ${L} mm long, about ${g} g (typical of the ${sz} size); speed rises with volts, torque with current`, [d, d, L], g); },
 };
 // ---- hobby servos by size ---------------------------------------------------------------------------------------------
-const SERVOS: Record<string, { box: [number, number, number]; g: number; torque: string; gears: string }> = { micro: { box: [23, 12.2, 29], g: 9, torque: '1.8 kg·cm at 4.8 V (SG90)', gears: 'gear-plastic*4' }, standard: { box: [40.7, 19.7, 42.9], g: 55, torque: '9.4 kg·cm at 4.8 V (MG996R)', gears: 'gear-small*4' } };
+export const SERVOS: Record<string, { box: [number, number, number]; g: number; torque: string; gears: string }> = { micro: { box: [23, 12.2, 29], g: 9, torque: '1.8 kg·cm at 4.8 V (SG90)', gears: 'gear-plastic*4' }, standard: { box: [40.7, 19.7, 42.9], g: 55, torque: '9.4 kg·cm at 4.8 V (MG996R)', gears: 'gear-small*4' } };
 const servo: Family = {
   id: 'servo', name: 'hobby servo', path: ['Electrical', 'Motors and actuators', 'Servos'], says: 'micro (SG90 size) or standard (MG996R size)', params: [{ key: 'size', says: 'size', unit: '', values: Object.keys(SERVOS), default: 'micro' }],
   examples: ['servo micro', 'servo standard'],
@@ -386,6 +390,17 @@ const pcb: Family = {
 /** ISO 4017 hex head heights, mm. */
 export const HEX_K: Record<string, number> = { 'M1.6': 1.1, M2: 1.4, 'M2.5': 1.7, M3: 2, M4: 2.8, M5: 3.5, M6: 4, M8: 5.3, M10: 6.4, M12: 7.5, M14: 8.8, M16: 10, M20: 12.5, M24: 15 };
 export const CLASSES = ['4.6', '4.8', '5.6', '5.8', '6.8', '8.8', '10.9', '12.9', 'A2', 'A4'];
+/** Each property class's proof stress, Pa (ISO 898-1:2013 table 3, coarse threads; class 8.8 is 580 MPa to M16 and
+ *  600 MPa above); the stainless classes' 0.2 % proof (ISO 3506-1, A2-70 and A4-70). */
+export function proofStress(cls: string, d: number): number | undefined {
+  const t: Record<string, number> = { '4.6': 225, '4.8': 310, '5.6': 280, '5.8': 380, '6.8': 440, '8.8': d > 0.016 ? 600 : 580, '9.8': 650, '10.9': 830, '12.9': 970, A2: 450, A4: 450 };
+  return t[cls.toUpperCase()] !== undefined ? t[cls.toUpperCase()]! * 1e6 : undefined;
+}
+/** A drawn bolt's thread and property class, read from what it is (its catalogue item and what it says of itself). */
+export function boltOf(p: { item?: string; says?: string; name: string }): { thread: string; cls: string } | undefined {
+  const m = /bolt-m(\d+(?:\.\d+)?)x/i.exec(p.item ?? ''); if (!m) return undefined;
+  return { thread: `M${m[1]}`, cls: /class\s+(\d+\.\d|A[24])/i.exec(p.says ?? '')?.[1]?.toUpperCase() ?? '8.8' };
+}
 const lengthIn = (w: string, d: number) => num(/[x×]\s*(\d+(?:\.\d+)?)/i.exec(w)?.[1] ?? /(\d+(?:\.\d+)?)\s*mm\b/i.exec(w)?.[1]) || d;
 const classIn = (w: string, d: string) => /(?:^|\s)(4\.6|4\.8|5\.6|5\.8|6\.8|8\.8|10\.9|12\.9|A2|A4)(?=\s|$)/i.exec(w)?.[1]?.toUpperCase() ?? d;
 const metres = (w: string, d: number) => num(/(\d+(?:\.\d+)?)\s*m\b/i.exec(w)?.[1]) || d;

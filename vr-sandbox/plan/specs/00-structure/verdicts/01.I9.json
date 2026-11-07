@@ -1,0 +1,35 @@
+{
+ "task": "01.I9",
+ "verdict": "pass",
+ "model": "claude-sonnet",
+ "date": "2026-11-01",
+ "commit": "b5f0162b14e65bb58255062bf9df7d9f13020bae",
+ "ran": [
+  "Setup: git checkout --detach b5f0162, symlinked node_modules. Read evaluator.md, vr-sandbox/CLAUDE.md, tasks.json I9, requirements R10, design 2.4 step 5, the first verdict (499054a, fail), the diff 499054a..b5f0162 of mate.ts and kits.ts, reapplyImprints and applyImprint in mate.ts, Part.imprints in kits.ts, evals/interfaces/cases.json case 10, and the test at tests/nexus/domains.test.ts line 742.",
+  "npx vitest run tests/nexus/domains.test.ts -t 'a box made taller keeps its imprint': 1 passed. It reads case 10 from cases.json. Plate 100x10x100 imprinted at x 10, z -20 on top, made 20 mm tall: kept ['M8 cap screw'], none lost, one cut at y 10 mm, depth 20 mm, x 10, z -20, one port, one record, none lost. Made 15 mm wide and made a sphere: each lost, why over 20 chars, cuts 0, ports 0, record carries lost. The same test also pins: a lid 43 mm over it (kept on its own plate, lid not cut), a lid 13 mm over it (lost by its room check), a 6 mm plate (lost, checks refuse), a piece made into sub-parts (lost, no surface of its own), an imprint first put on a step (kept on its step; lost when the step is raised above it, 'another face with its normal lies').",
+  "Whole file npx vitest run tests/nexus/domains.test.ts: 53 passed (76 s). npx tsc --noEmit -p .: no output (clean) on the unmodified tree.",
+  "My probes (zz_probe_i9wf2*.test.ts, about 40 cases, deleted after). Kept as the spec wants, cut following the face: unchanged; made 11, 12, 20, 30, 40 mm tall; the piece moved or turned on its side (cut stays in the piece's own frame); base:true box made taller (cut to y 20 mm); a cylinder made taller or swapped for a wider cylinder; a nested, moved and turned group made taller; bottom-face imprint with the box made taller about its middle (cut follows to y -10 mm, dir +y); side-face imprint on a 100x40x100 plate made wider (cut to x 70 mm, depth 140) and taller; two plates each imprinted, one made taller (both kept, the other untouched); imprint made from between two plates stays on plate one (taller: y 7 mm, depth 14); reapply twice gives an identical result; the new keep zone is at the new top (22 mm centre against 17 mm before), and only one keep zone remains.",
+  "Said lost with a reason, nothing of it left anywhere, record carries lost: narrower in x, narrower in z, a cylinder of smaller radius, a sphere (26.6 degrees from the face), the box made 8 mm thin (counterbore does not fit), the piece made into sub-parts, a pan or hex head with a lid 0.05 mm over it ('the lid stands over it now: its own face is not the one met'), a socket head or tapped hole with a lid in its keep room ('room 0 mm'), a piece with a bolt seated flush on its face (checks refuse). Two plates, one made narrow: only its own imprint lost, the other kept.",
+  "Observed limits, said not moved, beyond the check's words: (a) a lid or bolt head touching the face exactly (gap 0), listed before the plate, with a pan or hex head: the intact imprint is lost ('the lid stands over it now'); listed after it, kept (a tie on the ray's first hit decides by list order). (b) A lost record stays lost when the piece is restored: the next reapply says nothing. (c) A hand-built record with no face, asking or made is skipped silently, its stale cut left. (d) A face 'made by' a feature is not held (the evidence says so: no shape history); the near point is used as the point to stand over, not as a fallback to the nearest face. Only normal, 'max' where it was so, and near are recorded.",
+  "Case data planted in evals/interfaces/cases.json (restored after each): kept_top 10 to 12, kept_depth 20 to 25, taller box 20 to 10 mm, narrower 15 to 100 mm: each fails the test."
+ ],
+ "planted": [
+  "mate.ts: normal check disabled (if (false)): CAUGHT ('round: lost' expected lost, was kept).",
+  "mate.ts: normal tolerance loosened from 0.5 to 80 degrees: CAUGHT (round kept at 26.6 degrees).",
+  "mate.ts: no-face branch continues without loseIt: CAUGHT ('narrower: lost' got [[],[]]).",
+  "mate.ts: old cuts kept when taking the imprint off its piece: CAUGHT (kept list wrong, two cuts).",
+  "mate.ts: remade imprint 2 mm off in x: CAUGHT (cut at x 12 not 10).",
+  "mate.ts: old port kept: CAUGHT (2 ports, expected 1).",
+  "mate.ts: loseIt does not push to the lost list: CAUGHT (lid-in-room case says nothing).",
+  "mate.ts: loseIt does not record lost on the piece: CAUGHT ('its record says it is lost').",
+  "mate.ts: farthest-out check deleted (the first verdict's untested path): CAUGHT (the raised step is no longer lost).",
+  "mate.ts: checks-refused imprint dropped without loseIt (the first verdict's other untested path): CAUGHT (lid-in-room: lost expected [true], got []).",
+  "mate.ts: walkAll disabled (piece made into sub-parts says nothing, the first verdict's silent case): CAUGHT ('made into sub-parts').",
+  "mate.ts: ray from 0.5 m above again, as the code that hopped onto another piece: CAUGHT (the lid-well-over case: kept [], lost, not kept on its own plate).",
+  "mate.ts: extreme recorded always 'max': CAUGHT (an imprint on a step is lost instead of kept). Extreme never recorded: CAUGHT (the raised step is no longer lost).",
+  "mate.ts: kept.push removed: CAUGHT. Re-made imprint not applied (old removed, nothing added): CAUGHT (no cut).",
+  "NOT CAUGHT, held outside the check's words, each checked by probe to be right in the shipped code: old keep zones kept on re-make (shipped code does replace them: one keep zone at the new top; the test pins cuts, ports and record, never keep zones); the own-piece check deleted (if (im.path !== q.path) to if (false)): the test passes, and by probe the shipped check matters for a pan or hex head with a lid 0.05 mm over it (without the check the imprint hops onto the lid, reported kept, plate's cut gone; with it, lost and said). The test's lid cases use a socket head whose room check refuses first, so this second layer is unguarded; the ray from 0.1 mm above (the original hop, planted back above) is guarded; the retry of a lost record (rec.lost skip removed): passes, behaviour not claimed; the turn changed by 0.3 rad on re-make: passes, the test's turn is 0.",
+  "All plants restored with the script's own restore (mate.ts and cases.json); probe files deleted; git status shows only the node_modules symlink from setup."
+ ],
+ "missing": []
+}

@@ -1,0 +1,30 @@
+{
+  "task": "01.I7",
+  "verdict": "pass",
+  "model": "claude-sonnet",
+  "date": "2026-11-01",
+  "commit": "070f432",
+  "ran": [
+    "git checkout --detach 070f432 (HEAD 070f432f834eb4ff9fe90e52b36417472cf41274); linked node_modules into vr-sandbox",
+    "npx vitest run tests/nexus/domains.test.ts -t 'the checks before cutting': 1 passed, 48 skipped (re-run at the end on the restored tree: still 1 passed)",
+    "Probe zz_probe_wf2 (deleted): imprint on cases.json's imprint blocks printed the actual results. Case 1 OK: edge distance need 10.8 have 50, room 24/24, depth 10/10. Case 2 REFUSED 'engagement' need 12 have 8, source 'Bossard engagement', why 'an M6 needs 12.0 mm of thread (2 d for class 8.8 in aluminium, Rm over 180 (AlMg3 F18) (Bossard; its Rm 310 MPa)); the part is 8.0 mm'. Case 4 REFUSED 'edge distance' need 10.8 have 4, source 'EN 1993-1-8', 'e2 >= 1.2 d0 = 1.2 x 9.0 mm'. Case 5 REFUSED 'spacing' need 19.8 have 15, source 'EN 1993-1-8', 'p1 >= 2.2 d0 = 2.2 x 9.0 mm'",
+    "Hand check against sources. ISO 273 (iTeh preview PDF, downloaded and read): M8 fine 8.4, medium 9, coarse 10; M6 6.4, 6.6, 7. So d0 = 9.0 and 1.2 x 9 = 10.8, 2.2 x 9 = 19.8. EN 1993-1-8 Table 3.3: e1 and e2 >= 1.2 d0, p1 >= 2.2 d0, p2 >= 2.4 d0, distances to the hole centre. I confirmed this from secondary sources (a web search that returned the Table 3.3 text and a steelconstruction.info table), not from the dokumen.pub copy named in TABLE_SOURCES: the harness permission classifier refused that download (walled copy) and I did not work around it. Bossard PDF (the maker's own document, downloaded and read): AlMg3 F18, Rm > 180, class 8.8 coarse = 2 d [3 d by VDI 2230]; AlMgSi1 F32, Rm > 330 = 1.4 d. 6061-T6 Rm 310 sits above 180 and below 330, so 2 d x 6 = 12 mm; plate 8 mm: refused, as case 2 says. Case 4: hole at x = 46 in a 100 mm plate gives 4 mm to the edge. Case 5: 15 mm between centres. All as worked in cases.json",
+    "Own probes (all agreed with hand arithmetic): edge 10.7 refused (have 10.7), 10.8 and 10.9 pass; edge 4 refused on -x, +z, -z sides and at a corner; spacing 19.7 refused, 19.8 passes, diagonal (11,11) = 15.556 refused; breaking in at 5 mm apart, dead on, and 8.9 apart refused (need 9 = 4.5 + 4.5); aluminium M6 t = 11.99 refused (need 12 have 11.99), t = 12 and 20 pass; steel M6 t = 5 refused (need 6); tapped M6 uses d0 = 5.0 so e2 is 6 (edge 5 refused, 6.1 passes); socket-head hole 10 mm from edge refused (need 10.8); ray missing the plate refused 'a surface to stand on'; plate turned 90 degrees in a group gives the same edge result; room: a bracket 24 mm above a socket-head hole refused 'room' need 24 have 0, bracket far away passes",
+    "Cosmetic faults seen, outside the check: the room rule text reads 'room along the axis for room along the axis for the hex key' (the phrase is doubled); the 'breaking in' test has no float tolerance, so two holes exactly 9.0 mm apart read as 8.99999 and are refused (spacing would refuse them anyway)",
+    "git status at the end: only the node_modules symlink from the setup, no source change"
+  ],
+  "planted": [
+    "mate.ts: edge-distance ok forced true: CAUGHT (test fails 'case 4 refused: expected undefined to be true')",
+    "mate.ts: spacing ok forced true: CAUGHT (fails 'case 5 refused')",
+    "interfaces.ts: engagement refusal disabled (if (false)): CAUGHT (fails 'case 2 refused')",
+    "interfaces.ts: BOLT_SPACING p1 factor 2.2 changed to 2.4: CAUGHT (case 5 got need 21.6, expected 19.8)",
+    "interfaces.ts: BOLT_SPACING e2 factor 1.2 changed to 1.0: CAUGHT (case 4 got need 9, expected 10.8)",
+    "mate.ts: edge threshold made 8x too strict so case 1 over-refuses: CAUGHT (fails 'case 1 passes')",
+    "mate.ts: depth measured as zero (distanceTo(at)): CAUGHT (case 1 fails, counterbore does not fit a 0.0 mm plate)",
+    "mate.ts: edge measured from the hole's wall instead of its middle: CAUGHT (case 4 have -0.5, expected 4)",
+    "mate.ts: the edge refusal's source changed to 'none': NOT caught (the test passes, it only asserts source.length > 3). The code as committed does give the right sources ('EN 1993-1-8', 'Bossard engagement'), as the probe showed, but the test does not hold the source's name, which the task title asks for ('its source'). The check line itself says only 'the right rule and value'. Not a ground for fail, but a gap to close",
+    "Not planted, noted from reading: d0 for a counterbored hole is taken from the narrowest bore. A d0 taken from the counterbore would still pass the four cases, because case 1's edge is 50 mm and cases 4 and 5 use hex heads",
+    "All plants restored with git checkout -- <file> after each; the probe file was deleted"
+  ],
+  "missing": []
+}

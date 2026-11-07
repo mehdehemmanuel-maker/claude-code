@@ -5,10 +5,13 @@
 import { DimensionError, dimOf, dimText, sameDim } from './dimension';
 import { evaluate, type Derivation, type DomainCheck, type Env } from './evaluate';
 import { hashOf } from './identity';
+import { root, type Found, type RootOptions } from './numeric';
 import { varsOf, type Term } from './term';
 
-export type SourceKind = 'standard' | 'textbook' | 'handbook' | 'derivation' | 'measurement' | 'declaration' | 'maker' | 'distributor' | 'rule of thumb' | 'press' | 'patent' | 'paper' | 'database';
-export interface Source { cite: string; kind: SourceKind; url?: string }
+import type { Source as Cited, SourceKind } from '../ganglia/types';
+export type { SourceKind };
+/** Where a law comes from: the one source type (ganglia/types.ts), its kind always said. */
+export type Source = Cited & { kind: SourceKind };
 export interface Port { sym: string; unit: string; name: string }
 
 export interface Law {
@@ -48,21 +51,16 @@ export function apply(l: Law, env: Env, name = l.output.name): Derivation {
 
 /**
  * The input `sym` that makes the law's output `target`, with every other input bound: a numeric inversion of the
- * same term (bisection on a bracket where the output crosses the target). Null when it does not cross there.
+ * same term by the numeric layer (bisection unless another method is asked for, on a bracket where the output crosses
+ * the target), with whether it converged and its error. Its value null when it does not cross there.
  */
-export function invert(l: Law, sym: string, target: number, env: Env, bracket: [number, number], mk: (name: string, value: number, unit: string) => Derivation): number | null {
+export function invertFound(l: Law, sym: string, target: number, env: Env, bracket: [number, number], mk: (name: string, value: number, unit: string) => Derivation, o: RootOptions = {}): Found {
   const port = l.inputs.find((p) => p.sym === sym);
   if (!port) throw new Error(`${l.id}: ${sym} is not an input`);
   const f = (x: number) => { const d = apply(l, { ...env, [sym]: mk(port.name, x, port.unit) }); return d.value === null ? NaN : d.value - target; };
-  let [lo, hi] = bracket;
-  let flo = f(lo), fhi = f(hi);
-  if (!Number.isFinite(flo) || !Number.isFinite(fhi) || flo * fhi > 0) return null;
-  for (let i = 0; i < 200; i++) {
-    const mid = (lo + hi) / 2, fm = f(mid);
-    if (!Number.isFinite(fm)) return null;
-    if (Math.abs(fm) <= 1e-13 * Math.max(Math.abs(target), Number.MIN_VALUE) || hi - lo <= 1e-14 * Math.abs(mid)) return mid;
-    if (fm * flo < 0) { hi = mid; fhi = fm; } else { lo = mid; flo = fm; }
-  }
-  void fhi;
-  return (lo + hi) / 2;
+  return root(f, { method: 'bisection', bracket, tol: 1e-14, ftol: 1e-13 * Math.max(Math.abs(target), Number.MIN_VALUE), most: 200, ...o });
+}
+/** The same, its value alone. */
+export function invert(l: Law, sym: string, target: number, env: Env, bracket: [number, number], mk: (name: string, value: number, unit: string) => Derivation, o: RootOptions = {}): number | null {
+  return invertFound(l, sym, target, env, bracket, mk, o).value;
 }

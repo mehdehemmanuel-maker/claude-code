@@ -1,0 +1,505 @@
+// The space: nothing but what you make, in x, y and z, at any scale and through time, with the panels you make it with
+// floating where you can reach them. No room, no floor, no robot: a dark field, a grid of cells on the ground plane (and
+// on the upright planes when asked), the three axes coloured x red, y green, z blue, and what every "Show in space" node
+// on the board is given (src/nexus/view/space3d.ts).
+//
+// S, scale: you stay your own size and the world is scaled round you, so zooming from a bolt to a city never takes the
+// camera kilometres off (which a screen's depth and a headset's comfort both dislike): a cell of the grid is always a
+// few centimetres where you see it, and it says what it is (1 µm, 1 mm, 1 m, 1 km), a decade at a time. T, time: the
+// board's clock (played, what moves runs: traffic, signals), or its history run back and forward. Entered from the
+// dashboard (view/index.html), and back to it.
+//
+// The board of blocks (src/nexus/view/nodes.ts, the same board as its page) is the main panel, with its strip and its
+// chosen block's inputs (src/nexus/view/nodes-wall.ts); the space bar holds S and T; chat sends to Claude Code. On a
+// screen the panels ride with the view and the mouse presses them; in a headset they stand before you and a hand's ray
+// presses them, the right stick zooms S, the left stick carries you.
+
+import * as THREE from 'three';
+import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
+import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { NH, NW, NodesWall } from './nodes-wall';
+import { wall } from './nodes';
+import { SpaceView, type Shown } from './space3d';
+import { Keyboard } from './keyboard';
+import { makeRelay, type Relay } from './relay';
+import { Pad, Walker } from './pad';
+
+const FONT = 'system-ui, -apple-system, Segoe UI, sans-serif';
+// ?emulate: an emulated Quest 3 (Meta's IWER), so a browser test can put on the headset, aim a hand and pull its trigger
+type Emulated = { position: { set(x: number, y: number, z: number): void }; quaternion: { set(x: number, y: number, z: number, w: number): void }; controllers: Record<'left' | 'right', { position: { set(x: number, y: number, z: number): void }; quaternion: { set(x: number, y: number, z: number, w: number): void }; updateButtonValue(id: string, v: number): void; updateAxes(id: string, x: number, y: number): void }> };
+let emulated: Emulated | null = null;
+if (new URLSearchParams(location.search).has('emulate')) { const { XRDevice, metaQuest3 } = await import('iwer'); const d = new XRDevice(metaQuest3); d.installRuntime({ forceInstall: true }); emulated = d as unknown as Emulated; }
+
+// ---- the renderer and the field --------------------------------------------------------------------------------------
+const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x05070b);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture; scene.environmentIntensity = 0.55; renderer.toneMappingExposure = 0.95;
+scene.add(new THREE.HemisphereLight(0xdfe9ff, 0x101820, 0.35));
+// a horizon: the space reaches 400 m of what you see (whatever S is, that many metres at your own size: 10 km of a city
+// seen at 1 cell = 1 m, 400 µm of a part at 1 cell = 1 µm), fading into haze before it, so a world without end costs what
+// the view holds and its edge is never seen
+const HORIZON = 400; scene.fog = new THREE.FogExp2(0x05070b, 2.6 / HORIZON);
+{ const sun = new THREE.DirectionalLight(0xfff4e0, 1.6); sun.position.set(3, 6, 4); scene.add(sun); const back = new THREE.DirectionalLight(0x9ec3ff, 0.35); back.position.set(-4, 2, -3); scene.add(back); }
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 2e5);
+const rig = new THREE.Group(); rig.add(camera); scene.add(rig);
+camera.position.set(0, 1.55, 2.3);
+const orbit = new OrbitControls(camera, renderer.domElement); orbit.target.set(0, 1.0, 0); orbit.enableZoom = false; orbit.enableDamping = true; orbit.update();
+
+/** The world: the grid and what is made, scaled round you. Its scale is S: a metre of the world is S metres where you see it. */
+const world = new THREE.Group(); scene.add(world);
+const view = new SpaceView(); world.add(view.group);
+const S = () => world.scale.x;
+/** S changed by a factor, about a point where you see it (it stays where it is). */
+function zoomAbout(f: number, at: THREE.Vector3): void {
+  const s = Math.min(1e16, Math.max(1e-16, S() * f)), k = s / S();
+  world.position.sub(at).multiplyScalar(k).add(at); world.scale.setScalar(s); grid.dirty = true;
+}
+/** Everything shown, framed before you: its middle at the point you turn about, its largest side a metre and a bit. */
+function fit(): void {
+  const b = view.bounds(); if (b.isEmpty()) { world.scale.setScalar(1); world.position.copy(pivot()).sub(new THREE.Vector3(0, 0, 0)); grid.dirty = true; return; }
+  // on a screen with the board up beside it, framed in the open part of the view, left of the board
+  const open = !renderer.xr.isPresenting && panelsShown && !boardBig, c = b.getCenter(new THREE.Vector3()), size = Math.max(...b.getSize(new THREE.Vector3()).toArray(), 1e-6), s = (open ? 0.75 : 1.3) / size;
+  const at = pivot(); if (open) at.add(new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar(-0.85));
+  world.scale.setScalar(s); world.position.copy(at).sub(c.multiplyScalar(s)); grid.dirty = true;
+}
+/** S set so a cell is a decade: µm, mm, m or km, about the point you turn about. */
+function jump(cell: number): void { zoomAbout(0.04 / cell / S(), pivot()); }
+/** A point of the world brought to where you turn about, with a cell of the grid this long. */
+function focusOn(p: THREE.Vector3, cell = grid.cell || 1): void { const s = 0.04 / cell; world.scale.setScalar(s); world.position.copy(pivot()).sub(p.clone().multiplyScalar(s)); grid.dirty = true; }
+const pivot = () => (renderer.xr.isPresenting ? xrPivot.clone() : orbit.target.clone());
+const xrPivot = new THREE.Vector3(0, 1.0, -0.8);
+
+// ---- the grid: cells a decade at a time, the axes, their marks ---------------------------------------------------------
+const grid = { group: new THREE.Group(), cell: 0, centre: new THREE.Vector3(Infinity, 0, 0), dirty: true, planes: { xz: true, xy: false, yz: false } };
+world.add(grid.group);
+const lineMat = (c: number, o: number) => new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: o, depthWrite: false });
+const NAMES: [number, string][] = [[9.4607e15, 'ly'], [1.496e11, 'AU'], [1e9, 'Gm'], [1e6, 'Mm'], [1e3, 'km'], [1, 'm'], [1e-3, 'mm'], [1e-6, 'µm'], [1e-9, 'nm'], [1e-12, 'pm'], [1e-15, 'fm']];
+/** A length as it is said: 1 km, 10 m, 100 µm. */
+export function lengthSaid(x: number): string { for (const [k, u] of NAMES) if (Math.abs(x) >= k * 0.999) return `${Number((x / k).toPrecision(3))} ${u}`; return `${x.toExponential(1)} m`; }
+function label(text: string, colour: string): THREE.Sprite {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d')!;
+  g.font = `600 34px ${FONT}`; g.fillStyle = colour; g.textBaseline = 'middle'; g.fillText(text, 6, 32);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false })); s.userData.label = true; return s;
+}
+/** The grid laid again where the decade changed, or you went past a major cell: centred on the point you look at. */
+function layGrid(): void {
+  const s = S(), cell = 10 ** Math.floor(Math.log10(0.1 / s)), focus = world.worldToLocal(pivot());
+  // the grid lies at the height you look at (to the nearest major cell): zoomed into the air above a city down to a
+  // micrometre, its cells are still there to read the scale by
+  const major = cell * 10, centre = new THREE.Vector3(Math.round(focus.x / major) * major, Math.abs(focus.y) < major * 5 ? 0 : Math.round(focus.y / major) * major, Math.round(focus.z / major) * major);
+  if (!grid.dirty && cell === grid.cell && centre.distanceTo(grid.centre) < major * 0.5) return;
+  grid.dirty = false; grid.cell = cell; grid.centre.copy(centre);
+  for (const o of [...grid.group.children]) { grid.group.remove(o); (o as THREE.Mesh).geometry?.dispose(); }
+  const shown = cell * s, fade = Math.min(1, Math.max(0, (shown - 0.01) / 0.03)), N = 40;
+  /** One plane of lines spanned by axes u and v (the third axis at its zero), `step` apart, n each way of the centre. */
+  const plane = (u: 0 | 1 | 2, v: 0 | 1 | 2, step: number, n: number, o: number, c: number) => {
+    // the lines measured from the grid's centre, the centre where the lines are placed: a grid of nanometre cells a hundred
+    // metres out keeps its lines apart (in 32 bits, 100 m and 100 m + 1 nm are the same number)
+    const cen = [0, 0, 0], pts: number[] = [];
+    for (let i = -n; i <= n; i++) for (const [a, b] of [[u, v], [v, u]] as const) {
+      const p = [0, 0, 0], q = [0, 0, 0]; p[a] = q[a] = cen[a]! + i * step; p[b] = cen[b]! - n * step; q[b] = cen[b]! + n * step; pts.push(...p, ...q);
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); const ls = new THREE.LineSegments(geo, lineMat(c, o)); ls.position.copy(centre); grid.group.add(ls);
+  };
+  const each = (a: 0 | 1 | 2, b: 0 | 1 | 2) => { plane(a, b, cell, N, 0.22 * fade, 0x3b4a5e); plane(a, b, major, N / 10 + 4, 0.45, 0x5a6f88); };
+  if (grid.planes.xz) each(0, 2); if (grid.planes.xy) each(0, 1); if (grid.planes.yz) each(1, 2);
+  // the axes through the origin, long; x red, y green, z blue
+  const L = major * 2000;
+  for (const [d, c] of [[[1, 0, 0], 0xff5252], [[0, 1, 0], 0x69f0ae], [[0, 0, 1], 0x448aff]] as [number[], number][]) {
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute([-L * d[0]!, -L * d[1]!, -L * d[2]!, L * d[0]!, L * d[1]!, L * d[2]!], 3)); grid.group.add(new THREE.LineSegments(geo, lineMat(c, 0.85)));
+  }
+  // marks every major cell along x and z near where you look, and the names of the axes
+  const k = 0.03 / s;
+  for (let i = -4; i <= 4; i++) {
+    if (!i) continue;
+    for (const [axis, col] of [['x', '#ff8a80'], ['z', '#82b1ff']] as const) {
+      const v = (axis === 'x' ? centre.x : centre.z) + i * major, l = label(lengthSaid(v), col); l.scale.set(k * 4, k, 1);
+      l.position.set(axis === 'x' ? v : 0, k * 0.6, axis === 'z' ? v : 0); grid.group.add(l);
+    }
+  }
+  for (const [name, col, at] of [['x', '#ff5252', [major * 5, 0, 0]], ['y', '#69f0ae', [0, major * 5, 0]], ['z', '#448aff', [0, 0, major * 5]]] as [string, string, number[]][]) { const l = label(name, col); l.scale.set(k * 4, k, 1); l.position.set(at[0]!, at[1]!, at[2]!); grid.group.add(l); }
+  bar.draw();
+}
+
+// ---- panels -----------------------------------------------------------------------------------------------------------
+interface Hit { x0: number; y0: number; x1: number; y1: number; act: (x: number) => void }
+/** A flat panel drawn on a canvas, pressed where its buttons are. */
+class Panel {
+  readonly mesh: THREE.Mesh; readonly c = document.createElement('canvas'); readonly g: CanvasRenderingContext2D; tex: THREE.CanvasTexture; hits: Hit[] = [];
+  constructor(public w: number, public h: number, public px: number, private readonly paint: (p: Panel) => void) {
+    this.c.width = px; this.c.height = Math.round((px * h) / w); this.g = this.c.getContext('2d')!;
+    this.tex = new THREE.CanvasTexture(this.c); this.tex.colorSpace = THREE.SRGBColorSpace;
+    this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: this.tex, transparent: true }));
+  }
+  /** Another size and shape (the bar is one row on a screen, two in a headset): a new canvas size, plane and texture. */
+  shape(w: number, h: number, px: number): void {
+    if (w === this.w && h === this.h && px === this.px) return;
+    this.w = w; this.h = h; this.px = px; this.c.width = px; this.c.height = Math.round((px * h) / w);
+    this.mesh.geometry.dispose(); this.mesh.geometry = new THREE.PlaneGeometry(w, h);
+    const old = this.tex; this.tex = new THREE.CanvasTexture(this.c); this.tex.colorSpace = THREE.SRGBColorSpace; (this.mesh.material as THREE.MeshBasicMaterial).map = this.tex; old.dispose();
+    this.draw();
+  }
+  draw(): void { this.hits = []; this.g.clearRect(0, 0, this.c.width, this.c.height); this.paint(this); this.tex.needsUpdate = true; }
+  press(uv: THREE.Vector2): void { const x = uv.x * this.c.width, y = (1 - uv.y) * this.c.height; this.hits.find((r) => x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1)?.act(x); }
+  button(label: string, x: number, y: number, w: number, h: number, act: () => void, on = false): void {
+    const g = this.g; g.fillStyle = on ? '#12324a' : '#162132'; round(g, x, y, w, h, 12); g.fill(); if (on) { g.strokeStyle = '#40c4ff'; g.lineWidth = 3; g.stroke(); }
+    g.fillStyle = '#e6eef8'; g.font = `600 ${Math.round(h * 0.42)}px ${FONT}`; g.textBaseline = 'middle'; const tw = g.measureText(label).width; g.fillText(label, x + (w - tw) / 2, y + h / 2);
+    this.hits.push({ x0: x, y0: y, x1: x + w, y1: y + h, act });
+  }
+}
+function round(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+
+let tMode: 'auto' | 'clock' | 'history' = 'auto';
+/** The space bar: S (what a cell is, the decades to jump to, fit), the planes of the grid, T (the clock, or the board's history), and
+ *  what is drawn. */
+// (one row on a screen; in a headset two rows, S over T, so every button is 90 px or more of a narrower bar: in one row
+// the bar could not keep within the 58° Meta designs for and give its buttons the 2.5° a target needs (measured, research 34))
+const BAR_ONE = [1.7, 0.1, 2400] as const, BAR_TWO = [0.9, 0.2, 1400] as const;
+const bar = new Panel(...BAR_ONE, (p) => {
+  // (in two rows every button at least 100 px wide: as the eye sees the bar's ends at a slant, 90 px was 2.49°)
+  const g = p.g, two = p.h / p.w > 0.15, H = two ? p.c.height / 2 : p.c.height, bw = (w: number) => (two ? Math.max(w, 100) : w);
+  g.fillStyle = '#0b1220ee'; round(g, 0, 0, p.c.width, p.c.height, 24); g.fill();
+  g.textBaseline = 'middle'; g.font = `700 22px ${FONT}`; g.fillStyle = '#ffd740'; g.fillText('S · SCALE', 24, H / 2 - 18);
+  g.font = `600 28px ${FONT}`; g.fillStyle = '#e6eef8'; g.fillText(`1 cell = ${lengthSaid(grid.cell || 1)}`, 24, H / 2 + 16);
+  let x = two ? 250 : 300; for (const [name, cell] of [['nm', 1e-9], ['µm', 1e-6], ['mm', 1e-3], ['m', 1], ['km', 1e3], ['Mm', 1e6]] as const) { p.button(name, x, 22, bw(84), H - 44, () => { jump(cell); }, Math.abs(Math.log10((grid.cell || 1) / cell)) < 0.5); x += bw(84) + 8; }
+  // (no Board button in a headset: there the board at its larger size covered the chat and the bar (the evaluator,
+  // 2026-11-01); its own zoom, the strip's + and −, makes it larger)
+  p.button('Fit', x, 22, bw(90), H - 44, fit); x += bw(90) + 10; if (!two) { p.button('Board', x, 22, 110, H - 44, () => { boardBig = !boardBig; layPanels(); }, boardBig); x += 130; }
+  for (const k of ['xz', 'xy', 'yz'] as const) { p.button(k.toUpperCase(), x, 22, bw(84), H - 44, () => { grid.planes[k] = !grid.planes[k]; grid.dirty = true; }, grid.planes[k]); x += bw(84) + 8; }
+  // (in two rows, T begins the second row; its buttons are moved down by a row's height, and its mode button made full height)
+  const T0 = two ? H : 0; if (two) x = 24; else x += 22;
+  g.font = `700 22px ${FONT}`; g.fillStyle = '#69f0ae'; g.fillText('T · TIME', x, T0 + H / 2 - 18);
+  // T is the clock (what moves: traffic, signals) or the board's history; the clock first when anything moves with it
+  const ck = wall.clock(), clockMode = tMode === 'clock' || (tMode === 'auto' && ck.moves);
+  if (two) { x += 130; p.button(clockMode ? 'clock' : 'history', x, T0 + 22, 130, H - 44, () => { tMode = clockMode ? 'history' : 'clock'; bar.draw(); }); x += 140; }
+  else { p.button(clockMode ? 'clock' : 'history', x - 4, H / 2 + 2, 104, 34, () => { tMode = clockMode ? 'history' : 'clock'; bar.draw(); }); x += 112; }
+  const tx = x, tw = two ? 620 : 470, sx = tx + bw(64) + 20, sw = tw - 2 * (bw(64) + 20) - (two ? 0 : 42);
+  const slide = (f: number, act: (f: number) => void) => {
+    g.fillStyle = '#1c2a3d'; round(g, sx, T0 + H / 2 - 8, sw, 16, 8); g.fill(); g.fillStyle = '#69f0ae'; round(g, sx, T0 + H / 2 - 8, Math.max(16, sw * f), 16, 8); g.fill();
+    g.beginPath(); g.arc(sx + sw * f, T0 + H / 2, 16, 0, Math.PI * 2); g.fill();
+    p.hits.push({ x0: sx - 10, y0: T0, x1: sx + sw + 10, y1: T0 + H, act: (px) => act(Math.max(0, Math.min(1, (px - sx) / sw))) });
+  };
+  if (clockMode) {
+    p.button(ck.playing ? '❚❚' : '▶', tx, T0 + 22, bw(64), H - 44, () => { wall.play(!wall.clock().playing); bar.draw(); }, ck.playing);
+    const [w0] = wall.window(); slide((ck.t - w0) / ck.span, (f) => wall.setTime(w0 + f * ck.span));
+    p.button('×' + (ck.rate >= 1000 ? `${ck.rate / 1000}k` : String(ck.rate)), sx + sw + 14, T0 + 22, bw(64), H - 44, () => { wall.rate(({ 1: 10, 10: 100, 100: 1000 } as Record<number, number>)[ck.rate] ?? 1); wall.span(({ 1: 600, 10: 3600, 100: 86400 } as Record<number, number>)[ck.rate] ?? 120); bar.draw(); });
+    g.font = `500 24px ${FONT}`; g.fillStyle = ck.moves ? '#a7ffeb' : '#5f6f84'; g.fillText(ck.moves ? `t = ${ck.t.toFixed(1)} s` : 'nothing moves', tx + tw + 8, T0 + H / 2 - 16);
+  } else {
+    const h = wall.history();
+    p.button('◀', tx, T0 + 22, bw(64), H - 44, () => wall.goto(h.at - 1));
+    slide(h.count > 1 ? h.at / (h.count - 1) : 1, (f) => wall.goto(Math.round(f * (h.count - 1))));
+    p.button('▶', sx + sw + 14, T0 + 22, bw(64), H - 44, () => wall.goto(h.at + 1));
+    g.font = `500 24px ${FONT}`; g.fillStyle = '#9fb3c8'; g.fillText(`${h.at + 1} / ${h.count}`, tx + tw + 8, T0 + H / 2 - 16);
+  }
+  const st = view.stats; g.fillStyle = '#7f8ea3'; g.font = `500 22px ${FONT}`;
+  const sayIt = `${st.instances.toLocaleString()} drawn in ${st.draws} draw${st.draws === 1 ? '' : 's'}${st.boxes ? `, ${st.boxes.toLocaleString()} far off as boxes` : ''}`; g.fillText(sayIt, tx + tw + 8, T0 + H / 2 + 16);
+});
+
+/** Chat: what you say goes to Claude Code (src/nexus/view/relay.ts); its last lines, and the line being typed. */
+const said: string[] = ['Claude: Build with the board; what a "Show in space" node is given stands here. Say anything to send it to Claude Code.'];
+let typing = '';
+const chat = new Panel(0.62, 0.22, 900, (p) => {
+  const g = p.g; g.fillStyle = '#0b1220e6'; round(g, 0, 0, p.c.width, p.c.height, 22); g.fill();
+  g.font = `700 30px ${FONT}`; g.fillStyle = '#b388ff'; g.textBaseline = 'top'; g.fillText('Chat with Claude', 24, 20);
+  g.font = `400 24px ${FONT}`; let y = 70;
+  for (const l of said.slice(-4)) { for (const line of wrap(g, l, p.c.width - 48).slice(0, 3)) { g.fillStyle = l.startsWith('You:') ? '#e6eef8' : '#9fb3c8'; g.fillText(line, 24, y); y += 30; } y += 6; if (y > p.c.height - 80) break; }
+  g.fillStyle = '#162132'; round(g, 20, p.c.height - 62, p.c.width - 40, 46, 10); g.fill(); g.fillStyle = typing ? '#e6eef8' : '#5f6f84'; g.textBaseline = 'middle';
+  g.fillText(typing || (renderer.xr.isPresenting ? 'Press here to type' : 'Type in the box at the top left'), 34, p.c.height - 39);
+  // (the place to type: 90 px of the panel's height, 2.5° or more from 1.3 m in a headset (research 34 found 70 px, 2.0°))
+  p.hits.push({ x0: 0, y0: p.c.height - 90, x1: p.c.width, y1: p.c.height, act: () => { if (renderer.xr.isPresenting) { keyboard.mesh.visible = !keyboard.mesh.visible; placeKeyboard(); } else chatInput.focus(); } });
+});
+function wrap(g: CanvasRenderingContext2D, t: string, w: number): string[] { const out: string[] = []; let line = ''; for (const word of t.split(/\s+/)) { const tryL = line ? `${line} ${word}` : word; if (g.measureText(tryL).width > w && line) { out.push(line); line = word; } else line = tryL; } if (line) out.push(line); return out; }
+let relay: Relay | null = null; void makeRelay().then((r) => { relay = r; });
+async function send(text: string): Promise<void> {
+  const t = text.trim(); if (!t) return; said.push(`You: ${t}`); typing = ''; chat.draw();
+  if (!relay) { said.push('Claude: not reachable from here yet; kept.'); chat.draw(); return; }
+  const r = await relay.send(`From the space: ${t}`, renderer.domElement); said.push(`Claude: ${r.said}`); chat.draw();
+}
+const chatInput = document.createElement('input');
+chatInput.placeholder = 'Say something to Claude…'; chatInput.style.cssText = 'position:fixed;left:16px;top:16px;width:min(420px,calc(100vw - 32px));padding:10px 12px;border-radius:10px;border:1px solid #2b3a50;background:#0b1220e6;color:#e6eef8;font:14px system-ui;z-index:5';
+chatInput.addEventListener('input', () => { typing = chatInput.value; chat.draw(); });
+chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const t = chatInput.value; chatInput.value = ''; void send(t); } e.stopPropagation(); });
+document.body.appendChild(chatInput);
+const back = document.createElement('a'); back.href = './index.html'; back.textContent = '◀ Dashboard';
+back.style.cssText = 'position:fixed;left:16px;bottom:16px;padding:8px 14px;border-radius:10px;border:1px solid #5a3f9a;background:linear-gradient(90deg,#1b3a5a,#3a1b5a);color:#e6eef8;font:14px system-ui;text-decoration:none;z-index:5';
+document.body.appendChild(back);
+// (0.62 m wide: each key 40.7 mm tall, 2.59° from 0.9 m; at 0.56 m they were 2.34°, under the 2.5° a target needs)
+const keyboard = new Keyboard(false, 0.7); keyboard.mesh.visible = false; // (0.70 m: its end keys, seen at a slant from 0.9 m, are 2.5° or more (at 0.62 m they were 2.45°))
+// (in a headset, 0.9 m from the eye and below it: nearer than 1 m it is in the band Meta's comfort pages say to avoid,
+// 0.5 to 0.8 m, where the eyes strain to focus (research 34; spec 04, P10))
+// 45° below the eye, tilted to face it, so it clears the bar above it (measured: at 34° below it covered the bar)
+function placeKeyboard(): void { const a = THREE.MathUtils.degToRad(45); keyboard.mesh.position.set(0, -0.9 * Math.sin(a), -0.9 * Math.cos(a)); keyboard.mesh.rotation.set(-a, 0, 0); }
+
+const board = new NodesWall((t) => { said.push(`Board: ${t}`); chat.draw(); });
+
+/** The panels: riding with the view on a screen, standing before you in a headset. */
+const ui = new THREE.Group(); scene.add(ui);
+ui.add(board.group, bar.mesh, chat.mesh, keyboard.mesh);
+let panelsShown = true, boardBig = false;
+function layPanels(): void {
+  const xr = renderer.xr.isPresenting; if (xr) boardBig = false; // (never the larger board in a headset: it covered the chat and the bar)
+  // (in a headset, laid to the comfort numbers of research 34 (spec 04, P10; Meta's comfort and panel pages): the board
+  // before you, 10° below the eye at 1.25 m and tilted back to face you; the bar under it, within the 58° Meta designs
+  // for; the chat to the side at 1.3 m, turned to face you: 42°, so it clears the board (measured: at 30° it
+  // overlapped the board's edge), past Meta's 30° comfortable turn of the head and inside its 55° most)
+  if (xr) { chat.mesh.visible = true; board.group.scale.setScalar(boardBig ? 0.6 : 0.38); board.group.position.set(0, -1.25 * Math.tan(THREE.MathUtils.degToRad(10)), -1.25); board.group.rotation.set(-THREE.MathUtils.degToRad(10), 0, 0);
+    // (the board's drawing does not sit centred on its own origin: centred by its measured box, so it is straight ahead)
+    { ui.updateWorldMatrix(true, true); const c = ui.worldToLocal(new THREE.Box3().setFromObject(board.group).getCenter(new THREE.Vector3())); board.group.position.x -= c.x; }
+    bar.shape(...BAR_TWO); bar.mesh.position.set(0, -0.62, -1.1); bar.mesh.scale.setScalar(1);
+    const side = THREE.MathUtils.degToRad(42); chat.mesh.position.set(-1.3 * Math.sin(side), 0, -1.3 * Math.cos(side)); chat.mesh.rotation.set(0, side, 0); chat.mesh.scale.setScalar(1); }
+  else bar.shape(...BAR_ONE);
+  // (the least a target on the board may be, in its css px: 2.5° at the board's distance; set in a headset, nothing on a screen)
+  // (and the least zoom for its text, as drawn: 13 px at 0.6° and 11 px at 0.4° from 1.25 m)
+  // (worked from where the board stands as the eye at the ui's origin sees it, at nine points of the canvas, the least of
+  // them: its text 0.6° (13 px) and 0.4° (11 px), every block 2.5°, each with 3 % to spare)
+  if (xr) { ui.updateWorldMatrix(true, true); const eye0 = ui.getWorldPosition(new THREE.Vector3()), t = boardText(eye0, 1);
+    wall.headset(Math.ceil((2.5 / t.px) * 1.03), Math.max(0.6 / t.t13, 0.4 / t.t11) * 1.03); } else wall.headset(0);
+  if (xr) { /* laid above */ } else if (boardBig) { board.group.scale.setScalar(0.5); board.group.position.set(-0.12, 0.06, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.visible = false; }
+  else { chat.mesh.visible = true; board.group.scale.setScalar(0.36); board.group.position.set(0.36, 0.1, -1.25); bar.mesh.position.set(0, -0.5, -1.25); bar.mesh.scale.setScalar(1); chat.mesh.position.set(-0.78, 0.4, -1.25); chat.mesh.scale.setScalar(0.65); chat.mesh.rotation.set(0, 0, 0); }
+  // the panels are drawn over what is made: they are what you work with, never hidden inside it
+  ui.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material | undefined; if (m) { m.depthTest = false; m.depthWrite = false; } o.renderOrder = 50; });
+}
+/** Where the panels stand in a headset: before you, where you are when you ask. */
+function recentre(): void { const head = renderer.xr.getCamera(), p = head.getWorldPosition(new THREE.Vector3()), f = head.getWorldDirection(new THREE.Vector3()); f.y = 0; f.normalize(); ui.position.copy(p); ui.lookAt(p.clone().sub(f)); xrPivot.copy(p).addScaledVector(f, 0.9).setY(p.y - 0.4); }
+
+// ---- every target a hand presses, as the eye sees it (spec 04, P10): each rectangle's angle across its middle, each
+// way, from where the eye is, its corners where they stand (a flat panel's end buttons are seen at a slant: measured at the
+// panel's centre, square on, they read larger than they are: the evaluator, 2026-11-01) -------------------------------------
+type Rect = { x0: number; y0: number; x1: number; y1: number };
+function seen(mesh: THREE.Object3D, w: number, h: number, cw: number, ch: number, r: Rect, eye: THREE.Vector3): number {
+  mesh.updateWorldMatrix(true, false);
+  const P = (px: number, py: number) => new THREE.Vector3((px / cw - 0.5) * w, (0.5 - py / ch) * h, 0).applyMatrix4(mesh.matrixWorld).sub(eye);
+  const xm = (r.x0 + r.x1) / 2, ym = (r.y0 + r.y1) / 2;
+  return THREE.MathUtils.radToDeg(Math.min(P(r.x0, ym).angleTo(P(r.x1, ym)), P(xm, r.y0).angleTo(P(xm, r.y1))));
+}
+/** Every target a hand presses in a headset, each as seen: the bar's and the chat's buttons, every key, the strip's and the
+ *  side panel's buttons, and every block wholly in view on the board (a block cut by the canvas's edge is pressed where it
+ *  shows, and is measured once it is in view). */
+function everyTarget(eye: THREE.Vector3): { name: string; deg: number }[] {
+  const out: { name: string; deg: number }[] = [];
+  for (const [name, p] of [['bar', bar], ['chat', chat]] as const) if (p.mesh.visible) for (const r of p.hits) out.push({ name, deg: seen(p.mesh, p.w, p.h, p.c.width, p.c.height, r, eye) });
+  if (keyboard.mesh.visible) { const k = keyboard.keyRects(), g = keyboard.mesh.geometry as THREE.PlaneGeometry; for (const r of k.rects) out.push({ name: 'key', deg: seen(keyboard.mesh, g.parameters.width, g.parameters.height, k.cw, k.ch, r, eye) }); }
+  if (board.group.visible) {
+    for (const z of board.hitRects()) for (const r of z.rects) out.push({ name: z.name, deg: seen(z.mesh, z.w, z.h, z.cw, z.ch, r, eye) });
+    const cw = wall.canvas.clientWidth, chh = wall.canvas.clientHeight;
+    for (const r of wall.blockRects()) if (r.x0 >= 0 && r.y0 >= 0 && r.x1 <= cw && r.y1 <= chh) out.push({ name: 'block', deg: seen(board.canvasMesh, NW, NH, cw, chh, r, eye) });
+  }
+  return out;
+}
+/** The board's text as seen, at nine points across its canvas: the least height of its usual 13 px, and of the least text
+ *  it drew (11 px at zoom 1 today), each under the zoom it is drawn at (`drawn`, css px: the board's own record of its last
+ *  paint; worked at 11 px × k where nothing is drawn yet, as when the zoom's floor is set). */
+function boardText(eye: THREE.Vector3, k = wall.zoomK(), drawn?: number): { t13: number; t11: number; px: number; least: number } {
+  const cw = wall.canvas.clientWidth, chh = wall.canvas.clientHeight, least = drawn !== undefined && Number.isFinite(drawn) ? drawn : 11 * k; let t13 = Infinity, t11 = Infinity, px = Infinity;
+  for (const u of [0.05, 0.5, 0.95]) for (const v of [0.05, 0.5, 0.95]) { const x = u * cw, y = v * chh, at = (hpx: number) => seen(board.canvasMesh, NW, NH, cw, chh, { x0: x - hpx / 2, y0: y - hpx / 2, x1: x + hpx / 2, y1: y + hpx / 2 }, eye);
+    t13 = Math.min(t13, at(13 * k)); t11 = Math.min(t11, at(least)); px = Math.min(px, at(10) / 10); }
+  return { t13, t11, px, least };
+}
+
+/** You move, and what you work with comes with you: the panels and the point the zoom turns about go where you go, so
+ *  walking never leaves them behind (fault D11: they were left where they stood until you squeezed to bring them). */
+function carry(d: THREE.Vector3): void { rig.position.add(d); ui.position.add(d); xrPivot.add(d); }
+/** Where each panel stands from your eyes, measured: how far, how far off to the side and below, how wide it looks
+ *  (in degrees). For checking the layout against the comfort numbers, in a headset or an emulated one. */
+function comfort(): Record<string, { distance: number; side: number; below: number; width: number; height?: number; rows?: number }> {
+  const head = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera, eye = head.getWorldPosition(new THREE.Vector3()), f = head.getWorldDirection(new THREE.Vector3());
+  const yaw = Math.atan2(f.x, -f.z), out: Record<string, { distance: number; side: number; below: number; width: number; height?: number; rows?: number }> = {};
+  for (const [name, o] of [['board', board.group], ['bar', bar.mesh], ['chat', chat.mesh], ['keyboard', keyboard.mesh]] as const) {
+    if (!o.visible) continue; o.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(o), c = box.getCenter(new THREE.Vector3()).sub(eye), d = c.length(), sz = box.getSize(new THREE.Vector3());
+    const across = Math.hypot(sz.x, sz.z), deg = THREE.MathUtils.radToDeg;
+    const lo = box.min.y - eye.y, hi = box.max.y - eye.y, h = Math.hypot(c.x, c.z) || 1e-9;
+    out[name] = { distance: d, side: deg(Math.atan2(c.x, -c.z) - yaw), below: deg(-Math.asin(c.y / d)), width: deg(2 * Math.atan(across / 2 / d)), height: deg(Math.atan2(hi, h) - Math.atan2(lo, h)) };
+  }
+  // (sizes as the eye sees them, in degrees: the board's smallest and usual text (11 and 13 css px over its drawn width),
+  // the smallest dimension of the smallest target on the bar, the chat and the keyboard)
+  const sz = (m: number, d: number) => THREE.MathUtils.radToDeg(2 * Math.atan(m / 2 / d)), dist = (o: THREE.Object3D) => new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()).distanceTo(eye);
+  // (as drawn: the board's text is drawn under its own zoom (the evaluator found it measured at zoom 1, 2026-11-01))
+  if (board.group.visible) { const perPx = (NW * board.group.scale.x) / Math.max(1, wall.canvas.clientWidth), d = dist(board.group), k = wall.zoomK(); out.text = { distance: d, side: 0, below: 0, width: sz(11 * k * perPx, d) }; out.text13 = { distance: d, side: 0, below: 0, width: sz(13 * k * perPx, d) }; }
+  const smallest = (p: Panel) => Math.min(...p.hits.map((h) => Math.min((h.x1 - h.x0) * (p.w * p.mesh.scale.x) / p.c.width, (h.y1 - h.y0) * (p.h * p.mesh.scale.y) / p.c.height)));
+  for (const [name, p] of [['bar target', bar], ['chat target', chat]] as const) if (p.mesh.visible && p.hits.length) { const d = dist(p.mesh); out[name] = { distance: d, side: 0, below: 0, width: sz(smallest(p), d) }; }
+  if (keyboard.mesh.visible) { const d = dist(keyboard.mesh); out['key'] = { distance: d, side: 0, below: 0, width: sz(keyboard.smallestKey(), d) }; }
+  // (the board's strip and side panel too: their smallest target and smallest text, each from its own distance (the
+  // evaluator found them unmeasured, at 1.1° and 0.9°, 2026-11-01); and the bar's rows)
+  if (board.group.visible) for (const z of board.sizes()) { const d = dist(z.mesh); if (z.target !== undefined) out[`${z.name} target`] = { distance: d, side: 0, below: 0, width: sz(z.target, d) }; out[`${z.name} text`] = { distance: d, side: 0, below: 0, width: sz(z.text, d) }; }
+  if (out.bar) out.bar.rows = bar.h / bar.w > 0.15 ? 2 : 1;
+  // (the keyboard clear of the bar as the eye sees them: at each direction across them, the bar's lower edge above the
+  // keyboard's upper edge, the least of these (from their centres' boxes it read 6.60° where it was far less: the
+  // evaluator, 2026-11-01); each edge sampled where it stands, in degrees round (azimuth) and up (elevation) from the eye)
+  if (bar.mesh.visible && keyboard.mesh.visible) {
+    const edge = (mesh: THREE.Object3D, w: number, h: number, top: boolean): [number, number][] => { mesh.updateWorldMatrix(true, false); const pts: [number, number][] = [];
+      for (let i = 0; i <= 40; i++) { const p = new THREE.Vector3(((i / 20 - 1) * w) / 2, ((top ? 1 : -1) * h) / 2, 0).applyMatrix4(mesh.matrixWorld).sub(eye); pts.push([THREE.MathUtils.radToDeg(Math.atan2(p.x, -p.z) - yaw), THREE.MathUtils.radToDeg(Math.atan2(p.y, Math.hypot(p.x, p.z)))]); }
+      return pts.sort((a, b) => a[0] - b[0]); };
+    const at = (e: [number, number][], az: number): number | undefined => { for (let i = 1; i < e.length; i++) { const [a0, l0] = e[i - 1]!, [a1, l1] = e[i]!; if (az >= a0 && az <= a1) return a1 === a0 ? l0 : l0 + ((l1 - l0) * (az - a0)) / (a1 - a0); } return undefined; };
+    const kg = keyboard.mesh.geometry as THREE.PlaneGeometry, ke = edge(keyboard.mesh, kg.parameters.width, kg.parameters.height, true), be = edge(bar.mesh, bar.w, bar.h, false);
+    let gap = Infinity; for (const [az, l] of ke) { const b = at(be, az); if (b !== undefined) gap = Math.min(gap, b - l); } for (const [az, l] of be) { const k = at(ke, az); if (k !== undefined) gap = Math.min(gap, l - k); }
+    out['keyboard gap'] = { distance: 0, side: 0, below: 0, width: gap };
+  }
+  // (every target a hand presses, as seen: the smallest, and which; the board's text as seen across its canvas; the canvas
+  // itself (its css width, where it stands))
+  { const all = everyTarget(eye), least = all.reduce((a, b) => (b.deg < a.deg ? b : a), { name: 'none', deg: Infinity }); out['every target'] = { distance: 0, side: 0, below: 0, width: least.deg, what: `${least.name} (of ${all.length})` } as never;
+    if (board.group.visible) { const t = boardText(eye, wall.zoomK(), wall.leastText()); out['board text seen'] = { distance: 0, side: 0, below: 0, width: t.t13, height: t.t11, what: `the least drawn ${t.least.toFixed(1)} css px` } as never;
+      const cm = board.canvasMesh; cm.updateWorldMatrix(true, false); const c = cm.getWorldPosition(new THREE.Vector3()).sub(eye), d = c.length();
+      out['canvas'] = { distance: d, side: THREE.MathUtils.radToDeg(Math.atan2(c.x, -c.z) - yaw), below: THREE.MathUtils.radToDeg(-Math.asin(c.y / d)), width: wall.canvas.clientWidth }; } }
+  // (every block on the board is a target a hand presses (to choose it, to move it): the smallest, as drawn)
+  if (board.group.visible && Number.isFinite(wall.smallestBlock())) { const perPx = (NW * board.group.scale.x) / Math.max(1, wall.canvas.clientWidth), d = dist(board.group); out['block'] = { distance: d, side: 0, below: 0, width: sz(wall.smallestBlock() * perPx, d) }; }
+  return out;
+}
+
+// ---- what is shown ---------------------------------------------------------------------------------------------------
+function refresh(): void { view.show(wall.shown() as Shown[]); bar.draw(); }
+wall.ran = refresh;
+
+// ---- being in it: walking at your own size, and the board's controls (view/pad.ts) -------------------------------------
+// (walking puts the world at its true size, S = 1, about where you were looking, puts the panels away and stands you on
+// its ground at eye height; stopping gives the panels back)
+const walker = new Walker(camera, renderer.domElement, orbit); walker.metre = () => S(); walker.ground = () => world.position.y;
+const pad = new Pad(document.body, walker, (on) => {
+  if (on) { zoomAbout(1 / S(), orbit.target.clone()); panelsShown = false; ui.visible = false; const t = orbit.target.clone(), d = camera.position.clone().sub(t).setY(0);
+    walker.enter(t.clone().add(d.normalize().multiplyScalar(Math.max(3, Math.min(30, d.length())))), t); }
+  else { walker.exit(); panelsShown = true; ui.visible = true; }
+});
+pad.el.querySelector<HTMLElement>('.walk')!.style.top = '56px'; pad.el.classList.add('raised');
+/** A press on a piece of a thing: a button put on it is worked (down and up); true when it was one. */
+function pressPiece(down: boolean): boolean { const p = view.pieceAt(ray); return !!p && pad.pressPiece(p.name, down); }
+
+// ---- pointing: the mouse on a screen, a hand's ray in a headset --------------------------------------------------------
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+type Target = { kind: 'board' } | { kind: 'panel'; panel: Panel; uv: THREE.Vector2 } | { kind: 'keys'; uv: THREE.Vector2 } | { kind: 'thing'; key: string } | null;
+function aimed(): Target {
+  if (!panelsShown) { const t = view.pick(ray); return t ? { kind: 'thing', key: t.key } : null; }
+  const hits = ray.intersectObjects([bar.mesh, chat.mesh, ...(keyboard.mesh.visible ? [keyboard.mesh] : [])], false), dBoard = board.distance(ray);
+  const h = hits[0];
+  if (h && h.distance <= dBoard) { if (h.object === keyboard.mesh) return { kind: 'keys', uv: h.uv! }; return { kind: 'panel', panel: h.object === bar.mesh ? bar : chat, uv: h.uv! }; }
+  if (dBoard < Infinity) return { kind: 'board' };
+  const t = view.pick(ray); return t ? { kind: 'thing', key: t.key } : null;
+}
+function press(t: Target): boolean {
+  if (!t) return false;
+  if (t.kind === 'board') return board.down(ray);
+  if (t.kind === 'panel') { t.panel.press(t.uv); t.panel.draw(); return true; }
+  if (t.kind === 'keys') { const k = keyboard.keyAt(t.uv); if (k) { const r = keyboard.press(k); typing = keyboard.text; if (r === 'send') { void send(keyboard.text); keyboard.text = ''; } keyboard.draw(); chat.draw(); } return true; }
+  if (t.kind === 'thing') { if (pressPiece(true)) return false; if (!walker.on) wall.choose(t.key); return false; }
+  return false;
+}
+let mouseOnBoard = false;
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (renderer.xr.isPresenting) return;
+  ndc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
+  const t = aimed();
+  if (t?.kind === 'thing') { press(t); return; }
+  if (press(t)) { orbit.enabled = false; mouseOnBoard = t?.kind === 'board'; }
+});
+renderer.domElement.addEventListener('pointermove', (e) => { if (!mouseOnBoard) return; ndc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera); board.move(ray); });
+window.addEventListener('pointerup', () => { if (mouseOnBoard) board.up(); mouseOnBoard = false; if (!walker.on) orbit.enabled = true; pad.releaseAll(); });
+renderer.domElement.addEventListener('dblclick', (e) => {
+  ndc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
+  if (panelsShown && board.distance(ray) < Infinity) return;
+  const t = view.pick(ray); if (t) focusOn(world.worldToLocal(t.point.clone()), Math.max(1e-7, grid.cell / 10));
+});
+renderer.domElement.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  ndc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
+  // over the board, the wheel zooms the board; elsewhere it zooms the world about what is under the pointer
+  if (panelsShown && board.distance(ray) < Infinity) { wall.zoom(Math.exp(-e.deltaY * 0.0015)); return; }
+  const hit = view.pick(ray)?.point ?? ray.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), world.localToWorld(new THREE.Vector3())), new THREE.Vector3()) ?? orbit.target.clone();
+  if (hit.distanceTo(camera.position) > 50) hit.copy(orbit.target);
+  zoomAbout(Math.exp(-e.deltaY * 0.0015), hit);
+}, { passive: false });
+window.addEventListener('keydown', (e) => {
+  if ((e.target as HTMLElement).closest('input, textarea')) return;
+  if (walker.on) return;
+  if (e.key === 'f' || e.key === 'F') fit();
+  else if ((e.key === 'b' || e.key === 'B') && !renderer.xr.isPresenting) { boardBig = !boardBig; layPanels(); bar.draw(); }
+  else if (e.key === 'h' || e.key === 'H' || e.key === 'Tab') { e.preventDefault(); panelsShown = !panelsShown; ui.visible = panelsShown; }
+  else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (e.shiftKey) wall.redo(); else wall.undo(); }
+});
+window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+
+// ---- the headset --------------------------------------------------------------------------------------------------------
+const hands: { ctl: THREE.XRTargetRaySpace; line: THREE.Line; ball: THREE.Mesh; held: boolean }[] = [];
+const models = new XRControllerModelFactory();
+for (let i = 0; i < 2; i++) {
+  const ctl = renderer.xr.getController(i); rig.add(ctl);
+  const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 0, -1)]), new THREE.LineBasicMaterial({ color: 0x80deea, transparent: true, opacity: 0.7 }));
+  line.scale.z = 3; ctl.add(line);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.008), new THREE.MeshBasicMaterial({ color: 0xffffff })); ball.visible = false; scene.add(ball);
+  const grip = renderer.xr.getControllerGrip(i); grip.add(models.createControllerModel(grip)); rig.add(grip);
+  const hand = { ctl, line, ball, held: false }; hands.push(hand);
+  ctl.addEventListener('selectstart', () => { ray.setFromXRController(ctl); const t = aimed(); if (press(t) && t?.kind === 'board') hand.held = true; });
+  ctl.addEventListener('selectend', () => { if (hand.held) { board.up(); hand.held = false; } pad.releaseAll(); });
+  ctl.addEventListener('squeezestart', () => recentre());
+}
+// (in a headset the board is drawn at a fixed width, so its text has a fixed size in degrees whatever the desktop window's
+// width: 780 css px over its 0.912 m, from 1.23 m, gives its smallest text (11 px) 0.6°, the size Meta calls comfortable;
+// from the window it was 0.29° to 0.50° (research 34))
+const BOARD_CSS_PX = 780; let boardStyle = '';
+renderer.xr.addEventListener('sessionstart', () => { board.headset(true); boardStyle = wall.canvas.style.cssText; wall.canvas.style.width = `${BOARD_CSS_PX}px`; wall.canvas.style.height = `${Math.round((BOARD_CSS_PX * NH) / NW)}px`; wall.fit(); layPanels(); window.setTimeout(recentre, 300); bar.draw(); chat.draw(); });
+renderer.xr.addEventListener('sessionend', () => { board.headset(false); wall.canvas.style.cssText = boardStyle; wall.fit(); ui.position.set(0, 0, 0); ui.rotation.set(0, 0, 0); layPanels(); chat.draw(); });
+/** The sticks: the right zooms S about the point before you, the left carries you where you look, and turns you. */
+function sticks(dt: number): void {
+  const session = renderer.xr.getSession(); if (!session) return;
+  for (const src of session.inputSources) {
+    const ax = src.gamepad?.axes; if (!ax || ax.length < 4) continue;
+    const x = Math.abs(ax[2]!) > 0.15 ? ax[2]! : 0, y = Math.abs(ax[3]!) > 0.15 ? ax[3]! : 0;
+    if (src.handedness === 'right' && y) zoomAbout(Math.exp(-y * dt * 1.6), xrPivot);
+    if (src.handedness === 'left' && (x || y)) { const head = renderer.xr.getCamera(), f = head.getWorldDirection(new THREE.Vector3()); f.y = 0; f.normalize(); const r = new THREE.Vector3(-f.z, 0, f.x); carry(f.multiplyScalar(-y * dt * 1.2).addScaledVector(r, x * dt * 1.2)); }
+  }
+}
+
+// ---- running ----------------------------------------------------------------------------------------------------------
+{ const vr = VRButton.createButton(renderer); document.body.appendChild(vr); window.setTimeout(() => { vr.style.bottom = ''; vr.style.top = '16px'; vr.style.left = ''; vr.style.right = '16px'; vr.style.width = 'auto'; vr.style.padding = '8px 14px'; if (/not supported|not allowed/i.test(vr.textContent ?? '')) vr.style.display = 'none'; }, 400); }
+layPanels(); bar.draw(); chat.draw(); keyboard.draw(); placeKeyboard();
+board.show();
+let first = true, last = performance.now();
+renderer.setAnimationLoop((now) => {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (!renderer.xr.isPresenting) { if (!walker.on) orbit.update(); ui.position.copy(camera.getWorldPosition(new THREE.Vector3())); ui.quaternion.copy(camera.getWorldQuaternion(new THREE.Quaternion())); }
+  else {
+    sticks(dt);
+    for (const h of hands) { ray.setFromXRController(h.ctl); if (h.held) board.move(ray); const t = ray.intersectObjects([board.group, bar.mesh, chat.mesh], true)[0]; h.ball.visible = !!t; if (t) h.ball.position.copy(t.point); h.line.scale.z = t ? t.distance : 3; }
+  }
+  if (first && view.bounds().isEmpty() === false) { first = false; fit(); }
+  layGrid();
+  const xrCam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
+  view.range = Math.min(HORIZON, view.reach); (scene.fog as THREE.FogExp2).density = 2.6 / view.range;
+  view.update(xrCam as THREE.PerspectiveCamera, renderer.domElement.clientHeight || window.innerHeight, now);
+  board.update(now);
+  if (now % 500 < 17 || (wall.clock().playing && now % 100 < 17)) bar.draw();
+  const r0 = performance.now(); renderer.render(scene, camera); view.drawMs = 0.9 * view.drawMs + 0.1 * (performance.now() - r0);
+});
+// the first time, a board that shows something in the space: the city from a few nodes
+try { if (!localStorage.getItem('nexus.space.seen')) { localStorage.setItem('nexus.space.seen', '1'); window.setTimeout(() => { if (!wall.shown().length) wall.demo(0); }, 400); } } catch { /* a private window: nothing kept */ }
+window.setTimeout(refresh, 300);
+// what a browser test drives it by
+const emulate = emulated && {
+  /** The right hand at the head's side, aimed at a button of the space bar by its label. */
+  aimAtBar(label: string): boolean {
+    bar.draw(); const i = ['nm', 'µm', 'mm', 'm', 'km', 'Mm'].indexOf(label); const h = bar.hits[i]; if (!h) return false;
+    const uv = new THREE.Vector3(((h.x0 + h.x1) / 2 / bar.c.width - 0.5) * bar.w, (0.5 - (h.y0 + h.y1) / 2 / bar.c.height) * bar.h, 0), target = bar.mesh.localToWorld(uv);
+    const from = new THREE.Vector3(0.2, 1.3, -0.1), q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), target.clone().sub(from).normalize());
+    emulated!.controllers.right.position.set(from.x, from.y, from.z); emulated!.controllers.right.quaternion.set(q.x, q.y, q.z, q.w); return true;
+  },
+  trigger: (v: number) => emulated!.controllers.right.updateButtonValue('trigger', v),
+  stick: (y: number) => emulated!.controllers.right.updateAxes('thumbstick', 0, y),
+  /** The left stick, as a hand pushes it: walking goes the way it goes in use (sticks(), then carry()). */
+  walk: (x: number, y: number) => emulated!.controllers.left.updateAxes('thumbstick', x, y),
+  /** The board's side panel in one of its states, for measuring: the chosen block (one with inputs a hand can change) or
+   *  the library. Says which block was chosen. */
+  side: (mode: 'chosen' | 'library'): string => {
+    board.libraryShown(mode === 'library');
+    if (mode === 'chosen') for (const id of Object.keys(wall.board().nodes)) { wall.choose(id); if (wall.chosen()?.inputs.some((q) => q.number || q.choices)) break; }
+    board.drawSide(); return mode === 'library' ? 'the library' : wall.chosen()?.label ?? 'nothing';
+  },
+  /** A button of the board's side panel pressed by its label (the same act a hand's ray sets off), the first, or the nth. */
+  press: (label: string, nth = 0): boolean => board.pressLabel(label, nth),
+  /** Where the eyes are in the world. */
+  eye: () => renderer.xr.getCamera().getWorldPosition(new THREE.Vector3()).toArray(),
+};
+(window as unknown as { space: object }).space = { emulate, comfort, carry: (x: number, z: number) => carry(new THREE.Vector3(x, 0, z)), keyboard: () => { keyboard.mesh.visible = true; placeKeyboard(); }, presenting: () => renderer.xr.isPresenting, S, fit, jump, focusOn: (x: number, y: number, z: number, cell: number) => focusOn(new THREE.Vector3(x, y, z), cell), zoomAbout, stats: () => view.stats, shown: () => wall.shown().length, pivot, grid: () => ({ cell: grid.cell, planes: grid.planes }), panels: (on: boolean) => { panelsShown = on; ui.visible = on; }, demo: (i: number) => wall.demo(i), wall, camera, orbit };

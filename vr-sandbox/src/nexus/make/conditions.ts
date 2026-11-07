@@ -54,6 +54,8 @@ export function applyConditions(root: Part, c: Conditions): { part: Part; did: s
   const did: string[] = []; let swapped = 0;
   const k = c.scale * (c.child ? 0.7 : 1);
   const walk = (p: Part): Part => {
+    // (a sealed part, bought and fitted as it comes, keeps its own materials: only a change of size reaches into it)
+    if (p.sealed && k === 1) return p;
     const q: Part = { ...p };
     if (c.material && q.mat && STRUCTURE.has(q.mat) && q.mat !== c.material) { q.mat = c.material; q.color = COLOUR[c.material] ?? q.color; swapped++; }
     if (c.env === 'marine' && q.mat === 'steel-low' && !c.material) { q.mat = 'stainless-304'; swapped++; }

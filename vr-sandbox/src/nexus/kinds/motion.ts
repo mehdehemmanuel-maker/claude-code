@@ -26,9 +26,9 @@ const HK: Record<string, [number, number, number]> = { HK0408: [4, 8, 8], HK0509
 /** Flanged miniature bearings: bore, outside, width, flange diameter. */
 const FB: Record<string, [number, number, number, number]> = { F623: [3, 10, 4, 11.5], F624: [4, 13, 5, 15], F625: [5, 16, 5, 18], F626: [6, 19, 6, 22], F608: [8, 22, 7, 25], F688: [8, 16, 5, 18], F695: [5, 13, 4, 15], F693: [3, 8, 4, 9.5] };
 /** UC insert bearings in housings: bore. */
-const UC: Record<string, number> = { '201': 12, '202': 15, '203': 17, '204': 20, '205': 25, '206': 30, '207': 35, '208': 40, '209': 45, '210': 50 };
+export const UC: Record<string, number> = { '201': 12, '202': 15, '203': 17, '204': 20, '205': 25, '206': 30, '207': 35, '208': 40, '209': 45, '210': 50 };
 /** UCP pillow blocks: centre height and length, mm (makers' tables, typical). */
-const UCP: Record<string, [number, number]> = { '201': [30.2, 127], '202': [30.2, 127], '203': [30.2, 127], '204': [33.3, 127], '205': [36.5, 140], '206': [42.9, 165], '207': [47.6, 167], '208': [49.2, 184], '209': [54, 190], '210': [57.2, 206] };
+export const UCP: Record<string, [number, number]> = { '201': [30.2, 127], '202': [30.2, 127], '203': [30.2, 127], '204': [33.3, 127], '205': [36.5, 140], '206': [42.9, 165], '207': [47.6, 167], '208': [49.2, 184], '209': [54, 190], '210': [57.2, 206] };
 /** ISO 3547 wrapped plain bushes (steel-backed, PTFE-lined): bore → outside. */
 const DU: Record<number, number> = { 3: 4.5, 4: 5.5, 5: 7, 6: 8, 8: 10, 10: 12, 12: 14, 14: 16, 15: 17, 16: 18, 18: 20, 20: 23, 22: 25, 25: 28, 30: 34, 35: 39, 40: 44, 50: 55 };
 /** Rod ends, DIN ISO 12240-4 series K: bore → thread. */
@@ -47,7 +47,7 @@ const VLEN = [400, 450, 500, 560, 630, 710, 800, 900, 1000, 1120, 1250, 1400, 16
 const HTD: Record<string, [number[], number]> = { '3M': [[6, 9, 15], 0.381], '5M': [[9, 15, 25], 0.572], '8M': [[20, 30, 50, 85], 0.686], '14M': [[40, 55, 85, 115], 1.397] };
 const MODS = [0.5, 0.8, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
 /** DIN 705 set collars: bore → outside, width. */
-const COLLAR: Record<number, [number, number]> = { 3: [7, 5], 4: [10, 6], 5: [10, 6], 6: [12, 8], 8: [16, 8], 10: [20, 10], 12: [22, 12], 14: [25, 12], 15: [25, 12], 16: [28, 12], 18: [32, 14], 20: [32, 14], 22: [36, 14], 25: [40, 16], 30: [45, 16], 35: [56, 16], 40: [63, 18], 50: [80, 18] };
+export const COLLAR: Record<number, [number, number]> = { 3: [7, 5], 4: [10, 6], 5: [10, 6], 6: [12, 8], 8: [16, 8], 10: [20, 10], 12: [22, 12], 14: [25, 12], 15: [25, 12], 16: [28, 12], 18: [32, 14], 20: [32, 14], 22: [36, 14], 25: [40, 16], 30: [45, 16], 35: [56, 16], 40: [63, 18], 50: [80, 18] };
 /** DIN 2093 disc springs, groups A and B: outside × inside × thickness, mm. */
 const DISC: Record<string, [number, number, number][]> = {
   A: [[8, 4.2, 0.4], [10, 5.2, 0.5], [12.5, 6.2, 0.7], [14, 7.2, 0.8], [16, 8.2, 0.9], [18, 9.2, 1], [20, 10.2, 1.1], [22.5, 11.2, 1.25], [25, 12.2, 1.5], [28, 14.2, 1.5], [31.5, 16.3, 1.75], [35.5, 18.3, 2], [40, 20.4, 2.25], [45, 22.4, 2.5], [50, 25.4, 3]],
@@ -56,7 +56,7 @@ const DISC: Record<string, [number, number, number][]> = {
 /** Brushless outrunner stators (diameter and height in their name, mm) and the KVs each is wound to (typical). */
 const BLDC: Record<string, number[]> = { '1104': [4000, 7500], '1306': [3100, 4000], '2204': [2300, 2600], '2207': [1750, 2550], '2306': [1700, 2450], '2806': [1300, 1700], '2814': [700, 1000], '3508': [380, 700], '4108': [380, 600], '5010': [280, 360], '6215': [170, 270] };
 /** Gear motors: the motor's speed a volt (typical, unloaded), the ratios sold. */
-const GM: Record<string, { d: number; L: number; rpmV: number; ratios: number[]; volts: number[] }> = {
+export const GM: Record<string, { d: number; L: number; rpmV: number; ratios: number[]; volts: number[] }> = {
   N20: { d: 12, L: 25, rpmV: 2500, ratios: [10, 30, 50, 100, 150, 210, 298, 1000], volts: [3, 6, 12] },
   JGA25: { d: 25, L: 55, rpmV: 550, ratios: [4.4, 9.6, 20.4, 34, 47, 75, 103, 171, 248], volts: [6, 12, 24] },
   '37GB': { d: 37, L: 65, rpmV: 600, ratios: [6.3, 10, 19, 30, 50, 90, 131, 270], volts: [12, 24] },

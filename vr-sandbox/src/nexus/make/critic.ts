@@ -25,13 +25,8 @@ import { DENSITY, massOf, type Part } from '../kits';
 import { loadPath } from '../embody/tree';
 import type { Part as EPart } from '../embody/part';
 import { classOf, onePiece, sealedIn } from './detail';
-import { contacts, dirToLocal, grownOf, layout, least, sat, thingOf, toLocal, type Node, type OBB } from './space';
-import { insideBy, stationAt, type Lathe, type Loft, type Station } from '../form';
-import { inSweep } from '../panels';
-/** How wide a turned part is along its axis: a tyre's width at its sidewalls' widest, from its section (its covering
- *  boxes stand a few millimetres proud of it, which is room for them, not for it). */
-const latheWidth = (l: Lathe) => Math.max(...l.map((q) => q[1])) - Math.min(...l.map((q) => q[1]));
-import { closestOn, draft, fairness, patchAt, patchPoints, type Patch, type V3 as SV3 } from '../surface';
+import { contacts, grownOf, layout, least, thingOf, type Node, } from './space';
+import { closestOn, draft, fairness, patchAt, type Patch, type V3 as SV3 } from '../surface';
 
 export interface Finding { check: string; part: string; says: string; fixed: boolean }
 
@@ -54,15 +49,7 @@ export function turning(p: Part): { clearance: number; why: string; /** beside i
 }
 const ancestors = (n: Node) => { const a: Node[] = []; for (let x = n.parent; x; x = x.parent) a.push(x); return a; };
 const isUnder = (a: Node, b: Node): boolean => { for (let x: Node | null = a; x; x = x.parent) if (x === b) return true; return false; };
-/** The axis a turning thing turns about: its own round shape's, or its largest round part's. */
-function axisOf(n: Node, nodes: Node[]): THREE.Vector3 {
-  const round = (x: Node) => x.p.shape && ('torus' in x.p.shape || 'cyl' in x.p.shape || 'lathe' in x.p.shape) && x.obb;
-  const r = round(n) ? n : nodes.filter((x) => isUnder(x, n) && round(x) && !x.p.detail).sort((a, b) => Math.max(...b.obb!.h) - Math.max(...a.obb!.h))[0];
-  if (!r) { const o = n.obb; if (!o) return new THREE.Vector3(0, 0, 1); const k = [0, 1, 2].reduce((b, i) => (o.h[i]! < o.h[b]! ? i : b), 0); return o.u[k]!.clone(); }
-  return ('torus' in r.p.shape! ? r.obb!.u[2] : r.obb!.u[1]).clone();
-}
 const WALL: [RegExp, number, string][] = [[/^(abs|pp|pc|pmma|nylon)$/, 0.0008, 'moulded plastic'], [/^glass$/, 0.0032, 'toughened glass'], [/^cast-iron$/, 0.003, 'a casting'], [/^(wood|oak|bamboo)$/, 0.003, 'wood'], [/steel|stainless/, 0.0006, 'pressed steel'], [/^al-/, 0.0008, 'aluminium sheet']];
-const boxOBB = (b: THREE.Box3): OBB => { const c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3()).multiplyScalar(0.5); return { c, u: [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)], h: [s.x, s.y, s.z] }; };
 
 /** An interface checked: who offers, who asks, and each figure against the other. */
 export interface Contract { kind: string; provider: string; requirer: string; rows: { what: string; required: string; provided: string; ok: boolean }[]; ok: boolean }
@@ -88,121 +75,14 @@ export function contracts(nodes: Node[], touch = contacts(nodes)): Contract[] {
   }
   return out;
 }
-/** The parts paired by an interface: what goes through a hub is its shaft, not in its way. */
-function paired(nodes: Node[], touch: ReturnType<typeof contacts>): Set<string> {
-  const out = new Set<string>(); const has = (n: Node) => !!n.p.iface?.length;
-  for (const c of contracts(nodes, touch)) { const a = nodes.find((n) => n.p.name === c.provider), b = nodes.find((n) => n.p.name === c.requirer); if (a && b) { out.add(`${a.path}|${b.path}`); out.add(`${b.path}|${a.path}`); } }
-  for (const t of touch) if (has(t.a) && has(t.b) && t.a.p.iface!.some((x) => t.b.p.iface!.some((y) => y.kind === x.kind && y.role !== x.role))) { out.add(`${t.a.path}|${t.b.path}`); out.add(`${t.b.path}|${t.a.path}`); }
-  return out;
-}
 
 /** What is wrong with a thing, and what was put right (the thing is changed in place). */
 export function critique(root: Part): Finding[] {
   const out: Finding[] = [], say = (check: string, part: string, says: string, fixed: boolean) => out.push({ check, part, says, fixed });
-  let nodes = layout(root);
-  // ---- room to move: each turning thing (the outermost of what turns together) against the fixed parts near it ----
-  const movers = nodes.filter((n) => turning(n.p) && n.sub && !n.p.detail && !sealedIn(n) && !ancestors(n).some((a) => turning(a.p)));
-  const pairs = paired(nodes, contacts(nodes, (n) => !!n.p.iface?.length));
-  const pairedTo = new Map<string, string[]>(); for (const k of pairs) { const [a, b] = k.split('|') as [string, string]; (pairedTo.get(a) ?? pairedTo.set(a, []).get(a)!).push(b); }
-  let dirty = false;
-  for (const m0 of movers) {
-    if (dirty) { nodes = layout(root); dirty = false; } const m = nodes.find((x) => x.path === m0.path)!, need = turning(m.p)!, ax = axisOf(m, nodes);
-    // (what turns is what is of its link: a brake's caliper carried in a wheel's group, on its own link (its knuckle's, its
-    // fork's), does not turn with it, and the room is the wheel's, not the caliper's)
-    const ownLink = (x: Node): boolean => { for (let y: Node | null = x; y && y !== m; y = y.parent) if (y.p.link !== undefined && y.p.link !== m.p.link) return false; return true; };
-    const turns = nodes.filter((x) => isUnder(x, m) && x.box && ownLink(x)), box = turns.length ? turns.reduce((b, x) => b.union(x.box!), new THREE.Box3()) : m.sub!, ctr = box.getCenter(new THREE.Vector3());
-    // the room it needs: the disc it sweeps round its axis (a blade's, not its still box), and the room past that
-    // (a round thing's reach is its radius; a blade's, the farthest corner of it from its axis)
-    // (a wheel sweeps a ring: inside its rim, behind its face, is where its knuckle, brake and strut foot live)
-    const ringIn = nodes.filter((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.p.shape && ('torus' in x.p.shape || 'lathe' in x.p.shape)).map((x) => 'torus' in x.p.shape! ? x.p.shape.torus[0] - x.p.shape.torus[1] : Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r)));
-    // (inside its rim's barrel is free for what does not turn, 10 mm clear of the barrel's well, typical of a caliper's
-    // room to its wheel: measured from the rim where it is drawn, else 30 mm in from the tyre's bead)
-    const rimIn = nodes.filter((x) => isUnder(x, m) && /\brim\b/i.test(x.p.name) && classOf(x.p.mat ?? '') === 'metal' && x.p.shape && 'lathe' in x.p.shape).map((x) => Math.min(...(x.p.shape as { lathe: [number, number][] }).lathe.map(([r]) => r)));
-    const bore = rimIn.length ? Math.max(0, Math.min(...rimIn) - 0.01) : ringIn.length ? Math.max(0, Math.min(...ringIn) - 0.03) : 0;
-    const roundish = nodes.some((x) => isUnder(x, m) && x.p.shape && ('torus' in x.p.shape || 'cyl' in x.p.shape || 'lathe' in x.p.shape) && !x.p.detail), ext = box.getSize(new THREE.Vector3());
-    const sweep = roundish ? Math.max(...[0, 1, 2].map((i) => (ext.getComponent(i) / 2) * Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)))) : Math.max(...corners(box).map((q) => q.clone().sub(ctr).sub(ax.clone().multiplyScalar(q.clone().sub(ctr).dot(ax))).length())), along = Math.max(...corners(box).map((q) => Math.abs(q.clone().sub(ctr).dot(ax))));
-    const sideRoom = need.side ?? need.clearance, env = new THREE.Box3().setFromCenterAndSize(ctr, new THREE.Vector3(...[0, 1, 2].map((i) => 2 * (Math.abs(ax.getComponent(i)) * (along + sideRoom) + Math.sqrt(Math.max(0, 1 - ax.getComponent(i) ** 2)) * (sweep + need.clearance)))));
-    // turning inside its own housing (a mower's blades in their deck, a fan in its duct, an auger in its trough): its tip
-    // kept the room asked inside the housing's walls
-    const blocked = new Set(nodes.filter((x) => isUnder(x, m)).flatMap((x) => pairedTo.get(x.path) ?? []));
-    const house = ancestors(m).find((a) => a.p.shape && 'loft' in a.p.shape && a.p.shell);
-    if (house) { const l = (house.p.shape as { loft: Loft }).loft, u = new THREE.Vector3(1, 0, 0).cross(ax).lengthSq() > 1e-6 ? new THREE.Vector3(1, 0, 0).cross(ax).normalize() : new THREE.Vector3(0, 1, 0).cross(ax).normalize(), v = ax.clone().cross(u);
-      // along its housing (a fan in its duct, an auger in its trough): its tip within the section; across it (a mower's
-      // blades under their deck, open below): within the housing's outline in plan
-      const duct = Math.abs(dirToLocal(house, ax).x) > 0.9, xs = l.st.map((q) => q.x), x0 = Math.min(...xs), x1 = Math.max(...xs);
-      let worst = Infinity; for (let i = 0; i < 24; i++) { const a = (i / 24) * 2 * Math.PI, q = toLocal(house, ctr.clone().addScaledVector(u, Math.cos(a) * sweep).addScaledVector(v, Math.sin(a) * sweep)), st = stationAt(l, q.x); worst = Math.min(worst, !st ? -1 : duct ? roomIn(st, q.y, q.z) : Math.min(Math.max(st.w, st.wt ?? 0) - Math.abs(q.z), q.x - x0, x1 - q.x)); }
-      if (worst < need.clearance) say('room to move', m.p.name, `${need.why}: its tip comes ${worst < 0 ? 'outside' : `within ${(worst * 1000).toFixed(0)} mm of`} the ${house.p.name}`, false);
-    }
-    for (const f of nodes) {
-      if (blocked.has(f.path)) continue; // an interface (its axle in its hub), not in its way
-      // (what is carried with it, steered and risen with it as a knuckle is with its wheel, is never in its way)
-      if ([f, ...ancestors(f)].some((a) => a.p.movesWith === m.p.name)) continue;
-      if (f === m || !f.obb || f.p.detail || isUnder(f, m) || isUnder(m, f) || turning(f.p) || ancestors(f).some((a) => turning(a.p)) || !f.p.mat || classOf(f.p.mat) === 'soft' || classOf(f.p.mat) === 'organic') continue;
-      if (!env.intersectsBox(f.box!) || !f.pieces.some((pc) => sat(boxOBB(env), pc, 0))) continue;
-      // (and then exactly: within the cylinder it sweeps, not merely that cylinder's box)
-      if (!f.pieces.some((pc) => hitsCylinder(pc, ctr, ax, sweep + need.clearance, along + sideRoom, bore))) continue;
-      // a skin (src/nexus/panels.ts) is tested exactly, point by point on it, against the room the wheel sweeps through
-      // its lock and its bump: its arch is its maker's to draw (from that same sweep), never the critic's to cut
-      if (f.p.shape && 'surf' in f.p.shape) {
-        // (its tyre sweeps the ring about the tyre's own middle, its full width; what is inside its rim, the hub and the
-        // brake, reaches further in but only within the rim's bore)
-        const ez = ax.clone().normalize(), ey = new THREE.Vector3(0, 1, 0).addScaledVector(ez, -ez.y).normalize(), ex = ey.clone().cross(ez), tr = m.p.travel ?? {};
-        const tyreN = nodes.find((x) => isUnder(x, m) && x.p.mat === 'rubber' && x.box), tc = tyreN ? tyreN.box!.getCenter(new THREE.Vector3()) : ctr, tw = !tyreN ? 2 * along : tyreN.p.shape && 'lathe' in tyreN.p.shape ? latheWidth(tyreN.p.shape.lathe) : Math.abs(tyreN.box!.getSize(new THREE.Vector3()).dot(ez));
-        const off = tc.clone().sub(ctr).dot(ez), room = { radial: need.clearance, side: sideRoom, poses: 7 };
-        const section = tyreN?.p.shape && 'lathe' in tyreN.p.shape ? tyreN.p.shape.lathe : undefined, tyreSweep = { name: m.p.name, x: 0, y: 0, z: off, R: sweep, w: tw, steer: tr.steer ?? 0, bump: tr.bump ?? 0, section }, hubSweep = { ...tyreSweep, z: 0, R: Math.max(0, bore), w: 2 * along, section: undefined };
-        // (a skin by the wheel straight ahead through its bump and at full lock at ride height, as its arch is drawn (BODY_RULES
-        // 'lip'); a wheelhouse's liner by its whole sweep, lock in bump, from the strip along its lip on in: that strip is the
-        // arch's, the tyre passing just behind it)
-        const liner = /liner/.test(f.p.name), straight = { ...tyreSweep, steer: 0 }, atRest = { ...tyreSweep, bump: 0 };
-        const hit = patchPoints(f.p.shape.surf as Patch, 30, 14).map((q) => new THREE.Vector3(...q).applyMatrix4(f.m).sub(ctr)).find((d, i) => { const l: [number, number, number] = [d.dot(ex), d.dot(ey), d.dot(ez)]; if (inSweep(l, hubSweep, { ...room, radial: 0 })) return true; return liner ? (i % 15) / 14 >= 0.15 && inSweep(l, tyreSweep, room) : inSweep(l, straight, room) || inSweep(l, atRest, room); });
-        if (!hit) continue;
-        say('room to move', m.p.name, `${need.why}${tr.steer || tr.bump ? `, steered ${Math.round(((tr.steer ?? 0) * 180) / Math.PI)}° either way and risen ${Math.round((tr.bump ?? 0) * 1000)} mm` : ''}: the ${f.p.name} is in its way`, false); continue;
-      }
-      const opened = (f.p.parts ?? []).some((q) => q.detail === 'room to move' && q.name === `opening for ${m.p.name}`);
-      if (opened) continue;
-      // a lofted panel over a wheel (a car's body, a fender): its lower edge raised round the wheel, so the panel is
-      // cut back into an arch with the room asked between them
-      if (f.p.shape && 'loft' in f.p.shape) {
-        const lc = toLocal(f, ctr), la = dirToLocal(f, ax);
-        if (Math.abs(la.z) > 0.9) {
-          const ext = m.sub!.getSize(new THREE.Vector3()), k = [0, 1, 2].reduce((b, i) => (Math.abs(ax.getComponent(i)) > Math.abs(ax.getComponent(b)) ? i : b), 0);
-          const R = Math.max(...[0, 1, 2].filter((i) => i !== k).map((i) => ext.getComponent(i) / 2)) + need.clearance, halfW = ext.getComponent(k) / 2, r = archOf(f.p.shape.loft, lc.x, lc.y, Math.abs(lc.z) - halfW, R);
-          if (r === 'clear') continue;
-          if (r === 'cut') { dirty = true; say('room to move', m.p.name, `${need.why}: the ${f.p.name} is cut back round it into an arch ${(R * 1000).toFixed(0)} mm round its axle`, true); continue; }
-          say('room to move', m.p.name, `${need.why}: the ${f.p.name} is lower than the top of it there, and cannot be cut back round it`, false); continue;
-        }
-      }
-      if (f.p.shell && f.box!.containsPoint(ctr)) {
-        // turning inside a box-shaped shell, which cannot be cut into an arch: the shell opened round it (a dark opening on
-        // its side) and the wheel set out to stand 2 mm proud of it, so it can be seen (a lofted body is cut instead, above)
-        const k = [0, 1, 2].reduce((b, i) => (Math.abs(ax.getComponent(i)) > Math.abs(ax.getComponent(b)) ? i : b), 0), fc = f.box!.getCenter(new THREE.Vector3()), side = Math.sign(ctr.getComponent(k) - fc.getComponent(k)) || 1;
-        const half = (m.sub!.max.getComponent(k) - m.sub!.min.getComponent(k)) / 2, faceAt = side > 0 ? f.box!.max.getComponent(k) : f.box!.min.getComponent(k), want = faceAt - side * (half - 0.002);
-        const R = Math.max(...[0, 1, 2].filter((i) => i !== k).map((i) => (m.sub!.max.getComponent(i) - m.sub!.min.getComponent(i)) / 2)) + need.clearance;
-        if (Math.abs(ctr.getComponent(k) - want) > 1e-3) { const shift = new THREE.Vector3(); shift.setComponent(k, want - ctr.getComponent(k)); moveBy(m, shift); }
-        dirty = true;
-        const at = ctr.clone(); at.setComponent(k, faceAt + side * 0.003); const loc = toLocal(f, at), dir = new THREE.Vector3(); dir.setComponent(k, side);
-        const e = new THREE.Euler().setFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.transformDirection(f.m.clone().invert())));
-        (f.p.parts ??= []).push({ name: `opening for ${m.p.name}`, shape: { cyl: [R, 0.004] }, at: [loc.x, loc.y, loc.z], rot: [e.x, e.y, e.z], color: 0x0c0c0e, kg: 0, detail: 'room to move' });
-        say('room to move', m.p.name, `${need.why}: it turned inside the ${f.p.name}, so the ${f.p.name} is opened round it (${(R * 1000).toFixed(0)} mm) and it is set flush with its side`, true);
-        break;
-      }
-      say('room to move', m.p.name, `${need.why}: the ${f.p.name} is in its way`, false);
-    }
-  }
-  // ---- room to slide: each part that slides (its travel along an axis said: a carriage on its rail, a rod in its tube),
-  // with everything on its link, swept from one end of its travel to the other against the fixed parts near it: one
-  // clear of it where it is drawn but inside that sweep is in its way ----
-  const linkAt = (x: Node): string | undefined => { for (let y: Node | null = x; y; y = y.parent) if (y.p.link !== undefined) return y.p.link; return undefined; };
-  for (const s0 of nodes.filter((n) => n.p.travel?.slide && !n.p.detail)) {
-    const sl = s0.p.travel!.slide!, link = linkAt(s0), dir = new THREE.Vector3(...sl.dir).transformDirection(s0.m).normalize();
-    const mine = nodes.filter((x) => x.box && (isUnder(x, s0) || (link !== undefined && linkAt(x) === link)));
-    if (!mine.length) continue;
-    const rest = mine.reduce((b, x) => b.union(x.box!), new THREE.Box3()), swept = rest.clone().translate(dir.clone().multiplyScalar(sl.from)).union(rest.clone().translate(dir.clone().multiplyScalar(sl.to)));
-    const inWay = nodes.filter((f) => f.box && f.p.shape && !f.p.detail && !mine.includes(f) && !isUnder(s0, f) && !f.box.intersectsBox(rest) && f.box.intersectsBox(swept));
-    for (const f of inWay.slice(0, 8)) say('room to slide', s0.p.name, `it slides ${((sl.to - sl.from) * 1000).toFixed(0)} mm along its travel: the ${f.p.name} is in its way`, false);
-  }
+  let nodes = layout(root, undefined, { sealedWhole: true });
+  // (what turns or slides is not checked against what is round it: nothing checks for overlap, decision 0021)
   // ---- held up: the embodiment's load path, from the ground (or, for a thing held or flying, its heaviest piece) ----
-  nodes = layout(root);
+  nodes = layout(root, undefined, { sealedWhole: true });
   // (what grew, a tree's twigs on its branches, is held by growing, not by resting)
   const alive = grownOf(nodes);
   const solid = nodes.filter((n) => n.obb && n.p.mat && classOf(n.p.mat) !== 'organic' && !n.p.detail && !alive(n)), touch = contacts(nodes, (n) => solid.includes(n));
@@ -227,9 +107,9 @@ export function critique(root: Part): Finding[] {
     if (best && best.d > 0 && best.d < Math.min(size / 4, 0.06)) { const gap = gapBetween(n.box, best.to.box!); moveBy(n, gap); say('held up', n.p.name, `it touched nothing that holds it: set onto the ${best.to.p.name} (${(gap.length() * 1000).toFixed(0)} mm)`, true); }
     else say('held up', n.p.name, `nothing holds it up${best ? ` (the nearest, the ${best.to.p.name}, is ${(Math.max(0, best.d) * 1000).toFixed(0)} mm away)` : ''}`, false);
   }
-  // ---- walls ----
+  // ---- walls (not inside a sealed part: it is fitted as it comes, its walls its maker's) ----
   for (const n of nodes) {
-    const p = n.p; if (!p.shell || !p.mat || p.detail) continue; const w = WALL.find(([re]) => re.test(p.mat!));
+    const p = n.p; if (!p.shell || !p.mat || p.detail || sealedIn(n)) continue; const w = WALL.find(([re]) => re.test(p.mat!));
     if (w && p.shell < w[1] - 1e-9) { say('walls', p.name, `its ${(p.shell * 1000).toFixed(1)} mm wall is thinner than ${w[2]} is made (${(w[1] * 1000).toFixed(1)} mm): thickened`, true); p.shell = w[1]; }
   }
   // ---- skins: how each meets its neighbours (as its maker says, and why), whether it parts from its die, how tight it bends ----
@@ -255,40 +135,6 @@ export function critique(root: Part): Finding[] {
   return out;
 }
 function centreOfMass(nodes: Node[]): THREE.Vector3 { const c = new THREE.Vector3(); let m = 0; for (const n of nodes) { if (!n.box) continue; const own = massOf({ ...n.p, parts: [] }); if (own <= 0) continue; c.addScaledVector(n.box.getCenter(new THREE.Vector3()), own); m += own; } return m > 0 ? c.divideScalar(m) : c; }
-/** The least move that brings one box against another (along the axis they are nearest across). */
-/** A loft cut back round a wheel at (x, y) in its own frame, its inner face at |z| = zIn, its room R: the loft's lower edge
- *  raised to the circle's top at every station over it (stations added at its middle, at 0.7 R and at R either side, so
- *  the arch is round). 'clear' if the loft does not reach it, 'cut' if cut, 'too low' if the loft's top is below it. */
-function archOf(l: Loft, x: number, y: number, zIn: number, R: number): 'clear' | 'cut' | 'too low' {
-  const circle = (dx: number) => y + Math.sqrt(Math.max(0, R * R - dx * dx));
-  // (in its span only: at R either side the room's circle comes down to the axle's height and no further)
-  const near = [-0.95, -0.7, -0.35, 0, 0.35, 0.7, 0.95].map((f) => stationAt(l, x + f * R)).filter((s): s is Station => !!s);
-  if (!near.some((s) => s.w > zIn && s.lo < circle(s.x - x) - 1e-4)) return 'clear';
-  // the arch's stations: over it, and at its feet (the axle's height at R, the sill again a little past it)
-  for (const f of [-1.15, -1, -0.95, -0.7, -0.35, 0, 0.35, 0.7, 0.95, 1, 1.15]) { const s = stationAt(l, x + f * R); if (s && !l.st.some((q) => Math.abs(q.x - s.x) < 1e-6)) l.st.push(s); }
-  let low = false;
-  for (const s of l.st) {
-    const dx = s.x - x; if (Math.abs(dx) > R * 1.0001 || s.w <= zIn) continue;
-    const top = Math.abs(dx) >= R * 0.999 ? y : circle(dx); if (s.lo >= top) continue;
-    if (top > s.hi - 0.03) { low = true; continue; } s.lo = top;
-  }
-  l.st.sort((a, b) => a.x - b.x);
-  return low ? 'too low' : 'cut';
-}
-/** How far a point (y, z in a loft's frame) lies inside a station's section, m (negative: outside it). */
-const roomIn = (s: Station, y: number, z: number) => insideBy(s, y, z);
-/** Whether an oriented box reaches into a cylinder (its middle, axis, radius and half-length): the box sampled on a grid
- *  finer than a quarter of the radius, each point tested by its distance along and from the axis. */
-function hitsCylinder(o: OBB, c: THREE.Vector3, ax: THREE.Vector3, R: number, L: number, Rin = 0): boolean {
-  const n = o.h.map((h) => Math.max(2, Math.min(14, Math.ceil((2 * h) / Math.max(1e-3, R / 4)) + 1)));
-  const q = new THREE.Vector3(), d = new THREE.Vector3();
-  for (let i = 0; i < n[0]!; i++) for (let j = 0; j < n[1]!; j++) for (let k = 0; k < n[2]!; k++) {
-    q.copy(o.c).addScaledVector(o.u[0], o.h[0] * (2 * i / (n[0]! - 1) - 1)).addScaledVector(o.u[1], o.h[1] * (2 * j / (n[1]! - 1) - 1)).addScaledVector(o.u[2], o.h[2] * (2 * k / (n[2]! - 1) - 1));
-    d.copy(q).sub(c); const a = d.dot(ax); if (Math.abs(a) > L) continue; const r = d.addScaledVector(ax, -a).length(); if (r <= R && r >= Rin) return true;
-  }
-  return false;
-}
-const corners = (b: THREE.Box3) => [0, 1, 2, 3, 4, 5, 6, 7].map((i) => new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z));
 /** How far apart two boxes are (0 if they touch or overlap). */
 const boxGap = (a: THREE.Box3, b: THREE.Box3) => Math.hypot(...[0, 1, 2].map((k) => Math.max(0, b.min.getComponent(k) - a.max.getComponent(k), a.min.getComponent(k) - b.max.getComponent(k))));
 function gapBetween(a: THREE.Box3, b: THREE.Box3): THREE.Vector3 {
@@ -362,8 +208,8 @@ type CV3 = [number, number, number];
 /** Where two parts meet: crossing (one through the other), touching (within the tolerance, across each other), or
  *  layered (laid parallel within it: a decal or a seam on a panel, which flickers if it is too close). */
 export interface Clash { a: string; b: string; pa: string; pb: string; /** through: one passes into the other; meets: they cross only where both end (two panels joined edge to edge, as a door's top meets its glass's belt); touch and layered as said */ kind: 'through' | 'meets' | 'touch' | 'layered' | /** one piece with what holds it (cast or moulded together, or welded), so not one part in another */ 'fused' | /** through an opening one of them has for it */ 'fitted' | /** face to face where a joint (welds, bolts, screws, a seal) joins them, as built */ 'joined'; hits: number; at: CV3; min: CV3; max: CV3; /** how far the meeting runs, m (the diagonal of what it covers) */ span: number; /** the mean normal of the surfaces there, to look along */ normal: CV3; /** how far one passes into the other, m, where one of them is closed (a solid's surface) */ depth?: number; /** a holder and what it holds, or two held by one holder */ kin: 'holds' | 'siblings' | 'apart'; /** fitted: false where its maker says it passes through an opening but none is drawn (the two cross) */ opening?: boolean; /** joined or fused: why, as its maker or a joint says (a joint's record, or Part.fixed) */ by?: string; /** the two meshes' places in the list given */ ia?: number; ib?: number }
-interface Tris { n: number; v: Float64Array; box: Float64Array; nor: Float64Array; lo: CV3; hi: CV3; /** which of each triangle's edges is on the mesh's boundary (one triangle uses it), a bit each */ edge: Uint8Array; /** no boundary at all: the surface of a solid, which has an inside */ closed: boolean }
-function trisOf(m: TriMesh): Tris {
+export interface Tris { n: number; v: Float64Array; box: Float64Array; nor: Float64Array; lo: CV3; hi: CV3; /** which of each triangle's edges is on the mesh's boundary (one triangle uses it), a bit each */ edge: Uint8Array; /** no boundary at all: the surface of a solid, which has an inside */ closed: boolean }
+export function trisOf(m: TriMesh): Tris {
   const P = m.pos, I = m.idx, n = Math.floor((I ? I.length : P.length / 3) / 3), v = new Float64Array(n * 9), box = new Float64Array(n * 6), nor = new Float64Array(n * 3), lo: CV3 = [Infinity, Infinity, Infinity], hi: CV3 = [-Infinity, -Infinity, -Infinity];
   for (let t = 0; t < n; t++) {
     for (let k = 0; k < 3; k++) { const vi = I ? I[t * 3 + k]! : t * 3 + k; for (let c = 0; c < 3; c++) v[t * 9 + k * 3 + c] = P[vi * 3 + c]!; }
@@ -403,7 +249,9 @@ function segTri(p: CV3, q: CV3, T: Tris, t: number): CV3 | null {
   const tt = f * (e2[0]! * qq[0]! + e2[1]! * qq[1]! + e2[2]! * qq[2]!); if (tt <= 1e-6 || tt >= 1 - 1e-6) return null;
   return [p[0] + d[0]! * tt, p[1] + d[1]! * tt, p[2] + d[2]! * tt];
 }
-/** The least distance from a point to triangle t of T (Ericson, Real-Time Collision Detection 5.1.5). */
+/** The least distance from a point to triangle t of T (Ericson, Real-Time Collision Detection 5.1.5); NaN for a triangle with
+ *  no area (a drawn cylinder has 48 such in 528), which a least distance passes over: Math.min with it is NaN, and how deep
+ *  a bar ran into a round shaft read as nothing, so it was taken as resting on it (fault D24). */
 function pointTri(p: CV3, T: Tris, t: number): number {
   const v = T.v, o = t * 9, a: CV3 = [v[o]!, v[o + 1]!, v[o + 2]!], b: CV3 = [v[o + 3]!, v[o + 4]!, v[o + 5]!], c: CV3 = [v[o + 6]!, v[o + 7]!, v[o + 8]!];
   const sub3 = (x: CV3, y: CV3): CV3 => [x[0] - y[0], x[1] - y[1], x[2] - y[2]], dot3 = (x: CV3, y: CV3) => x[0] * y[0] + x[1] * y[1] + x[2] * y[2], dist = (x: CV3) => Math.hypot(p[0] - x[0], p[1] - x[1], p[2] - x[2]);
@@ -416,7 +264,7 @@ function pointTri(p: CV3, T: Tris, t: number): number {
   const den = 1 / (va + vb + vc), sv = vb * den, tw = vc * den; return dist([a[0] + ab[0] * sv + ac[0] * tw, a[1] + ab[1] * sv + ac[1] * tw, a[2] + ab[2] * sv + ac[2] * tw]);
 }
 /** Every place two parts' surfaces cross or come within `touch` of each other (1 mm unless said), each pair once. */
-export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: TriMesh, b: TriMesh) => boolean; /** a holder and what it holds that are one piece (src/nexus/make/detail.ts's onePiece, unless said) */ fused?: (a: TriMesh, b: TriMesh, kin: Clash['kin']) => boolean } = {}): Clash[] {
+export function meshClashes(meshes: TriMesh[], o: { touch?: number; /** the band along a triangle's edge in which a crossing is an edge resting on a face, not one through the other: 3 mm (a seam's), or 'scaled' (a fifth of the triangle's shortest side, never more than 3 mm: so a rod or a bolt thinner than the band still reads as passing through) */ edge?: 'seam' | 'scaled'; skip?: (a: TriMesh, b: TriMesh) => boolean; /** a holder and what it holds that are one piece (src/nexus/make/detail.ts's onePiece, unless said) */ fused?: (a: TriMesh, b: TriMesh, kin: Clash['kin']) => boolean } = {}): Clash[] {
   // (a holder and what it holds of its one casting, or two it holds that are: an alloy wheel's barrel, centre and spokes)
   // (and a part drawn in pieces, its patches under one name and holder (a skin split at a crease, a door in two), is one
   // pressing with itself)
@@ -425,6 +273,9 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
   // mouldings that only share the whole thing as their holder (a car's B pillar trim and its belt moulding) are not)
   const fitted = (a: TriMesh, b: TriMesh) => !!a.passes?.includes(b.name) || !!b.passes?.includes(a.name);
   const tol = o.touch ?? 0.001, T = meshes.map(trisOf), out: Clash[] = [];
+  // (a triangle's plane: a point's signed distance from it)
+  const planeOf = (X: Tris, t: number) => { const q = t * 9, a: CV3 = [X.v[q]!, X.v[q + 1]!, X.v[q + 2]!], u: CV3 = [X.v[q + 3]! - a[0], X.v[q + 4]! - a[1], X.v[q + 5]! - a[2]], w: CV3 = [X.v[q + 6]! - a[0], X.v[q + 7]! - a[1], X.v[q + 8]! - a[2]], n: CV3 = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]], l = Math.hypot(...n) || 1; return (p: CV3) => ((p[0] - a[0]) * n[0] + (p[1] - a[1]) * n[1] + (p[2] - a[2]) * n[2]) / l; };
+  const bandOf = (X: Tris, t: number): number => { if (o.edge !== 'scaled') return 0.003; const q = t * 9, e = (i: number, j: number) => Math.hypot(X.v[q + i * 3]! - X.v[q + j * 3]!, X.v[q + i * 3 + 1]! - X.v[q + j * 3 + 1]!, X.v[q + i * 3 + 2]! - X.v[q + j * 3 + 2]!); return Math.min(0.003, 0.2 * Math.min(e(0, 1), e(1, 2), e(2, 0))); };
   const kinOf = (a: TriMesh, b: TriMesh): Clash['kin'] => (b.path.startsWith(a.path + '/') || a.path.startsWith(b.path + '/') ? 'holds' : a.path.slice(0, a.path.lastIndexOf('/')) === b.path.slice(0, b.path.lastIndexOf('/')) ? 'siblings' : 'apart');
   for (let i = 0; i < meshes.length; i++) for (let j = i + 1; j < meshes.length; j++) {
     const A = T[i]!, B = T[j]!; if (!A.n || !B.n) continue;
@@ -438,7 +289,7 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
     const cell = (x: number, c: number, nn: number) => Math.max(0, Math.min(nn - 1, Math.floor((x - lo[c]!) / h))), grid = new Map<number, number[]>();
     for (const t of ib) { const x0 = cell(B.box[t * 6]! - tol, 0, nx), x1 = cell(B.box[t * 6 + 3]! + tol, 0, nx), y0 = cell(B.box[t * 6 + 1]! - tol, 1, ny), y1 = cell(B.box[t * 6 + 4]! + tol, 1, ny), z0 = cell(B.box[t * 6 + 2]! - tol, 2, nz), z1 = cell(B.box[t * 6 + 5]! + tol, 2, nz); for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) { const k = (x * ny + y) * nz + z; let l = grid.get(k); if (!l) grid.set(k, (l = [])); l.push(t); } }
     // (each place they meet kept with what kind of meeting it is: 0 through, 1 where both end, 2 touching, 3 laid parallel)
-    const seen = new Int32Array(B.n).fill(-1), hits: { p: CV3; k: number; n: CV3; ta: number; tb: number }[] = [];
+    const seen = new Int32Array(B.n).fill(-1), hits: { p: CV3; k: number; n: CV3; ta: number; tb: number; e?: [CV3, CV3, 0 | 1] }[] = [];
     for (const ta of ia) {
       const near0: number[] = [], x0 = cell(A.box[ta * 6]!, 0, nx), x1 = cell(A.box[ta * 6 + 3]!, 0, nx), y0 = cell(A.box[ta * 6 + 1]!, 1, ny), y1 = cell(A.box[ta * 6 + 4]!, 1, ny), z0 = cell(A.box[ta * 6 + 2]!, 2, nz), z1 = cell(A.box[ta * 6 + 5]!, 2, nz);
       for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (const tb of grid.get((x * ny + y) * nz + z) ?? []) if (seen[tb] !== ta) { seen[tb] = ta; near0.push(tb); }
@@ -455,9 +306,12 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
         // (through only where it is within both: a crossing on either one's edge is that edge resting on the other's face, as
         // a wheel's mounting face on its hub, and on both, the two joined there; 3 mm, so a seam's band where two skins meet
         // in one tangent plane is a join, not a crossing)
-        const kindAt = (x: CV3) => { const ea = nearEdge(x, A, ta, 0.003), eb = nearEdge(x, B, tb, 0.003); return ea && eb ? 1 : ea || eb ? 2 : 0; };
-        for (let e = 0; e < 3; e++) { const x = segTri(va(e), va((e + 1) % 3), B, tb); if (x) { hits.push({ p: x, k: kindAt(x), n: nAB, ta, tb }); crossed = true; } }
-        for (let e = 0; e < 3; e++) { const x = segTri(vb(e), vb((e + 1) % 3), A, ta); if (x) { hits.push({ p: x, k: kindAt(x), n: nAB, ta, tb }); crossed = true; } }
+        const kindAt = (x: CV3) => { const ea = nearEdge(x, A, ta, bandOf(A, ta)), eb = nearEdge(x, B, tb, bandOf(B, tb)); return ea && eb ? 1 : ea || eb ? 2 : 0; };
+        // (scaled: an edge rests on the other's face only where it lies in its plane; one that passes from one side of it
+        // to the other goes through it, wherever along itself it crosses; it meets the other only at the other's edge)
+        const kindScaled = (x: CV3, p: CV3, q: CV3, O: Tris, ot: number) => { const pl = planeOf(O, ot), band = bandOf(O, ot), dp = pl(p), dq = pl(q); if (Math.abs(dp) < band && Math.abs(dq) < band) return 2; return nearEdge(x, O, ot, band) ? 2 : 0; };
+        for (let e = 0; e < 3; e++) { const x = segTri(va(e), va((e + 1) % 3), B, tb); if (x) { hits.push({ p: x, k: o.edge === 'scaled' ? kindScaled(x, va(e), va((e + 1) % 3), B, tb) : kindAt(x), n: nAB, ta, tb, e: [va(e), va((e + 1) % 3), 0] }); crossed = true; } }
+        for (let e = 0; e < 3; e++) { const x = segTri(vb(e), vb((e + 1) % 3), A, ta); if (x) { hits.push({ p: x, k: o.edge === 'scaled' ? kindScaled(x, vb(e), vb((e + 1) % 3), A, ta) : kindAt(x), n: nAB, ta, tb, e: [vb(e), vb((e + 1) % 3), 1] }); crossed = true; } }
         if (crossed) continue;
         // (not crossing: is a corner of either within the tolerance of the other, and are they laid parallel there?)
         const par = Math.abs(A.nor[ta * 3]! * B.nor[tb * 3]! + A.nor[ta * 3 + 1]! * B.nor[tb * 3 + 1]! + A.nor[ta * 3 + 2]! * B.nor[tb * 3 + 2]!) > 0.97;
@@ -499,10 +353,18 @@ export function meshClashes(meshes: TriMesh[], o: { touch?: number; skip?: (a: T
         // (inside by parity, a ray from the corner crossing the solid's surface an odd number of times, so the way its
         // triangles are wound cannot mislead it; then how far in, to its nearest face)
         const inside = (p: CV3, Q: Tris) => { const far: CV3 = [p[0] + 37.1, p[1] + 41.3, p[2] + 29.7]; let k = 0; for (let q = 0; q < Q.n; q++) if (segTri(p, far, Q, q)) k++; return k % 2 === 1; };
-        const probe = (P: Tris, ts: Set<number>, Q: Tris) => { const seenV = new Set<string>(); for (const t of ts) for (let k = 0; k < 3; k++) { const p: CV3 = [P.v[t * 9 + k * 3]!, P.v[t * 9 + k * 3 + 1]!, P.v[t * 9 + k * 3 + 2]!], key = p.join(','); if (seenV.has(key)) continue; seenV.add(key); if (Q.n > 40000 || !inside(p, Q)) continue; let best = Infinity; for (const q of Q.n <= 6000 ? Array.from({ length: Q.n }, (_, i2) => i2) : qs(Q)) best = Math.min(best, pointTri(p, Q, q)); if (best < 0.5 && best > depth!) depth = best; } };
+        const probe = (P: Tris, ts: Set<number>, Q: Tris) => { const seenV = new Set<string>(); for (const t of ts) for (let k = 0; k < 3; k++) { const p: CV3 = [P.v[t * 9 + k * 3]!, P.v[t * 9 + k * 3 + 1]!, P.v[t * 9 + k * 3 + 2]!], key = p.join(','); if (seenV.has(key)) continue; seenV.add(key); if (Q.n > 40000 || !inside(p, Q)) continue; let best = Infinity; for (const q of Q.n <= 6000 ? Array.from({ length: Q.n }, (_, i2) => i2) : qs(Q)) { const dq = pointTri(p, Q, q); if (dq < best) best = dq; }; if (best < 0.5 && best > depth!) depth = best; } };
         // (the other's triangles met in this meeting, and those near them: enough to find the nearest face to each corner)
         const qs = (Q: Tris) => (Q === A ? [...new Set(hs.map((x) => x.ta))] : [...new Set(hs.map((x) => x.tb))]);
         if (B.closed) probe(A, new Set(hs.map((x) => x.ta)), B); if (A.closed) probe(B, new Set(hs.map((x) => x.tb)), A);
+        // (scaled: and along each edge that passes in, how deep the material it runs through goes: a rod through a plate
+        // has no corner in it, its edges have; points 0.5 to 16 mm along the edge from where it crosses, the deepest
+        // inside the other solid by its distance to its nearest face)
+        let tried = 0;
+        if (o.edge === 'scaled' && kind === 'through' && depth! < 0.002) for (const hh of hs) { if (hh.k !== 0 || !hh.e) continue; if (++tried > 12) break; const Q = hh.e[2] === 0 ? B : A; if (!Q.closed || Q.n > 40000) continue;
+          for (const end of [hh.e[0], hh.e[1]]) { const dx = end[0] - hh.p[0], dy = end[1] - hh.p[1], dz = end[2] - hh.p[2], L = Math.hypot(dx, dy, dz); if (L < 1e-9) continue;
+            for (const st of [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016]) { if (st >= L) break; const p: CV3 = [hh.p[0] + (dx / L) * st, hh.p[1] + (dy / L) * st, hh.p[2] + (dz / L) * st]; if (!inside(p, Q)) continue; let best = Infinity; for (const q of Q.n <= 6000 ? Array.from({ length: Q.n }, (_, i2) => i2) : qs(Q)) { const dq = pointTri(p, Q, q); if (dq < best) best = dq; }; if (best < 0.5 && best > depth!) depth = best; } }
+          if (depth! >= 0.002) break; }
       }
       const nl = Math.hypot(...ns) || 1, kin = kinOf(meshes[i]!, meshes[j]!), kind2 = kind === 'through' && depth !== undefined && depth < 0.002 ? 'touch' : kind;
       // (a part said to be fixed to what holds it or beside it, welded, seated or clipped, meets it as it is fixed: unless

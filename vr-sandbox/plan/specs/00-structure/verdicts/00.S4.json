@@ -1,0 +1,21 @@
+{
+  "task": "00.S4",
+  "verdict": "pass",
+  "model": "claude-sonnet",
+  "date": "2026-11-01",
+  "commit": "6a31f04",
+  "ran": [
+    "Read tests/nexus/scans.ts and the test in tests/nexus/domains.test.ts: unsourced/placeholder scans read src/data/*.ts by readdir (placeholders also src/nexus/kinds and src/nexus/book); the key scan now lists files with 'git ls-files --cached --others --exclude-standard' (the earlier failure's fix) plus dist-view.",
+    "npx vitest run tests/nexus/domains.test.ts -t \"source, no placeholder\" on the clean tree: 1 passed.",
+    "Same command after each plant below, and again after all were removed: clean passes.",
+    "npm run gate once on the clean tree at the end: type check and 32 tests passed (1 skipped), about 61 s."
+  ],
+  "planted": [
+    "Unsourced figure: appended 'export const ZZ_PLANTED = { m8: { d: 0.008, mass: 0.012 } }' to src/data/motors.ts. Caught: 'src/data/motors.ts: ZZ_PLANTED.m8'. Restored.",
+    "Placeholder: appended '// TODO the real value' to src/data/woods.ts. Caught: 'src/data/woods.ts:15'. Restored.",
+    "Key pattern (invented fake sk-ant- plus 30 Q) in tracked src/data/constants.ts. Caught: 'src/data/constants.ts:51'. Restored.",
+    "Key pattern (invented fake sk-ant- plus 30 Z) in a NEW untracked file src/data/zz_planted_key.ts. Caught: 'src/data/zz_planted_key.ts:1' (the case that failed last time). Removed.",
+    "Key pattern (invented fake AIza plus 35 Z) in a NEW untracked file zz_planted_key2.ts at the repo root, outside data. Caught: 'zz_planted_key2.ts:1'. Removed."
+  ],
+  "missing": []
+}

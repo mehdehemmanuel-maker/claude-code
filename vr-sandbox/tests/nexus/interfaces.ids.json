@@ -1,0 +1,91 @@
+{
+ "stepper": [
+  "NEMA 17 stepper front bearing/bore",
+  "NEMA 17 stepper rear bearing/bore",
+  "NEMA 17 stepper rotor/NEMA 17 stepper shaft/shaft",
+  "NEMA 17 stepper tie screw@-15.5,-37,-15.5/thread",
+  "NEMA 17 stepper tie screw@-15.5,-37,15.5/thread",
+  "NEMA 17 stepper tie screw@15.5,-37,-15.5/thread",
+  "NEMA 17 stepper tie screw@15.5,-37,15.5/thread",
+  "front face",
+  "shaft"
+ ],
+ "led": [],
+ "bearing": [
+  "bore"
+ ],
+ "rail": [
+  "MGN12H rail carriage/mount",
+  "MGN12H rail seal screw@-9.5,7.1,-22.7/thread",
+  "MGN12H rail seal screw@-9.5,7.1,22.7/thread",
+  "MGN12H rail seal screw@9.5,7.1,-22.7/thread",
+  "MGN12H rail seal screw@9.5,7.1,22.7/thread",
+  "carriage top",
+  "rail foot"
+ ],
+ "motorplate": [
+  "motor face"
+ ],
+ "bolt": [
+  "thread"
+ ],
+ "screw": [
+  "thread"
+ ],
+ "panhead": [
+  "thread"
+ ],
+ "buttonhead": [
+  "thread"
+ ],
+ "setscrew": [],
+ "pulley": [
+  "bore"
+ ],
+ "nut": [
+  "thread"
+ ],
+ "washer": [],
+ "fenderwasher": [],
+ "springwasher": [],
+ "flangenut": [
+  "thread"
+ ],
+ "threadedrod": [
+  "thread"
+ ],
+ "dowel": [
+  "shaft"
+ ],
+ "nail": [],
+ "blindrivet": [],
+ "wheelnut": [
+  "thread"
+ ],
+ "wheelstud": [
+  "thread"
+ ],
+ "rod": [
+  "shaft"
+ ],
+ "flatbar": [],
+ "squarebar": [],
+ "hexbar": [],
+ "sheet": [],
+ "tube": [],
+ "pipe": [],
+ "angle": [],
+ "channel": [],
+ "ibeam": [],
+ "boxsection": [],
+ "extrusion": [],
+ "spring": [],
+ "gear": [
+  "bore"
+ ],
+ "helicalgear": [],
+ "circlip": [],
+ "circlipint": [],
+ "oring": [],
+ "chain": []
+}

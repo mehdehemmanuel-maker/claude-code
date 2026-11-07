@@ -310,13 +310,6 @@ export function primDist(q: V3, p: Prim): number {
   const d = Math.hypot(pa[0] - ba[0] * h, pa[1] - ba[1] * h, pa[2] - ba[2] * h);
   return d - (p.r + (p.r2 - p.r) * h);
 }
-/** The skin's distance field at a point: every primitive blended, the cuts taken out. */
-export function skinDist(q: V3, prims: Prim[]): number {
-  let d = 1e9;
-  for (const p of prims) if (!p.cut) d = smin(d, primDist(q, p), p.k);
-  for (const p of prims) if (p.cut) { const c = primDist(q, p); d = -smin(-d, c, p.k); }
-  return d;
-}
 /** A field sampled on a grid and meshed by surface nets: one vertex a cell where the surface crosses, joined into quads.
  *  Each primitive touches only the cells near it, so the cost goes with the surface, not the grid times the
  *  primitives. Positions and normals (from the field's gradient), as flat arrays, with triangle indices. */
@@ -443,5 +436,3 @@ export function placeIn(body: Body, parent: string, child: string): { c: V3; box
 let current: { key: string; body: Body } | null = null;
 export function currentBody(): Body { if (!current) { const b = layOut(); current = { key: bodyKey(b.params), body: b }; } return current.body; }
 export const currentKey = (): string => { currentBody(); return current!.key; };
-/** Change the body the view draws (a new height, a wider jaw): laid out again from them. */
-export function setBody(p: Partial<BodyParams>): Body { const b = layOut(p); current = { key: bodyKey(b.params), body: b }; return b; }

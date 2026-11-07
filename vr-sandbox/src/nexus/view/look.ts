@@ -16,56 +16,44 @@
 //                &hide=<regex> (those parts not drawn: the rest of only=), &lamp=x,y,z;… (a lamp hung there, as one in a
 //                cabin to see its inside by), &interior=1 (lamps in its middle, a cabin's dome light)
 //   posed        &pose=steer:<rad>,bump:<m> (each wheel that steers turned so far, each that rises risen so far, with what
-//                is carried with it: its knuckle, its strut's tube and spring), so what clears it can be looked at and
-//                clashed where it moves to
-//   tried        &rules=<JSON> and &lines=<JSON> try body rules and lines (src/nexus/panels.ts) on what is made, so a
-//                critic can show what it would change
+//                is carried with it: its knuckle, its strut's tube and spring), so what clears it can be looked at where
+//                it moves to
+//   (tried       body rules and lines went with the old car builder)
 // And on window.look: parts() (each part drawn: name, holders, material, finish, colour, what it says of itself, its
 // bounds), facts() (what the thing says of itself and its measured size), pick(x, y) (the part under a pixel),
-// clash(touch) (every place two parts' surfaces cross or touch: src/nexus/make/critic.ts), gap(a, b) (the least distance
+// gap(a, b) (the least distance
 // between parts so named), section(axis, at) (every part cut by a plane: its outline there, as segments), mass() (its
 // mass part by part, its centre of mass, and what each axle carries), lint() (what no part should be: no thicker than a
-// sheet of paper when it is not a skin, hidden whole inside another, a weld on a casting, a bolt thicker than what it
+// sheet of paper when it is not a skin, a weld on a casting, a bolt thicker than what it
 // holds).
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { KITS, makeKit, massOf, type Part } from '../kits';
-import '../creatures';
 import { perfect } from '../make/pipeline';
 import { frame, held, leastDistance, LEAST_METHOD, meshClashes, type TriMesh } from '../make/critic';
-import { tryBody } from '../panels';
-import { kitView } from './kit3d';
+import { kitView, studioScene } from './kit3d';
 import { draft } from '../surface';
 
 const q = new URLSearchParams(location.search), kit = KITS.find((k) => k.id === (q.get('kit') ?? 'car')) ?? KITS[0]!, words = q.get('words') ?? kit.name, seed = Number(q.get('seed') ?? 7);
 const num3 = (s: string | null) => (s ? (s.split(',').map(Number) as [number, number, number]) : null);
 // (a trial of rules or lines, before anything is made)
-if (q.get('rules') || q.get('lines')) tryBody({ rules: q.get('rules') ? JSON.parse(q.get('rules')!) : undefined, lines: q.get('lines') ? JSON.parse(q.get('lines')!) : undefined });
 // (a logarithmic depth buffer, and the near plane set by how far the camera stands: so two faces a millimetre apart are
 // told apart close up, not drawn through each other as they are with a fixed 5 mm near plane and 500 m far one)
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true }); renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.3; renderer.outputColorSpace = THREE.SRGBColorSpace; document.body.appendChild(renderer.domElement);
 const holes = q.get('holes') === '1';
 const scene = new THREE.Scene(); scene.background = new THREE.Color(holes ? 0xff00ff : 0xc9ccd0);
-// a car studio: a dark room with softboxes (a long one overhead, strips either side, one in front and behind), so a
-// painted skin shows its shape in the reflections of the lights, as a product photograph does
-const studio = (): THREE.Scene => {
-  const st = new THREE.Scene(), room = new THREE.Mesh(new THREE.BoxGeometry(40, 16, 40), new THREE.MeshBasicMaterial({ color: 0x3a3d42, side: THREE.BackSide })); room.position.y = 6; st.add(room);
-  const box = (w: number, h: number, at: [number, number, number], rot: [number, number, number], k: number) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color().setScalar(k), side: THREE.DoubleSide })); m.position.set(...at); m.rotation.set(...rot); st.add(m); };
-  box(14, 4, [0, 13.5, 0], [Math.PI / 2, 0, 0], 4); for (const z of [-1, 1]) box(16, 1.2, [0, 4, z * 12], [0, 0, 0], 3); for (const x of [-1, 1]) box(1.5, 6, [x * 14, 4, 0], [0, Math.PI / 2, 0], 2.2); box(30, 0.4, [0, 0.4, -15], [0, 0, 0], 1.5);
-  return st;
-};
 // (a part alone is lit as on a light table, by a bright room, so its metal reads as metal; a vehicle in the studio, so
 // its skin shows its shape in the softboxes' reflections; &room=1 or &room=0 says which)
 const lightRoom = q.get('room') === '1' || (q.get('room') !== '0' && kit.id === 'part');
-scene.environment = lightRoom ? new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture : new THREE.PMREMGenerator(renderer).fromScene(studio(), 0.02).texture;
+scene.environment = lightRoom ? new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture : new THREE.PMREMGenerator(renderer).fromScene(studioScene(), 0.02).texture;
 // (biased, or every curved skin shadows itself in fine rings: shadow acne)
 const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(6, 10, 5); sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096); sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
 scene.add(sun, new THREE.HemisphereLight(0xdfe8f2, 0x6a645c, 0.3));
 const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 64), new THREE.MeshStandardMaterial({ color: 0xb8bbbf, roughness: 0.95 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 const made = makeKit(kit, words, seed), part = q.get('perfect') === '0' ? made.part : perfect(made.part, words).part, view = kitView(part, { maxLights: 0 });
-scene.add(view.group);
+scene.add(view.group); if (made.moved) console.info(made.moved);
 // (exploded, the whole set back on the floor: what moved down is lifted with the rest, not sunk under it)
 if (q.get('explode')) { view.explode(Number(q.get('explode'))); const b0 = new THREE.Box3().setFromObject(view.group); if (!b0.isEmpty() && b0.min.y < 0) view.group.position.y -= b0.min.y; }
 // a pose: each wheel that steers turned, each that rises risen, and what is carried with it moved with it
@@ -176,9 +164,8 @@ function landmarksOf(side: number): Record<string, number[]> {
 }
 const look = {
   parts: () => meshes.filter((m) => m.visible).map((m) => { const p = (m.userData.part ?? {}) as { mat?: string; finish?: string; says?: string; shell?: number }, b = new THREE.Box3().setFromObject(m); return { name: m.name, path: pathOf(m), mat: p.mat, finish: p.finish, color: hex(m), says: p.says, shell: p.shell, link: linkOfObj(m) || undefined, joint: (p as Part).joint, min: r3(b.min), max: r3(b.max), tris: (m.geometry.getIndex()?.count ?? m.geometry.getAttribute('position').count) / 3 }; }),
-  facts: () => ({ name: part.name, says: (part as { says?: string }).says, size: r3(size), parts: meshes.length, made: (made as { says?: string }).says }),
+  facts: () => ({ name: part.name, says: (part as { says?: string }).says, size: r3(size), parts: meshes.length, made: (made as { says?: string }).says, moved: made.moved }),
   pick: (x: number, y: number) => { const ray = new THREE.Raycaster(); ray.setFromCamera(new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1), camera); const hit = ray.intersectObjects(meshes.filter((m) => m.visible), false)[0]; if (!hit) return null; const p = (hit.object.userData.part ?? {}) as { says?: string; mat?: string }; return { name: hit.object.name, path: pathOf(hit.object), at: r3(hit.point), distance: +hit.distance.toFixed(3), mat: p.mat, says: p.says }; },
-  clash: (touch = 0.001) => meshClashes(meshes.filter((m) => m.visible).map(worldTris), { touch }),
   // where points of the thing fall in the picture (CSS pixels), and where a pixel falls on a plane z = const (the side
   // the camera looks at), for laying a photograph over it (the bench's ref:)
   project: (pts: [number, number, number][]) => pts.map((p) => { const v = new THREE.Vector3(...p).project(camera); return [+(((v.x + 1) / 2) * innerWidth).toFixed(2), +(((1 - v.y) / 2) * innerHeight).toFixed(2)]; }),
@@ -190,7 +177,7 @@ const look = {
   // what a frame is built of: its body-in-white by structure alone, where loads come into it, each link's joints (critic.ts)
   frame: () => { const ts = meshes.filter((m) => m.visible).map(worldTris); return frame(ts, meshClashes(ts, { touch: 0.001 })); },
   gap: (a: string, b: string) => {
-    // (the least distance between the parts so named, measured as the clash finder measures, so the two agree; the pairs
+    // (the least distance between the parts so named, a distance a person asks for, never run by the gate; the pairs
     // nearest by their boxes first, and given up on, said, after 20 s)
     const ra = new RegExp(a, 'i'), rb = new RegExp(b, 'i'), A = meshes.filter((m) => m.visible && ra.test(m.name)).map(worldTris), B = meshes.filter((m) => m.visible && rb.test(m.name)).map(worldTris);
     if (!A.length || !B.length) return null;
@@ -199,7 +186,7 @@ const look = {
     const pairs = A.flatMap((x) => B.filter((y) => y !== x).map((y) => [bg(x, y), x, y] as const)).sort((p, q) => p[0] - q[0]);
     let best: { d: number; at: number[]; a: string; b: string } | null = null, partial = false;
     for (const [g, x, y] of pairs) { if (best && g >= best.d) break; if (performance.now() - t0 > 20000) { partial = true; break; } const r = leastDistance(x, y, best?.d ?? Infinity); if (r && (!best || r.d < best.d)) best = { d: r.d, at: r.at.map((v) => +v.toFixed(4)), a: x.name, b: y.name }; if (best?.d === 0) break; }
-    return best ? { ...best, d: +best.d.toFixed(4), ...(best.d === 0 ? { crossing: true } : {}), ...(partial ? { partial: true } : {}), method: LEAST_METHOD, ms: Math.round(performance.now() - t0) } : null;
+    return best ? { ...best, d: +best.d.toFixed(4), ...(partial ? { partial: true } : {}), method: LEAST_METHOD, ms: Math.round(performance.now() - t0) } : null;
   },
 };
 // (each part cut by a plane: where each of its triangles crosses it, a segment, in the plane's two other axes, mm)
@@ -246,15 +233,6 @@ const lint = () => {
     const host = ho?.userData.part as Part | undefined;
     if (p.finish === 'weld' && host?.mat && castLike.test(host.mat)) out.push({ rule: 'weld on a casting', part: m.name, path: pathOf(m), says: `a weld bead on the ${host.name}, which is cast (${host.mat})` });
     const mm = /\bM(\d+)\b/.exec(m.name); if (mm && host && /hex head|bolt|screw/i.test(m.name)) { const hb = host ? [...boxes.entries()].find(([x]) => x.parent?.userData.part === host)?.[1] : undefined; if (hb) { const hs = hb.getSize(new THREE.Vector3()), ht = Math.min(hs.x, hs.y, hs.z); if (Number(mm[1]) / 1000 > Math.max(0.006, ht * 0.5)) out.push({ rule: 'bolt too big', part: m.name, path: pathOf(m), says: `M${mm[1]} on the ${host.name}, whose least size is ${(ht * 1000).toFixed(0)} mm` }); } }
-    // (hidden whole inside another part that is not what holds it nor held by it, nor one it passes through)
-    for (const o of vis) {
-      if (o === m) continue; const ob = boxes.get(o)!; if (!ob.containsBox(bb)) continue; const op = o.userData.part as Part;
-      if (pathOf(m).startsWith(pathOf(o.parent!)) || pathOf(o).startsWith(pathOf(m.parent!)) || op.passes?.includes(m.name) || p.passes?.includes(o.name) || (op.shape && 'surf' in op.shape)) continue;
-      // (inside by six rays, each way along each axis, every one crossing its surface an odd number of times: an open
-      // shape, as a tyre's turned section open at its bead, is not something to be inside)
-      const ray = new THREE.Raycaster(), ctr = bb.getCenter(new THREE.Vector3()), odd = [[1, 0.013, 0.007], [-1, 0.011, 0.005], [0.009, 1, 0.012], [0.007, -1, 0.01], [0.012, 0.008, 1], [0.01, 0.006, -1]].every((d) => { ray.set(ctr, new THREE.Vector3(...(d as [number, number, number])).normalize()); return ray.intersectObject(o, false).length % 2 === 1; });
-      if (odd) { out.push({ rule: 'hidden inside', part: m.name, path: pathOf(m), says: `wholly inside the ${o.name} (${pathOf(o)})` }); break; }
-    }
   }
   return out;
 };

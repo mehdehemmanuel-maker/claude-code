@@ -1,0 +1,26 @@
+{
+  "task": "01.I10",
+  "verdict": "pass",
+  "model": "claude-sonnet",
+  "date": "2026-11-01",
+  "commit": "499054a",
+  "ran": [
+    "Setup: git checkout --detach 499054a (HEAD 499054a01ba3aa9bf8a0fb2de112f9f659433748), linked node_modules. Read evaluator.md, the I10 row of plan/specs/01-interfaces/tasks.json (status claimed), fastenerFor/mate/boreThrough in src/nexus/mate.ts, soldLengths in src/nexus/catalogue.ts, case 8 in evals/interfaces/cases.json, and the test.",
+    "Ran `npx vitest run tests/nexus/domains.test.ts -t \"the fastener for a stack\"`: 1 passed (51 skipped), 10.6 s. The test calls fastenerFor on case 8 (M8, plies 10+6 mm, through) and gets {words 'bolt M8x30', std ISO 4017, L 30, nut 'nut M8', washers 2}. It also checks boltedJoint('M8',16) lays an 'M8 x 30 hex bolt', tapped M6 into al-6061 gives screw M6x18 (Bossard), insert M4 gives screw M4x12, boreThrough says '9.0 mm (ISO 273 medium for M8)', and the four machines equal tests/nexus/fasteners.before.json.",
+    "Case 8 numbers by hand: grip 10+6 = 16 mm; two ISO 7089 M8 washers (8.4 x 16 x 1.6) = 3.2; ISO 4032 M8 nut m = 6.8 (max); two pitches of M8 (ISO 261, 1.25) = 2.5; total 28.5 mm. ISO 4017 M8 lengths run 16 to 80; the first sold at or above 28.5 is 30 (28 falls short). So bolt M8x30 is right, and METRIC in src/nexus/threads.ts holds p 1.25, m 6.8, h 1.6 for M8. The standards are paywalled and a web lookup failed (Firecrawl out of credits), so these figures are from the standards' tables as I know them, not re-fetched.",
+    "Rebuilt the 'before' snapshot myself. In my worktree I checked out a8ecae3, ran a throwaway probe that builds the corolla, rancher, go kart and cascadia (seed 7) and records every fastener's name and count (the test's walk), plus item, shape, placement, rotation and every cut's radius and depth. Then I returned to 499054a and ran the same probe. The rebuilt names and counts equal the committed tests/nexus/fasteners.before.json exactly (506, 220, 178 and 1584 fasteners). The richer fingerprint (shapes, placement, cuts: 577, 63, 60 and 761 cuts) is identical before and after. The machines' fasteners are unchanged. Machines never call mate() or boreThrough; they use boltedJoint and boreGrips, which I10 did not touch.",
+    "Probe finding, outside the check's words: for an M8 stack needing 30 < need <= 32 mm (plies 12+6.6, 10+8.6, 10+9), mate() lays two things that disagree. fastenerFor and mate()'s 'says' text give 'bolt M8x32' (catalogue soldLengths includes 32), but the part laid is 'M8 x 35 hex bolt', because boltedJoint in components.ts picks its own length from a separate LENGTHS list that lacks 32. For M8 10+6, M6 10+6, M10 12+12, M5 8+8 and M4 6+5 they agree. So the task title's 'mate() lays every fastener through it' is not true for through bolts.",
+    "Ran the whole tests/nexus/domains.test.ts once with a planted fault (below): 51 passed, 1 failed, and the one failure was 'no probe is left where the gate runs', which caught my own zz_ probe files. No other test failed.",
+    "Cleanup: removed my probe files, restored every planted file with git checkout. `git status --short` shows only the untracked vr-sandbox/node_modules symlink from the setup. No verdict file written and nothing pushed."
+  ],
+  "planted": [
+    "fastenerFor through: dropped `2 * T.h` (the washers) from the need. The test failed: need 25.3 mm, chose bolt M8x28, not M8x30. Caught.",
+    "fastenerFor through: dropped `T.m` (the nut). The test failed: need 21.7 mm, chose bolt M8x22. Caught.",
+    "catalogue.ts HEX M8 range [16,80] changed to [31,80]. The test failed: chose bolt M8x32. Caught.",
+    "components.ts boltedJoint LENGTHS: removed 55. Machine-side fault. The test failed on 'every fastener of the four machines as it was before' (the cascadia's M16x55 bolts changed name). Caught.",
+    "boreThrough: forced the old path (standard ignored). The test failed: 'a bolt's bore ISO 273 medium', the hole came out 16.0 mm, not 9.0 mm (ISO 273 medium for M8). Caught.",
+    "threads.ts M12 nut height m changed 10.8 to 11.8: a size-only change to the cascadia's M12 nuts, names and counts unchanged. The I10 test PASSED. The 'unchanged' half compares names and counts only, so a change of size or shape in the machines' fasteners goes unseen where the name carries no length. My own richer comparison shows no such change was made. Not caught.",
+    "mate() tapped branch: set the screw length to a constant 99 instead of ff.L. The I10 test does not call mate(), and the whole domains test passed apart from my probes. Not caught: nothing in the gate guards 'mate() lays its fasteners through fastenerFor'. This is outside the check's words (case 8 and the engine's fasteners)."
+  ],
+  "missing": []
+}

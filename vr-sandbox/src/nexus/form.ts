@@ -85,8 +85,9 @@ export function tubeLegs(t: Tube): Leg[] {
   for (let i = 1; i < p.length - 1; i++) {
     const c = p[i]!, u = unit(sub(p[i - 1]!, c)), v = unit(sub(p[i + 1]!, c)), cos = Math.max(-1, Math.min(1, u[0] * v[0] + u[1] * v[1] + u[2] * v[2])), turn = Math.PI - Math.acos(cos);
     if (turn < 1e-3) continue; // straight through
-    // cut back no further than half of either leg
-    const cut = Math.min(R * Math.tan(turn / 2), len3(sub(p[i - 1]!, c)) / 2, len3(sub(p[i + 1]!, c)) / 2), r = cut / Math.tan(turn / 2);
+    // cut back no further than half of a leg it shares with another corner, or nine tenths of an end's leg (no corner at
+    // its other end; a tenth kept straight, where it is pushed on to what it joins)
+    const cut = Math.min(R * Math.tan(turn / 2), len3(sub(p[i - 1]!, c)) * (i === 1 ? 0.9 : 0.5), len3(sub(p[i + 1]!, c)) * (i === p.length - 2 ? 0.9 : 0.5)), r = cut / Math.tan(turn / 2);
     const a = add(c, mul(u, cut)), b = add(c, mul(v, cut));
     out.push({ kind: 'line', a: from, b: a, len: len3(sub(a, from)) }, { kind: 'arc', a, b, c, len: r * turn });
     from = b;
@@ -101,6 +102,43 @@ export const tubeVolume = (t: Tube) => tubeLength(t) * Math.PI * (t.r ** 2 - (t.
 /** A profile's area (the shoelace sum), its perimeter, and so its prism's volume and skin. */
 export const profileArea = (pts: [number, number][]): number => { let a = 0; for (let i = 0; i < pts.length; i++) { const [x0, y0] = pts[i]!, [x1, y1] = pts[(i + 1) % pts.length]!; a += x0 * y1 - x1 * y0; } return Math.abs(a) / 2; };
 const perimeterOf = (pts: [number, number][]): number => { let l = 0; for (let i = 0; i < pts.length; i++) { const [x0, y0] = pts[i]!, [x1, y1] = pts[(i + 1) % pts.length]!; l += Math.hypot(x1 - x0, y1 - y0); } return l; };
+/** A cut of any section (spec 01, I17: a keyway, a panel's cut-out): its own frame, from its axis d (into the part), u
+ *  across its face (given, else any square to d) and w = d × u; a point of its section (x, y) lies at at + x u + y w. */
+export function cutFrame(c: { dir: V3; u?: V3 }): { d: V3; u: V3; w: V3 } {
+  const n = (v: V3): V3 => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; }, d = n(c.dir);
+  let u: V3 = c.u ? c.u : Math.abs(d[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0]; const k = u[0] * d[0] + u[1] * d[1] + u[2] * d[2]; u = n([u[0] - k * d[0], u[1] - k * d[1], u[2] - k * d[2]]);
+  return { d, u, w: [d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]] };
+}
+/** Segments a full turn of a drawn section takes (spec 01, I17). */
+export const ROUND = 64;
+/** A rectangle L along x by b along y about its middle, its corners rounded r (r = b/2: a slot with round ends, as an end
+ *  mill leaves; 0: square, as a broach or a shaper leaves); each quarter turn ROUND/4 points on the radius. */
+export function roundedRect(L: number, b: number, r = 0, n = ROUND): [number, number][] {
+  const hl = L / 2, hb = b / 2, rr = Math.min(Math.max(0, r), hl, hb); if (rr <= 1e-12) return [[-hl, -hb], [hl, -hb], [hl, hb], [-hl, hb]];
+  const k = Math.max(2, Math.round(n / 4)), pts: [number, number][] = [];
+  for (const [cx, cy, a0] of [[hl - rr, -hb + rr, -Math.PI / 2], [hl - rr, hb - rr, 0], [-hl + rr, hb - rr, Math.PI / 2], [-hl + rr, -hb + rr, Math.PI]] as const)
+    for (let i = 0; i <= k; i++) { const a = a0 + (Math.PI / 2) * (i / k); pts.push([cx + rr * Math.cos(a), cy + rr * Math.sin(a)]); }
+  return pts.filter((p, i) => { const q = pts[(i + 1) % pts.length]!; return Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-12; });
+}
+/** A round hole d across, drawn with its flats touching the circle so it is never under its size, and with a key recess w
+ *  wide toward +y whose end lies `to` from the middle (a panel cut-out's anti-rotation notch). */
+export function notchedCircle(d: number, notch?: { w: number; to: number }, n = ROUND): [number, number][] {
+  const r = d / 2, R = r / Math.cos(Math.PI / n);
+  if (!notch) return Array.from({ length: n }, (_, i) => { const a = (2 * Math.PI * i) / n; return [R * Math.cos(a), R * Math.sin(a)] as [number, number]; });
+  const hw = notch.w / 2, a0 = Math.PI / 2 + Math.asin(Math.min(1, hw / r)), a1 = Math.PI / 2 - Math.asin(Math.min(1, hw / r)) + 2 * Math.PI, steps = Math.max(8, Math.round((n * (a1 - a0)) / (2 * Math.PI))), Rs = r / Math.cos((a1 - a0) / steps / 2), pts: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) { const a = a0 + ((a1 - a0) * i) / steps, rad = i === 0 || i === steps ? r : Rs; pts.push([rad * Math.cos(a), rad * Math.sin(a)]); }
+  pts.push([hw, notch.to], [-hw, notch.to]); return pts;
+}
+/** A section's area, m² (the shoelace sum). */
+export const sectArea = (pts: [number, number][]): number => profileArea(pts);
+/** Whether (x, y) lies inside a section (its crossings counted), and how far it is from the section's nearest edge. */
+export function inSect(pts: [number, number][], x: number, y: number): { inside: boolean; edge: number } {
+  let inside = false, edge = Infinity;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i]!, [xj, yj] = pts[j]!;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    const dx = xj - xi, dy = yj - yi, L2 = dx * dx + dy * dy, t = L2 ? Math.max(0, Math.min(1, ((x - xi) * dx + (y - yi) * dy) / L2)) : 0; edge = Math.min(edge, Math.hypot(x - xi - t * dx, y - yi - t * dy)); }
+  return { inside, edge };
+}
 const sectionArea = (p: Prism): number => profileArea(p.pts) - (p.holes ?? []).reduce((a, h) => a + profileArea(h), 0);
 export const prismVolume = (p: Prism): number => sectionArea(p) * p.L;
 export const prismArea = (p: Prism): number => (perimeterOf(p.pts) + (p.holes ?? []).reduce((a, h) => a + perimeterOf(h), 0)) * p.L + 2 * sectionArea(p);

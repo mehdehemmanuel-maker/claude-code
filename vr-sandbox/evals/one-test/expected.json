@@ -1,0 +1,132 @@
+{
+ "_says": "The one test's pass lines (plan/specs/00-structure/the-one-test.md), fixed before any run and never changed by one. 'auto' lines are scored by the runner from what the AI built; the others say what must exist, or be worked out from sources, before they can be scored.",
+ "request": "put a lamp on a shelf on my wal and make it so i can turn it on",
+ "lines": [
+  {
+   "n": 1,
+   "what": "\"wal\" is read as wall; \"lamp\" and \"shelf\" found",
+   "passWhen": "the AI's first find lands on them",
+   "proves": "search, names, misspellings",
+   "state": "auto"
+  },
+  {
+   "n": 2,
+   "what": "The AI plans it in passes, each gated before it hands on",
+   "passWhen": "every pass's claims trace to a tool's result; nothing ungrounded is piped forward",
+   "proves": "the AI, gated passes",
+   "state": "missing: the AI does not plan in gated passes yet (spec 00, S9 and S12)"
+  },
+  {
+   "n": 3,
+   "what": "The wall is a real wall of a room, its material named",
+   "passWhen": "the wall's layers and material named with their source",
+   "proves": "civil, materials, seeds",
+   "state": "auto"
+  },
+  {
+   "n": 4,
+   "what": "The brackets are fixed by the negative the wall's material takes",
+   "passWhen": "the fixing matches the material; its hole from the anchor maker",
+   "proves": "interfaces, materials",
+   "state": "missing: interfaces and their negatives (spec 01, I2 to I8)"
+  },
+  {
+   "n": 5,
+   "what": "The holes keep their distances from edges and each other, and miss the studs",
+   "passWhen": "the distances and the rule's source given",
+   "proves": "interfaces, checks before cutting",
+   "state": "missing: the checks before cutting (spec 01, I7)"
+  },
+  {
+   "n": 6,
+   "what": "The shelf is screwed to the brackets; screws chosen from the catalogue",
+   "passWhen": "the screw's length, the reason",
+   "proves": "fasteners, catalogue",
+   "state": "missing: the fastener chosen for a stack (spec 01, I10)"
+  },
+  {
+   "n": 7,
+   "what": "The shelf's sag and each fixing's pull, with a 2 kg book on its edge",
+   "passWhen": "the sag in mm and the pull in N against limits with sources, worked by hand first",
+   "proves": "loads",
+   "state": "expected: not yet worked out by hand from sources (to do before this line can be scored)"
+  },
+  {
+   "n": 8,
+   "what": "The book dropped onto the shelf in the physics",
+   "passWhen": "the physics run's result, its poses logged",
+   "proves": "physics, time",
+   "state": "missing: live physics in the space (spec 04, P1)"
+  },
+  {
+   "n": 9,
+   "what": "The lamp is a real lamp: bulb, cable, plug, switch",
+   "passWhen": "each figure sourced",
+   "proves": "products, electrical",
+   "state": "auto"
+  },
+  {
+   "n": 10,
+   "what": "A button on the lamp turns it on; the light lights the room",
+   "passWhen": "pressing it in 3D changes the room's light, measured in the render",
+   "proves": "controls, rendering",
+   "state": "missing: a light the button switches, measured in the render"
+  },
+  {
+   "n": 11,
+   "what": "The bulb warms the shelf under it over twenty minutes",
+   "passWhen": "the shelf's surface temperature after 20 min against its limit",
+   "proves": "heat, time, causality",
+   "state": "expected: not yet worked out by hand from sources"
+  },
+  {
+   "n": 12,
+   "what": "A person can reach the switch standing",
+   "passWhen": "the switch's height and the reach range's source",
+   "proves": "life, bodies, ergonomics",
+   "state": "missing: a reach check over a body sample (spec 01, I25)"
+  },
+  {
+   "n": 13,
+   "what": "X-ray, heat and rewind views",
+   "passWhen": "three screenshots; the blind check names what each shows",
+   "proves": "perception",
+   "state": "missing: the perception modes (spec 04, P6)"
+  },
+  {
+   "n": 14,
+   "what": "Zoom from the room to one screw's thread in its anchor",
+   "passWhen": "the thread pitch readable at the end of the zoom",
+   "proves": "multiscale",
+   "state": "missing: anchors in walls (spec 01) and scale anchors (spec 11, LW8)"
+  },
+  {
+   "n": 15,
+   "what": "Every piece in the library; the whole folded and placed three times",
+   "passWhen": "the library test passes; three placed, one stored",
+   "proves": "composition, the library law",
+   "state": "auto"
+  },
+  {
+   "n": 16,
+   "what": "The bracket exported as STEP with the bill of materials",
+   "passWhen": "the STEP reads back valid with the same volume; the BOM lists every part",
+   "proves": "export",
+   "state": "missing: a bracket from this request to export (lines 4 to 6)"
+  },
+  {
+   "n": 17,
+   "what": "The answer says what it built, every number with where it came from, and what it does not know",
+   "passWhen": "the second judge finds no unsupported claim",
+   "proves": "honesty, the reviewer",
+   "state": "auto"
+  },
+  {
+   "n": 18,
+   "what": "On a phone, the same request spoken",
+   "passWhen": "the same pass lines",
+   "proves": "the phone, voice",
+   "state": "missing: the app on the web and the phone (spec 03, spec 06)"
+  }
+ ]
+}

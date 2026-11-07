@@ -1,9 +1,9 @@
-// The book, optics: the kept laws (src/ganglia/laws.ts) as terms. Every term is SI; the ports say the
+// The book, optics: the kept laws as terms (closures in src/ganglia/laws.ts until docs/REALITY.md step 3). Every term is SI; the ports say the
 // units people write. Metadata is the kept data's own; the terms and domains are written here.
 
 import { L } from './define';
 import { CONST } from './constants';
-import { mul, div, sin, asin, k } from '../term';
+import { mul, div, sin, asin, k, and, gt, le } from '../term';
 
 export const OPTICS = [
   L({
@@ -25,6 +25,7 @@ export const OPTICS = [
     valid: "Wavelength of the order of the spacing (X-rays for crystals).",
     inputs: [["d", "m", "plane spacing"], ["theta", "rad", "glancing angle"], ["n", "-", "order"]], output: ["lambda", "m", "wavelength"],
     term: (v) => div(mul(k(2), v.d, sin(v.theta)), v.n),
+    domain: (v) => [{ says: 'a glancing angle between 0 and 90°', holds: and(gt(v.theta, k(0)), le(v.theta, k(Math.PI / 2))) }],
     source: { cite: "Kittel, Introduction to Solid State Physics, 8th ed., Wiley 2005", kind: "textbook" }, example: { inputs: {"d":2.5e-10,"theta":0.3,"n":1}, output: 1.4776010333066977e-10 },
   }),
 ];

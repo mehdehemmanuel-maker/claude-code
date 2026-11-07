@@ -1,0 +1,227 @@
+{
+ "spec": "13-node-creator",
+ "rule": "A task is failing until its check passes, run by the evaluator. Budget: the owners named, their tests and the docs; past it, a decision record.",
+ "tasks": [
+  {
+   "id": "NC1",
+   "title": "Decision 0019 (the node creator extends its owners; what is done on a board is recorded once, and read by every agent that needs it) and spec 13 written; the README's phases row; a row in CLAUDE.md and in docs/OWNERS.md; faults D32 to D35 recorded",
+   "meets": [],
+   "owner": "plan/decisions/0019-the-node-creator-extends-its-owners.md, plan/specs/13-node-creator, plan/README.md, plan/DEFECTS.md, CLAUDE.md, docs/OWNERS.md",
+   "check": "python3 plan/compile.py exits 0 (every after names a task; D32, D33, D34 and D35 name 13.NC2, 13.NC10, 13.NC8 and 13.NC8). In tests/nexus/domains.test.ts the routing test, 'every rule names its check and its task, and every decision its options, choice, assumption and re-test' and 'plan/INDEX.md is what the plan compiles to' pass. Decision 0019 names the owner of each concern as design section 5 does, states the hand-action rule of design 2.6, says that the efficiency and context agents (spec 14) read this record and write no second one, that a run's tokens and steps stay with AgentRun (src/nexus/agent.ts:79), that spec 11's run record (11.LW2) and chronicle (11.LW6) record runs, not changes to a board, and read who changed a board from this record where they need it, writing no second record of it, and says how 01.I18, 09.P3, 10.T23 and research 26's items 15 to 17 relate, as each one's own row holds it. plan/DEFECTS.md holds D32 (src/nexus/dataflow.ts:325, :480-482, :539, :610), D33 (src/nexus/view/nodes.ts:482) D34 (src/nexus/trial-worker.ts:14, src/nexus/dataflow.ts:705) and D35 (src/nexus/pool.ts:62, :72), each open, in its five columns. The row in CLAUDE.md's owners table (in place of 'Running boards …', CLAUDE.md:81) and the row in docs/OWNERS.md (in place of 'A board of blocks run …', :60) each name boards.ts with the board's event log, the one record of who changed a board, and dataflow.ts with offersOf, useOffer, foldBoard and copyInside, each part not yet built marked (spec 13, not built), the marker taken off by the task that builds it (NC12 the event log, NC14 offersOf and useOffer, NC9 foldBoard, NC10 copyInside). Every file:line the spec cites holds on the day NC1 lands (the evaluator reads each). No file appears under src/. Planted: with the README row for specs/13-node-creator/ taken out, the routing test fails.",
+   "status": "failing",
+   "after": []
+  },
+  {
+   "id": "NC2",
+   "title": "A fold keeps a many-input's order (fault D32): only a wire made in place of another (by collapse, expand, mergeTwins or a rewrite) carries `order`, the order key of the wire it replaces; a wire made by wire() carries none; the engine sorts by `order`, else by source id; boardKey writes it where a wire has one",
+   "meets": [
+    "R11"
+   ],
+   "owner": "src/nexus/boards.ts, src/nexus/dataflow.ts, tests/nexus/domains.test.ts",
+   "check": "One-test cases on 'Steel, finished five ways' (src/nexus/starters.ts:277), each run fresh on a memo of its own: f1, s1 and p1 folded with collapse's default id leave all's assembly digest-equal to the board unfolded (today it differs 10 times in 10, measured 2026-11-02), and so do the ids 'g1' (today it differs) and 'p1z'; that fold unfolded by expand is equal too. Two folds of p1's and p3's chains given one inner board (the same inner ids, as two copies of one block opened), both unfolded, are equal (today expand's random ids reorder them, :539, measured). Twins 'z1' and 'a0' with 'm1' between them into one combine, merged by mergeTwins, keep the combine's items in their order (today 'other, twin' becomes 'twin, other', measured). A board made by wire() alone has no `order` on any wire; every starter's boardKey and every quick board's digests are as before, but for the one starter built with collapse ('A city from a few nodes', starters.ts:979-980), whose boardKey may change and whose digests are as before. Two inner boards that differ only in one wire's `order` have different boardKeys. Planted: collapse with `order` left off its wires makes the first Steel case fail.",
+   "status": "failing",
+   "after": [
+    "NC1"
+   ]
+  },
+  {
+   "id": "NC3",
+   "title": "A fold no stronger than its inside: runInside returns each output's evidence, its warnings and whether it extrapolated (_evidence by port, _warnings, _extrapolated); judge reads the evidence of the port each wire reads; carried on a memo hit; a block made of a board is a sink when its inside holds one other than group.out",
+   "meets": [
+    "R11"
+   ],
+   "owner": "src/nexus/dataflow.ts, tests/nexus/domains.test.ts",
+   "check": "One-test cases: on Steel with all five places folded (each under its place's id), all reads 'hypothetical' and why 'estimated', as they do unfolded (today both 'derived', measured 2026-11-02), and each fold node reads 'hypothetical', its placed 'hypothetical' and its says 'estimated' (today one 'derived', measured); the same board run again on a fresh engine sharing the first run's memo, so the folds are served from it (dataflow.ts:346), reads the same (a judge that reads only the child engine fails this). Planted: one evidence for each fold, the weakest of its outputs, makes why 'hypothetical' (measured 2026-11-02), which fails the why case. A mass of -2 kg (math.expr '0 - 2', unit kg) feeding math.expr 'a*0', folded together, puts 'a mass cannot be below nothing' on the fold's node (today lost, measured). A fold holding a law asked past where it holds marks its node extrapolated. Steel's why folded alone (a viewer) is not in deadNodes (today it is, measured); a fold with no viewer that feeds nothing still is, so making every group a sink fails the case.",
+   "status": "failing",
+   "after": [
+    "NC1"
+   ]
+  },
+  {
+   "id": "NC4",
+   "title": "Repeats found by an id-free shape key, by extending shapeKeys and patterns (not a second miner): places grown in step while every place still matches, with no size limit, the search given a deadline, read from the clock between steps; each place feeding a sink; places sharing no node; sinks, in.* nodes, impure, clock and live blocks never in a shape; twins left to Merge; groups keyed by their inner board; suggest still synchronous",
+   "meets": [
+    "R5",
+    "R6"
+   ],
+   "owner": "src/nexus/dataflow.ts, tests/nexus/domains.test.ts",
+   "check": "One-test cases: the Steel board's {f1, s1, p1} and a copy with every node renamed and other settings get one key; a port name, a block, a block's version or a wire's direction changed gives another; math.expr 'a*2' against 'x*2' (other input names, so other ports) gives another, worked out through portsOf with no list of settings; two groups with different insides give two keys (today both 'group', dataflow.ts:624); a planted pair with the same blocks and the same wires at each node by port name, joined differently, gets two keys. On Steel the only shape is surface.finish > shape.cyl > place at 5 places, none holding fe or all (today the first suggestion holds fe and the third reaches into all, measured 2026-11-02). On 'Metals, coloured by their physics' (starters.ts:263): optics.colour > shape.sphere > place at 14 places. seed.house's inner board copied 3 times onto one board under new ids, its group.in nodes made in.text nodes holding a plan of their own in each copy ('studio', '1 bed', '2 bed') and its group.out nodes view.show: one shape at 3 places, each holding the house's 14 nodes and none of the in.text nodes (design section 4, case 3; patterns sees chains of 2 and 3 only today), its search time printed with its command; the same board searched with a deadline that falls during the search (planted: its stop's aborted reads false at the first reading and true after) stops before its last step and says so, where a deadline read only once, at the start, would let it finish. Three chains like Steel's with no wire into a sink give no shape (a dead place is Cut's). No shape holds a view, check, note, group.out, 3D-view or in.* node; a shape holding a block that reads the clock is not offered and the reason is said; three chains that are twins give the twins suggestion and no shape. suggest still gives kind, says, nodes and size to its callers, and returns an array, not a promise (the page calls it while drawing, src/nexus/view/nodes.ts:189, :631). Each of the 67 starters is searched with a deadline of 2 s, none stopped, and the time is printed with its command.",
+   "status": "failing",
+   "after": [
+    "NC1"
+   ]
+  },
+  {
+   "id": "NC5",
+   "title": "An input that sets an inner setting: group.in gains `into`; runInside runs a bound copy of the inner board, cached for each set of bound values, the stored board never written; Engine.inside(id) gives the engine that ran the bound copy; groupBlock types the port from the setting; expand writes a value back and refuses a wired one; a setting whose values give other ports cannot be bound",
+   "meets": [
+    "R8"
+   ],
+   "owner": "src/nexus/blocks.ts, src/nexus/dataflow.ts, tests/nexus/domains.test.ts",
+   "check": "One-test cases on a group of optics.colour > shape.sphere whose group.in 'metal' has into 'c.metal; s.name': given 'gold', its hex equals a lone optics.colour set to gold and its part is named 'gold'; given 'silver', both differ; the port's choices are optics.colour's own 15, read from its definition; the stored inner board's digest and boardKey are the same before and after both runs. After the run with 'gold', engine.inside(the group's id) has a board whose c.metal is 'gold' and a state in which c gives gold's hex. The same group run through runnerOf (the path fit.target, variants and sweep.range take), with metal given as an input, gives the same as on a board. A bound surface.finish set to 'turned' then 'ground' on one node gives two different outputs, and fresh equals cached. expand with metal set to 'gold' gives c.metal 'gold' and s.name 'gold'; expand with metal wired from another node is refused, saying why. Binding math.expr's expr where a place's value gives other ports is refused, saying why. Planted: a bound copy written into the stored board fails the digest case.",
+   "status": "failing",
+   "after": [
+    "NC1"
+   ]
+  },
+  {
+   "id": "NC6",
+   "title": "A node or a node type from a shape's places: what agrees a constant; what differs an input (type, unit and choices from its own definition; default the commonest, the first place's on a tie); two inputs of one value type equal at every place of 3 or more made one, taking the narrower definition; outside sources, in.* nodes among them, inputs; outputs every port read outside; any constant made an input on request, under a new id; the name made by code",
+   "meets": [
+    "R6",
+    "R8",
+    "R9",
+    "R16"
+   ],
+   "owner": "src/nexus/dataflow.ts, tests/nexus/domains.test.ts",
+   "check": "One-test cases, expected values from design section 4: Steel gives inputs color, process (surface.finish's 12 choices, default 'turned'), name and x, outputs placed and says, constants shape.cyl's mat 'steel-low', r 0.02 and h 0.16 and place's y 0.08; Metals gives inputs metal (into c.metal and s.name, with optics.colour's 15 choices, not free text), x and z, constants mat, finish, r and y (without the merge it gives four inputs, which fails the case); two numbers equal at every place but in other units stay two inputs; two copies of math.expr 'a + k' with k typed 1 and 2 give an input k; the same two inputs equal at only 2 places stay two; an exact repeat gives a node with no input of its own; a shape holding a clock-reading block is refused, naming it. Steel's shape with mat made an input gives a fifth input mat, default 'steel-low', with shape.cyl's material choices, and an id other than the type without it. Steel's name is 'Surface texture from the process (roughness, gloss) → Cylinder → Place', as suggest words the pattern today (dataflow.ts:639), and its five rewritten nodes keep the labels 'Turned: its surface' to 'Sand cast: its surface'.",
+   "status": "failing",
+   "after": [
+    "NC4",
+    "NC5"
+   ]
+  },
+  {
+   "id": "NC7",
+   "title": "Proved before offered, against the board's own last run: a place into which a ± comes, or a proposal with a block that is not pure below a place, refused before anything runs; every place rewritten on a copy, which runs with the board's env (time, code) on an engine and memo of its own from the board's last-run state, only the new nodes and what they feed; at each place every output equal by digest; below, every value and every evidence the same, no warning, extrapolation or ± lost; refusals named; each place proved kept as a test compared by digest; offersOf async, its result kept by boardKey; at most 3 proposals a call; one budget of 2 s a call, a deadline read from the clock between nodes, the event loop let run between them (Env.pause)",
+   "meets": [
+    "R6",
+    "R11",
+    "R16"
+   ],
+   "owner": "src/nexus/dataflow.ts, src/nexus/blocks.ts, tests/nexus/domains.test.ts",
+   "check": "One-test cases on Steel, its board run once first (the reference): the copy has 9 nodes and 12 wires; at each of the 5 places the new node's placed and says are equal by digest to the place's on the board's run; all, show and why are equal by digest, every node's evidence is the same (why 'estimated', all 'hypothetical'), and no warning or ± is lost; the copy's run runs only the 5 new nodes, all, show and why (its report's ran is 8: measured 8 on 2026-11-02 with today's Engine, its private all and dirty set by a cast), and shape.cyl runs 5 times by USAGE (its inner blocks run, none read from the board's memo). Steel with an api.claude node and a control.slider placed beside the places, each wired into a view.show, proved: USAGE's runs and fails for api.claude and for control.slider are both unchanged by the proof (with no key api.claude counts a fail, not a run; the copy run fresh ran api.claude again: both measured 2026-11-02). api.claude wired below a Steel place: the proposal is refused before anything runs, naming api.claude, and its USAGE runs and fails are both unchanged. The block holds 5 tests, and testBlock through runnerOf gives ok with ran 5; one test's output digest changed makes it fail. A test row of check.limit at a value of 0 keeps its factor, Infinity, through JSON by its digest (today null, measured 2026-11-02). Planted, each refused naming the place and the output: one place's y changed on the board after the type was made (that place refused, the type proved for 4); x and z swapped in Metals' bindings; s.name left out of into; r 0.031 in the body; the rewrite with its wires' `order` dropped and its new nodes' ids given in the reverse of their places' order (all differs); three places of math.expr 'a*3' > math.expr 'b+1', each wired into a view.show, each a fed by an in.number of its own holding 1, 2 and 3, each with pm 0.1 (each refused before it runs: a ± comes into it; measured 2026-11-02: each in.number's state carries ±0.1 on its value, and the three places are not twins). Steel with 3 of its 5 places planted to differ is not offered (2 left, under 3). Metals' proof, given a deadline that falls 1 ms after its copy's run starts (planted), stops before the copy's last node, says it stopped (not that a place fails), and does not offer it, where a deadline read only once, when offersOf starts, would let the copy run to its end (a 1 ms deadline read from the clock between nodes stopped Metals' own run after 2 of its 45 nodes in one run and 3 in another: measured 2026-11-02 with today's Engine given a signal whose aborted reads the clock); read in the code, the deadline is read from performance.now() and no timer is the cap. An Engine given env.pause awaits it between nodes: on Metals (45 nodes) a pause that counts how often it is awaited is awaited at least 44 times. Read in the code: offersOf, useOffer and foldBoard each give the engine they run an env.pause that yields to the page. offersOf returns a promise; suggest, called after it on the same board, gives the proved proposal as kind 'type' and no 'pattern' for its shape, and on the board changed after, none until offersOf runs again. The Steel and Metals proofs are timed and printed with their command.",
+   "status": "failing",
+   "after": [
+    "NC2",
+    "NC3",
+    "NC6"
+   ]
+  },
+  {
+   "id": "NC8",
+   "title": "One node, one block, and who made it: a type's id from its identity (shape key, constants, inputs with bindings and defaults); the same identity is duplicateOf; a different block under a taken id refused; one conversion between a saved block and a live one, keeping its author, version, tests and identity, used where a block is converted today (the page's keepBlock and loadBlocks, Claude's blocks on arrival, toolsFor); the pool's carry every block not built in that the board reaches, inner first, each registered by the worker (fault D34); a shape whose block is in the library offered as that block, found by its identity; Claude's folds by 'claude'",
+   "meets": [
+    "R4",
+    "R8",
+    "R12",
+    "R15"
+   ],
+   "owner": "src/nexus/blocks.ts, src/nexus/dataflow.ts, src/nexus/pool.ts, src/nexus/trial-worker.ts, src/nexus/agent.ts, src/nexus/view/nodes.ts, tests/nexus/domains.test.ts, tests/evals/ask.eval.ts",
+   "check": "One-test cases: Steel's shape made twice, the second time with every node id renamed, gives the same id and duplicateOf the first; the same shape with r 0.04 is another block; registering a different board under a taken id throws, naming the id (today blocks.ts:344 replaces it in silence); every seed block and every block registered the way loadBlocks registers it still registers. After Steel's type is registered, offersOf on Steel offers that block, found by its identity, and makes no second. A block by 'claude' with 2 tests, turned into its saved form and back, keeps by 'claude', its version, its identity and its 2 tests, and they pass through runnerOf; toolsFor given that saved block registers it by 'claude' (today 'you', agent.ts:179); toolsFor's fold of named nodes on the Bolt starter gives a block by 'claude' (today 'you', agent.ts:240). A type that holds a type (Steel's type placed twice in a block of its own): carryOf gives the outer block and the inner one, inner first, and a fit.target over the outer block run on the pool's workers gives what it gives run here (today a worker registers only the one block carried, trial-worker.ts:14: fault D34, probed 2026-11-02, 1,999 of 2,000 such jobs failed on 4 workers); the planted pool case is checked to have run on the workers (its Many reads wide: true), since today wide: true on a quick batch runs it here (fault D35); planted: carrying only the outer block fails that case inside the worker. Read in the code: view/nodes.ts:36-37 and :650 and agent.ts:179 go through the one conversion, and none of them, nor agent.ts:240 or trial-worker.ts:14, sets 'you' in place of the block's author. tests/evals/ask.eval.ts, extended with a run the real tools make with a fold (toolsFor, callTools, runOf; no model; the page answered with relayBody, as that eval does): after a reload, the folded block reads by 'claude' (today 'you', view/nodes.ts:650); registering it as 'you', as today, fails the eval.",
+   "status": "failing",
+   "after": [
+    "NC7",
+    "01 I16"
+   ]
+  },
+  {
+   "id": "NC9",
+   "title": "A whole board as one node (foldBoard): every node but in.* nodes, sinks and notes folded; each in.* stays on the board as the node's input, its output value the default and its label the words; each wire into a sink an output; Claude's fold with no nodes named through it; how far a proof runs past a 2 s budget measured once",
+   "meets": [
+    "R10",
+    "R15"
+   ],
+   "owner": "src/nexus/dataflow.ts, src/nexus/agent.ts, tests/nexus/domains.test.ts, tests/evals/creator.eval.ts",
+   "check": "One-test cases on the Bolt starter (starters.ts:1026): folded whole, it gives inputs F, d, Sy, Sp and As, each with a default equal to its in.number's output value (F 10000, not the text '10 kN') and its label as words, and outputs result, result2 and T; F, dd, As, Sy, Sp, ck, s1, s2 and the note stay on the board; ck, s1 and s2 are equal by digest before and after (measured with collapse of the same nodes, 2026-11-02); runBlock of the block with no inputs gives the T that s1 shows. toolsFor's fold with no nodes named on Bolt leaves ck, s1, s2 and the note outside and gives a block by 'claude' (today it folds them in: agent.ts:237's filter, run on Bolt's nodes, keeps tau, allow, ck, pre, T, s1, s2 and the note). Apart from the gate, npx vitest run --config vitest.eval.config.ts tests/evals/creator.eval.ts folds 'A car down to its bolts' (starters.ts:756) whole: 7 nodes folded, show, measure and audit outside and equal by digest, the block saved and placed again equal; its time printed with the command (its first cold run in a process took 7.4 s in one probe and 4.4 s in another, measured 2026-11-02; no budget applies to a fold the person asks for). The same eval proves that fold once more under a 2 s budget and prints, with the command, when it stopped and by how much it ran past 2 s (the budget is a deadline read from the clock between nodes, dataflow.ts:303, so a node already running finishes). The same eval sets a 5 ms interval before that fold is proved through foldBoard and asserts it fired during the proof (a plain run of the car let it fire 0 times in 3,727 ms; with a pause between nodes it fired 6 times: both measured 2026-11-02, one run each).",
+   "status": "failing",
+   "after": [
+    "NC7",
+    "NC8"
+   ]
+  },
+  {
+   "id": "NC10",
+   "title": "Open a copy keeps a made node's values (fault D33): copyInside, beside expand in dataflow.ts, puts the block's board in the node's place with the node's own set; the page's openCopy (view/nodes.ts:482) calls it",
+   "meets": [
+    "R9"
+   ],
+   "owner": "src/nexus/dataflow.ts, src/nexus/view/nodes.ts, tests/nexus/domains.test.ts",
+   "check": "One-test cases: a block 'a*3' placed with a typed 5 gives 15, and its copy by copyInside gives 15 (the copy as openCopy makes it today gives 3, measured 2026-11-02 by replicating its statement); a placed Steel type with process typed 'ground' gives the same placed digest copied, and copied then unfolded by expand (process written back into f.process). Planted: a copyInside that drops set fails the first case. The page's button is driven by NC14's eval.",
+   "status": "failing",
+   "after": [
+    "NC5",
+    "01 I16"
+   ]
+  },
+  {
+   "id": "NC11",
+   "title": "opsOf: the operations between two boards (place, remove, set, move, label, wire, unwire, group, ungroup, block, title), inside groups by their path, in certify.ts; diffOf computed from it, its output unchanged",
+   "meets": [
+    "R1"
+   ],
+   "owner": "src/nexus/certify.ts, tests/nexus/domains.test.ts",
+   "check": "One-test cases on the Steel starter, through dataflow's own functions: placeBlock, wire, a wire into an input that had one (an unwire and a wire), a set change, a move, a label change, expand, makeBlock, cutBranch (one remove for each node it cut), mergeTwins and a set change inside a group each give operations of their own kind and no others, with the group's path where it applies; collapse gives one 'group' operation and the wire changes it makes. A move and a label change give two operations (diffOf, certify.ts:79, sees neither: it compares block and settings only, :83). A title change gives one 'title' operation. A change that makes nothing different gives none. An empty board against the Steel starter gives one place for each of its 19 nodes and one wire for each of its 22 wires. diffOf is computed from opsOf (read in the code: no second walk of the two boards), and its output on every case above and in the AI-change test is unchanged.",
+   "status": "failing",
+   "after": [
+    "NC1"
+   ]
+  },
+  {
+   "id": "NC12",
+   "title": "The event and the log's rules in boards.ts, in place of the unused Board.calls: who, when, which board, what kind, the operations; appends only; drops a change that makes nothing different; one event for each undo step; an undo or redo linked to what it reverts; an actor not in the list refused; hand actions counted from a board by the rule",
+   "meets": [
+    "R1",
+    "R2",
+    "R14"
+   ],
+   "owner": "src/nexus/boards.ts, src/nexus/dataflow.ts, tests/nexus/domains.test.ts",
+   "check": "One-test cases fed with real operations from opsOf: twelve set changes of one setting are twelve events; a change that makes nothing different gives no event; an undo gives an 'undo' event whose reverts is the event it reverted; an 'open' carries the board's author and no operations; an event with no actor, or one not in the list ('app', say), is refused; events round-trip through JSON unchanged; changing a kept event is refused. The hand actions counted on Steel by the rule are 71 (19 nodes, 22 wires, 30 values, measured 2026-11-02). Board.calls is gone and nothing read it.",
+   "status": "failing",
+   "after": [
+    "NC11"
+   ]
+  },
+  {
+   "id": "NC13",
+   "title": "The recorder on the page: the event closed at the next pushUndo or in a microtask; eight whole-board swaps through useBoard, each an 'open' by the board's author; Claude's board taken an 'edit' by 'claude' with its operations; the start-up its own call; undo and redo linked; a change that makes nothing different leaves no undo step; IndexedDB 'nexus.log' (never localStorage); a refused store said once",
+   "meets": [
+    "R1",
+    "R2",
+    "R3"
+   ],
+   "owner": "src/nexus/view/nodes.ts, view/index.html, tests/evals/creator.cjs, tests/evals/ask.eval.ts",
+   "check": "After npx vite build --config vite.view.config.ts, node tests/evals/creator.cjs <out> record: by real input, placing, wiring, setting, moving and then undoing gives 5 events by 'you' in IndexedDB 'nexus.log', the undo's reverts the move's id; typing '2345' into surface.finish's number setting f (which fires on each key, view/nodes.ts:749) gives 4 events; after an undo, setting f to the value it holds gives no event, redo still gives back what was undone (redo kept), and the undo after it lands where it did before (no step added); opening a starter from the library gives 1 'open' by 'starter', and an Undo then gives the board before back; importing a board file that has no by gives 1 'open' by 'import'; a starter kept in Boards and opened again from there gives 1 'open' by 'starter' (today keepBoard keeps no author, view/nodes.ts:34); Clear gives 1 'open' by 'you'; a reload of the stored board gives 1 'open' by its author and no undo step; a first visit with empty storage gives 1 'open' by 'starter'; index.html and space.html open together write events with distinct ids; localStorage's keys and sizes are unchanged by recording, and nexus.nodeboard.v1 is still written after each edit; with IndexedDB made to refuse, the board still saves and the page says once that the record is kept for this visit only. No request the page sends during the run holds the record (each is read). The record's size after the run is printed. Any FAIL exits 1. npm run eval:ask, with tests/evals/ask.eval.ts extended (a run the real tools make, toolsFor, callTools and runOf, no model, the page answered with relayBody as that eval does): taking Claude's board records 1 'edit' by 'claude' and no 'open', its operations equal to opsOf of the board before and Claude's board.",
+   "status": "failing",
+   "after": [
+    "NC12",
+    "01 I16"
+   ]
+  },
+  {
+   "id": "NC14",
+   "title": "The offer on the page, the computer and the phone: offersOf's proved proposals, read by suggest as kind 'type', one card at a time at 3 places or more, with what it saves (hand actions counted) and what the proof covers; Preview; Use (useOffer proves again on the board as it is, then one edit by 'engine' that registers, keeps by 'you' and rewrites; a place that no longer proves: nothing taken, the place named); No remembered; a chip with Undo; a constant made an input on the card; a group's inside shown with its bound values; offersOf called only where PAGE holds, never on space.html",
+   "meets": [
+    "R4",
+    "R9",
+    "R13",
+    "R14"
+   ],
+   "owner": "src/nexus/dataflow.ts, src/nexus/view/nodes.ts, view/index.html, tests/nexus/domains.test.ts, tests/evals/creator.cjs",
+   "check": "Gate: on the Steel starter, run once, await offersOf gives exactly one proposal: 5 places, 19 to 9 nodes, inputs color, process, name and x, proved 5 of 5, hand actions 71 to 35 (counted); none holds fe; suggest then gives it as kind 'type'. useOffer on Steel gives a board of 9 nodes and 12 wires whose every sink is digest-equal to before, and registers the block by 'you', which the gauntlet's deleteThing takes out (it refuses only what is 'built in' or by 'engine', src/nexus/gauntlet.ts:443); with one place's shape.cyl r set to 0.03 after the proof, useOffer takes nothing, names that place, and leaves the board's digest and the library (LIBRARY) as they were; with that place's x changed instead, it proves and takes it, that place's node given the new x. node tests/evals/creator.cjs <out> offer, on the built page: (a) on a board holding a combine wired to the 3D view, by real input (the command bar to place, pointer drags to wire, typing x), surface.finish > shape.cyl > place built three times in the order of design section 4, case 7: after the 2nd chain's last edit, no card; the card appears after the 3rd chain's wire into the combine and not one edit before. (b) Preview outlines the 3 places; Use leaves the counted nodes, the 3D view's thing digest-equal to before, the block in nexus.nodeblocks.v1 by 'you' with 3 tests, and an 'offer' event by 'engine' naming it; a reload keeps its author and tests; the chip's Undo, and Ctrl Z, give the board back in one step with the block kept; No, then a reload, and the card is not shown again until a 4th chain is wired. (c) Steel opened from the library: the card says 5 places, 19 to 9, proved 5 of 5; mat made an input on the card, then Use, gives 9 nodes and 12 wires with a fifth input mat; the node at the ground place set to brass gives a part of brass; Open a copy on it keeps brass (D33), and entering the copy shows surface.finish's process as 'ground', not the default 'turned'. (d) At 390 x 844 by touch, on Steel: by taps alone the ⓘ button (view/index.html:143) opens the inspector with the card at the top of its Suggestions, and Use and the chip's Undo give 9 and 19 nodes; every card and chip button is at least 44 x 44 css px, the size tests/evals/imprint-drag.cjs:169 checks. (e) On index.html, while offersOf works on the starter with the most nodes ('Colours with no dye…', 63 nodes, counted 2026-11-02), the longest gap between two animation frames is printed with the command; the page's test hook (nexusNodes, view/nodes.ts:863) says offersOf ran at least once on index.html after Steel's run (so a hook that counts nothing fails), and 0 times on space.html, with Steel the stored board, after its run. Screenshots before and after are taken and looked at. Any FAIL exits 1.",
+   "status": "failing",
+   "after": [
+    "NC8",
+    "NC10",
+    "NC13",
+    "01 I16"
+   ]
+  },
+  {
+   "id": "NC15",
+   "title": "Every author's boards searched together: the open board, the boards the person kept and the boards of saved blocks, each place with its board; only the open board proved; a made node one node from then on, so repeats of made nodes become nodes of their own",
+   "meets": [
+    "R5",
+    "R7"
+   ],
+   "owner": "src/nexus/dataflow.ts, src/nexus/view/nodes.ts, tests/nexus/domains.test.ts, tests/evals/creator.cjs",
+   "check": "One-test cases: after Steel's type is used on Steel, searching again finds no shape inside its 5 nodes and counts each as one node; two such types each wired into a place the same way, twice on one board, are a shape of their own; a saved block's board holding Steel's chain three times gives one shape there, its places naming that block's board. node tests/evals/creator.cjs <out> corpus: the open board holding Steel's chain twice and a kept board holding it once give one card naming both boards (3 places, 2 proved on the open board); Use rewrites the open board's 2 places only; opening the kept board offers the node there, proved on that board. Any FAIL exits 1.",
+   "status": "failing",
+   "after": [
+    "NC13",
+    "NC14",
+    "01 I16"
+   ]
+  }
+ ]
+}

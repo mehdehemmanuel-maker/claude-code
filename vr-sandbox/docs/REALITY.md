@@ -1,0 +1,3061 @@
+# Reality as one graph: laws, math, materials, models
+
+> Entries before 2026-11-02 describe builds since deleted (the cars, engines, panels, fittings, the computer, the seeds,
+> picture to model; decision 0021). They are history, not something to build on: build with the operations of `room.ts`.
+
+The user (2026-10-28): "Map out every known law of reality and turn them into connected, reusable nodes … connect
+every law through the math, variables, constants, and physical quantities they share … a unified math system …
+configurable settings for units, precision, solvers, assumptions, and accuracy … a unified material system that maps
+materials down to their known compositions … connect their properties directly to physics … simplified, estimated,
+abstract, and hypothetical nodes … every node must identify whether it's measured, theoretically derived, estimated,
+simplified, hypothetical, or experimentally validated, and show its assumptions and limitations … search existing
+knowledge first, combine what already exists, identify missing information, and generate new models when necessary.
+Every prediction must remain distinguishable from verified reality. First inspect Nexus's existing architecture … then
+connect and expand the system without rebuilding working features unnecessarily."
+
+And, in the user's own earlier draft of the same ask: "find all real physical laws of reality … map out how each
+interact with each other, find the in between math and equations … it could cancel out the need for certain nodes or
+strengthen other nodes … physics should all interconnect in math and interaction so no errors are hit … can everything's
+material be exposed … the house, what material is it made out of, if wood what type, if metal what type, what type of
+plastic, is it a mix of materials, what are them materials made out of, how much does it weigh, all of these should be
+viewable".
+
+## 1. What exists (inspected 2026-10-28)
+
+### Laws
+
+| Where | What | Laws | Reached by the node app |
+| --- | --- | --- | --- |
+| `src/ganglia/laws.ts` (`LAWS`) | records with a closure `eval`, an `outside()` range check, `valid`, a worked example, one source | 144 | yes: every `law.*` node is built from these (`lawBlocks` in `blocks.ts`) |
+| `src/nexus/law.ts` + `src/nexus/book/` (`BOOK`) | each law a term (`term.ts`): dimensions checked as it is built, a domain of predicates that refuses outside it, a content hash, evaluated into a `Derivation` (value, status, inputs, uncertainty, refusal); solvable for any input (`invert`) | 241: the same 144 again (`KEPT`), 22 derived (`SLICE`), 75 more (`UNIVERSAL`: conservation, transport, scaling, kinetics) | **no** |
+| `src/engineering/*.ts` | hand-written functions (drag, beams, springs, heat loss, motors, batteries) | about 40 | partly, inside other code |
+| `src/nexus/lawgraph.ts` | records with provenance, a law applied to records, solved for an input, provenance trees, laws grouped by the shape of their math, Rayleigh's method, routes from what is known to a target (one or two steps, by dimension) | over `BOOK` | no (tests and `life/glands.ts`) |
+
+The same law written two or three times: all 144 kept laws (closure and term), spring rate, convection and radiation
+against `heatLoss`, the copper temperature coefficient against `windingR`, nine kept and book-only pairs, Ohm's law and
+an RC time constant against hand-made calculator nodes; Stefan–Boltzmann's constant three times; `Source` twice.
+
+### Math
+
+One dimension algebra (`ganglia/units.ts`, M L T I Θ: no amount of substance), a Buckingham π null space
+(`dimension.ts`), terms with an integral binder evaluated by Simpson's rule with an error from halving
+(`term.ts`, `evaluate.ts`), first-order uncertainty. A second unit parser in `generate.ts` behind `math.expr`.
+Root finding written three times (`law.invert`, `fin.irr`, `lawgraph.solve`), time stepping five times (PID, heat
+flow, warming, battery drain, motor run), none with a setting for tolerance, method or precision. `math.multiply` and
+`math.divide` drop their units.
+
+### Materials
+
+| Table | Ids | Holds |
+| --- | --- | --- |
+| `data/materials.ts` | `steel.a36` (49 + 2 ground) | E, ν, yield, ultimate, elongation, conductivity, friction, restitution, sound, colour, source, confidence |
+| `engineering/thermal.ts` | `steel.a36` | c, k, emissivity |
+| `engineering/fusion.ts` | `steel.a36` | melting, expansion, bond, base element; its own 4 elements |
+| `mass.ts` `DENSITY` | `steel-low` (103) | density, typical, no sources |
+| `elements.ts` | `steel-low` (149 + 239 life molecules) | composition: alloys by grade, polymers by repeat unit, blends; 52 elements by IUPAC weight |
+| `inventory.ts` | `steel-low` | names, paths, makeup |
+| `make/rules.ts` `MAX_SERVICE` | `steel-low` (48) | most service temperature |
+| `kinds/core.ts` `MATTER` | words | a third density |
+
+Measured over all 423 material ids parts and items can carry (2026-10-28): 410 have no strength, 342 fall back to a
+typical friction, 375 have no service limit, 321 have a composition and no density (239 of them the body's
+molecules; the rest such as silver, tin, nickel, mica, neoprene, quartz: a part of any of them weighs nothing), 35 have
+a density and no composition.
+
+Parts carry the `steel-low` scheme; the properties are in the `steel.a36` scheme; five maps between them disagree
+(`steel-low` is 1018 for strength, A36 for friction, 1020 for composition), match by spelling (`tissue` and `tile` get
+titanium's friction, `platinum` gets PMMA's), and miss most polymers. 78 materials have a composition and no density
+(a part of them weighs nothing); 36 have a density and no composition. Thermal, fusion, adhesives and liquids reach no
+node.
+
+### Evidence
+
+A 13-step status lattice (`status.ts`: fundamental, measured, derived, given, empirical, estimated, assumed,
+hypothesized, …) and derivations that carry it (`evaluate.ts`), used by no node. Nodes carry `sources` (the 144 laws and
+26 others), `valid` (laws only) and words ("typical", "an estimate") in their text. Two other confidence scales in data
+files. Nothing a wire carries says what it rests on.
+
+## 2. How it will connect
+
+```
+                 ┌────────────── quantities (one registry: force, length, temperature … each its dimension, SI unit) ─────────────┐
+                 │                                                                                                               │
+  laws (BOOK, 241 terms) ──ports are quantities──► law nodes (solve for any variable) ──► chain solver (law.solve: any number of steps,
+      │   domains, hashes,                         │ each value a Derivation:              across fields, by shared quantities)
+      │   examples, sources                        │ value, unit, evidence, limits hit            │
+      │                                            ▼                                              ▼
+      │                               numeric layer (root, integrate, derivative, ODE; method, tolerance, iterations, converged?)
+      │                                            ▲                                              ▲
+  materials (one registry, keyed by the ids parts carry) ──properties are quantities, each with its source and evidence──┘
+      composition → elements (elements.ts)          density → mass of every part, assembly, body in the physics
+      handbook grade (data/materials.ts)            E, yield, ultimate → loads, tethers, stress laws
+      thermal, fusion, service limit, friction      c, k, melting, limit → heat gate, heat laws;  μ, e → Let it go
+                                                   │
+  every node: an evidence label (exact, measured, derived, validated, empirical, estimated, simplified, hypothetical, given)
+  and its assumptions and limits; every value on a wire carries the weakest evidence it rests on, and from which node
+```
+
+The thread through all of it is the **quantity**: a law's port, a material's property and a value on a wire are the
+same kind of thing (a quantity with a dimension, a unit and its evidence), so a material's density can feed any law
+that takes a density, and the chain solver can join a mechanics law to a heat law through the temperature they share.
+
+## 3. The plan, step by step
+
+The user's brief (2026-10-28, "Reality Physics Unification and Material Transparency") sets the order: audit, map,
+then a plan, then small verified stages; correctness, clarity, shared foundations and consistency across fields over
+the size of the catalogue; nothing fabricated, gaps recorded. Each step below is its own commit after the full gate.
+
+**Step 0. Baseline and the dependency map (no behaviour changes).**
+- A snapshot test that records what the system gives today: every starter board run headless (each node's outputs),
+  every law node's worked example, the mass of everything every seed and machine makes. Every later step runs it and
+  lists each difference; none may stand unexplained.
+- The dependency map as data, written into a document and kept current by a test: law ↔ quantity ↔ node ↔ material
+  property ↔ consumer (which code reads which table), so what each step changes can be seen before it is changed.
+
+**Step 1. One numeric layer.** (`src/nexus/numeric.ts`, new.)
+- Root finding (bisection, Brent, Newton with a finite-difference derivative), integration (adaptive Simpson,
+  Gauss–Legendre), derivatives (central differences with Richardson), ordinary differential equations (Euler, RK4,
+  adaptive RK45, backward Euler for stiff systems).
+- Each call takes its method, tolerance and most iterations, and returns its value with whether it converged, its
+  iterations, its error estimate, and a warning when it is unstable or extrapolates; never a number alone.
+- The duplicates call it: `law.invert`, `fin.irr`, `lawgraph.solve`, the Simpson rule in `evaluate.ts`, the steppers
+  that are ODEs (PID, battery drain, motor run, warming). The heat flow's implicit grid solver is a field solver and
+  stays.
+- Nodes `math.root`, `math.integrate`, `math.derivative`, `math.ode`, with the settings and a `converged` output;
+  `math.multiply` and `math.divide` keep units.
+- Verified against closed forms, with each method's order of convergence measured, and the replaced duplicates giving
+  their old answers within tolerance.
+
+**Step 2. Quantities, and what each law is.** (`dimension.ts` owns dimensions; the book owns laws.)
+- A registry of named quantities (force, length, temperature, pressure, stress, energy, power, current, voltage,
+  resistance, density, …; about 120), each its dimension, SI unit and a plain sentence of what it is. Amount of
+  substance added to the dimensions, which lack it.
+- Every port of every book law mapped to a quantity, with a plain sentence of what the variable means in that law; a
+  test fails on any port that maps to none.
+- Each law given its kind: fundamental (a conservation law, Maxwell's), definition (P = V I), constitutive (Hooke's,
+  Ohm's for a material), empirical or a correlation (Dittus–Boelter), an approximation of another (a small swing's
+  pendulum), a phenomenological rule; with why it works, what it predicts, and when it must not be used (its domain,
+  said in words beside the predicates that refuse).
+- One set of constants (CODATA) and one `Source` type; the duplicates folded.
+
+**Step 3. The law nodes from the book.**
+- `lawBlocks` builds every `law.*` node from the book (241), keeping the ids boards use. Each node: its equation, its
+  variables as quantities with units and meanings, a "solve for" setting (any variable, by the numeric layer), its
+  domain refusing outside it (said, never a number), each output's derivation (evidence, inputs, uncertainty), its
+  sources and kind, its tests.
+- Parity first: each of the 144 laws in both engines gives the same value on its example and on 50 samples inside
+  its domain, to 1 part in 10⁹; differences found and fixed in whichever is wrong. Only then are the closures retired
+  (their tags and range checks moved onto the book's laws; the engineering functions other code uses stay).
+- Where a law follows from others, it says so, and the derivation is kept (P = I²R from Ohm's law and P = V I): a
+  rearrangement or a special case is folded into the law it comes from, never kept as a second source of truth.
+
+**Step 4. Laws connected: the chain solver and consistency.** (`lawgraph.ts` owns joining laws.)
+- Laws and quantities as one graph; from what is known, laws applied as many steps as it takes to reach the target,
+  across fields; two laws sharing two unknowns solved together by Newton's method from the numeric layer.
+- Node `law.solve`: knowns in, a target out, with the chain (each step's law, inputs, evidence, the limits it came near),
+  the weakest evidence it rests on, and what it assumed (that a quantity named alike in two laws is the same thing,
+  unless the board names them apart). Where more than one model fits, which was chosen and why is said; nothing
+  substituted silently.
+- Consistency: units checked at every joint; where two chains reach one quantity they must agree, else both are shown;
+  energy, mass, charge and momentum checked across a chain where they apply.
+- Verified on cross-field problems with known answers (a hung steel rod: weight, stress, strain, elongation from its E;
+  a wire's resistance, heating and temperature rise; a pendulum's length from its period).
+
+**Step 5. Coverage: the laws reality needs that Nexus lacks.**
+- The laws there are set against the fields (mechanics and collisions; gravitation and orbits; relativity where it
+  matters; electromagnetism as fields and circuits; heat and thermodynamics; fluids, gases, buoyancy, turbulence;
+  waves, acoustics, optics, radiation; atomic and quantum; chemistry, bonding, reactions, kinetics; solids: elasticity,
+  plasticity, fracture, fatigue; materials' properties; biomechanics): what each field has, what it is missing, written
+  into the dependency map.
+- Missing laws added field by field from sources (CODATA, textbooks, standards), each with its kind, domain and tests;
+  disagreements between models and unresolved questions recorded as such, never smoothed over.
+
+**Step 6. One material system.** (`src/nexus/matter.ts`, new owner; `elements.ts` and `data/materials.ts` its data.)
+- For every id parts carry: its precise identity (wood species and grade, steel grade, polymer type, concrete mix,
+  glass type), its composition recursively (a mix of materials, each down to compounds and elements, with shares),
+  and each property (density, E, ν, yield, ultimate, elongation, c, k, expansion, emissivity, melting, service limit,
+  resistivity, friction, restitution, colour) with its value, unit, source and evidence: measured, specified (a
+  standard or a maker), estimated or typical.
+- One explicit table from part ids to handbook grades replaces `HANDBOOK`, `SURFACE` and `MATTER_WORDS` and their
+  spelling matches.
+- What is not measured is worked out only where a rule holds and labelled so (density of a mixture by volume
+  fractions); properties that depend on microstructure, direction or arrangement (stiffness, conductivity of a
+  composite) are given as bounds (Voigt and Reuss) or left missing, never averaged blindly.
+- A material known only by its family ("wood", "plastic", "steel") is shown as unspecified, with the range its family
+  spans, never passed off as a species or a grade. The house seed's generic "wood" and its concrete (oxides only, no
+  mix, no reinforcing) are the first to be specified.
+- Element data added from CRC and IUPAC (densities, melting points, standard atomic weights).
+- Every consumer reads it: `mass.ts`, `strengthOf`, `surfaceOf`, `MAX_SERVICE`, `tetherOf`, the thermal and fusion
+  tables. The snapshot lists every mass and property that moves, each explained.
+
+**Step 7. What anything is made of, and what follows from it.**
+- A node and a panel that open any thing as its materials all the way down: each part, its precise material, the mixes
+  and what is in each, elements, with the mass and share at every level, and what is known, estimated and unspecified.
+- Properties of any part and assembly from its parts, without double counting what is nested: mass and material
+  quantities, centre of mass, inertia tensor, heat capacity; resistance and conductance where a path is defined;
+  expansion; stiffness and strength where a model holds.
+- Fed into the physics, sizing, clearances, heat and simulation that exist; a material changed on a board re-runs every
+  result that depends on it, and a test proves it (the house's framing changed, its mass and its loads follow).
+
+**Step 8. Evidence on every node and every value.**
+- Every node labelled: exact, measured, specified, derived, validated, empirical, estimated, simplified, hypothetical,
+  given; with its assumptions and limits. Read from what a node is (a law from its kind and sources, a datasheet
+  lookup as measured, a model that leaves things out as simplified, a generator as hypothetical), set by hand only
+  where a rule cannot tell.
+- Every value on a wire carries the weakest evidence it rests on and the node it came from; uncertainty carried where it
+  changes a result; invalid inputs, incompatible units, violated assumptions, nonphysical results (a negative mass, an
+  efficiency over one), instability and extrapolation said on the node that hit them.
+- Validation recorded honestly in three grades: tested here, compared with an independent reference, validated against
+  experiment; a model is never called validated because its tests pass.
+- Shown as a badge on every node and in the inspector, checked by the gauntlet, written into `docs/NODES.md`.
+
+## 4. How each step is verified without breaking what works
+
+- The step 0 snapshot after every step; each difference explained, or the step is not done.
+- Dimensional analysis: every law, every chain joint, every node with units.
+- Known analytical solutions and limiting cases (a pendulum's small swing, a beam's tip load, e^(−kt), a cubic's
+  roots); boundary conditions.
+- Conservation of energy and momentum where they apply (collisions, a chain through electrical and heat).
+- Independent references: a law's worked example from its own source; a material's figure against a second source.
+- Material consistency: density from composition against the measured where both exist; every id parts carry has a
+  density; tissue, tile, platinum and alumina get their own properties.
+- Assemblies: mass and centre of mass of a known shape against hand calculation; nested assemblies not counted twice.
+- Cross-field: the hung rod, the heated wire, a motor's winding changed and its electrical, heat and mass results
+  following.
+- Incremental runs: a change re-runs every dependent result and nothing else.
+- Failures: insufficient data and violated assumptions give a stated warning or refusal, never a number.
+- Ids kept: every `law.*` id keeps working, so saved boards open; the reach test, the gauntlet over every node, the
+  pages in a browser, and screenshots of a board that solves a cross-field problem through laws and a material.
+
+## 5. Progress
+
+- **Step 0, done.** `tests/nexus/baseline.test.ts` records 1,447 values from every starter board, law node, seed and
+  vehicle model (timings left out; two runs alike). `docs/DEPENDENCIES.md` is written from the code by
+  `tests/nexus/dependencies.test.ts` and fails when stale. It found: 241 laws in the book, 144 of them also closures
+  and nodes, 97 in the book alone; 558 quantity names over 892 ports, 117 shared by two laws or more; 53 letters that
+  mean different things in different laws (so laws are joined by quantity, never by letter); four material tables no
+  code reads (the friction map, words to matter, the liquids, the edge rules).
+- **Step 1, done.** `src/nexus/numeric.ts`: roots (Brent, bisection, Newton, secant), integrals (adaptive Simpson,
+  Gauss–Legendre, Simpson on panels), slopes (Ridders, central), paths (Dormand–Prince, RK4, Euler, backward Euler),
+  each answer with its method, whether it converged, its steps, its evaluations, its error and a warning. Tested
+  against closed forms, with Simpson's fourth order, Euler's first and RK4's fourth measured, and a stiff system
+  shown running away explicitly and held by backward Euler. Through it now: a law solved for an input, the law graph's
+  inversion (its grounds say the method, whether it converged and its error), `fin.irr` (method and tolerance
+  settings, and `converged`), a term's integrals, the PID plant (method setting). New nodes `math.root`,
+  `math.integrate`, `math.derivative`, `math.ode`. `math.multiply` and `math.divide` carry units (N × mm is N mm; N ÷
+  mm² is N/mm^2). The baseline is unchanged. Kept as their own code, each with its reason in the dependency map: the
+  battery's one-step charge count, the motor run (events and energy each step), a frame's warming, the heat grid.
+- **Step 2, done.** Amount of substance is a base dimension (the mole was a plain number, so a molar slip could not be
+  seen); every law of the book still balances with it. `src/nexus/quantities.ts`: 85 quantities, each a dimension, an
+  SI unit and a sentence; all 892 ports of the 241 laws map to one (a test fails on any that does not), told apart by
+  their words where a dimension holds several (a torque is not an energy, a stress not a pressure, a modulus not
+  either); 55 letters that mean different things in different laws are now different quantities. `meaning(law, port)`
+  says what each variable is in its law. `src/nexus/book/kinds.ts`: every law's kind and why it works (92 derived, 40
+  definitions, 29 empirical, 25 fundamental, 24 geometry, 18 approximations, 13 constitutive); when it must not be used
+  stays its `valid` text and its domain. `src/data/constants.ts`: the constants once (the 2019 SI's exact ones with
+  e and N_A added, CODATA 2018's measured ones with their uncertainty); the book's leaves, the Stefan–Boltzmann
+  constant in the thermal code and the closures, standard gravity in five modules and the Faraday constant in the gas
+  code (it was 96485, now 96485.33212) all read it; a test fails if any code defines one again. One `Source` type:
+  the law's is the ganglia's with its kind required. The dependency map now shows each law's kind and the laws each
+  quantity joins, and finds a table's readers by the file they import from (it had counted the book's own
+  `./materials` as the handbook's).
+- **Step 3, done.** One law engine. Every one of the 241 laws of the book is a node (`law.<id>`; the 144 old ids
+  kept, 97 new). Before the closures went, each of the 144 was run against its book term at its example and 20 points
+  around it (2,940 runs): the ports and units were the same in every law, and every value the same to 10⁻⁹ wherever
+  both answered; the only difference was what each did outside its range, where a closure gave a number with a caution
+  and the book refuses. So each node now has "Outside where it holds": refuse (by default, in words) or extrapolate
+  (the number, marked `outside-validity (extrapolated)` and "not a prediction it makes"). "Solve for" any variable the
+  term reads: a product of powers is rearranged; anything else is found by the numeric layer, its bracket searched over
+  ±10⁴⁰ and at the edges of where the law is finite, the answer put back to check it holds there and gives what was
+  asked; where more than one value solves it, it says how many and takes the positive one nearest 1 where the law
+  holds, and From and To choose another. A variable only in a law's domain (the depth that makes a beam slender)
+  cannot be solved for, and says so. Each node gives its result's evidence (`status`) and the tree it rests on
+  (`why`), and says the law's kind and why it works. Every law's example is its test forward and backward for each
+  input it can be solved for; four cannot at their examples (a double root or an edge), each with its reason.
+  Found and fixed on the way: the law graph's numeric solve converted an answer in a unit with a scale or an offset
+  (°C, mm) as if it were SI; three laws lacked a domain a root search needs (a slope angle within ±90°, a glancing
+  angle within 0 to 90°, a transverse fibre fraction within 0 to 0.7) and a bolt's pitch is now below its diameter.
+  The baseline moved only by the new outputs and nodes and by two laws now on CODATA 2018's μ₀ rather than 4π × 10⁻⁷
+  (5 parts in 10¹⁰). `src/ganglia/laws.ts` is deleted, and with it three engineering files only it reached
+  (`battery.ts`, `beams.ts`, `mechanics.ts`); their formulas are the book's.
+- **Step 4, done.** `chain` in `src/nexus/lawgraph.ts` and the node `law.solve`: knowns written one a line ("mass =
+  1000 kg", a quantity named in brackets where the unit is not enough, `@law.sym` to pin one to a port), a quantity
+  wanted, and the laws of the book chained to reach it, sought from the target back so only laws on a way to it are
+  applied, as many deep as asked (six by default), each forward or solved backward, a law never twice on one way. Of the
+  ways found, the fewest laws then the strongest kind is taken; the rest are said with their values. Where no single law
+  can be solved, two laws sharing the same two unknowns are solved together by Newton's method. Out: the value, its
+  evidence, the tree it rests on, each step with its law and kind, every assumption, other ways and their values, and
+  every other law the values can be checked by, agreeing or not.
+  Joining is the rule the plan set, made exact: a value joins a port by its pin, its name or its symbol; by its quantity
+  alone only where both the port and the value are named plainly (σ = F/A takes a weight; a critical load, an applied
+  voltage, a yield strength are particular and join only by name); a length, an area, a time, a temperature, a speed, an
+  energy and every ratio join only by name. Standard gravity is used where a law needs gravity and none is given, and
+  said. Verified: a rod holding a tonne (weight → stress → Hooke's law solved for strain, 4.903 × 10⁻⁴); a wire carrying
+  5 A (its resistance → Joule heating → Newton's law of cooling solved for the rise, 42 K), its two areas pinned apart;
+  a pendulum's length from its period (0.9936 m); a voltage and a current from a power and a resistance by two laws
+  solved together; a mass and a weight that do not agree, shown. A wire's length is never joined to a plate's size.
+  The laws checked against each other (`crossCheck`, written into `docs/DEPENDENCIES.md`): each law's example given and
+  its output sought through the others. Building this found the joining faults the rule above fixes (a normal force
+  taken as a friction force, an applied voltage as the drop across a resistance, a law used to find its own input):
+  35 false disagreements before, 2 after. 7 laws have another way to their output; 5 agree; the 2 that differ are read:
+  the series for a pendulum's period against the exact elliptic integral (5 parts in 10⁶ at 60°, the series' own
+  truncation), and a box's shape factor against an ellipsoid's volume (two models of a shape). That only 7 of 241 have a
+  second way is the coverage gap step 5 is for. The old two-step `routes` (by dimension alone) is gone; so is the mole
+  count kept beside the dimensions, now that the mole is one.
+- **Step 5, the first round done.** The coverage map (`src/nexus/book/fields.ts`, written into `docs/DEPENDENCIES.md`):
+  fourteen fields, each the core its standard textbook teaches (the source named on each list), 179 laws in all. At the
+  start of the step the book had 131 of them. 82 laws were added from those textbooks
+  (`book/foundations.ts`, `book/core.ts`), each with its kind and reason, its domain, its source and a worked example
+  computed independently in Python, and each tested forward and backward as every law node is: the definitions the rest
+  join through (strain, momentum, impulse, work, pressure, wave speed, charge, capacitance), steady acceleration,
+  rotation, gravitation and orbits (Newton's law, orbital and escape speed, Kepler's third, vis-viva), special
+  relativity (the Lorentz factor, time dilation, length contraction, relativistic momentum, E = m c²), solids (Poisson,
+  the isotropic shear modulus, thermal stress, stress intensity at a crack, Goodman, power-law creep, strain energy),
+  fluids (terminal speed, Haaland's friction factor), heat (adiabatic compression, entropy of heating, fin efficiency,
+  Dittus–Boelter), waves and sound (Doppler, decibels, the speed of sound in a gas, harmonics, inverse square), light
+  (the thin lens, magnification, two slits, Malus, Beer–Lambert, Wien), circuits (series and parallel, a wire's field,
+  the transformer, LC resonance), the quantum (Planck–Einstein, de Broglie, hydrogen's levels, the photoelectric
+  effect, Heisenberg, the particle in a box, Compton), chemistry (pH, the equilibrium constant, Raoult, second-order
+  kinetics, van 't Hoff), the binary entropy, and machine elements (a shaft's critical speed, belt power, a clutch's
+  torque). New constants from CODATA 2018 (Wien's b, the Rydberg energy) and the conventions they need (I₀ = 10⁻¹²
+  W/m², ISO 1683; c° = 1 mol/L, IUPAC); the electronvolt as a unit; six quantities (mass per length, entropy, energy
+  density, molar absorptivity, the second-order rate constant, momentum and its angular kin, angular acceleration).
+  The book now holds 323 laws, all nodes; the map's core is 177 of 179. The two left: Colebrook's friction factor, which
+  is implicit (f on both sides) and so not a term (Haaland's explicit fit to it, within 2 %, is in), and the entropy of a
+  distribution of many outcomes, which takes a list, not a number.
+  Found on the way: the dimension checker refused my first pH (a concentration over a bare 1000, not over 1 mol/L); the
+  root search took a pole (where 1/(1/f − 1/d) changes sign through infinity) for a root, and now keeps only roots the
+  law reaches; classical momentum, valid "far below light's speed" in words only, now refuses past a tenth of it (the
+  cross-check had found it differing from the relativistic law at 0.6 c, as it should); series and parallel resistance
+  each named their output "resistance" and were taken for each other. Laws with a second way to their output: 14 (from
+  7); all agree but the two read in step 4. Five laws repeat their outputs (an angle and its complement, a cosine, a
+  damped swing, a yes-or-no): their backward tests are given the range that holds the root meant, and the node says
+  how many values solve it.
+  Still to cover, beyond each field's core: biomechanics, plasticity beyond yield, turbulence beyond friction factors,
+  electrochemistry of cells, nuclear reactions, statistical mechanics past the Boltzmann factor; each to be listed in
+  `fields.ts` from its textbook before its laws are added.
+- **Step 6, the first round done.** `src/nexus/matter.ts` is the one material system: one explicit table (`MATTER`)
+  from every material id a part carries (114) to its family, what it is as exactly as it is known, whether that is a
+  grade, species, type or mix (66) or only a family (48, said unspecified, with the span its family's specified members
+  cover), and its handbook grade, its own (19) or the nearest the handbook holds (50, every number from it said as a
+  stand-in's). `matterOf` gives every property with its value, unit, source and evidence, and keeps two tables'
+  disagreement rather than choosing (one found: phenolic, 1300 kg/m³ typical against the handbook's 1735 for a filled
+  billiard-ball resin). The friction map's spelling matches are gone (they gave tissue and tile titanium's friction,
+  platinum PMMA's); strength comes only from a material's own grade, so a stand-in never lends its strength; `steel-low`
+  is one steel throughout (its make-up was AISI 1020's while its strength was 1018's: now 1018's, ASTM A108). The
+  elements (`data/periodic.ts`, 118): weight, density, melting and boiling points from a secondary compilation (Wikipedia
+  citing CRC and IUPAC; PubChem was not reachable from here), said so, the superheavy elements' predicted figures left
+  out; a material that is one element now weighs that element's density (a silver or tin part weighed nothing). Wood
+  species from the Wood Handbook (`data/woods.ts`: Douglas-fir, northern red oak; density worked out from specific gravity
+  at 12 % moisture; MOE and MOR of clear wood, said not a grade's); mixes by the cubic metre (`data/mixes.ts`: a 25 MPa
+  concrete, its density the sum of its parts and its make-up from them, down to Portland cement's oxides). The house
+  seeds now say their materials: red oak for the oak, MDF for the door leaf and the cabinets, Douglas-fir for the door
+  lining, the concrete mix for the sidewalk (each the seed's choice, changed on its node). The baseline moved only by
+  that: a door 18.6 → 25.2 kg (MDF at 750 kg/m³ against an unspecified 500), a bed 116.9 → 111.7 kg (red oak 705.6
+  against 750), roads lighter by the mix's 2335 kg/m³ against 2400; the agents' timings by the heavier door's swing; more
+  kitchen pieces past what a body can lift. Node `matter` opens any material. The dependency map lists every material
+  with its family, whether it is specified, its handbook grade, its density and strength with their evidence.
+  A stand-in must fit the property it lends: the gate caught a car held still by friction starting to slide, because
+  the brake pads' friction material and epoxy had been given the handbook's only thermoset, a filled phenolic billiard
+  ball (friction 0.06); neither has a stand-in now, and each says its friction is typical.
+  Still to do in this step: the house's walls and frame (the wall node's material), reinforcing in the concrete,
+  thermal and fusion properties for the stand-ins' own grades, polymers' own handbook entries (50 stand-ins remain),
+  composites' stiffness as bounds; then step 7 opens any thing as its materials all the way down.
+- **Step 7, the first round done.** `src/nexus/madeof.ts`, from one walk of a thing's placed pieces (the walk that draws
+  and weighs it): `madeOf` opens any thing as its materials all the way down (its own tree, each thing's mass and share,
+  a thing placed many times counted once at each place; mass by material, each said as exactly as `matter.ts` knows it;
+  by element; and what is not known: pieces with no material, materials with no density, materials known only by their
+  family, masses stated rather than worked out); `massProperties` gives mass, centre of mass, the inertia tensor about it
+  (each piece's own, exact for a box, a cylinder or a ball, else its box and said; the parallel axis theorem in tensor
+  form), its principal moments, and heat capacity from each material's own specific heat with the share of mass it
+  covers. Verified against answers worked by hand (a steel block and an aluminium rod a metre apart: mass, centre,
+  inertia about two axes; iron from both, the aluminium's 0.35 % too), against the existing weighing (the house and the
+  default vehicle agree to 10⁻¹⁵), nested and repeated placing (four of a pair weigh four pairs), what is not known said,
+  and a material changed on a board re-running mass, make-up and heat capacity. Nodes `made.of`, `mass.properties`.
+  What it found, left as findings (design is not this round's): the house is 213 t, 81 % of it "tile": the roof is a
+  solid triangular prism of tile, not a roof; tile has no make-up, so 82 % of the house is not known down to elements;
+  "oak" (unspecified) is still in the room plans. The default vehicle is 6.1 t, 11.6 % of it alumina (about 700 kg),
+  which no car holds: some part is drawn of it or at a size it is not; 12 of its materials are known only by family.
+  Still to do in this step: resistance and conductance along a defined path, expansion, stiffness and strength of an
+  assembly where a model holds; the physics bodies' inertia read from here rather than from their shapes alone.
+- **Step 7, fed into the physics.** A body of several pieces is now given to the rigid-body engine with its centre of
+  mass and inertia tensor from its pieces' own masses (`massPropsOf` in `sim.ts`, the same parallel-axis sum as
+  `madeof.ts`; each piece's own inertia exact for a box, a ball, a cylinder and a cone, a ring or a tube as the solid
+  cylinder round it), the centre moved by Jolt's offset-centre-of-mass shape. Before, Jolt took one density for the
+  whole body, so a steel cube joined to a pine cube balanced at the middle of their volume; now, set across a knife
+  edge there, the steel side goes down, and with one density it still balances (the test holds both). A body with any
+  piece of unknown mass keeps Jolt's own. What moved in the snapshot: the two agent boards, through the door, which is
+  a body of pieces of different materials: its swing now ends one physics step (1/60 s) later, so the plans end
+  1/60 s later, and the child's drawn path has one segment fewer (3 g of PVC line).
+  Still to do: resistance and conductance along a defined path, expansion, stiffness and strength of an assembly.
+- **Step 7, along a path.** `alongPath` (`madeof.ts`, node `path.properties`): pieces of a thing named in order along an
+  axis, in series; each piece's length its extent along the axis and its section its volume over that length (exact
+  for a box square to the axes or a cylinder lying along the axis, else a mean, said); from each material's own figures,
+  the path's resistance to heat (L / k A), to current (L / σ A), its axial stiffness (1 / Σ L / E A) and its growth
+  warmed (Σ α L ΔT); where neighbours expand differently, the strain between them and the stress if one held the other
+  (the stiffer E times |Δα| ΔT, an upper bound). A piece not found, a material with no figure, a stand-in grade's figure:
+  each said, nothing guessed. Left out, said: contact resistance (for heat often the larger part, so the result is the
+  least the path can be), bending, any other path. Verified against the same sums worked by hand for an aluminium rod,
+  a copper rod and a steel block (all four quantities, the sections exact, the mismatch strain and stress), a rod lying
+  across the path read as a mean section, and a material changed on a board changing what the path carries.
+  The snapshot did not move.
+- **Step 7, side by side and strength.** A path is now stages one after another, each one piece or several side by
+  side ("a + b, c"), joined at both ends: in a stage conductances and stiffnesses add, and the pieces grow by their
+  stiffness-weighted mean (Turner), each pair side by side with its own mismatch; its strength is the axial force at
+  which the first piece yields (each stage carries it all, shared by stiffness, so a stage yields when its first piece
+  reaches its own yield strain σy / E; series: the least over the stages). Pieces side by side of different lengths are
+  said to be taken as joined at both ends. Verified against the sums worked by hand for a steel and an aluminium rod
+  side by side under a copper rod (resistance, stiffness, Turner growth, first yield). The snapshot did not move.
+- **Step 7, a beam, a column, its joints and networks.** A path is now also a beam held at its start: its end's
+  stiffness to a sideways push toward each of the other two axes, exact for a stepped beam (Euler–Bernoulli,
+  δ = P Σ ((L − a)³ − (L − b)³) / 3 E I over its stages; each piece's section second moments exact for a box square to
+  the axes and a cylinder along the path, else its box's scaled to its mean section and said). And a column: the push it
+  takes at least before buckling, π² E I / (K L)² with its weakest stage's E I over its whole length and its ends as
+  said (K 1, 0.5, 0.699, 2): a stepped column is stiffer everywhere than one as weak as its weakest stage, so this is a
+  floor, never an overestimate; where it is below the yield force, it is said to buckle first. The joints between
+  stages, through the lesser section: a contact conductance (W/m² K) or resistance (Ω) given is added there; none is
+  invented (it hangs on the faces' finish and how hard they are pressed, which nothing here knows yet), and left out it
+  is said. Networks (`throughNetwork`, node `path.network`): pieces as branches between named junctions, solved by
+  nodal analysis (each junction's balance one row of a linear system, `solveLinear`) for heat, current and axial
+  stiffness between two junctions; a bridge no series-and-parallel reduction can take is solved as readily. Verified
+  against hand-worked answers: a bar's 3 E I / L³ both ways, a stepped beam's sum, Euler's load for pinned and
+  fixed-free ends, the stepped column's floor, the contact added at a joint, a split that rejoins equal to pieces side
+  by side, and an unbalanced Wheatstone bridge of five rods of three metals against its closed form (to 12 figures).
+  The snapshot did not move.
+  Shown on a starter board (What it is made of, and what it carries: a copper and an aluminium rod side by side under
+  a steel block), looked at in the app: what it is made of by material and element, its mass, centre and inertia, and
+  the path's heat, current, stiffness, growth, first yield, bending and buckling. Looking found two faults, both fixed:
+  the analyses were shelved under Start (any node that measures was, before its being a critic was asked; a critic is
+  now shelved under Check first), and the path nodes said "untested" (their tests were in a test file, not on the
+  node: each now carries one worked by hand from its material's handbook figures).
+  Step 7 as planned is done but for two things said plainly: contact conductance from what the faces are (no data
+  here for it yet), and a test that the house's framing changed moves its loads (the house is parked: design is not
+  this round's).
+- **Step 8, the first round done.** `src/nexus/evidence.ts` gives every node its own evidence, read from what it is: a
+  law from its kind (definition or geometry exact, fundamental or derived law derived, approximation simplified, the rest
+  empirical) with its validity as an assumption and its domain as its limits; a typed or chosen value given; a maker's,
+  a standard's or a table's figures specified; the 6502 netlist measured (traced from the die); simulations and
+  perception models simplified; designs, generators, AI and the web hypothetical; anything that says its figures are
+  typical or an estimate no stronger than estimated; set by hand only for 14 nodes a rule cannot tell, each with why.
+  Counts: exact 81, measured 1, specified 7, derived 289, given 9, empirical 47, estimated 6, simplified 40,
+  hypothetical 71. Validation in the grades the plan set, never claimed past what was done: 9 laws compared with an
+  independent reference (their worked example reached another way through the book, and agreeing), 510 tested here (a
+  check that a node does what it says, not that the world does), 32 untested, none validated against experiment.
+  The engine carries on every value the weakest evidence it rests on and the node it came from; a result that cannot be
+  physical (a mass, density, volume, area or resistance below nothing, a temperature below absolute zero, an efficiency
+  or share outside nothing to one) is said on the node that made it, never corrected. Shown on each node's footer and in
+  the inspector (kind, why, assumptions, limits, how checked), counted in `docs/NODES.md`; the gauntlet fails a node that
+  claims specified or measured figures with no source. The snapshot did not move.
+  What it found: 29 ports were in units the units parser cannot read (USD, N*m, A*h, W*h, kW*h, °), so no value through them
+  could be converted or checked; they now read N m, Ah, Wh, kWh and deg, currency is let stand as currency, and a test holds
+  every port to a unit the parser reads.
+  Still to do in this step: uncertainty carried on wires where it changes a result; conservation checks across a chain;
+  extrapolation outside a law's domain said on the value, not only listed as a limit.
+- **Step 8, the second round done.** Uncertainty on wires: a number typed with a ± (one standard uncertainty, in its own
+  unit) carries it, and the engine carries it through every node that gives the same for the same inputs: each
+  uncertain source moved by its ± and the node run again, the half-difference its sensitivity, summed in quadrature (a
+  first-order estimate as the GUM gives it). One source feeding two inputs is moved as one, so x × x gives 2x δx, not
+  √2 x δx; sources reached by different paths from one origin are still taken as independent, which is said. A ± is
+  converted with its value (2 mm arrives as 0.002 m), changing only a ± runs again what it feeds, and a node it cannot
+  pass (one with a board of its own, one that does not give the same twice, a sweep) says so rather than dropping it.
+  Shown as "value ± u" in the inspector. Extrapolation carried: a law asked to go past where it holds says so on its
+  node, and every value downstream says it rests on an extrapolation and which node made it, not a prediction.
+  Conservation: a balance node (`check.balance`) sums what goes in against what comes out and is kept, of one
+  conserved thing in one unit, says on the node when the imbalance is more than its tolerance, and carries the inputs'
+  ± into the imbalance. Verified by hand-worked answers (2 ± 0.1 kg weighs 19.61 ± 0.98 N; a pendulum's δT = T δL / 2L;
+  100 ± 3 J in against 90 ± 4 J out is 10 ± 5 J unaccounted for). The snapshot did not move.
+  Still to do in this step: the balance applied along the existing chains (the electrical-to-heat chain, collisions in
+  the physics) rather than only as a node one places; uncertainty from the material tables (a property's own spread)
+  and from the solvers' own error; judging a balance against its imbalance's uncertainty rather than a fixed tolerance.
+
+## 6. The plan from here, in order (rewritten 2026-10-29)
+
+History. 2026-10-28, after step 7's rounds, the user asked for "a smarter way to go about step 7 … in chronological
+order": what step 7 had built (`alongPath`, `throughNetwork`, nodes `path.properties`, `path.network`) was formulas driven
+by typed piece names, doing its own arithmetic where the book owns the law, one-dimensional. Steps A to I replaced it with
+one engine over the contact graph. 2026-10-29 the user asked what is retired, merged and connected, whether the whole
+system is updated ("put it in system population and take all previous builds as before the update"), for nodes "more
+technical, scientifically specified", and for the engineering disciplines as a tree; then for the whole plan in
+chronological order, then for appearance from physics ahead of a design round that throws away what was built before the update and rebuilds it. This is that order. Two rules set it: what changes the answers (the engine, the materials, the
+evidence) is finished before anything is re-checked against it, so nothing is re-checked twice; and the naming schema
+exists before the re-check, so each node is renamed once, while it is re-worked.
+
+Every step ends the same way: the tests that touch it while working (probes, deleted after), the one test (under a
+minute) before it is pushed and only pushed on its passing, a screenshot in the app where it can be seen, and a progress
+entry below.
+
+### Phase 1. The engine (steps A to I): done, 2026-10-28 to 10-29
+
+| Step | What | State |
+| --- | --- | --- |
+| A | Context and process: CLAUDE.md trimmed, the one test, nodes dated, the gate under a minute | done |
+| B | Contact graph from the geometry (`graphOf`, node `graph`), each distinct thing once | done |
+| C | One solver for what flows (`flowOver`, node `flow`): heat, current, force | done |
+| D | Each edge by the book's laws; evidence and ± (GUM type B from families' spans) | done (the frame's sections and stiffnesses through the book, phase 2.3) |
+| E | Seen in 3D: coloured by level, smooth fields through each piece (Fourier between known points), bent as beams bend (Hermite), arrows across contacts | done |
+| F | Force: 3D frame (`bentUnder`, node `bend`): deflection, von Mises stress, first yield, linear buckling, thermal loads, supports by kind and at a point | done (supports as settings, phase 2.3) |
+| G | Accuracy that grows: slices along the flow, the answer shown settling | done |
+| H | Fed into what exists: heat gate by conduction, placement's heat map, the con-rod check | done for those; the other load rows in Phase 4 |
+| I | Retired: `path.network` → `flow`, `path.properties` → `bend`, their code deleted | done |
+
+### Phase 2. Finish what changes the answers (before anything is re-checked)
+
+1. **Taxonomy schema (step K, its fields).** The disciplines tree is populated (`src/data/disciplines.ts`,
+   `docs/DISCIPLINES.md`: 17 disciplines, 363 entries, each after the body that divides it). Next: the fields on every
+   node (technical name and plain gloss; discipline entry; scheme code from PhySH, MSC2020, ICS, ACM CCS or JEL; role
+   from data source, geometry operation, analysis, numerical solver, assessment, data transformation, control flow,
+   visualisation, I/O; model specification: governing laws, model class, steady or transient, linear or not, numerical
+   method, assumptions and range, references; physical domain read from its ports' quantities; a hierarchical technical
+   id with the old one an alias). For example `bend`: "Frame analysis: 3D Euler–Bernoulli beam network (deflection, von
+   Mises stress, linear buckling, thermal load)", discipline mechanical → solid mechanics → elasticity, role analysis, id
+   `solid.frame`; `flow`: "Lumped network analysis: steady conduction, DC current, axial stiffness", id
+   `heat.conduction.network`; `graph`: "Contact graph (adjacency from geometry)". The one test's check holds them on every node marked current; a node before the update
+   is exempt until Phase 4 re-works it, so the gate stays green and the check grows with the work.
+2. **One heat solver.** `heatflow.ts` (lumped, stepped in time, used by `generate.ts`) becomes the time-stepped form of
+   `temperaturesOf` over the same graph and laws; Incropera's touching-contact resistance becomes the engine's default
+   where pieces only touch. Nothing does heat twice.
+3. **Engine leftovers.** Bending stiffness through book laws (D for the frame); `bend` takes supports as settings
+   (clamped, pinned, sliding, held at a point) and says its convergence as `flow` does (G); arrows for the flow through
+   each contact (E).
+4. **Materials (step 6's remainder).** The 50 stand-in grades each given their own sourced figures or said unknown;
+   conductivity for polymers, rubbers and mixes; composites' stiffness and conductivity as bounds (Voigt and Reuss);
+   the old word-to-material maps retired.
+5. **Evidence (step 8's remainder).** Balances along the existing chains (electrical to heat, collisions), a balance
+   judged against its imbalance's ±; ± from the solvers' own error (the residual, the settling as slices double).
+
+### Phase 3. Appearance from physics: how a thing looks, worked out and editable (asked 2026-10-29)
+
+The user: "I would rather get textures stunning and different tools that govern how something looks maybe math can
+determine something color like why is metal silvery grey why is copper its color … like a auto texture that is editable
+like paint jobs or design". Before anything is rebuilt, so every rebuilt thing gets it.
+
+1. **Optical data on the materials** (`matter.ts`): each metal's complex refractive index n(λ) + i k(λ) across the
+   visible (Johnson and Christy 1972 for copper, silver and gold; Rakić et al. 1998 for aluminium, chromium, nickel,
+   titanium, tungsten; others as the compilations give them, sourced); each dielectric's index and absorption; pigments
+   by their absorption.
+2. **Colour computed, not chosen**: reflectance at each wavelength from Fresnel's equations, R = ((n−1)² + k²) /
+   ((n+1)² + k²) at normal incidence, weighed by the CIE 1931 observer under D65 into XYZ, then linear sRGB: the metal's
+   reflected colour (its F0). This is the why: silver and aluminium reflect nearly the same at every wavelength, so they
+   look neutral; copper's d-band electrons absorb above about 2.1 eV (green and blue), so it reflects red and orange;
+   gold's edge is near 2.4 eV, so it is yellow; iron and steel reflect about 55 to 65 % flatly, so they are grey and
+   darker than silver. Checked against measured colours.
+3. **Surface from the process**: roughness from the finishing process's Ra (turned, ground, polished, cast, forged, blasted,
+   printed) into microfacet roughness; the lay of machining as anisotropy; what is geometry at that scale (layer lines,
+   knurls, weave, threads) made as height and normal maps; oxides and patinas (copper's Cu₂O then verdigris, aluminium's
+   anodic film, heat tint on steel) as layers with their own optics, thin films by interference.
+4. **An editable look stack on every part** (an auto texture to start from, every layer changeable): substrate (from its
+   material, step 2) → treatment (anodised, plated, oxidised) → coating (primer, base coat by pigment, metallic or pearl
+   flake, clear coat) → graphics (livery, decals, patterns) → wear and weathering (edge wear by curvature, dirt by
+   occlusion, heat tint by the engine's own temperature field). Nodes for each layer; a paint job is a node.
+5. **The renderer**: physically based (clear coat, anisotropy, sheen, iridescence), lit by an environment; screenshots
+   close up and a blind check each round ("would a person call this cheap?").
+
+### Phase 4. Node population (step J): every node before the update re-checked
+
+Dated from git: 457 of 556 nodes were from before the update (`BUILT`, `UPDATE` in `src/nexus/built.ts`), marked so on
+the node, in the inspector and in NODES.md. A node counts as current only when it has been re-worked and specified
+(step K), never because it passes; one that would take longer to fix than to rebuild is rebuilt.
+
+1. **Load checks read the drawn parts**: rod bolts, crank-pin bearing, wrist pin (`loads.ts`), as the con-rod does. Done 2026-10-29.
+2. **Nodes, field by field** (laws 241, seeds 21, make 16, engine 8, …): each re-checked against units, evidence and ±,
+   its own tests read again ("they could be flawed tests"), named and classified (step K), and so dated after. Decided
+   by the user (2026-10-29): "if the law nodes fall into the math node hierarchy with no contradictions then they're
+   safe": a law node is current when `lawFits` holds for its law as it now is (all 330 do; see the progress entry).
+3. **Retire what the population shows doubled**, as aliases, so no board breaks.
+
+### Phase 5. Design population: what was built before the update thrown away and rebuilt
+
+The user: "those were really just tasks that helped us see what we need … thing built before the update just throw it
+away it's gonna be too buggy and be a unreasonable headache when you can rebuild it way faster and way better now". The
+39 boards from before the update (`BOARDS_BUILT`, marked in the library) and the builds they make (the house, the
+vehicles, the truck, the city, the engine, the battery, the computer, …) are deleted, not repaired; what they taught
+stays in this document and in the nodes. Then rebuilt, field by field, from the current nodes only: each from its first
+parts, through the contact graph, the heat gate and the frame under its own weight and working loads, with its look from
+Phase 3, and shown. The one test's quick board for each field is rebuilt with it, so the gate never runs a thrown-away
+board.
+
+### Phase 6. Coverage (step 5's remainder)
+
+The laws and nodes each discipline needs, measured against the disciplines tree: each specialty with no node listed,
+the most used first; and what the rebuilds of Phase 5 found missing. (Segment tables, #52, are one of these.)
+
+### Progress (newest last)
+
+**Step A, done (2026-10-28).** The user: "the gate should be one minute at max", then "since you have updated the system
+it should be more effective creat one teste that converse all domains also mark have a date on nodes so you can marke
+previously built nodes as before the update, they could be flawed tests anyways".
+- The anchor: `CLAUDE.md` from 55 KB to 29 KB, its owners table a one-line index, the full rows word for word in
+  `docs/OWNERS.md`.
+- Why the gate took 8 to 12 minutes, measured: 21.7 minutes of test work on 4 cores, 96 % of it in 56 tests; one alone
+  ("every kit through the pipeline") took 4 m 46 s, 90 % of that a car park and a street, each many copies of one car
+  worked through the make pipeline one copy at a time.
+- Faster, proven unchanged: the contact search (`contacts`, `sat` in `make/space.ts`) allocates nothing per pair,
+  works out each part's tolerance once, sweeps along the axis the parts spread furthest over, and skips covering
+  boxes whose bounds are apart by more than the tolerance (two shapes are never nearer than their bounds). Every one
+  of the 30 kits gives the same contacts, interfaces and critique, bit for bit; the car park's search from 5.0 s to
+  1.2 s, the street's from 1.6 s to 0.34 s. Still to do: the pipeline working a thing placed many times once.
+- The gate is now the type check and one test, `tests/nexus/domains.test.ts`: for each of the 19 domains, every node
+  resolves its ports, says its evidence, works in units the parser reads, is dated and passes its own tests, and one
+  quick starter board of the field runs with no node failing; 28 s. The tests from before are the legacy suite:
+  `npm run gate:full`, and CI on every push.
+- Every node is dated (`src/nexus/built.ts`, from git: the commit that last changed the line that defines it), and one
+  built before the update (Reality step 0, 2026-10-28 06:21 UTC) says so on its node, in the inspector and in
+  `docs/NODES.md`: its tests may be flawed and it is to be re-checked. 457 of 554 nodes are before it, the queue.
+- Found on the way: a code block could run only in the page's worker, so no test could run a board with one (the
+  resistor board's "where it overheats" failed headless); the worker's own runner now serves tests. Two messages
+  still named the deleted forge; they no longer do.
+
+- Then (the user: "Dude we don't need all these tests"): the legacy suite deleted, 72 test files and the baseline
+  snapshot (commit f509152 holds them). One test is left, `tests/nexus/domains.test.ts`: every domain's nodes (ports,
+  evidence, units, date, their own tests), one quick starter board per field, and the reach check (every source file
+  reached from the app); 26 s with the type check, and CI runs the same. The generated docs are written by
+  `tests/nexus/docs.ts` (`UPDATE_DOCS=1 npx vitest run`), no longer checked by tests of their own. What is given up,
+  said: the snapshot that held every output still (the step 0 baseline), and the slow end-to-end checks (the Corolla's
+  autopilot, the 6502's 151 opcodes on its transistors, every kit through the make pipeline, the 10,000-node scale
+  runs); a change to what a board gives is now caught only where its node's own tests or its domain's quick board see it.
+
+**Step B, done (2026-10-28).** `src/nexus/graph.ts` (`graphOf`, node `graph`, What touches what): the contact graph of any
+thing from its geometry, nothing typed: every piece a node, every two that touch an edge with where, which way, how hard
+and over what patch (the overlap of their covering boxes: exact for boxes face to face; for a 12 mm rod's end it reads
+144 mm² where the circle is 113, said on the node, to be tightened in step C); the groups held together. Each distinct
+thing's graph is worked out once in its own frame and placed; between placements only pieces near each other are
+looked at. Checked: three stacked cubes give three pieces, two contacts of 0.0100 m², one group (the node's own test);
+a car is 1,523 pieces and 4,840 contacts in 0.26 s; twenty of it 30,460 pieces in 0.58 s, the car worked out once.
+Found: the car is 55 groups that do not touch each other, so some of its pieces float (to look at when design is back).
+Shown on the starter board What it is made of, and what it carries.
+
+**Step C, first round (2026-10-28).** `flowOver` in `graph.ts`, node `flow` (What flows through it): heat or current
+through any thing between two sets of its pieces over its contact graph, the ends chosen by what pieces are (the highest,
+the lowest, a name or a material), never a typed path. Each piece held at its middle; between two that touch, half of
+each from its middle to the middle of the patch they meet over, by each material's own conductivity (`matter.ts`), and
+the contact's conductance where given; the network solved at once by conjugate gradients (`solveSparseSPD`, added to
+`numeric.ts`), with the balance at every piece said. The contact patch is now no more than either piece's own section
+across it (a 12 mm rod's end is 113.1 mm², not its box's 144), and where pieces meet is the patch's middle, not halfway
+between their centres (which had put a block's contact 58 mm down inside the rod under it and doubled the answer).
+Checked by hand: three copper cubes, top to bottom, 0.2 / (388 × 0.01) K/W, exactly a 200 mm bar (the node's own test);
+the steel block on its copper and aluminium rods, 3.618 K/W, the same as the halves and branches worked out apart. A car
+through its 1,523 pieces in 0.75 s (540 pieces with no conductivity known, said).
+Also: the one test made quicker (a law's back-solve bracketed: 8.4 s to 1.0 s; the evidence check that could never
+fail removed); `UPDATE_DOCS=quick` writes the dates and the catalogue in seconds.
+Still to do in step C: the contact patch for round pieces meeting side on, and step D (each edge's figure through the
+law book, so its ± and evidence come with it).
+
+**Step D, done for heat and current (2026-10-28).** Each half of each contact is now worked by the book's own law, not
+private arithmetic: Fourier's (`conduction`) for heat, a wire's resistance (`wire.resistance`) for current, run through
+the law engine; a half the law refuses carries nothing and is said. The answer rests on the weakest evidence of the
+material figures it used (said on the node and carried on its wires, the engine now taking a node's evidence and ± from
+what it worked out), and a material known only by its family takes the middle of its family's span with the span as a
+uniform ± (span / √12), carried to the resistance by solving again with each such material moved. Found and fixed on the
+way: no wood had a thermal conductivity, though `thermal.ts` held the Wood Handbook's relations from specific gravity;
+every species now has its k (across the grain, along it 1.5 to 2.8 times) and specific heat, derived. Checked: plain
+"wood" cubes give 130.4 K/W ± 8.4 (the span's middle, 0.153 W/m K, by hand 0.2 / (0.1534 × 0.01)), estimated; copper's
+answer unchanged and exact. Concrete still carries nothing: the mixes have no conductivity (to come with step 6's
+remainder).
+
+**Step E, done (2026-10-28).** The flow node also gives what it worked out as the thing itself, each piece coloured by
+its level, blue at the cold end through green and yellow to red at the hot, grey where nothing reaches (`coloured` in
+`graph.ts`, each piece placed, shared). On the rods board, beside the rods: the steel block red, the rods blue. Seen
+plainly: each piece is one colour, because each is one temperature (lumped), though heat falls along a rod; step G
+splits pieces so the gradient shows and the answer can be seen settling.
+
+**Step G, first round (2026-10-28).** `sliced` in `graph.ts`: each box and cylinder cut into slices (node setting, 8 by
+default), a box across the way what flows goes (its side most along the line from the one end to the other; its
+longest when no way is given), a cylinder along its axis; the slices of a piece joined through its own section at each
+cut, by the same law; a contact from outside lands on the slice that holds where it meets; tubes, lofts and pieces of
+several boxes stay whole. The flow node says the answer at its slices and at half as many, and how far apart: how far
+to trust its last figures. Checked by hand: three copper cubes in 8 slices each, top slice to bottom slice, 0.2875 /
+(388 × 0.01) K/W, their middles' distance through the same bar (the node's second test). Found by that test: a cube's
+sides are all equal, so "the longest side" cut the stack across the wrong way; cutting across the way it flows put it
+right. The rods: 4.424 K/W at 8 slices, 4.270 at 4, 3.5 % apart; seen in 3D, red at the block through green and
+yellow to blue at the rods' feet, the copper rod's top cooler than the aluminium's because copper draws more heat
+through the steel above it.
+
+**Step F, first round (2026-10-28).** Force through the same graph: the flow node's third kind. Each half a bar by a new
+law of the book, `bar.axial-stiffness` (k = E A / L, Hooke's law over a whole bar; Shigley eq. 4-4, with its kind and
+worked example), stiffnesses in series and side by side as conductances are; the ends where it is pushed and what holds
+it; it gives the give between them (m/N), how far the pushed end moves for the push given, each piece's movement, and
+the load path: what each contact carries, most first. Checked by hand: 1,000 N on three steel cubes held at the
+bottom moves the top 1000 × 0.2 / (205 GPa × 0.01) (the node's third test); the steel block pushed onto its rods puts
+62.1 % of the load through the copper rod, as its E A share (115 / (115 + 69) = 62.5 %, less the steel above each)
+says. Said on the node: along the way it is loaded only, contacts bonded; bending, buckling and a 3D frame are the
+next round of F.
+
+**Step I, first round (2026-10-28).** `path.network` and `throughNetwork` retired: a network named piece by piece is what
+What flows through it finds from the geometry, nothing typed; the old id is an alias of `flow`, so a saved board moves
+on. `path.properties` stays, for what the engine does not yet: growth when warmed, the first yield, bending and
+buckling; its heat, current and axial stiffness are the engine's, and go when F's second round brings bending.
+
+**Step H, first round (2026-10-28): the heat gate by conduction.** The heat gate judged only what a hot piece's heat
+reaches across the air, and skipped anything touching it ("cooled by what it is bolted to"), so heat conducted was never
+judged. `temperaturesOf` (`graph.ts`): each piece's steady temperature over the contact graph, the hot pieces held,
+heat conducted by Fourier's law through each contact (the conductances `flowOver` uses, now one function,
+`edgeConductances`), every piece losing to the air from its surface by `heatLoss` (Holman's natural convection and
+radiation, its emissivity, else 0.9), linear and worked again from the temperatures it gives. `conducted` in
+`make/rules.ts`, run with the other rules: a piece hotter than its material stands is a heat finding, with the hot
+piece its heat comes from. A piece whose own conductivity is not known (rubbers, most polymers: not in the tables) would
+read the air's temperature, never safe on that account: it is judged at the face it touches, said. Pieces are cut into 8 slices along their longest side
+(step G), so a long plate is hot by the exhaust and cool at its far end: lumped whole, the autopilot's own test failed,
+the battery it had moved onto a plate the exhaust also touched read the plate's average, 140 °C; sliced, it reads the
+plate where it stands, and the test passes again. Checked on a rig: a pipe at 400 °C, the rubber mount on a steel
+bracket on it is said at 243 °C (the bracket's tip) over its 80 °C; a rubber pad in the open is not. What it found,
+left as findings (design is parked): the semi's fibreglass hood shell touches its 700 °C turbine housing (a geometry
+fault: the hood is on the turbo) and a silicone gasket on that housing reaches 304 °C over its 230 °C (a turbo's
+gasket is metal). A finding on the car's oxygen sensor lead, made while lumped, went when sliced: withdrawn. Still to do in H: placement's heat map and the loads reading the engine.
+
+**Step H, placement's heat map (2026-10-28).** The heat field (`placement/fields.ts`) took only the hot surfaces as
+sources; what touches them, warmed by conduction, heats the cells round it too. Now each slice of every piece in the
+region gets its steady temperature (`temperaturesOf` over the sliced contact graph) and, warmer than the air by more
+than 10 °C, is a source like the hot surfaces, in bands of 10 °C; the field says how many slices were warmed this way.
+The placement, autopilot, field and rules nodes' own tests pass. Not done in H, said: the load cases (`loads.ts`) are
+closed forms on one part each, and read nothing from the graph yet; that waits on F's second round (bending through an
+assembly), which gives them something to read.
+
+**Step F, second round (2026-10-28): bending in 3D.** `bentUnder` (`graph.ts`), node `bend` (How it bends under a load):
+any thing as a 3D frame of Euler–Bernoulli beams over its sliced contact graph, each node free to move and turn six
+ways; between a piece's slices a beam of its own section (a box's two second moments and Roark's torsion constant, a
+cylinder's) and material (E, and G from Poisson's ratio, else 0.3); between pieces, a beam bonded through their patch;
+held and pushed where said, by what pieces are; solved at once by conjugate gradients. Checked: a 1 m steel bar 20 mm
+square, held at its bottom slice and pushed 10 N sideways at its top, moves P a³ / 3 E I to twelve figures both ways
+across it, and pushed along it P a / E A, exactly (the node's own test); the rods with the block pushed sideways,
+323 kN/m, near two rods clamped at both ends worked by hand (12 E I / L³ each, about 327). Seen: drawn bent, its
+movements exaggerated, red where it moves most. Said on the node: small elastic movements, slender pieces (a block's
+shear left out), contacts bonded, no buckling yet.
+
+**Step F, stress and buckling (2026-10-28).** The frame now gives each beam's worst stress (its ends' forces from their
+movements: stretch and both bendings at its outer fibre, with its twist's shear, as von Mises) over its material's
+yield (else its ultimate), and the push at which the first yields, with where; and the push at which it buckles
+(linear buckling: each beam's consistent geometric stiffness from the axial force it carries, the least λ with
+(K + λ K_g) singular by inverse iteration). Checked by hand: the 1 m bar's root stress 7.03 MPa, first yield at 526 N
+(10 × 370 / 7.03), to eight figures; stood up and pushed down, it buckles at Euler's π² E I / (2a)² = 7,673 N, to seven
+figures, in 31 ms; pulled, it does not buckle. Both are the node's own tests. Found on the rods board: 200 N sideways
+puts the annealed copper rod past its yield (it yields at 184 N), so the board pushes 100 N and says so. With this, the
+engine does all `path.properties` did but growth when warmed and the mismatch between neighbours (thermal loads, next).
+
+**F, thermal loads, and I: `path.properties` retired.** The frame takes an even warming: each element pushed by its
+fixed-end force E A α ΔT, the stress said net of it. Checked exactly: the 1 m steel bar left free grows α × 0.9375 m ×
+50 K to the last digit, unstressed; held at both ends it is pushed by E α ΔT = 117.875 MPa, to the last digit (the
+`bend` node's own test). `bend` takes "Warmed evenly by, K" and holds "the lowest and the highest pieces" together. On
+the rods board, warmed 50 K, copper and aluminium grow apart under the steel block, and the board says how hard that
+pulls. With that, `path.properties` (pieces named in order along an axis) does nothing the engine does not, from the
+geometry: it is gone, its id now opens `bend`, and its code (`alongPath`, `END_K`) is deleted from `madeof.ts`.
+
+**E, seen smoothly.** A heat map drawn one colour per slice showed the slices, not the heat. Between two points where the
+level is known, the law that carries it sets its shape, as a string's shape between two hands is set by the string: steady
+conduction with no source and no loss from the sides is a straight line (Fourier's law in one dimension). So each contact
+now gives the level at its two faces (the middle's level less what each half drops), each whole piece is drawn once with
+its slices' middles and faces run along it (`Field` in `assembly.ts`), and the renderer colours every point of it, its
+triangles halved along their longest side until they are fine enough. No seams where it was cut; the colour bends where
+copper meets aluminium because the law does. Bending is next: a beam's shape between two slices is the cubic its end
+movements and turns set (Hermite), the same idea.
+
+**F, seen bent as beams bend.** The bent view moved each slice as a block, so it showed steps. Between two slices the
+beam the frame solves (Euler and Bernoulli's, loaded only at its ends) takes exactly the cubic its two ends' movements and
+turns set (Hermite's), its stretch straight between, each section turning as a whole (`Bend`, `bentAt` in `assembly.ts`;
+`bentWhole` in `graph.ts`). Each whole piece is now drawn once, every point of it moved by that and coloured by how far
+it moves. Checked against the textbook: a 1 m steel cantilever pushed at its top, its drawn shape against P x² (3a − x)
+/ 6EI at a hundred points along it, agrees to 10⁻¹² mm at 2, 4, 8 and 16 slices (slice by slice, it was up to 1.3 mm
+out). On the rods board the two rods sway in the S a frame makes when the block keeps their tops from turning.
+
+**H, the load checks read the frame.** The engine's con-rod rows had been hand formulas on a section typed beside the rod
+(0.7 of its width by 1.6 of its beam, 0.62 filled), its buckling Euler's with pinned ends about its thin way. They now read
+the rod as drawn (`rodFrame` in `loads.ts`): its beam in slices, its eyes and cap bonded where they meet. For that the frame
+learned two things every engineer expects. Supports by kind: a held piece holds only the movements said (a slide leaves
+its way free), and can be held at a point, not its middle, going round it as it turns (u = θ × r, solved for its turn):
+the bearing shells held at the crank pin's axis, the small end kept in line by the piston and turning about the wrist pin.
+And a part's stated fill (a forged I-section's 0.62 of its box) taken into its section. Checked: pushed with 40.7 kN, the
+beam's stress is the hand formula's 268 MPa exactly; it buckles at 294 kN, against 296 kN for Euler's pinned ends in the
+plane the crank turns in (the eyes give a little). The hand row's 226 kN was about the rod's thin way with pinned ends,
+which the pin's bosses and the throw do not allow; first held at the shells' own middles it read 794 kN, the big end
+locked against turning, which is what showed supports at a point were needed.
+
+**Phase 2.1, the taxonomy's schema (2026-10-29).** Every node can now carry a specification (`Spec` in `blocks.ts`): its
+name is its discipline's term and its plain question becomes its gloss; its place in the disciplines tree; codes on
+recognised schemes (MSC2020, PhySH, ICS, ACM CCS 2012, JEL, each checked against that scheme's form); its role (data
+source, geometry operation, analysis, numerical solver, assessment, data transformation, control flow, visualisation,
+I/O); and, for what models, its model (governing equations, the book's laws, class, steady or transient, linear or not,
+numerical method, references). The one test holds every node changed from `SPEC_FROM` on to it (`specProblems`: a name
+that is a question fails, a discipline not in the tree fails, a code not of its scheme's form fails, a model without an
+equation or a reference fails); the rest are specified as phase 4 re-works them. Search finds a node by its term or its
+gloss; the inspector shows the whole specification. The first three: `graph` is now Contact graph (mechanical › machine
+design › computer-aided design and geometric modelling, a branch added to the tree; MSC2020 05C90), `flow` Lumped network
+analysis (mechanical › thermal and fluid sciences › conduction; MSC2020 80A19; Incropera ch. 3, Shigley eq. 4-4), `bend`
+Frame analysis (3D beams) (civil › structural › structural analysis; MSC2020 74K10; Przemieniecki 1968, Roark). Each
+MSC2020 code was checked against the AMS's MathSciNet listing. Law nodes are left to phase 4, where their specification
+is read from the book.
+
+**Phase 2.2, one heat solver (2026-10-29).** `heatflow.ts` was a second heat solver (lumped, stepped in time, its own
+conductances), and the only thing that used it was `Workshop` in `generate.ts`, the old word-driven workshop: 1,250
+lines nothing reached (the reach check sees files, not classes, so it had stayed). Both deleted, with every declaration
+only they used (pruned by the compiler's own unused-code report until none was left: `generate.ts` 1,667 lines to 180,
+now only the expression language nodes use) and `engineering/motorrun.ts`, reached only by them. What was worth keeping
+moved into the engine: `temperaturesOf` (`graph.ts`) now runs steady or in time (backward Euler, each piece holding m c,
+its air loss read again each step, what went in, to the air and was held more balanced), takes heaters, and the contact
+resistance where pieces only touch (`TOUCHING_R`, Incropera Table 3.1b, said as an estimate past aluminium). The flow
+node takes it as its default (`touching`; `none` for one body): the rods board's resistance goes from 3.6 to 5.7 K/W, the
+faces between block and rods now most of it, and its evidence is said as estimated. New node, specified from the start:
+Thermal analysis (conduction, convection, radiation) (`thermal`, gloss How hot each piece gets; MSC2020 80A19 and
+80A21), checked exactly: 10 W through two sealed copper cubes, 20 + 10 R; and the free cube warming toward 100 °C in
+time, 100 − 80 (1 + dt/RC)⁻²⁰⁰ to the digit (the continuous exponential is 0.11 % above, the step's own error). On the
+rods board, 5 W into the steel block settles it at 35.3 °C, the rods' tops at 31 °C.
+
+**Phase 2.3, the engine's leftovers, first round (2026-10-29).** Frame analysis takes how each held piece is held: clamped,
+pinned, or the components held as a Nastran SPC numbers them (1 2 3 along x y z, 4 5 6 turning about them), one for each
+held group ("1235 and 135": a column pinned at its foot and on a slide at its top). A piece held only in part can be
+pushed. Checked: that column buckles at Euler's π² E I / L² to 10⁻⁵. It now gives its worst stress (`stress`), and the
+warmed bar held at both ends is checked against E α ΔT = 117.875 MPa exactly in its own test (found: that test had
+checked no output at all, so the exactness reported for it earlier rested on a probe, not the test). It says how its answer
+settles: cut into half as many slices and worked again, the two said and how far apart. If it does not settle, it says it
+may be held too loosely to stand. The flow's view draws what crosses each contact between pieces as an arrow the way it goes,
+sized by how much (`arrowsOf`), drawn over everything so it reads through the solid it crosses (`overlay` on an override;
+a stand-in keeps every marker whatever its level).
+
+**Phase 2.3 done: the frame through the book (2026-10-29).** Every section and stiffness of the frame is now a law of the
+book, worked through the law engine (units, its domain, its evidence), not a formula of the frame's own: six new laws,
+each with its source and worked example, run as its own test: the area, second moment and polar moment of a circle
+(Shigley table A-18), the torsion constant of a rectangle (Roark's Formulas for Stress and Strain, 7th ed., table 10.7;
+an approximation, kind said), the torsional stiffness of a bar G J / L, and the flexural stiffness of a beam E I / L,
+each end stiffness of a beam element a whole multiple of it (Przemieniecki 1968, ch. 5); with the rectangle's area and
+second moment, the bar's axial stiffness and the isotropic shear modulus already in the book. Each is worked once for each
+distinct set of figures. A law that refuses its figures is said, and that beam carries nothing. The frame says the laws it
+used. Its tests come out as before, to the same digits (the same mathematics, now with one owner).
+
+
+**Phase 2.4, materials from their phases (2026-10-29).** The user: "do advanced math to figure materials out … populate
+it with what's possible, different types, mixes … link it to an open source buy tomorrow". A material is now worked
+out from what goes into it and how it is arranged (`mixture.ts`; `mixedMatter` in `matter.ts`; node Composite and
+mixture properties (micromechanics), `mixture`): density by volume fractions and specific heat by mass (Kopp–Neumann),
+exactly; stiffness, heat and electrical conduction within Hashin and Shtrikman's bounds for any number of phases, and
+estimated by the arrangement: particles in a matrix (Maxwell, Hashin), aligned fibres (rule of mixtures along,
+Halpin–Tsai and Rayleigh across, a fibre's own modulus across where it has one), random in a plane (Tsai–Pagano), woven
+(the mean of along and across), layers (Voigt and Reuss), grains (Bruggeman), open foam (Gibson–Ashby); expansion by
+Turner; strength along aligned fibres as the ideal. A solid solution (an alloy mixed atom by atom) is refused its
+conduction and says why (brass conducts 120 W/m K, a mix of copper and zinc would say 300). The phases' figures are in
+`data/constituents.ts`: Toray's T300 datasheet for the carbon fibre, a secondary table for E-glass, Incropera for air,
+and the rest typical, each said so until a supplier's datasheet confirms it. Seven mixtures are materials like any
+other (`MIXTURES`, parts may be made of them): unidirectional carbon/epoxy at 60 %, random and woven glass/epoxy,
+aluminium with 20 % silicon carbide, thermal paste, concrete as aggregate in paste, aluminium foam at 10 %. Checked:
+carbon/epoxy along the fibres 139.2 GPa against Toray's own laminate at 60 %, 140 GPa (its ideal strength 2,136 MPa
+against Toray's 1,820, the 85 % laminates reach); across it 7.7 GPa (typical 8 to 10); woven glass/epoxy 23.9 GPa
+(circuit-board laminate is about 24); aluminium–silicon carbide 92.7 GPa within bounds of 92.7 to 114.7 (measured
+about 100; the matrix bound is the lower one); concrete 33 GPa, 2.0 W/m K, 2,475 kg/m³. On a new starter board a 1 m
+bar of the laminate bends 1.48 mm under 10 N where steel bends 1.005, as their moduli say (the frame takes the laminate
+as isotropic at its along-fibre modulus: right for bending along the fibres, too stiff in twist). Next: suppliers'
+datasheets, open-source, to confirm or replace every typical figure (asked for tomorrow).
+
+**Phase 2.4, the stand-ins replaced (2026-10-29).** Of the 76 specified solid materials, 28 had taken their core figures
+(modulus, Poisson's ratio, conductivity, specific heat, expansion) from another grade (every plastic from PMMA, every
+rubber from natural rubber, tool steel from 1018); none does now. The grades without a handbook row of their own have
+typical figures (`data/constituents.ts`, said so, for a supplier's datasheet to confirm). Physics gives what it can: a
+heavy element's specific heat by Dulong and Petit, 3R per mole (gold 126.6 J/kg K against the handbook's 129, silver
+231 against 235, tungsten 135.7 against 132, lead 120 against 129); a metal's thermal conductivity from its electrical
+by Wiedemann and Franz with Sommerfeld's L₀ = π²/3 (k_B/e)² (gold 294 W/m K against 318, silver 451 against 429, lead
+34.4 against 35.3), the mixture node's test holding gold to L₀ σ T. What were typed figures for mixes are now worked
+from their phases: PA66 with 30 % glass by mass, 1,366 kg/m³ (sold at 1.36 to 1.37 g/cm³), 8.1 GPa; FR-4, 1,870
+kg/m³ (about 1,850), 23.9 GPa; glass wool at 24 kg/m³, 0.029 W/m K (about 0.035 measured: radiation through it is left
+out, said); the 25 MPa concrete as its own recipe's hardened phases (paste, sand, granite and the 4 % air its cubic
+metre leaves), 33 GPa, 2.2 W/m K. Left without a core figure: the woods' Poisson's ratio and expansion (they differ by
+direction), the loose textiles, and the foams' Poisson's ratio.
+
+**Phase 2.5, balances and the solvers' own error (2026-10-29).** A node may account what it conserves (`_balance`: what
+goes in, out and is kept, or its imbalance against its scale) and the engine judges it the same everywhere: an
+imbalance is warned of only when it is more than twice its standard uncertainty (95 % covered: the node's own, and
+that the engine carried onto the port it names) and more than its tolerance, never corrected. The balance node is
+judged so: 100 ± 3 J in against 90 ± 4 J out is 10 ± 5 J, not warned; 100 ± 1 against 90 ± 1 is 10 ± 1.4 J, warned
+(its `violation` output stays the fixed-tolerance verdict). Applied along the chains: the thermal analysis's energy in,
+to the air and held; the flow's Kirchhoff balance at every junction; each motor in the physics, its electrical energy
+against its copper's heat, its friction, its gears' loss and its work out (the electrical-to-heat chain). Collisions:
+see below (the energy is not lost, it is moved). The solvers' own error is now in their ±: how far
+halving the slices moved the answer, taken whole as the error of the finer cut, summed in quadrature with the
+materials' spread. Found by it: on the rods board the flow's 5.72 K/W is ± 0.16 (2.8 %), but the frame's give under the
+side push is 0.31 ± 0.09 mm (29 %), not settled at 8 slices; the contact links run from slice middle to slice middle, so
+their length (and stiffness) changes with the cut. The frame's contact link is to be made independent of the slicing
+(phase 4, with the frame's re-check).
+
+**Phase 2.5, the frame's joints made independent of the slicing (2026-10-29).** A joint between two pieces was one beam of
+the contact patch's round section from slice middle to slice middle: its length, and so its stiffness, changed with the
+cut. A first fix (each piece's own section in series to the contact point) made it worse, the give growing without
+settling (0.10, 0.22, 0.35, 0.63, 1.12 mm at 2 to 32 slices): the block's slab met the rods 15 mm to one side of its
+middle, and the half took its section across that side, a sliver that thinned as the slab was cut. Now each half runs
+along the contact's normal through the point where they meet, from the plane through its piece's middle to the face,
+with that piece's own section and material, the two in series; each end is tied rigidly to its piece's middle (an end
+offset, u = u₀ + θ × r, carried into the stiffness, the stress, the buckling stiffness and the thermal load). The give
+now settles: 0.186, 0.278, 0.337, 0.370, 0.388 mm at 2, 4, 8, 16, 32 slices, each step about half the last. What still
+moves with the cut is where it is held: a held piece is clamped at its slice's middle, which comes nearer its end as it
+is cut finer (its free length grows; the give with its cube: 2.26 times from 2 to 32 slices by that alone, 2.09 seen).
+Holding at the face rather than the middle is the next refinement. The con-rod's check is unchanged (294 kN; its eyes
+meet its beam head on).
+
+**Phase 2.5, energy moved, not lost (2026-10-29).** The user: "energy collisions don't lose it, it can relocate into
+thermal energy and the molecular energy … it's a scale thing, everything is made of energy trapped in loops". So the
+physics now accounts its energy whole: each body's mechanical energy at the start and the end (½ m v², ½ ω·I ω in its
+principal frame from the engine's own inertia, m g h against the engine's own gravity), the work done on them (pushes as
+F·v at the centre of mass, motors' work out), and what the bodies' mechanical energy no longer holds at the end gone
+into their molecules' motion: heat (collisions, sliding, joints' friction, and the engine's own numerical damping, which
+in the real thing is the air and the hinge). Where the heat lands the engine does not say (which contact, how much to the
+floor); if it all stayed in the bodies, shared by their heat capacity (m c of their materials), they are this much
+warmer together: the most it can warm them. Heat below nothing would be energy made from nothing, the engine's own
+error: judged as a balance and said. Checked: a 100 mm steel cube let fall 0.5 m and come to rest turned m g h = 38.5 J to
+heat, to 0.5 % (the node's own test). On the boards: the steel ball into the wooden tower, 57.2 J at the start and 56.7 J
+of push, 17.1 J left mechanical, 96.8 J to heat (0.028 K warmer, at most); the cart, its motors' 2,079 J, 1,995 J into
+its motion and 83.8 J to heat; the pendulum, 0.345 J of its 32.2 J to heat over its run (the hinge solver's loss: in the
+real thing, the hinge's friction and the air).
+
+
+**Phase 3, steps 1 and 2: a metal's colour from its physics (2026-10-29).** The user: "why is metal silvery grey, why is
+copper its colour". Now worked out, not chosen (`colour.ts`, `data/optics.ts`, node Reflectance colour (Fresnel, CIE
+1931), `optics.colour`): each metal's complex refractive index n + i k measured at every wavelength (Johnson and Christy
+1972 and 1974, Rakić 1998, Querry 1987, Golovashkin, from the refractiveindex.info database, public domain) gives what
+it reflects at each (Fresnel); the CIE 1931 observer under D65 daylight weighs that into XYZ, and the sRGB primaries into
+what a screen shows. The eye and the light as tabulated in colour-science (the CIE's server was not reachable from
+here). Compared with Hoffman's table of metals' reflectance in linear sRGB (Physics and Math of Shading, SIGGRAPH 2013),
+worked independently: palladium (0.733, 0.697, 0.652) to the digit (the node's own test), chromium 0.550/0.556/0.554
+against 0.549/0.556/0.554, aluminium within 0.01, platinum within 0.006, copper, nickel and iron within 0.04, titanium
+0.08 brighter (another measurement of it), zinc within 0.09. Gold comes out past what sRGB can show (red 1.04): more
+saturated than a screen, said. Found: the first data for tungsten, platinum, zinc and lead (Werner 2009, from
+electron energy-loss spectra) made platinum reflect 95 % where it reflects about 65 %; replaced by optical
+measurements. Tin has none covering the visible here; lead's starts at 450 nm (held below, said). It says why: copper
+gives back 94 % of red, 62 % of green and 54 % of blue, its electrons taking the bluer light; silver 98 to 99 % of every
+colour, so white-silver. A starter board of fourteen polished spheres, each coloured only by this.
+- **2026-10-29, phase 3.3, surfaces from the process (first half).** `finish.ts` keeps twelve processes (turned,
+face milled, printed, ground, brushed, polished, lapped, bead blasted, sand cast, die cast, forged, spark eroded). A cut
+surface is worked out from its feed and tool radius: the tool's arcs one feed apart give Ra = f²/18√3 r (Shaw), Rq =
+f²/4√45 r, and its facets' rms slope across the lay f/2√3 r. A random surface takes the figures typical of its process,
+labelled. How much light stays in a mirror image is Davies' exp(−(4π Rq/λ)²) at 550 nm; how wide the highlight spreads
+is the facets' slope (GGX α), so the renderer's roughness is √α along the lay and the lay is anisotropy across it
+(MeshPhysicalMaterial). Found: calling a surface "matt" from the mirror-image share alone was wrong; a turned shaft
+gives no mirror image yet a sharp highlight. Its look is now said from the slopes, and its image from the heights.
+"Polished" made a true mirror polish (Ra 0.02 µm, 72 % of green light kept in the image). Every part's finish word
+maps to its process (machined → turned, chrome → polished, cast → sand cast, satin → bead blasted), and the process
+names are finishes themselves, wirable into any shape (a new `finish` input). A node, `surface.finish` (ICS 17.040.20),
+tested on the cusp formula and Davies' share; a starter board of five steel bars, iron's colour from its optics, one per
+process. Seen: turned and ground streak along the axis, polished mirrors the room, blasted is evenly matt, cast grainy.
+Left: a turned end face shows radial marks where facing leaves rings.
+- **2026-10-29, phase 3.3, colours with no dye (second half).** A film on a metal, worked out: Airy's sum of every
+reflection inside the film, r = (r₀₁ + r₁₂ e^{2iβ})/(1 + r₀₁ r₁₂ e^{2iβ}), β = 2π N₁ d/λ, with complex indices (an absorbing
+film damps the wave from below), wavelength by wavelength through the CIE eye under daylight (`colour.ts`
+`reflectanceFilm`, `filmColour`). Films kept with their measured n + i k (refractiveindex.info, CC0): amorphous TiO₂
+(Jolivet et al. 2023), hematite and magnetite (Querry 1985), amorphous alumina (Boidin et al. 2016). Checked: titanium
+under TiO₂ runs bronze, purple, blue, pale blue, gold, rose, magenta, teal, green as it thickens, the anodised palette;
+at 2 nm per volt (inside the published 1.5 to 3) it lands on the Heliyon chart's colour at each of 10 to 100 V. Iron
+under magnetite runs straw, brown, purple, blue, grey-blue: the temper colours. Hematite gives duller ones, so heat
+tint is taken as magnetite (the oxide next to the steel), said. Not found: visible data for Cu₂O (Querry's starts at
+2.5 µm) and for chromium oxide, so copper's tarnish and stainless heat tint wait for data; a temperature and time to a
+thickness needs the oxide's growth law, not kept yet. A node, `optics.film` (tested: no film is the bare metal by
+Fresnel; a quarter wave of n 1.5 on n 3 reflects ((3 − 1.5²)/(3 + 1.5²))² at 550 nm), and a board of twenty coupons.
+- **2026-10-29, phase 3.4, a part's look as layers (first half).** `appearance.ts` owns a look as data, bottom up:
+the substrate's colour worked out from its material (steels as iron, aluminium alloys as aluminium, copper, titanium,
+gold and the other measured metals; stainless, brass and bronze have no data here and keep their colour, said), a
+treatment grown on it (an anodic or oxide film, coloured by `filmColour`), a coat over it (a paint's colour, a design
+choice; its metal flake as metalness with a sparkle grain; a clear coat, F0 0.04 at n 1.5), and wear. The look rides on
+the part or on the override that places it, and is resolved per piece against that piece's own material when drawn,
+so one look over an assembly colours a steel bolt and an aluminium bracket each by its own optics. A node, `look`
+(ICS 25.220, 87.040), tested on bare steel taking iron's colour, titanium anodised at 30 V, and a chosen paint; a board
+of one sphere in eight looks. Seen: the metals, anodising, heat tint, clear-coated and metallic paint all read as they
+should. Left: wear only dulls and dirties; paint coming off at edges (by curvature) and dirt in hollows (by occlusion)
+not yet; graphics (livery, decals) not yet a layer; heat tint from the part's own computed temperatures needs the
+oxide's growth law.
+- **2026-10-29, phase 3.4, graphics and wear where the shape puts it (second half).** Graphics are a layer of the look
+(`appearance.ts` `Graphic`): stripes and two-tone splits across an axis of the piece's own frame, under the wear, two
+per look, set on the `look` node. Wear reads the surface's own shape. Each vertex gets its mean curvature (from every
+mesh edge, (n_j − n_i)·(p_j − p_i)/|p_j − p_i|², pooled where copies of a point meet) and its distance to the nearest
+sharp feature (a crease, or a rounded edge tighter than 4 mm). This is `kit3d.ts` `surfaceShape`, run on the piece's
+geometry split finely first (`space3d.ts` `wornGeometry` over `refined`, which now carries texture coordinates).
+A coat chips off within a reach of its edges that grows with wear (1 mm + 12 mm × wear), cut crisply and broken up
+at two scales, and shows the substrate under it with its own computed colour. Bare iron rusts in patches and hollows.
+Dirt gathers in hollows. Found on the way, each fixed: curvature read from screen-space derivatives missed every edge
+narrower than a pixel and drew each triangle flat (the torus showed its facets); per-vertex distance on a mesh whose
+faces have no inner points made every point an edge (the box and drum came out bare); the split mesh without texture
+coordinates broke the ground finish's anisotropy (pieces drawn white). Seen: the panel and the drum chip at their
+edges and rims, the tube rusts in spots. Left: a smooth piece with no edges (the ring) does not chip, true to the
+rule but perhaps not to wear by handling; decals and text not yet; heat tint from computed temperatures still needs
+the oxide's growth law.
+- **2026-10-29, phase 3.5, close-ups and a blind check (first round).** Five boards rendered close and given to an agent
+with no context, asked what is cheap or fake. Its top findings: every object showed one and the same reflection (three
+blobs over a square: three.js's RoomEnvironment), so fourteen metals read as one sphere copied; stripes and chip edges
+stair-stepped; chips scattered on flat faces; turned ends showing coarse wedges where facing leaves rings; gold olive
+(its colour checked: linear 1.04, 0.73, 0.37 against the measured 1.0, 0.78, 0.34, so the lighting, not the colour).
+Fixed: one studio environment for the app (`kit3d.ts` `studioScene`: a room with softboxes and a lighter floor, so a
+metal shows a horizon and each light as a shape; the dock and the part viewer share it); graphics and chip outlines
+antialiased by each pixel's footprint; a primer rim at each chip (the paint's thickness); stray wear patches cut
+right down; turned, machined, ground and threaded grain measured by radius and height from the piece's axis, and
+its anisotropy off on faces square to the axis (rings on a faced end, no wedges). Seen after: the spheres read as
+photographed balls, the bars' ends clean, the chips crisp. Left from the check: no floor under things in the space
+(by the space's design: a void with a grid; a stage for look-dev boards is a choice for the user); no scale cue; a
+polished bar mirrors mostly floor and reads flat grey; blasted and cast metal still read near plaster; plastics have
+no subsurface glow; sheet parts (the tube cut) have no thickness.
+- **2026-10-29, phase 4.1, the engine's load rows read the drawn parts.** The rod bolts, the crank-pin shells and the
+wrist pin were worked out from formulas parallel to the drawing (a thread from 0.85 × the bore, a shell 0.86 × the rod's
+width, a pin bored 0.56 of its diameter): right only while the formulas matched the parts, wrong without a word for any
+rod or piston wired in. Now each is read off what is drawn: the bolts by their catalogue item and class (`families.ts`
+`boltOf`, and `proofStress` from ISO 898-1 table 3, kept now), how many hold the cap, the stress area from the thread;
+a shell's bore and width from its profile; the pin's outside and bore from its lathe profile. A piece not drawn is a
+row that fails, said so, not one that passes. Found by reading them: the drawn rod bolts were class 8.8 (580 MPa proof)
+while the check judged them as 10.9 (830 MPa); rod bolts are 10.9 or 12.9, so the rod now carries 10.9 (margin 2.88 at
+6,600 rpm). Seen with it, already shown: the starter engine's valve spring lets its valves float above 6,304 rpm,
+under the 6,600 rpm its board runs (margin 0.91), a design fault in that spring for that speed, left for the rebuild.
+- **2026-10-29, phase 4.2, the laws held in the math hierarchy.** The user's rule for the law nodes: current if they fall
+into the math node hierarchy with no contradictions. `lawFits` (lawgraph.ts) holds each law to it. (1) Its term is
+rewritten in the math nodes' own language (`asFormula`: the Formula node's, an integral by the Integral node's
+adaptive Simpson) and run: it must give what the law gives. (2) Its worked example holds. (3) Solved back for each
+input from that example, it holds again wherever it lands (another root is not a contradiction; no root in range is
+said). (4) No chain of other laws to the same quantity gives another answer. Units are held already: a law whose
+term and ports disagree is never built. Found on the way: the Formula language lacked asin, acos, atan, log2, log10
+and erf, functions the laws use, so not every law could be written as math nodes; added (`generate.ts`). The cross-check
+called four laws contradicted that were not: it reached a rectangle's area through a circle's (a length is not said
+to be which length of which shape) and a box's volume through an ellipsoid's, and held the pendulum's series to its
+exact elliptic integral at 10⁻⁶ when they differ by 5 × 10⁻⁶. Fixed in `crossCheck`: geometry laws are not ways to
+each other, and an approximation or an empirical law agrees within 10⁻³ (an estimate), its difference shown. All 330
+laws fit; 10 are reached another way and agree. The record (`book/fits.ts`, each law's hash with it) is written with
+the generated docs (the cross-check takes a minute, too long for the gate); a law changed since counts as before the
+update until worked out again, and a law node that fits shows as current (`builtOf` in evidence.ts).
+- **2026-10-29, phase 4.2, the first fields re-checked: finance, operations, energy, electronics, materials (20 nodes).**
+Each read again with its tests, given its discipline's name, a gloss, its place in the tree, codes and its model:
+- **Finance:** the loan is an amortisation payment (JEL G21, G51) and NPV is capital budgeting (G31). Compound
+  interest is E43; break-even (cost–volume–profit), margin and markup, depreciation and the running balance are M41.
+  Relative change is C43. All of it sits under a new branch, `manufacturing.industrial.economy`, engineering economy,
+  which IISE counts in industrial engineering.
+- **Operations:** OEE is defined by ISO 22400-2 (ICS 25.040.01). The critical path method is MSC2020 90B35, after
+  Kelley and Walker (1959).
+- **Energy:** battery runtime at constant power is ICS 29.220.01. Daily photovoltaic yield is ICS 27.160, with
+  IEC 61724-1's performance ratio.
+- **Electronics:** the divider, the LED resistor and the RC corner are MSC2020 94C05 with their ICS components. The
+  netlist, the cell and the switch-level run are ICS 31.200 and 35.160, the run after Bryant (1984).
+
+Found on reading:
+- **Silent Infinity:** seven nodes divided with no guard and gave Infinity without a word. They were battery runtime
+  at no load, margin at no price, markup at no cost, relative change from nothing, NPV and the loan at a rate of −100 %
+  or less, the divider with no resistance, and the LED resistor at no current. Each now refuses, saying why.
+- **Relative change from a negative value** had its sign turned; it now divides by the magnitude, tested.
+- **Untested outputs:** the divider's current was never tested, and is now.
+- **No tests at all:** `cell.characterise` had none and now has a hand-made two-input NOR, read back as
+  NOT (a OR b) with its truth table. `netlist` and `logic.run` still have no offline test. They fetch the real 6502
+  netlist, and only the 6502 starter board runs them, said so.
+- **The ACM CCS 2012 code form** was wrong (it expected "10.…"). Its concept ids are eight digits (10010293); fixed.
+  The ACM site is not reachable from here, so the chip nodes are coded on ICS, which is known, rather than by guessed
+  ACM ids.
+- **2026-10-29, the 2004 Chevrolet Monte Carlo SS from its first parts (asked by the user as a challenge).** Its figures
+from search results (spec pages blocked from here): 197.9 × 72.7 × 55.2 in, 110.5 in wheelbase, 62/61 in track, 11.93 in
+vented and 10.94 in solid discs, struts at both ends, P225/60R16, 5 × 115 studs; the 3800 Series II (L36) V6, 96.5 ×
+86.4 mm, 200 hp, 225 lb-ft; its lines, ground clearance, wheel offset and engine place are estimates, said so. What it
+took, by the clock (08:00:35 to 08:22:15 for the build, its checks clean): the engine owner learned a banked vee (it
+knew only a vee twin: one pin, a head on each cylinder): cylinders by bank with paired rods on pins at 0, 120 and 240°
+(the 3800's split pins drawn as one, said), four mains, a barrel and a head along each bank, bulkheads bored where
+the banks' bores pass, an intake plenum in the vee with its injectors and rails, a manifold, gasket and heat shield on
+each bank and a crossover under the pan; the transaxle owner an automatic (torque converter, drive chain, two planetary
+sets with clutch packs, valve body); the car record a V's angle and an iron block; the cooling module placed by the
+heat gate's own distance from the engine's hottest forward piece (it had been a fixed 0.11 m from a box that left a V's
+manifold out); the heat figures moved into make/heat-limits.ts so placing reads them without an import cycle; CV boots
+neoprene (polychloroprene, typical figures), as they are made, the generic 80 °C rubber failing beside an 81 °C
+transaxle; an automatic's drive plate filed as a kind of flywheel. Found by the checks and fixed: 31 then 32 rule
+findings (an alternator inside a bank, exhausts starting inside the head, a rail through the runners, pistons in the
+bulkheads, the crossover through the transaxle, the fan 73 mm from a manifold, the drive plate's absence), then 7 unmet
+recipes. Result: 8,702 pieces, built in about 2.5 s; nothing runs into, rubs or overheats anything; every recipe met.
+Not done: its drawn mass is 780 kg of its published 1,558 kg (the rest padded and said); its body is a generic coupe on
+estimated lines and is not recognisable as a Monte Carlo (its grille, lamps, side sculpting and deck spoiler not
+drawn); its board freezes the page for tens of seconds (the checks run on the page's own thread).
+- **2026-10-29, the library law: every piece built is stored (asked by the user: "you either use what's in the library or
+create something and store in the library").** `stock.ts`: a piece is stored by its design (its shape, material, cuts,
+make and what it is, and the pieces in it each by design and by where it sits), not by its name, colour, look, place or
+neighbours, so one design used in many places and many builds is one entry. Every node that makes a thing is a build (each
+real vehicle model once each): 126 builds, 4,287 pieces stored at every depth, 1,394 of them made of others; of the 640
+the Monte Carlo is made of, 218 are shared with other builds. Written to `src/data/stock.json` (421 kB) by the docs run;
+the one test fails on a piece built and not stored, stored and no longer built, or stored where its build no longer has it.
+Searchable as "Built parts" in the library; the Stored part node takes any of them out (its build run once: about 3 s for
+a car, measured), with what it is made of and the builds that use it. Found on the way: `check.balance` had no
+specification and the plain gate failed on the last two commits (they were checked with UPDATE_DOCS=quick, which skips
+that check); specified. Gate with the law's check: 36.5 s. Not yet: a piece a person makes in the browser is not stored
+for good (only what the committed builds make is); the builders do not yet ask the library first when they draw (the
+same design drawn twice is stored once, but still drawn twice).
+- **2026-10-29, builds take their pieces from the library (the second half of the law).** `fromLibrary` (assembly.ts),
+called by the node engine on everything a node makes: each piece inside a part designed whole and still (`sealed`, which
+the make pipeline never changes inside) is taken from the pieces the library holds while building where one equal in
+every way is there, and put there where not. Measured on every vehicle: each build is the same in every value after
+(compared as JSON), and the Monte Carlo's rules (0 findings) and take-apart audit (0 recipes not met) read the same. It
+saves less than the stored count suggested: the builds already held a repeated piece as one object (the Monte Carlo
+places 9,717 pieces with 2,677 objects; 2,520 after; the Cascadia 4,434, 3,400 after), at 14 to 63 ms a build. Not taken
+from the library: pieces outside sealed parts (17 places in the code change a part after it is made: the detail pass,
+the critic's moves, conditions), until those work on copies.
+- **2026-10-29, the Monte Carlo as in the user's photograph.** Its lines measured off the photograph (side-on), scaled by
+its 110.5-in. wheelbase (its tyres agree to 2 %), its overhangs by their published lengths (the photograph foreshortens
+its ends): the windscreen's foot 0.274 of its length, its roof from 0.40, its back glass's foot 0.76, its belt 0.675 of
+its height; estimates, said so. A body kit any car can carry (`BodyKit`, `bodyKit` in machines.ts, fitted to the skin as
+made by `skinOf`, `archLip`, `lowAt`, `topAt`, `endAt` in panels.ts): riveted flares round each arch, skirts, a front lip,
+a rear valance, a scoop's insert on each rear quarter, a wing (a cambered blade on two uprights, end plates), each in the
+inventory. Wheels may carry an accent painted down each spoke and round the rim (look layers, not pieces). The user's
+build a second record (gloss black, the kit red, 20-in. black and red wheels on 245/35R20s; colours sampled from the
+photograph). Found on the way: a real model in the car kit took a colour picked at random when no colour was said (why
+the stock car rendered silver; the kit now says which choices were said); a rear seat's back was sized by the roof and
+glass over it, not the deck lid (the measured lines brought the lid over it; any car's deck lid now counts). Rules: 0
+findings; recipes: all met. Blind check: read as "a black two-door coupe with red aftermarket add-ons", taken for a
+Holden Monaro / Pontiac GTO at about 25 % confidence, not a Monte Carlo; its list: flares flat and stuck on, a smooth body
+without mirrors or shut lines that read, the arches seen through, a crude wing, the lip and valance floating as blades,
+the scoop insert an outline that reads as a bracket, the skirts flat bars, the ends unfinished.
+- **2026-10-29, the Monte Carlo's kit, second round (from the blind check).** Flares are now moulded surfaces through four
+lines round each arch, proudest at the lip and falling back onto the skin, their lip read off the skin and smoothed (the
+middle of five, then the mean: single samples caught on a gap had notched them); the skin reader no longer takes the
+inner wheelhouses for the skin (it had put the front flares into the strut springs); the scoop frames a black vent; the
+lip keeps to where the bumper comes down to its foot; a car's face may say its tail lamps' height. Found on the way, for
+every build: the make pipeline's `stripDetails` took off every finish a maker gave a part, not only its own, so a painted
+wheel came back polished: now only the finishes its rule chose (`finishBy`) are taken off. Not fixed, found: the Corolla's
+rules give 2 findings (its hood inner frame in its hood, its battery tray in its heater hose) on every commit back to
+1937fd8, before this work. Blind check: "a four-door sedan in black with red body-kit accents", taken for a Holden
+Commodore at about 20 %, still not a Monte Carlo; its list: the wing flat slabs, the flares thin, the vent flat, the skirts
+and splitter boards, tyres with a chunky tread, the nose blank, the tail lamps boxy, the plates' text clipped.
+- **2026-10-29, the user's own Monte Carlo, from their garage photographs.** A third record: its paint sanded back to a
+tan primer (sampled #c8bd9d), red bolt-on flares round all four arches (their heads red), a red ducktail on its deck lid,
+red mirrors, its own 16-in. five-spoke wheels black with a red lip on 225/60R16s. Each by a general option: a coat's
+primer and its being sanded (broad patches through to the primer on the flat, feathered, specks of paint left, the paint
+kept in hollows and on tight edges; a second kind of wear beside chipping), a build's mirror colour, a rim's lip colour
+apart from its spokes', a ducktail fitted to the deck lid across its crown, and how far a car's tail lamps wrap round.
+Found on the way: the skin reader saw only top-level panels, not the hood, doors and deck lid built as closures, and a
+mirrored skin has only its right half (both fixed). Rules: 0 findings; recipes: all met. Blind check: "a generic 4-door
+sedan" with "a cream-and-black cow-print or camo-style wrap", taken for a Charger or a 300 at about 15 %: the sanding
+reads as a wrap, not as work in progress; the flares still read thin, the ducktail a flat slab, the wheels small and set
+in, the body slab-sided and inflated, its windows near opaque with no pillar between. The body's own shape (the
+Monte Carlo's rear window, haunch and deck) is the gap now.
+- **2026-10-29, the Monte Carlo's own shape, first round.** Two general options any car can take: its haunches (`haunch` in
+its lines: each side narrower along its doors than over its rear wheel, where its published width is, so much of that over
+its front wheel, and its shoulder line rising over its rear wheel) and a coupe's one long door with a quarter glass
+behind it (`doorR` now splits a one-door car's side glass at its door's top rear corner: the door's drop glass, a black
+bar, a fixed quarter glass). The Monte Carlo: 35 mm of waist, 55 % of it at the front, a 50 mm rise; its door's rear edge
+0.581 of its length (measured off the first photograph). Rules clean on all three records. Blind check of the stock car:
+now read as a two-door ("a 2-door built on a sedan body"), still not as a Monte Carlo (an Audi A6 or a Commodore, under
+10 %): its body hangs nearly to the ground beside each arch with no sill line, the arches cut as notches with the
+suspension showing; a long slab deck and a tall plain tail; the wheels small and flat chrome; the door a flat cut-out.
+The body falling to the ground by its arches is every car's, from the body maker's bottom line: next.
+- **2026-10-29, rebuilding the user's own object from photographs: the closed loop, first round** (docs/RECONSTRUCT.md).
+Photograph → edge-snapped features → camera solved from the published wheel places → dimensions through every camera
+that fits → the model rendered from that camera → its silhouette compared with the photograph's by region → the body's
+line figures fitted → rendered and compared again → the one photograph or measurement that settles the most. Each a node,
+on the board "Rebuilt from a photograph". On the user's side photograph: the camera fits to 5.0 px rms but is not fixed
+(4.2 to 54.6 m away fit as well: the photographs have no EXIF); length 4.59 ± 0.48 m against the published 5.027 m, not
+fixed; IoU 0.831 → 0.841, mean outline error 68 → 62 mm after fitting; nose −113 mm and tail −133 mm left unresolved.
+Asked for: the original photograph file or the phone and lens. Not done: joining several photographs into one solution,
+the garage photographs not marked, outlines traced by eye (no segmentation), only the line figures fitted, 2 s an
+evaluation.
+- **2026-10-29, matching the goal picture better, and the pipeline folded into one node.** The side picture is the user's
+AI-made goal, not a photograph (marked `concept`: matched, never read as a measurement). New tools: Dense outline on the
+image's edges, the error both ways, Pipelines tried (every recipe judged alike), and Picture to model (`seed.image-to-model`,
+folded). Nine recipes run on the picture: the error both ways went from 19.26 px (IoU 0.833) to 9.23 px (IoU 0.898) with
+the one kept (I: the camera's distance scanned first, then lines, overhangs, stance and camera, then the roof, wing and
+lip; 932 s); the first round's way gave 17.24 px. What did it was the camera: the solve's 40 m camera fits the wheels as
+well as a near one, but not the body; scanned, the fit came to about 5.4 m, and through it the published length fits
+(5.020 m), so "the AI drew it short" (the round before) was wrong. A bug was found on the way (the dolly zoom slid the
+picture) and fixed. The fitted body is stored on the kit record. Rules clean. Blind check: "a 4-door sedan with a body
+kit", a Grand Prix or a Monaro at about 15 %: the outline matches; what is inside it (flat flares, a decal-like vent, a
+slab wing, the windows one band) does not, and the wing still stands about 55 px behind the picture's (its setback not
+fixed: its edge is a small share of the outline).
+- **2026-10-29, judged from the picture's own camera, four ways apart.** After an expert's critique (an outline is not
+the car): Same-camera view, Accuracy four ways (silhouette, features, surface, dimensions, and which way it faces),
+Geometry fitted to its features, Side by side, all in Picture to model. 18 features traced on the goal picture. Found
+and fixed: a coupe's door held to 1.15 m whatever its record said; the kit's lip and valance had no side pieces; those,
+when added, hung past the bumpers' corners; the picture's length read off one plane through a near camera. After: outline
+7.05 px (IoU 0.918), features' edges 11.0 → 6.5 px, their middles 19.2 → 7.5 px, overlap 0.41 → 0.56; surface unchanged;
+depth and the unseen sides unknown. Rules clean on all three Monte Carlos. Blind check: a two-door coupe facing left,
+not yet a Monte Carlo; the wing, flares, rims, lamps and the missing mirror are what it names.
+- **2026-10-30, tools built once for every category: Fit to a target.** One node (`fit.target`, in `dataflow.ts` where
+groups are run) drives any block, or any pipeline folded into one, with some of its inputs or settings moved within
+ranges, until its outputs meet their goals (= a value, under or over a limit, least or most, several at once): each
+value scanned first, then Nelder–Mead; each with its ± (how far before a goal slips 1 %) and whether the goals fix it;
+every trial kept, none run twice, and inside a folded one what the values do not reach worked out once. The minimiser
+and the fit with ± written once in `numeric.ts` as the points they ask for, driven at once (the picture fits) or by a
+board's run. Measured: a bar's area for 2 MPa under 5 kN, 0.0025 m² in 30 runs (12 ms); an engine's bore so its valves
+float at 7,000 rpm, 71.1 ± 0.9 mm in 23 runs (7.6 s); a window built and weighed, folded into one node, its width for
+20 kg, 0.748 ± 0.009 m in 24 runs (48 ms). Asked for what cannot be had (valves floating over 7,500 rpm with a factor of
+2 at once), it says which goals it did not meet and which values the goals do not fix.
+- **2026-10-30, one level of detail, a spatial index, and drawing only what can be seen.** Measured first: a Monte
+Carlo of a new shape took about 2.7 s to make (its body 1.5 to 2 s, reading its skin 1 s in 81,510 surface samples, its
+kit 0.1 s) and its outline 7 s to draw. Built once for everything: the level of detail (`lod.ts`: 1 as designed, less
+coarser), read by the renderer's surfaces, turned parts, spheres, cones and tori and by skin sampling, and by Fit to a
+target's trials (the answer always run again at 1); a spatial index over points (`PointGrid`, `make/space.ts`), which
+the skin's queries now use; and drawing only what can be seen: a piece under a pixel on the screen (more at a coarser
+detail) left out, and one wholly behind what is nearer left out before its triangles are made, biggest first. On the
+Monte Carlo from the picture's camera: 772 of its pieces drawn, 4,926 hidden, 72 too small; its outline unchanged
+(IoU 1.0000 against drawing all of them); the outline drawn in 1.7 s, not 7 s. Coarser detail: making 2.7 → 1.9 s at
+0.3, its outline still 0.989 of the full one's. Not yet: the body's making itself (its skins fitted through their
+sections) is untouched, and the 3D viewer's own stand-ins are not yet tied to this level.
+- **2026-10-30, any outline onto any surface.** `ontoSurface` (`mate.ts`) and node Onto a surface (`onto.surface`): a
+flat outline drawn as seen looking along a direction, cast onto any thing's drawn surface (ray against its triangles, only
+the pieces whose box the ray crosses), in tiles where asked, each set on the surface's tangent where its middle lands;
+how far each corner stands off the surface is measured and said. On the Monte Carlo: a 1,320 cm² vent onto its hood in
+40 tiles, every corner within 0.5 mm of the hood; a badge onto its door, within 0.1 mm; both with the car made in 6 s.
+Made of shapes every module already reads (prisms), so it weighs, lays out and is checked as any part is. Not yet: the
+kit's own scoop and lip pieces, made before this, still place themselves their own way; cutting an outline through a
+surface (a window in a wall) is not this tool.
+- **2026-10-30, variants of anything, none twice.** Node Variants of anything (`variants`, `dataflow.ts`): any block or
+folded pipeline made again and again, some of its inputs or settings drawn by seed from ranges (`w 0.6..1.8`, `n 2..6
+int`) or lists (`frame a|b|c`); what each made compared by what it is (things by the built-parts library's design key
+and their colours, numbers to seven figures), not by its seed, and one the same as one before drawn again; says how many
+differ in what they are and in design, and how many could not be made different (what is drawn from too small). Each
+variant's seed mixed through an integer hash first: unmixed, Park–Miller's first draws followed neighbouring variants
+almost in step (widths 0.771, 0.999, 1.227 …), now unrelated. Measured: twelve windows over width, height and frame from
+seed 1, twelve different in 12 draws (31 ms), the same twelve again from seed 1; five drawn from two frames only, 2
+different, 3 said to be repeats it could not avoid.
+- **2026-10-30, remembered by content, everywhere.** Every engine now shares one memo (`SHARED`, `dataflow.ts`) unless
+handed its own: a node's outputs kept by its content key (its block, version, settings and what came in), so the same
+node run on another board, inside a folded node or a fit is not run again. And `remembered` (`assembly.ts`), the same for
+any function by its input's content, used first for making a machine from its record (with the detail it is made at in
+its key; each caller given its own top, its pieces shared). Measured: the Monte Carlo on a second board 815 ms → 1 ms;
+making it again from its record 680 ms → under 1 ms. The built-parts library is unchanged by it (no piece added or
+dropped). Not measured: Picture to model end to end (its time is the fits', which this does not shorten).
+- **2026-10-30, what matters (sensitivity), for anything.** Node `what.matters`, Sensitivity (elementary effects)
+(`dataflow.ts`): any block or folded pipeline run along Morris's paths, each moved value stepped once a path across a
+4-level grid; for each output watched, each value's μ* (how far it moves it over its whole range), μ and σ (straight, or
+bent or acting with another), ranked, and what moves nothing. A thing it makes is measured as a person would (its mass,
+width, height, depth) and watched like a number. Measured: a bar's stress, load before area, both bent (σ = F/A), 11 runs,
+2 ms; a window, width moved by w alone, height by h alone, mass by both together (its glass w × h), 11 runs, 40 ms; the
+engine under load at 7000 rpm, 32 runs, 10.4 s: its valves' float speed moved by bore alone, its least factor of safety by
+rpm then bore, and its stroke by nothing, checked: the least is always the valve spring keeping its valve on the cam
+(0.81), which no stroke reaches, while the rod's pull does move with stroke (108 → 159 MPa at 70 → 100 mm). Found with it
+and fixed: a folded block run inside a fit, variants or this was not given its inputs' defaults (a window without its
+frame colour made nothing); `runnerOf` now gives them, as placing it on a board does.
+- **2026-10-30, trade-offs (a Pareto front), for anything.** Node `trade.offs` (`dataflow.ts`): any block or folded
+pipeline, two goals or more (`min`, `max`, a moved value among them) and limits (`<`, `>`): designs spread over the ranges
+by Halton's sequence, then each weight's augmented Chebyshev distance minimised (Nelder–Mead, within the ranges); the
+front is every design that keeps the limits and no other beats on every goal, its knee the one nearest the ideal. Seed
+`seed.spring-checked` (Coil spring, made and loaded: the coil maker into Spring under load, folded) gives it a real
+conflict. Measured: the spring, light against stiff with its least factor of safety over 1.2, 210 designs, 138 keep the
+limit, 26 on the front from 12.6 g at 16.6 kN/m to 32.6 g at 77.4 kN/m, the limit binding along it (1.20 to 1.27), its
+knee d 3.59 mm, D 19.7 mm, 3.24 coils, 25.1 g, 66.5 kN/m; 198 ms. A bar, area against stress kept under 4 MPa: 27 on the
+front from 0.0027 m², 68 ms. Seen and fixed in its board's screenshots: a chart drew the first wire in (its x) as its y;
+26 springs strung in a 0.7 m row were drawn far off as boxes, now laid in a square (174 × 143 mm), each a spring.
+- **2026-10-30, choosing inside a fit (no new node).** Asked for "best of choices", the space was searched first:
+`size.select` picks only batteries and `size.line` only wire gauges and bores; Variants already drew from lists. So
+Fit to a target, Trade-offs and What matters take choices instead (`name a|b|c`, `name lo..hi int`, one parser,
+`rangesOf` in `dataflow.ts`); a fit tries each way of choosing with its values fitted inside, ranks them (`choices`) and
+shows what the best makes (`thing`). A choice not among an input's own is refused by name. With a wish (min, max) among
+its goals, values asked for and limits now weigh 10⁵ over it (it had traded a 40 kN/m rate down to 27 kN/m for mass).
+Found and fixed on the way: a wire into an input a block does not have was kept and carried nothing (the folded spring's
+wire grade never reached its load check): `wire()` now refuses it; Spring under load and Engine under load take their
+wire grade wired, and the coil maker takes it too, its rate from the grade's own G (stainless 69 GPa, music wire 81.7)
+rather than 79 GPa for all. Measured: a 40 kN/m spring, 1.3 times as strong as it must be, as light as can be, from five
+ASTM wires, 3 to 8 coils and the wire's size fitted: music wire, 3 coils, 3.57 mm, 29.3 g; stainless needs 4 coils,
+44.9 g; hard-drawn and stainless cannot in 3 (said, with what each reached); 30 ways, 1,542 runs, 0.46 to 0.75 s. Seen
+in its screenshot and fixed: a coil drawn with 12 points a turn read as an octagon; 32 now.
+- **2026-10-30, run many at once.** `pool.ts` and `trial-worker.ts`: trials of any block handed to workers, one for each
+core (Web Workers in the page, worker threads under Node, the worker bundled by rolldown into node_modules/.cache), each
+with the whole library; a pipeline you folded is carried to them by its board. A batch goes wide only when its first
+trial, timed, says the rest would take longer than starting the workers (measured: 825 ms for four, 1,960 ms the first
+time it is bundled; 4 ms for seven trials once they are up); inside a worker nothing goes wider. What matters, Trade-offs
+(its spread), Variants (each first draw) and Fit to a target (each way of choosing, its own fit) lay their trials out
+first and run them as one batch. Measured on 4 cores, the same jobs with NEXUS_ONE_THREAD=1 and without, the same answers
+both ways: a fit of the engine's bore for a 7,000 rpm float, choosing among five spring wires, 42.9 s → 21.7 s; What
+matters on the engine, 29 trials, 9.7 s → 7.3 s with the workers' start in it; the spring's 30 ways of choosing, 0.82 →
+0.52 s. In the page four workers started and the engine's board ran in 9.4 s without error; one thread in the page was
+not measured. Not yet through the pool: a single fit's own steps (Nelder–Mead asks one point at a time) and Picture to
+model's fits, whose 15 minutes are mostly that.
+- **2026-10-30, the difference between any two things.** Asked for it, the space was searched first: what compares is
+for pictures (`compareOutline`, `compareFeatures`, `compareEdges`) and two numbers (`logic.compare`). `diff` in
+`assembly.ts` and node Difference (any two) (`blocks.ts`): numbers, words, lists, records, tables, parts and whole
+assemblies, one walk down both, pieces paired by name, a pair whose design key (`designOf`) and colour agree passed over
+whole. A row for each piece and kind of change (added, removed, reshaped, remade in another material, recoloured, moved,
+turned), how many of its numbers changed and the largest change; every number on asking. Between two things, what each
+weighs and spans, and the second drawn by what became of each piece (same dimmed, new green, reshaped orange, moved blue,
+gone red where it was). Measured: the Monte Carlo as sold against the custom one, 8,704 and 5,770 pieces: 35,447 numbers
+in 288 places, 0.42 to 0.76 s; first its 16 in. wheels and 225/60R16 tyres for 21s and 245/30R21, its body kit added,
+its hubs and discs 1.6 % larger, its front axle tube 49 → 64 mm for 126 % more torque, every body panel reshaped (its
+lines refitted to the picture). Its mass the same to 10⁻¹³ kg: a car is held to its published mass, so the kit's weight
+comes out of "the rest of it" (said, not hidden; whether a kit should add to the published mass is a choice not yet
+made). The board in the page, both cars built and compared: about 5 s.
+- **2026-10-30, fit in parallel.** `numeric.ts`: `eigenSym` (cyclic Jacobi; checked against a 3×3 with known eigenvalues
+to six places), and CMA-ES (Hansen 2016, his constants), a minimiser asking for a batch of points at once, driven by
+`minimizeBatchAsync`/`fitByBatchAsync`. Fit to a target takes `method` (auto, one at a time (Nelder–Mead), in batches
+(CMA-ES)); auto is batches for three values or more; its first scan's seven points go at once either way, through the pool.
+Goals may name a moved value (rpm max). Measured: Rosenbrock (2 and 5 values) reached by both (CMA-ES in more trials, 870
+against 206, in 145 rounds of 6); Rastrigin in 3 (many valleys): CMA-ES 1.38, Nelder–Mead stuck at 16.9. On the engine,
+bore, stroke and speed moved for the highest speed that holds (valves not floating below 7,000 rpm, least factor of
+safety over 1): CMA-ES on 4 workers 31.3 s, on one thread 59.6 s, the same answer (70 mm, 7,000 rpm, every goal met);
+Nelder–Mead 47.6 s and its limit missed (1.0 reached). In the page 38.2 s, every goal met. Its stroke not fixed by these
+goals, as What matters found. Picture to model's fits do not go through this yet: each scores its trials inside one node,
+not as a block run, so nothing can be handed to a worker.
+- **2026-10-30, models over the web: a blind judge, and drawing.** `genai.ts` (key `GEMINI_API_KEY`, read under Node
+only; a page holds none) and `views.around` in `reconstruct.ts`. Blind judge: pictures shown to a vision model told
+nothing but the criteria, n judges apart; each criterion's mean, spread and 95 % interval (Student's t), agreement, the
+faults they share. Measured (gemini-3-flash-preview, 3 judges): the custom Monte Carlo from the 3D viewer, called "modified
+sports coupe", 4.67/10, agreement 0.93, its red kit "tacked on" (2 of 3) and polygon edges on curves (2 of 3); the
+Corolla, "four-door sedan", 5.27/10, its plate poorly set (2 of 3); the Monte Carlo from Views round a thing (640 px,
+flat shading), 4.2/10, "missing mirrors and door handles", "low-polygon" (2 each); 10 to 11 s a judging. Picture from
+words and Prompt trial are built; every image model refused with RESOURCE_EXHAUSTED (the key's free tier carries no
+image quota), so no picture has been drawn and neither has been run end to end. ZenRows: the network policy refuses
+api.zenrows.com (CONNECT 403), so it has not been tried.
+- **2026-10-30, two new disciplines.** `data/disciplines.ts`: Intelligence (AI) engineering, after ISO/IEC 22989 and
+42001, ACM CCS 2012 and NIST's AI RMF (no body divides it into branches yet; its branches are Nexus's own, said so):
+model engineering, prompt engineering (wording, context, trials), evaluation engineering (model-as-judge, calibration,
+benchmarks), agent engineering (tools, planning, memory, multi-agent), machine perception, generative design, retrieval,
+safety and governance. Pipeline and flow engineering, its own discipline, not a branch of AI: its tools run engines and
+springs as much as models (dataflow design, execution, design search, sensitivity, verification, orchestration); no body
+divides it yet, so its division is Nexus's own, after dataflow practice. Library fields Intelligence (AI) (4 nodes: Ask
+Claude, Blind judge, Picture from words, Prompt trial) and Pipelines & flow (8: Fit to a target, Trade-offs, Variants,
+What matters, Difference, Pipelines tried, Sweep, Tester). Sweep, Tester and Ask Claude given their specs. The gate:
+23 of 23, 56 s against its minute.
+- **2026-10-30, the engineering compiler.** The user's 30-stage compiler as `compiler.ts` and four nodes (Compile:
+start, bill of materials, verify, release): one design record through the stages, every check naming its engine and the
+design hash it checked, the release gate their Loop F; the 30 stages mapped in `docs/COMPILER.md` (10 built, 13
+partial, 7 not built). First runs: a spring, BLOCKED (fatigue life unverified, no interfaces declared, meshes not
+solids), its three measurable requirements passing; an inline four from its parts, REJECTED for three real reasons (its
+coil housing over PBT's 140 °C by conduction from the exhaust, its least factor of safety 0.93 at 6,500 rpm, its
+valves floating at 6,270 rpm), 410 components, 20 s.
+- **2026-10-30, the gate under a minute again.** It had reached 63.8 s: 27.1 s of it the built-parts check (every build
+in the library run and walked), about 18 s compiling the TypeScript on every run. The check now runs its builds on the
+pool's workers and merges them in the builders' own order (`builtPieces({ wide: true })`, `walkBuild`), proved the same
+as walking them one after another: 4,703 pieces, each first met in the same place, the same users, 0 differences (two
+merge faults found that way and fixed). The compiled TypeScript is kept between runs (vitest's `fsModuleCache`).
+Measured: the gate 42.2 s on its first run, 37.9 s after.
+- **2026-10-30, the engine the compiler rejected, three causes found.** (1) The valve spring: its designer was held to
+five active coils and found none that holds the valves to 1.2 × the 6,500 rpm redline (its best 6,271 rpm), and gave it
+back without saying so; it now winds three to six coils (a thicker wire clears coil bind, and a spring's force at one
+stress goes as its wire's cube), and says where it still falls short (`ok` false): 3.14 mm wire, valves float at 6,942
+rpm (short of its own 7,800 aim, past the redline), the least factor of safety at 6,500 rpm 0.93 → 1.0007. (2) Heat: a
+liquid-cooled block and head were nothing but metal to the heat check, so the 800 °C manifold heated the whole head; they
+are now held at the coolant's temperature (`COOLANT`, 105 °C, typical, said an estimate). The coil housing's 171 to
+174 °C is gone; on the Corolla 15 findings (valve stem seals at 231 to 240 °C among them, so "every engine comes back
+clean" had gone stale) became 1. (3) What is left is real and marginal: the engine mount's rubber, now said natural
+rubber (NR, k 0.13 W/m K, Engineering Toolbox; 80 °C service) and so worked out rather than taken as hot as its
+neighbour, reaches 84 °C on its bracket off the 105 °C block: a heat shield, a longer bracket or a hotter-rated compound,
+a choice left to the user, not tuned away. The Monte Carlo's 10 findings (its exhaust heat shield into its alternator)
+were there before and are not from this.
+- **2026-10-30, the Monte Carlo's V6 bay, 10 findings to 0.** Two causes, both placement. The V engine's exhaust heat
+shield hung 0.75 bore below the log manifold, low enough to reach into the alternator; it now ends 0.35 bore below it,
+still covering the manifold's face. The banked engine's oil filter sat under the hot bank by the front; on a V it now
+sits on the far side, 0.35 of the block's length back (an inline engine keeps its place). The rules check on the V6:
+10 findings → 0. The gate: 23 of 23, 40.4 s.
+- **2026-10-30, the build gallery, four of its five faults.** (1) The car kit given "rancher" or "cascadia" drew a
+random car without a word: a kit now knows its machines by their short names, and words that name another kit's thing
+and not its own are made by that kit and said so ("\"rancher\" names an ATV, not a car: made as an ATV"; on the look
+page's console and in `facts().moved`); checked in the one test. (2) Specks floated by the ATV's bars and the dirt bike's
+front: screws laid on a tube were laid on its box, mostly air for a slanted one (`onShape` now reads a tube by its run).
+The dirt bike's number plate leaned forward off its fork; it now lies along the fork in front of its legs. (3) The bolt's
+thread was a smooth cylinder: its pitch is now on its part, and the renderer cuts it as an ISO thread (60° flanks, 0.6134
+P deep, ten rows to a pitch) where 24 threaded parts or fewer are drawn, so a car's thousands are not. (4) The lawn
+tractor's deck hung at foot height, 12 cm deep, and read as a footboard: it now hangs at a 2.5 in cut, its lip 40 mm
+off the ground, 5.5 in deep, with a side chute and anti-scalp wheels (typical); the rules check still clean. Left: the
+Monte Carlo's end plates (item 4's last); the dirt bike's 3 and the ATV's 1 rules findings (frame tubes meeting at their
+joints, there before this). The gate: 24 of 24, 45.6 s.
+- **2026-10-30, the Monte Carlo's lip and valance end plates on the body.** Each side piece was one flat plate set at the
+corner's widest point, so where the bumper rolls in toward its end it stood off it. It is now laid as Onto a surface lays
+an outline: in strips about 30 mm long, each on the skin where it is (the skin's samples at that length and height) and
+turned to follow it. Before and after shot from the same camera: both pieces now follow their corners. Left: faint
+seams where the strips meet. With this, item 4's five gallery faults are all fixed; a blind judge has not yet been
+shown them. The gate: 24 of 24, 42.6 s.
+- **2026-10-31, the compiler's stage 27, correction.** `compile.correct` and the board Compiler correction: a record's
+failed requirements handed to What matters (which values move them) and Fit to a target (every requirement a goal at
+once), the values found run through the block again on its own and every requirement judged afresh; rounds kept only
+if better (else rolled back), a repeated state stops it, three rounds at most; what is left HUMAN_REVIEW_REQUIRED, which
+the release gate now blocks on. The gate also changed: a requirement's newest check stands for it (a correction's
+re-check replaces the check it corrected; the old stays in the record). Verify runs without a drawn thing (only the
+values wired in). Measured on the inline four's load case: valves held to 7,800 rpm failed at 6,942; one round, bore
+70 mm and chrome-silicon wire, 8,030 rpm and least factor 1.013, both pass, REJECTED → RELEASE CANDIDATE, the board
+19.8 s under Node and 18.1 s in the app. Asked for a least factor over 1.3: sent to review, "the least factor of 10,
+valve spring: wire stress at full stroke" (the spring is designed to its allowable stress, so no bore or wire reaches
+1.3). Plainly: it shrank the bore to the bottom of its range (2.0 L to 1.5 L) because no requirement held the
+displacement; and the drawn engine is not rebuilt with the values yet. The gate: 24 of 24, 44.4 s.
+- **2026-10-31, the CAD kernel: exact solids.** OpenCascade through replicad 1.1.0 (pinned; 1.2.0 was a week old),
+`brep.ts`, nodes Exact solids and Compile: exact solids (the compiler's stages 10 and 12, now on the Engineering
+compiler board). Measured: the kernel loads in 263 ms under Node; the bolt, spring, valve, piston and block each made
+exact solids, every one valid by the kernel's analyser, volume × density against our mass 0.00 %. The inline four:
+1,512 of 1,547 pieces, 0 invalid, 0 off by more than 1 %, 84.37 kg against our 84.36 kg, 16.5 s; the board 33.2 s under
+Node, its solids stage 18.7 s in the app. The Monte Carlo: 5,623 of 5,762, 0 invalid, 50.5 s. Not made, counted: 27
+(engine) and 40 (car) sweeps the kernel refuses (dense windings, bond wires, a belt, a seal), 8 and 99 hollow parts. A
+spline spine tried for the windings made them, but invalid or 4 to 10 % off and the car nine times slower: taken out,
+and they are counted as not made. What the kernel found in our own code: `mass.ts` subtracted a saddle bored along a
+box's face (a main bearing's) as a whole hole; the bulkhead and main cap carried hand-set `fill`s to make up for it,
+and the crankcase ends, without one, were 7 % off. Now a hole takes only the share of its circle inside the box; the
+two `fill`s are deleted. Still ours to fix: the spokes' loft volume (1.7 %) and the V6 block's overlapping and leaning
+bores (22 to 80 %, counted twice or as full circles by `mass.ts`). Bugs of mine on the way: a loft returned as a
+shell, prisms with repeated points, openings as inner loops (all fixed, each found by a volume that did not match).
+- **2026-10-31, export.** `export.files` (in `brep.ts`, the solids' owner) and the board Export: a thing's exact solids
+written as STEP AP242 through OpenCascade's XDE (each solid named by its path in the thing's tree, its colour, mm),
+STL, 3MF and glTF from the kernel's tessellation (within 0.2 mm), and a BOM as CSV; the STEP read back by the kernel.
+Measured on the inline four: written in 58 s (72.7, 85.3, 19.1 and 72.8 MB; at 0.1 mm the meshes made a 156 MB STL and
+took 92 s, so 0.2 mm), read back in 16 s: 1,512 solids and 21,043.605 cm³, the same count and volume as written. The
+glTF has 1,512 named nodes, the 3MF 1,512 objects, the STL 1,747,280 triangles. The gate: 24 of 24, 48.9 s.
+- **2026-10-31, context and navigation brought up to date.** Every file path the context docs name was checked against
+the tree: `NODE-ENGINE.md` named 12 deleted files (now marked, and a note at its top that it is history), `LIFE.md` a
+test merged into the one test. The owners tables gained `fea.ts` and what `brep.ts` now holds. The road map's counts
+measured again (605 blocks, 330 laws, 552 tested, 63 starters, 4,731 stored pieces, 180 source files) and what is done,
+in progress and waiting said at its top. Search: a word whole in a name now ranks over a word it only starts, and a few
+words people search by find what the library says another way (collision found only physics laws before; now both
+interference checkers first). Biomedical & life had no node; the body and the gas node are in it.
+- **2026-10-31, interference, sorted.** The kernel's 121 overlaps on the inline four that the rules missed are 45
+distinct pairs: drawn solid where the part is hollow (about 80 % of the volume: the oil pump body round its rotor, the
+injectors round their coils, the barrel bored at the bore and not the liner's outside, sensors round their elements,
+shells drawn into their journals), real layout faults (pistons into bulkheads 324 mm³ each, plug electrodes into the
+crowns, the cam tube and the coil housing, the catalyst and the tail pipe, and five more), and drawing approximations
+(the belt through its pulleys' rims). The cause of the misses: the rules' triangle test sees surfaces crossing, so a
+piece wholly inside another is invisible to it. Queued as item 8b. Measured in 54 s on the engine alone.
+- **2026-10-31, the checker sees a piece inside another (item 8b).** Containment by ray parity where no surface
+crosses, three points of the inner each tried; moulding and potting (cast round what they hold) and a hollow part's
+hollow excused. 21 found on the inline four that the triangles missed, each fixed at its maker: a cavity in `turned`
+(injector bores and coil pockets), the oil pump's body and cover round its rotors (a hand-set fill of 0.7 deleted),
+6203 bearings on the alternator's 17 mm shaft (608s have an 8 mm bore), combustion chambers cut in the head's deck by
+compression ratio (new `cr`, typical 10.5; 5.9 mm deep, as deep as the 8.9 mm deck allows of the 10.3 mm wanted) with
+the plugs seated at their roof. Measured after: inline four 1 finding (the mount rubber, as before), Monte Carlo 0,
+lawn tractor 0, dirt bike 3 and ATV 1 (as before), Corolla 226 (as before: its battery's heat beside the EGR pipe).
+Each check 1 to 23 s. The gate: 24 of 24, 46.8 s.
+- **2026-10-31, every service a node; the loop made quicker.** `api.claude` (Anthropic SDK 0.135.0, the newest release
+two weeks old; Claude Opus 5.5, effort, server-side fallback), `api.gemini.see`, `api.gemini.draw`, `api.fal.draw`,
+`api.higgsfield` (from its docs: POST the model's path with `Authorization: Key id:secret`, then its status until
+completed, failed, nsfw or canceled) and `api.zenrows`. Measured live with the user's keys: ZenRows read example.com in
+0.6 s; Higgsfield accepted the key and said "not_enough_credits" (403); fal.ai "User is locked: TOP_UP"; Gemini's image
+models RESOURCE_EXHAUSTED; Claude not run (no ANTHROPIC_API_KEY here). Found on the way: Node's fetch did not use the
+container's proxy ("fetch failed" for every host but one) until `NODE_USE_ENV_PROXY=1`. Faster loop: `npm run check`
+(a rules check on one thing: the lawn tractor built in 0.2 s and checked in 2.7 s; the engine's injectors alone 2.5 s,
+against about 15 s for the engine whole), `npm run gate:field` (one field in 4.2 s against 46 s whole), `npm run probe`
+and `npm run docs`, each with the two-minute cap where it runs a probe or a check.
+- **2026-10-31, Claude in the app, through the nodes; cheapest models first.** `agent.ts`: Claude with the node
+system's own tools only (search, describe, example boards, docs by topic, place, wire, set, remove, run, read), a
+system prompt that makes it find, read before use, run, fix, and answer only from what its tools returned. Node Claude
+builds a board, the panel Ask Claude, and a relay on the app's server (`npm run app`: the built pages and `/api/agent`,
+the key under Node only). Measured: under Node, 21 steps, 15.7 s, 77,050 tokens in and 2,830 out, a 40,013 N/m spring of
+19.4 g after one correction it made itself; in the app, 9 steps, 12.6 s, Fit to a target over 949 trials, 40,000 N/m
+and 11.3 g. Models: the cheapest by default (the user, 2026-10-31): fal FLUX schnell only (a picture in 2.8 s once the
+user's credit landed), Claude Haiku 5.5 at low effort; heavier only where a node asks. The Claude node now goes to
+`api.anthropic.com` itself (the container's own ANTHROPIC_BASE_URL is not for the user's key). Two shells lost to
+`pkill -f` matching its own command line: processes are now stopped by their port.
+  The agent's first commit hung the docs step silently for over ten minutes: importing navigation and the starter
+  boards at the agent's top changed the order the library's modules start in, and the pool's bundled worker failed to
+  start (`init_blocks is not a function`); the pool waited forever on a worker that had died. Fixed both: the agent
+  loads those two when it runs, and a worker that fails now fails what waited on it, with why, and the pool is made again.
+
+- **2026-10-31, the agent made cheap.** The same request (a spring of 40 kN/m, as light as can be) before and after. Before:
+  ten tools, a long system prompt, a node placed and wired a call at a time: 21 steps, 77,050 tokens in, 2,830 out. After:
+  five tools answering in lines, the board sent whole as one plan, `docs/FOR-AI.md` as the instruction, cached: 5 steps
+  (find, find, card, card, build), 3,557 tokens in fresh, 7,302 read from cache (billed at a tenth), 1,121 out; the same
+  answer (0.12993 kg at 40,009 N/m by `fit.target`). One earlier run of the new version took 13 steps, guessing
+  `fit.target`'s line syntax; FOR-AI.md now states it. Measured once each; a model's runs vary.
+- **2026-10-31, the agent given the rest of what a person can do.** Open a starter board, change the board in place,
+  fold nodes into a saved library block, and a second model checking the answer against the steps. Measured once each:
+  "make a reusable coil spring sizer, then use it at 5 mm and 40 mm" took 7 steps (find, find, card, find, build, fold,
+  build), the saved block ran to the same rate as the board it was folded from (11,779.8 N/m, 0.194 kg), checker PASS;
+  1,650 + 5,940 tokens in fresh, 25,054 cached, 2,766 out. "Open the Export board, make its bolt M10, which files and
+  how big is the STEP" took 11 steps; a setting it guessed (`thread`) was refused with the block's real ones, it wired
+  the bolt's input instead: M10 × 30, 0.02623 kg, STEP 63 kB; checker PASS. In the app (`npm run app`), 10 steps in
+  30.8 s; the block kept in the browser's library; the board shown with it. Its answer named the defaults it left
+  inside the block (a different coil count from the first run, so 18,847.7 N/m): a fold keeps what is inside it.
+- **2026-10-31, controls and being in it.** Button, Stick and Slider nodes (`controls.ts`), drawn and worked by
+  `view/pad.ts` in the dashboard's 3D view and in the space; a walk at eye height. The engine gained `live` on a block
+  (what it reads from outside, as a key), because a control's node otherwise was skipped as unchanged; found by the first
+  headless test (2 presses, 0 crates added), after it 2 presses gave 2 crates. Measured in Chromium (software GL) on
+  the starter board Controls: E twice added 2 crates; a mouse press on the button drawn on the crate added 1; the arrow
+  keys (up 1.2 s, right 0.7 s) drove the cart to (0.48, −1.42) m, away from you and to the right; the slider set the
+  tower's top to 5.01 m; walking put the eye at 1.6 m; on a 390 × 844 touch screen, a tap on the drawn button added a
+  crate; in the space, walking set S to 1 with the eye at 1.6 m and E added 3 crates. No page errors. Not tried: a real
+  phone, a real gamepad, a headset (the hand's ray goes through the same press as the mouse, untested here).
+- **2026-10-31, navigation made absolute.** Measured first, over every entry: all 614 nodes were found first by their
+  exact names, but plain and misspelt words failed ("buton", "sprng", "joystick", "intractable", "make a house",
+  "scrape a website": nothing; "walk": unrelated parts). Now: words that say nothing left out, each misspelt word
+  corrected to the nearest the library has (edit distance 1 for short words, 2 for longer), more other words (ALSO), the
+  nearest match where nothing has every word, an id typed whole found as itself, and the app's own 22 features as a
+  library (`APP`). After: nodes by name 613 of 614 first and 614 in the first three; by id the same; every board by its
+  name and every app feature in the first three; the 20 plain and misspelt questions in the gate all land in the first
+  three (e.g. "buton" Button, "intractable" Button, "make a house" House, "scrape a website" ZenRows, "exprt step"
+  Export). Two tests hold it: navigation (a fourth of the nodes in the gate, every one in the docs run; about 12 ms a
+  search) and routing (every source file named by an owner row, every document routed from CLAUDE.md and every route
+  there). The routing test found 14 files no row named (`kinds/`, `ganglia/`): rows added.
+- **2026-10-31, constants to CODATA 2022** (spec 10, task T1). Values taken from NIST's own listing
+  (physics.nist.gov/cuu/Constants/Table/allascii.txt, "2022 CODATA adjustment", read 2026-10-31), not from memory.
+  Moved: μ₀ 1.25663706212e-6 → 1.25663706127e-6; ε₀ 8.8541878128e-12 → 8.8541878188e-12; Rydberg energy
+  13.605693122994 → 13.605693122990 eV; electron mass 9.1093837015e-31 → 9.1093837139e-31 kg; atomic mass constant
+  1.66053906660e-27 → 1.66053906892e-27 kg; G unchanged; the Coulomb constant derived anew (8987551786.2). Outputs that
+  moved, found by the gate (cmd: `npm run gate`): three law nodes' own tests, by under a part in a billion: parallel
+  plates 8.8541878128e-11 → 8.8541878188e-11 F; a long wire's field 4.000000002e-5 → 3.999999999e-5 T; the Compton
+  shift 2.42631023868e-12 → 2.42631023538e-12 m. Their expected answers were reworked from the 2022 constants; the
+  gate then passed (26 of 26).
+
+## 2026-10-31: the AI's guide wired a spring's output as an input, and the engine said nothing (fixed)
+
+Found by research pass 30 (the token experiment) and checked with a probe. `docs/FOR-AI.md`, sent with every call, showed
+the plan `k.value>s.rate`; `rate` is an output of `seed.spring-checked`. Folded blocks were exempt from the "no input of
+that name" check in `wire` (`dataflow.ts`), so the wire was kept, carried nothing, and the spring ran on its defaults:
+11,308.6 N/m, not 40,000 N/m, with no word said. A wire into `nothere` was kept the same way. Now the check covers folded
+blocks too (unless the block has no inputs at all); both wires are refused with the input named. The example wires `n`
+(6 coils: 9,423.8 N/m, measured) and says an output cannot be set (use `fit.target`). The one test runs the guide's plan
+as written and checks the refusal. Gate: 27 passed. All 64 starter boards still build under the check.
+
+## 2026-11-01: a cached run is checked against a fresh one; keys tell apart what they could not (spec 11, LW15; fault D6)
+
+`digest` (in `dataflow.ts`, keys) replaces `stable` wherever a key is made: a node's settings, its inputs' defaults, a
+group's feeds and a board's key. `stable` wrote every Map and Set as `{}` and every function as `undefined`, so a folded
+block fed two different Maps could be served the other's answer. The one test now runs each field's quick board three
+ways: as the gate always did; every node touched and run again (served from the cache); and anew with a cache of its own.
+Every pure node must give the same in all three. A test also checks the digest tells apart two Maps, two Sets, NaN and
+null, −0 and 0, two functions, Float32 and Float64 arrays, and keys the same value built in another order the same.
+
+The first run of the check found three nodes that differed: the 6502's simulation (`logic.run`) reports how fast it ran
+(`hz`, `modelHz`, and its `says`), which moves from run to run; and two gauntlet nodes (`research.loop`, `on.event`)
+read the gauntlet's state, shared across the app, which grows between runs. The first now declares those ports
+`measured` (a new `PortDef` field: a measurement of the run, never compared, never a sign that what follows changed);
+the gauntlet nodes are not pure, so they are never served from the cache and are not compared. A planted fault (a
+cached node given back with one field changed) failed the check on three nodes of the mechanical quick board. Gate:
+29 passed in 51.3 s (one run).
+
+## 2026-11-01: a value goes along a wire only into its own kind (spec 10, T11; faults D1 to D4)
+
+`relate(from, to)` in `src/ganglia/units.ts` decides whether a value may go from one unit into another and how it
+converts: the same dimension and the same kind. A turn is a cycle (60 rpm → 1 Hz; 1 Hz → 2π rad/s; before, 60 rpm into
+Hz gave 6.283); an energy (J, Wh, eV) is not a torque (a force times a length); an absorbed dose (Gy) is not a dose
+equivalent (Sv); a level in dB goes only into dB; a temperature (K, degC, degF) is not a temperature difference (new
+units ΔK, ΔdegC, ΔdegF, no offset: 10 ΔdegC → 10 ΔK, where degC into K adds 273.15). The laws' temperature differences
+(their quantity is `temperature-difference` in `quantities.ts`) take ΔK on their ports, the law's own term keeping K.
+The wire check (`fits`) and the engine (`convert`) both use it; a wire of another dimension or kind now fails the node it
+goes into, saying why, where before `convert` passed the number on unconverted. Tests written first (they failed),
+now passing: 11 conversions and 10 refusals, and a °C temperature refused by a law's dT while a ΔdegC rise converts.
+
+Measured before changing anything: across all 64 starter boards no wire joins two different units, so no stored result
+moved (book question Q14.4). 42 wires join a port with a unit to one without; refusing those would break them, so a port
+with no unit still takes anything (D1 stays partly open). A sweep running every starter board after the change found no
+refused wire in the boards it finished; boards that call the AI or run past two minutes were not finished (the sweep's
+log was overwritten midway by a gate run that picked up the probe: not every board is accounted for).
+
+## 2026-11-01: early cutoff (spec 11, LW12; faults D5, D7)
+
+A node's key is now made from the values wired into it (`valueKey`: the value's `digest`, kept by identity for objects),
+not from the keys of the nodes that made them. So a node run again that gives what it gave before leaves what it feeds
+alone. The one test counts it: a rounding fed 2.1 then 2.2 runs again; the node after it does not (2 nodes ran, not 3);
+with the old key the same test fails. It also fails any block that says it is pure but reads the clock, chance, the
+network or the AI in its own run, unless what it reads it gives as `measured` (two found: the 6502's speed, now measured;
+`compile.start`'s `new Date(0)`, a fixed date). What a block calls further down is not seen by that scan. Gate: 30 passed
+in 50.0 s (one run; 51.3 s before the change).
+
+## 2026-11-01: the headset panels come with you, laid to comfort numbers (spec 04, P10; fault D11)
+
+`space.ts`: walking with the left stick now moves the panels and the zoom's pivot with the player (`carry`); before, they
+stayed where they stood until a squeeze brought them back. In a headset the panels are laid to research 34's numbers
+(Meta's comfort and panel pages): the board 10° below the eye at 1.25 m, tilted back to face you, centred by its measured
+box; the bar under it; the chat to the side at 1.3 m, turned to face you; the keyboard 0.9 m away (it was 0.69 m, inside
+the 0.5 to 0.8 m band Meta says to avoid). `space.comfort()` measures each panel from the eye. Measured in an emulated
+Meta Quest 3 (IWER), one session: board 1.23 m, 9.1° below, 51.1° wide, straight ahead; bar 1.18 m, 20.9° below, 48.2°
+wide (inside the 58° Meta designs for); chat 1.30 m, 42° to the side, 26.8° wide; keyboard 0.90 m, 33.7° below. After
+moving 2 m right and 3 m ahead, every one of those numbers was the same. The chat was first put at 30°, as research 34
+proposed: the screenshot showed it over the board's edge, so it went to 42° and the board from 0.42 to 0.38 of its size
+(past Meta's 30° comfortable turn of the head, inside its 55° most). Not done: the board's text size in degrees (research
+34 found it near the 0.4° minimum) is not measured or changed; snap turn, a vignette and fixed speeds are P11; nothing
+was tried on a real Quest.
+
+## 2026-11-01: what is written is scanned (spec 00, S4; constitution C7, C17)
+
+`tests/nexus/scans.ts`, run by the one test: every record in `src/data/` that holds numbers says where they come from
+(itself, a record that holds it, or the file's `…SOURCE` export); no placeholder word (TODO, FIXME, TBD, XXX, lorem
+ipsum, placeholder) in `src/data/`, `src/nexus/kinds/` or `src/nexus/book/`; no key shape (Anthropic, Google, GitHub,
+AWS, a private key block, a long key written into a setting by name) in any tracked file or the built pages. Each scan
+is first run on a planted case that must fail it. Measured before: 126 records without a machine-readable source, in
+three files: the periodic table (118; its source was already in `PERIODIC_SOURCE`, now read), the BCI battery groups
+(6 of 9; its source was in prose only, now `BCI_SOURCE`, labelled typical) and two mixtures (now `basis`: one derived,
+one a chosen example). No placeholder and no key shape was found. The six real keys kept outside the repository were
+looked for by value in every tracked file and the built pages: none found (checked once, by hand: the gate cannot see
+them). Planted in the repository (an unsourced record and a TODO in `woods.ts`, an AWS-shaped key in a tracked doc), each
+failed the gate by file and line; removed, it passes. Not covered yet: figures outside `src/data/` (the kinds, makers).
+
+## 2026-11-01: the AI's evaluation set, its baseline, and one rule that took it from 16 to 30 of 30 (spec 00, S5)
+
+`npm run eval:agent` (`tests/evals/agent.eval.ts`, kept out of the gate: it spends real tokens) gives the agent 30 fixed
+requests: 26 numbers to work out (weights, energies, stresses, gas pressure, a pendulum, drag, a beam's moment, 60 rpm in
+hertz, a wall's heat flow), two starter boards to open, a screw to make and a spring to fold. Each is checked with no
+model: the board the agent built is run, and the request is right when the number, worked out in the test from the
+app's own constants, stands on some node within 1 %, or when what was asked was made or folded. Five run at a time,
+`check: false` (the second model's reading is not part of right or wrong), the app's default model, claude-haiku-5-5.
+
+Baseline (one run, `EVAL_OUT=… npm run eval:agent`): 16 of 30 right; 48 tool steps; tokens in 212 fresh + 170,936 read
+from the cache, out 14,748; 107 s summed. 13 of the 14 wrong took no step at all: the agent answered the number from
+what it knows and built nothing (the guide said to answer only with numbers its tools returned, but not to build
+first). The fourteenth built a wall's heat flow without the 800 W on its board.
+
+One rule added to `docs/FOR-AI.md` ("Every number you give comes from a node on the board, however simple the sum …
+a request answered with no board is answered wrong"), the same 30 run again (one run): 30 of 30 right; 109 steps; tokens
+in 322 fresh + 386,970 read from the cache, out 17,854; 141 s summed. Building costs more than answering from memory:
+about 2.3 times the cached input and 1.2 times the output. One run each: how much a second run would vary is not known.
+
+## 2026-11-01: the evaluator (spec 00, S7), its first four verdicts, and what it caught
+
+`plan/specs/00-structure/evaluator.md`: a fresh agent on another model (Claude Sonnet; the builder is Claude Opus),
+given the task, its check and the evidence, never the builder's reasoning; it runs the check, plants the faults the check
+guards against, and writes a verdict file; only its `pass` marks a task passing (the one test and `compile.py` both
+check it). What the builder had marked passing became "claimed". Its first verdicts: 00.S6 pass (it planted five faults;
+the four the check names were caught); 04.P10 fail (the chat at 42° and the bar at 0.62 differ from the task's 30° and
+0.74 with no record of why in the plan, the text size is not measured, the script compares nothing against the limits, no
+real Quest); 00.S4 fail: a key in a file not yet added to git was not scanned (the scan read `git ls-files` only), and the
+whole gate was red: the verdict files were not routed from `plan/README.md`, and they had been pushed without the gate
+being run first (the builder's fault, against the rule that a push waits on the gate). Both fixed: the key scan now reads
+untracked files too (a planted key in a new file fails it), and the README routes the verdicts. S6 passing and P10
+failing, judged rightly against what was known of them, meet S7's own check.
+
+## 2026-11-01: the cache check made to see what the evaluator showed it could not (spec 11, LW15)
+
+The evaluator failed LW15: with the shared cache made to alter what it gave, with `valueKey` made a constant, and with
+`valueKey` put back to the old `stable()` (fault D6 itself), the gate still passed, because no quick board was ever
+served from the shared cache and nothing fed a Map down a wire. Two checks added: each quick board is run a third time on
+the fresh run's own memo, where every pure node must be served from that cache (counted) and give the same; and a board
+where a node fed a Map has it changed to another Map (the old writing wrote both `{}`) must run its reader again and give
+the new value. Planted again: the old key and an altering cache each fail the gate now. Gate: 33 passed in 65.0 s (one
+run; over the one-minute aim; earlier runs 50.0 s here and 63.8 s in the evaluator's: run-to-run variance is large and
+not separated from the new check's cost).
+
+## 2026-11-01: the hooks (spec 00, S3; constitution C10 to C13)
+
+Four checks that refuse, so the rules hold by running rather than by being remembered. `npm run gate` is now
+`scripts/gate.mjs`: the type check and the one test as before, then `.gate-ok`, the tree of this folder exactly as it was
+tested (a run that changes files gives no stamp). The push gate (git's pre-push hook, and a Claude Code hook on Bash in
+`../.claude/settings.json` for a clone where `npm run hooks` was not run) refuses a commit whose tree is not the stamped
+one. The change budget (git's commit-msg hook) refuses a commit that changes code past the owners of the task its message
+names, or names no task, unless it names a decision record; the plan, the docs and the tests are open to any task; tasks
+written in a spec's table get their owners in `plan/owners.json` before work starts. Honesty (the same hook) refuses an
+entry added to this log, or a line added to `PROGRESS.md`, that states a number without the command or test it came from
+(dates, ids, hashes and versions are not counted). The loop breaker (in the gate) refuses a fourth run after three
+failures on the task in hand until `PROGRESS.md` answers, in a line `pipeline: <task>: …`, whether a pipeline is missing.
+Each check is a pure function in `scripts/hooks/lib.mjs`, tried on purpose by the test "each hook refuses what it is there
+to refuse" in `tests/nexus/domains.test.ts`. The Claude Code hook stopped one of the builder's own commands the moment it
+was installed: its first pattern read "git's pre-push hook", written into this entry, as a push. It now strips
+here-documents and quoted text and looks for `git … push` as a command; eight cases are in the test (the entry first said
+nine: the evaluator counted eight).
+Tried live in this clone before the commit that brought them (`git commit` on planted changes, `node scripts/gate.mjs`
+with three failures recorded): a commit past the owners and a commit naming no task were refused; a fourth gate run was
+refused. The honesty check let a planted entry through twice before it held: first because the planted entry and a real
+one were added as one hunk (now each `## ` entry is judged on its own), then because its `git diff` was given a path from
+the top of the repository while running inside this folder, so it read nothing (now `:(top)`); the first slip made a
+local commit, undone with `git reset --soft` before anything was pushed. Its unit test had passed both times: the wiring
+was what failed, which is why each hook is also tried live.
+
+## 2026-11-01: stop the line, and the near-miss log (spec 00, S10; constitution C25)
+
+`plan/ANDON.md`: an andon is raised when a check fails on something already called done; while it is open, its task and
+every task that waits on it cannot pass (the test "an open andon stops the line, and every near miss has its kind and its
+response" in `tests/nexus/domains.test.ts`, and `python3 plan/compile.py`); a planted open andon on a passing task failed
+it. One andon so far, closed: the gate red on a pushed commit (unrouted verdict files). `plan/NEAR-MISS.md`: seven real
+near misses from these two days, each with its kind (error, at-risk, reckless) and the response it called for, no
+blame. The AI in the app now logs its own on every run (`nearMisses` in `AgentRun`: each refusal the engine said back is
+an error; an answer with numbers and no board is at-risk), checked by the same test. And the gate now fails while a probe
+is left in `tests/nexus/` (the test "no probe is left where the gate runs"; a planted one failed it): a probe the gate
+picked up was one of the near misses.
+
+## 2026-11-01: a claim status on every figure in the data files (spec 10, T3; constitution C21)
+
+Every record of `src/data/` that holds numbers now carries a claim status in the app's one vocabulary of evidence kinds
+(`EVIDENCE` in `src/nexus/evidence.ts`: exact, measured, specified, derived, estimated, hypothetical, …), checked in the
+gate by `unstated` in `tests/nexus/scans.ts` beside the source scan (the test "every figure in data has a source, no
+placeholder stands in data, no key is written down"). The words the files already used are read as statuses rather than
+rewritten (`confidence: handbook` is specified, `evidence: typical` is estimated, a constant's `exact` is exact or
+measured). Measured before, with a probe of that scan: 144 records had none. Given now, each the weakest of its record's
+figures: the periodic table and the woods specified (handbook tables), the three fluids specified, the maxon motor and
+gearhead specified (the maker's data), the Unite motor estimated (sellers' figures and an estimated shaft), the batteries
+estimated (their cases' sizes are standard, their mass, amps and inner layers typical), two mixtures derived and
+hypothetical. A planted record with a source but no status fails it; so did removing one fluid's status. Not covered:
+figures outside `src/data/`; and C21's words disputed, myth and inspired-only have no evidence kind yet.
+
+## 2026-11-01: headset comfort measured against every limit, and the layout fixed until all hold (spec 04, P10; decision 0012)
+
+The evaluator failed P10: the chat and bar had moved from the task's numbers with no record, text size was not measured,
+the measuring script compared nothing against limits, no real Quest. Now `npm run eval:headset` (`tests/evals/headset.cjs`)
+builds the pages, enters the emulated Meta Quest 3, measures every panel, the board's text and the smallest target of the
+bar, the chat and the keyboard in degrees, checks each against its limit, walks the player 2 m right and 3 m ahead and
+checks again, and fails on any one outside. Its first run found three more faults beside the ones known: the bar's
+clock/history toggle was 0.73° (a target needs 2.5°), every one-row bar button under 2.5° at any scale the 58° width allows,
+and the keyboard's keys 2.34° tall. Fixed: the board drawn at a fixed 780 css px in a headset (its text 0.60° and 0.71°,
+where from the desktop window it was 0.29° to 0.50°), the bar in two rows (39° wide, buttons 2.62° or more), the chat's typing
+area 90 px (2.74°), the keyboard 0.62 m wide (keys 2.59°) and 45° below the eye (it covered the bar at 34°, 7.18° clear
+now), chat 42° aside and 3.06° clear of the board. Last run: every limit held, and every panel stayed where it was after
+walking. The departures from research 34's first numbers are decision 0012; a real Quest is spec 03's task W5.
+
+## 2026-11-01: the hooks, mended where the evaluator broke them (spec 00, S3)
+
+The evaluator failed S3 (`plan/specs/00-structure/verdicts/00.S3.json`): in an ordinary clone all four hooks refused as
+the check says, but in a linked worktree, where git sets GIT_DIR for a hook, the scripts read the project folder as the
+repository's top, so the change budget and honesty let everything through and the push check refused everything; the push
+check judged only the last of several branches pushed at once; the gate had no two-minute stop; the Claude Code hook was got
+round by `bash -c`, `xargs` and `/usr/bin/git`, and let through what it could not read; and the gate tested only the pure
+functions, so four wiring faults planted in the scripts passed it. Mended: every hook finds the repository without GIT_DIR
+and runs git from its top (`whereIs`, `gitEnv` in `scripts/hooks/lib.mjs`); every branch pushed is judged; each gate step is
+stopped at two minutes; the Claude Code hook reads every `git … push` outside a here-document, quoted or not, path or not,
+and refuses what it cannot read. And the gate now tries the hooks as installed (the test "the hooks, installed in a
+repository, refuse in a clone and in a linked worktree"): a throwaway repository with the real scripts and git's hooks on, a
+commit past its owners, one naming a decision that does not exist, a log entry with an unsourced number, the same past-owners
+commit from a linked worktree, and two branches pushed with the ungated one first, each refused. Planted again, the old
+repository detection and the last-branch-only check each fail that test. Not caught: a number written in words.
+
+## 2026-11-01: the one test's first baseline: 2 of 18 lines (spec 00, S14)
+
+`npm run eval:one` (`tests/evals/one.eval.ts`) gives the AI in the app the one test's request, typed as a person types it
+("put a lamp on a shelf on my wal and make it so i can turn it on"), runs the board it builds, and scores the 18 pass lines
+fixed beforehand in `evals/one-test/expected.json`: 5 can be scored today; 13 say what must exist first (interfaces, live
+physics, perception, the phone) or that their numbers are still to be worked out by hand from sources. First run (one
+run, claude-haiku-5-5, its answer read by a second model): 2 of 18 pass: "wal" was read as wall and the lamp and shelf
+were found (line 1); a wall was built with its material named (line 3). Failed: no sourced bulb figures on the lamp (9);
+nothing folded and placed three times (15); the second model found an unsupported claim (17: "aluminium 6061", which no
+step set). 20 steps, 3,637 tokens in fresh and 71,866 read from the cache, 6,164 out, 34 s. The AI said plainly that the
+lamp does not light yet and the wall is not joined to the shelf. An earlier run of the runner scored line 3 wrongly (it
+read a node's block from the wrong record); fixed before this run.
+
+## 2026-11-01: a law's dimensionless input refuses a length (spec 10, T11; fault D1, its last part)
+
+A law's input without a dimension (an efficiency, a ratio, a coefficient) had no unit on its port, so the wire check let
+anything into it: a length wired into Carnot's efficiency passed. Now such an input keeps its unit, 1 (`unitAt` in
+`lawBlocks`, `src/nexus/blocks.ts`), so a quantity with a dimension is refused and a plain number is still taken; the
+value shown hides the 1. The test "a value goes along a wire only into its own kind, converted rightly" wires a length
+into `law.carnot` solved for Tc and is refused. The other wires from a unit into a port with none, on the starter boards,
+all go into generic ports (the math, view and check.limit blocks), which take any quantity by design; fault D1 is closed.
+Checked with `npm run gate`.
+
+## 2026-11-01: the handoff checked against the plan, not only its form (spec 00, S2; S1's gaps)
+
+The evaluator failed S2: `PROGRESS.md` named two "next" tasks already built, a commit six behind, and its test checked only
+the form, so a wrong spec, a passing task in hand, next tasks that do not exist, a commit 0000000 and a CLAUDE.md with the
+loop deleted all passed. `PROGRESS.md` is rewritten to the truth, and the test "PROGRESS.md is short and true to where the
+work stands" now reads each task's state from `plan/INDEX.md` and checks: the spec named is a folder that holds the task in
+hand; the task in hand exists and is not passing; each task named next exists, is neither passing nor claimed, is not the
+task in hand, and is in the start queue; the commit named is a commit, an ancestor of HEAD and at most three behind it;
+CLAUDE.md routes "what is next" to the file and holds the loop from reading it to rewriting it. A new test, "plan/INDEX.md is
+what the plan compiles to", runs `python3 plan/compile.py --check`, so the states it reads are the plan's own; the start
+queue in INDEX.md now shows each task's state. Each of the evaluator's plants that passed before, and a few more (the spec of
+another task, an old commit, a claimed task named next, one not in the queue), was planted again and each failed the test.
+S1 passed its verdict; the four things its evaluator saw slip through (a check written "TBD", a rule id in bold, a
+decision's section left empty, a decision file misnamed) are now refused, each planted and caught. The secret scan reads
+files only (a linked node_modules, listed as untracked, made it fail in the evaluator's worktree). Checked with `npm run gate`.
+
+## 2026-11-01: the line stopped all the way down, and the AI's near misses shown (spec 00, S10)
+
+The evaluator failed S10: an open andon stopped only the tasks that wait on its task directly (a task two steps down could
+pass), and `compile.py` stopped only the task itself; a closed andon need not name its fix; a reckless near miss could carry
+any response; the AI's own log missed a tool that threw and a node that failed, and nothing read it; and probes were looked
+for only at the top of `tests/nexus`. Mended: the test "an open andon stops the line, and every near miss has its kind and its
+response" and `compile.py` both walk the whole chain of "after" (the tasks of every spec's table too); a closed andon reads
+"closed <date> by commit <sha>" and the commit must exist; a reckless row's response must say to stop and tell the user. The
+AI's run (`nearMissesOf`, `src/nexus/agent.ts`) now logs a tool that failed and a node that failed, and calls an answer
+given past a refusal still standing, without a word of it, reckless; the page shows the near misses beside the answer and
+`npm run eval:agent` and `npm run eval:one` print them. "no probe is left where the gate runs" reads the gate's include from
+`vite.config.ts` and looks in every folder under it. Each of the evaluator's plants that passed before was planted again
+(an andon on 00.S3 with a task one and two steps down passing, a bare "closed", a closing commit that does not exist, a
+reckless row answered "carry on", a probe in `tests/unit`, `tests/golden` and a folder under `tests/nexus`): each fails the
+test. Checked with `npm run gate`.
+
+## 2026-11-01: the claim-status entry above said too much: figures in lists were unseen (spec 10, T3)
+
+The entry "a claim status on every figure in the data files" said every record of `src/data/` that holds numbers carries a
+status. It did not: the evaluator found that both scans (`unsourced`, `unstated` in `tests/nexus/scans.ts`) asked only a
+record holding a single number, so figures held in lists went unseen, all of `src/data/optics.ts` among them (the CIE eye
+and daylight tables, 14 metals' and 4 films' refractive indices). Now a list of numbers, a table of rows of numbers and a
+typed array are figures to both scans, and a file can name each export's status in one `…_STATUS` record (a wrong word, or
+a name the file does not hold, fails). The optics given their statuses: the wavelength grid exact; the CIE tables
+specified; the metals measured where Johnson and Christy, Querry or Golovashkin measured them, empirical where the figures
+are Rakić's fitted models (aluminium, platinum, tungsten); the four films measured. Run over `src/data/` with the wider
+scan, only `optics.ts` had figures without a status. Planted in the test "every figure in data has a source, no placeholder
+stands in data, no key is written down": a record of number arrays with no status, the same with no source, a bare table
+and a typed array, a wrong status word for one export, a status for an export that is not there; each fails. Still not
+covered: figures outside `src/data/`, and C21's calibrated, disputed, myth and inspired-only, which have no evidence kind.
+Checked with `npm run gate`.
+
+## 2026-11-01: every target in the headset 2.5° or more, the board's strip and side panel too (spec 04, P10)
+
+The evaluator failed P10 again: `npm run eval:headset` measured the bar, the chat and the keys, but not the board's own strip
+of buttons (1.1° tall) nor its side panel (buttons 0.9°, text 0.3°), both pressed by a hand's ray; nothing held the keyboard
+to its 45° below the eye, nor the chat to its 42°; and walking was tried only by calling `carry()`, so a left stick that
+moved the player and left the panels behind passed. Now, in a headset, the board's strip is drawn taller and the side
+panel wider, at the same pixels per metre, with larger buttons and text (`headset()` in `src/nexus/view/nodes-wall.ts`; on
+a screen they are as before), and the side panel pages its inputs and the library when they do not fit. `comfort()` in
+`src/nexus/view/space.ts` measures the strip's and the side panel's smallest target and smallest text from their own
+distance, and the bar's rows; the run adds limits for each, for the keyboard at 43° to 47° below the eye, and for the chat
+at 40° to 44° to the side; it measures the side panel with a block chosen and with the library open; and it walks a second
+time by pushing the emulated left stick, checking that the player moved and every panel kept its place. All within their
+limits in one run of `npm run eval:headset` (an emulated Quest 3, not a headset): the strip's smallest target 2.65°, the
+side panel's 2.71°, its smallest text 0.64° to 0.67°, the strip's 0.77°; the stick moved the player 1.52 m. A cost: in the
+headset the library shows five blocks a page, so the largest field takes 36 pages. A real Quest is still spec 03, W5.
+
+## 2026-11-01: the AI's failures past the record's cut, the page's view guarded; figures in pairs and alone (spec 00, S10; spec 10, T3)
+
+S10's second verdict: the AI's near misses were read from each step's result after it was cut to 300 characters, so on a
+board of more than a few nodes a failed node or a refusal past the cut was missed; nothing guarded the page's view of them;
+an andon did not stop a task whose "after" is written in words ("spec 04 P4", "spec 00 S3", a whole spec, "V3 to V6");
+and an error's or an at-risk act's response was checked only as not empty. Now each step keeps its refusals and failures
+whole beside the cut record (`stepOf` in `src/nexus/agent.ts`, the one agentBuild uses), the page's view is one function
+(`nearMissesView`) the test checks and finds in `src/nexus/view/nodes.ts`, the chain of "after" is read in every form the
+specs use (in the test and in `compile.py`), and an error's or at-risk act's response must name a check, a test, a hook, a
+refusal or a rule. T3's second verdict: figures held as [name, number] pairs (a mix's parts, a mixture's phases) and a
+number exported alone went unseen by both scans, and `src/data/mixes.ts` had ten such records with no status; and the log
+said again more than was true. Now both are figures to the scans; the mixes are estimated (typical proportions, each with
+its basis), the three constants exported by name carry their constant's source and status, and `materials.ts` no longer
+re-exports one. Each of the evaluators' misses planted again fails the tests "an open andon stops the line, and every near
+miss has its kind and its response" and "every figure in data has a source, no placeholder stands in data, no key is
+written down". What the scans call a figure is still their own idea of one: a number inside a text, or in a function's
+body, is not seen. Checked with `npm run gate`.
+
+## 2026-11-01: the kernel's first version, and the AI's board taken only when it checks (spec 10, T23 and T18; decision 0013)
+
+`src/kernel/` checks certificates and never searches: exact BigInt rationals (a double read exactly from its bits),
+intervals with rational endpoints rounded outward to 96 bits, exp, ln and roots by series with their remainders bounded,
+never the host's `Math`; dimensions as six rational exponents from a unit table that is the units' own; a strict
+envelope; the kinds dims (a wire's two units, a law's term against its output), witness (a term's value at a point lies
+within a tolerance of what is claimed: inside passes, wholly outside is wrong, across the edge undecided) and judged
+(never a pass). It imports nothing outside its folder. `src/nexus/certify.ts` builds certificates for it: a law's
+dimensions (each constant carried with its unit), a law node's value at the point it ran (each law node now reports that
+point, in SI), a wire's units, and an AI change's diff from the boards themselves. Run over the book (the test "the
+kernel: closed, exact, each kind refusing what is planted, and a second checker agreeing"): of 330 laws, 318 certified
+for their dimensions and for their value at the worked example, 12 refused as undecided (sine, cosine, tangent, their
+inverses, erf and integrals: not in this kernel yet), none wrong; each of the 318 values moved by a millionth refused.
+A second checker in Python (`scripts/kernel2.py`: fractions, and decimal at 60 digits) agrees with the kernel on every
+certificate tried, the planted ones and values half and one and a half tolerances off included; each enclosure of exp,
+ln and a root at nine points lies within 1e-25 of Python's 60-digit value. Planted, and caught: every dimension made
+equal, anything outside a tolerance passed, an import from outside the folder, `Math` used, an exponential's series cut
+at 12 terms, a logarithm's at 6 with no bound, a second checker twice as lax. Not caught: the exponential's remainder
+dropped altogether (its error, about 1e-32, sits under the 96-bit rounding). The AI in the app (`certifiedOf`,
+`gateOf`, `src/nexus/agent.ts`) returns its change's diff and certificates; the page checks them again with the kernel
+and takes the board only when none is refused as wrong (the test "an AI change is taken only when the kernel refuses
+none of its certificates": a value moved, a point moved, a force wired into an energy, each stops it; the starter
+boards' law nodes are all certified or undecided). Ten of T23's thirteen kinds are not built (cover, farkas, lrat,
+model, gap, sweep, rewrite, refines, table, sample); a certificate of one is refused as malformed. Checked with
+`npm run gate`.
+
+## 2026-11-01: the near misses guarded where the run makes them; every number in a data module a figure (spec 00, S10; spec 10, T3)
+
+S10's third verdict: the near misses were tested by calling the functions that make them, not where the AI's run makes
+them, so a run that returned none, or kept its steps the old cut way, passed. A scripted stand-in for the model was
+suggested; the rule here is no mocks, so the run's wiring is guarded another way: every run ends through one function,
+`runOf` in `src/nexus/agent.ts` (its near misses from its steps and answer, its diff and certificates from its boards),
+which the test calls with steps kept as `stepOf` keeps them (a refusal, a node failed past the cut, a tool failed, an
+answer past a standing refusal: error, error, error, reckless); and the test reads that `agentBuild` ends only through
+`runOf`, keeps each step by `stepOf`, and sets no near misses of its own. Also now held: each near miss on the page with
+its kind and response, both evaluation runners printing each one, an andon naming no real task, and (in `compile.py`)
+a closing commit that does not exist. T3's third verdict: a number beside a text or a null in a list, a lone pair, and a
+Map's values went unseen. Now any number in a data module's exports is a figure to both scans, wherever it sits; each of
+the evaluator's shapes planted fails the test "every figure in data has a source, no placeholder stands in data, no key
+is written down", and no record in `src/data/` was newly found without a status. Not seen, and said so in C21's row: a
+number inside a text or a function, and the JSON data files (`src/data/stock.json`, which the builds generate). Checked
+with `npm run gate`.
+
+## 2026-11-01: in a headset, blocks are pressed and wires made from the side panel (spec 04, P10; decision 0012)
+
+P10's third verdict: the board's own ports (1.1° across) and wires (0.8°) were targets a hand's ray presses, under the
+2.5° a target needs, and unmeasured; the Board button made the board 72° wide over the chat and the bar; decision 0012
+still gave the old numbers. Each review had found another kind of target unmeasured, so this round answered the class:
+in a headset a hand presses only whole blocks on the board (`hit` in `src/nexus/view/nodes.ts` skips ports and wires
+there), the board's zoom never lets the smallest block fall under 2.5° (the space tells the board how many of its pixels
+that is at its distance), and wires are made from the side panel (`src/nexus/view/nodes-wall.ts`): a block's output by
+"→ wire", the other block's input by "← here", a wire taken away by "✕ cut". The Board button is gone from the headset's
+bar. `npm run eval:headset` now measures the smallest block (4.13° as the board opens, 2.64° after the strip's −
+pressed ten times) and makes a wire through the side panel's own buttons (wires 9 to 10); every limit held in one run.
+Decision 0012 is brought up to the numbers measured. The board's ports and wires still work with a mouse on a screen.
+Checked with `npm run gate`.
+
+## 2026-11-01: the interface record begins, read from what parts already say (spec 01, I1 and I2; decision 0014)
+
+`interfacesOf` in `src/nexus/interfaces.ts` reads every port (holes, threads, pins, a frame) and every old interface (a
+shaft and its bore, studs and their nuts, a drive, a chain, a mount) of every part in a thing as one record: its kind,
+its sizes in SI, its standard, the kinds it meets, its frame in the thing's own frame where the port gives one, and an id
+of names from the thing down to the part (siblings of one name told apart by where they stand). Nothing is written onto a
+part. A node, Interfaces, shows any thing's. The test "every port and old interface of a thing is one interface with a
+stable id" sweeps every designed component at its example and three machines (a go-kart, a Honda Rancher, a Freightliner
+Cascadia): 44 things, 720 interfaces, one for each port and each old interface, no id two share, each thing's digest the
+same after reading it, and every id the same as a build in another process wrote (`tests/nexus/interfaces.ids.json`).
+`mate.ts` now reads the part-placing function from `interfaces.ts`, so there is one. Not yet: every starter board's
+things (the task's whole check), frames for old interfaces (read from drawn bores and shafts, the next step), and the
+standards' tables (I3). Checked with `npm run gate`.
+
+## 2026-11-01: two red teams broke the kernel; each way they found is closed (spec 10, T23)
+
+Two agents were set to make the kernel pass a false certificate, one through its arithmetic and one through its reading.
+They found 18 (`tests/nexus/kernel.red.json`). Whole powers of 2^31 or more were worked with 32-bit steps, and powers past
+2^53 lost their parity on the way to a number, so 3^(2^31) + 5 passed as 6, 2^(2^32 + 3) as 8 and (−1)^(2^53 + 1) as 1;
+a zero-width character inside "mN" was read as a space, so a millinewton passed as an energy; and a dims claim holding a
+wire and a law was decided on the wire alone. Now a whole power is worked with BigInt steps and held to 1,024 either way
+(past it, undecided), an exponent's numerator is checked before it becomes a number, a unit may hold only letters,
+digits and unit signs with one "/" between two sides, a dims claim is a wire or a law, never both, and an exponential
+past 1,000 either way is undecided rather than worked for minutes. The second checker (`scripts/kernel2.py`) now keeps
+every input whole (450 digits; at 60 one red certificate rounded 1 + 1e-61 to 1 and passed both checkers), follows the
+same text rules, and catches decimal's own overflow. Every one of the 18 is refused by both checkers in the test "the
+kernel: closed, exact, each kind refusing what is planted, and a second checker agreeing". Not changed, and said by the
+red team: a value's text is at most 400 characters, so a figure far below 1e-4000 cannot be stated; a square root's grain
+is 2^-96, so claims about roots of numbers under 2^-192 come back undecided. Checked with `npm run gate`.
+
+## 2026-11-01: the AI's run tested by running it; a Set and any depth scanned; the headset's text as drawn (spec 00, S10; spec 10, T3; spec 04, P10)
+
+S10's fourth verdict: the run's wiring was guarded by reading its source, so a run that passed its steps or answer
+wrongly, spelt the same way, still passed. Now the AI's tools are one function (`toolsFor`), each turn's calls another
+(`callTools`, as agentBuild makes every turn), and the test runs them for real, with no stand-in model: a build of 23
+blocks with a refused wire and a block that fails past the record's 300-character cut, a card for a block that does not
+exist, then `runOf` with an answer that says nothing of the refusal still standing; the near misses come back error,
+error, error, reckless. agentBuild's two endings and its one call of `callTools` are held to their exact text, and the
+relay answers the page through `relayBody`, tested to carry the near misses, diff and certificates. T3's fourth verdict:
+the scans stopped eight levels down and never entered a Set. Now they go every level down (a record that holds itself
+met once) and into Sets; a Set of figures, one in a record and a figure twelve levels down, each without a status, fail
+the test. P10's fourth verdict: the board's text was measured at zoom 1, but it is drawn under the board's own zoom (0.57°
+as the board opened); the minimap was 1.1° tall; nothing tried a ray on a port; the B key still made the board larger.
+Now in a headset the board's zoom is held so its 13 px text is 0.6° or more and its 11 px 0.4° or more, as drawn; no
+minimap is drawn; the run probes a port and finds the block taken, not the port; and B does nothing. One run of
+`npm run eval:headset` (an emulated Quest 3): every limit held, the text 0.63° and 0.53° as drawn as the board opens and
+after the strip's − is pressed ten times, the smallest block 4.54°, every limit held again after pressing B. Checked
+with `npm run gate`.
+
+## 2026-11-01: old interfaces given frames where the drawing tells them (spec 01, I2)
+
+An old interface (a shaft, a bore, a stud) said nothing of where it sits. Now `interfacesOf` gives it a frame where it can
+be told and only there: a bolt's shank and a nut's thread by the components' own convention (axis y, bearing face at
+y = 0, the shank down −y); a bore or a shaft by the round piece drawn, only where its diameter agrees with the one said
+within 0.5 mm (the critic's own tolerance); otherwise no frame, and the record says why. The round-face finders
+(`piecesIn`, `roundOf`, `boreOf`, `shaftOf`) moved into `src/nexus/interfaces.ts` unchanged; `mate.ts` reads them back.
+Over the gate's corpus (41 components at their examples and three machines; counted by a probe over the same things the
+test "every port and old interface of a thing is one interface with a stable id" sweeps): 420 of 434 external threads
+framed (the rest are parts with several studs), all 187 internal threads, 19 of 35 bores, 4 of 15 shafts. Unframed: 14
+bores with no round bore drawn and 2 where the size said and the size drawn differ, 11 shafts with no round piece drawn,
+and the drives, chains and the one mount, which have no frame rule yet. The test holds every bolt's shank framed, every
+framed bore and shaft within 0.5 mm of its said size, and every unframed one saying why. Checked with `npm run gate`.
+
+## 2026-11-01: interference as a gate: nothing excused by its name, no depth skipped (spec 10, T24; faults D8, D9)
+
+The interference check excused any pair where either piece was named like a fastener (bolt, clip, plug, …), against
+everything, and skipped overlaps shallower than 0.5 mm. Both are gone (`candidates` in `src/nexus/make/rules.ts`): a bolt
+is excused against a part only where a hole is cut in that part on the bolt's axis (the existing `inCut`), or where one
+is said to pass the other; the triangle test's own touch tolerance is the only tolerance left until interfaces state their
+fits. Measured before changing anything (a probe that turned the excuse off): it hid nothing on the go-kart and a bolted
+joint, 8 clashes on the Honda Rancher; in the gate only the engine turned over (`check.turning`) showed two: its rod bolts
+ran through their bosses, where no hole was cut, and through the cap's ring, their axes too close to it. The rod now has a
+clearance hole in each boss (1.125 times the bolt's diameter, near ISO 273's medium series) and its bolts' axes clear the
+ring; it turns clean. The test "a bolt crossing a wall it does not pass through is caught" puts an M8 bolt through a plate
+with no hole (caught) and through the same plate with the hole cut (clean). What the two changes now show outside the
+gate, counted by a probe: the Freightliner Cascadia 506 interference findings against 302 before (its frame rails' bolts
+and washers with no holes, gussets in cross members), the Honda Rancher 9 against 1 (bleed screws in caliper bodies,
+caliper bolts through the pads), the go-kart none: fault D14, to fix in those builds. The interface ids of the engines'
+rod bolts changed with their place, as decision 0014 says they do. Checked with `npm run gate`.
+
+## 2026-11-01: T3 passes; the page's near-miss guard put back, the model's reply read by one function, the loop pinned (spec 10, T3; spec 00, S10)
+
+The evaluator passed T3 at its fifth judging (claim status on every figure in the data files, `verdicts/10.T3.json`).
+S10's fifth verdict found that the last rewrite of its test had dropped the guard on the page's view (the near misses
+shown with each kind and response, open when one is reckless), and that the model's reply was turned into an answer by a
+line nothing ran. Now: the page's view is tested again on the run's own near misses, and the page is held to calling it
+with them; every reply is read by `turnOf` in `src/nexus/agent.ts` (its answer every text block in order, its tool
+calls, a refusal an error), tested on real reply data with no model; agentBuild is held to the exact lines that read a
+reply through `turnOf`, pass its answer on and hand its calls to `callTools`; the loop's whole text is pinned by its hash,
+so a step dropped between turns or any other change to it fails the test "an open andon stops the line, and every near
+miss has its kind and its response" until the loop is read again and pinned on purpose; and the relay is held to sending
+the run as agentBuild made it. Checked with `npm run gate`.
+
+## 2026-11-01: every file directly in src/nexus/ named by its own name; every decision a task cites must exist (spec 01, I1)
+
+I1's first verdict: the routing test let any file in `src/nexus/` pass because some row named the folder "nexus/", so it
+passed with interfaces.ts named or not, and nothing checked the decisions the task rests on. Now a file directly in
+`src/nexus/` must be named by its own name (17 were covered only by the folder: each now named in the owner row of its
+concern in CLAUDE.md's table: the laws' algebra under the laws' row, `boards.ts` under running boards, `threads.ts` under
+parts from standards, and so on); the test also holds interfaces.ts named in both CLAUDE.md and docs/OWNERS.md; and the
+rules test fails when a task cites a decision by its number that does not exist. Checked with `npm run gate`
+(the tests "every source file has an owner in the docs" and "every rule names its check and its task, and every decision
+its options, choice, assumption and re-test").
+
+## 2026-11-01: the kernel decides sine, cosine, tangent and their inverses (spec 10, T23)
+
+`src/kernel/interval.ts` now encloses π by Machin's formula (16 atan(1/5) − 4 atan(1/239)), sin and cos by their series
+after reducing by π/2 (an interval of width w moves either by at most w), tan as their quotient, atan by its series after
+taking 1/x past 1 and halving twice, asin and acos through atan; each series alternates with falling terms, so its error is
+under the next term. The second checker (`scripts/kernel2.py`) has its own, written apart in decimal. Over the book (the
+test "the kernel: closed, exact, each kind refusing what is planted, and a second checker agreeing", which now allows at
+most 3 laws undecided): 327 of 330 laws certified for their dimensions and their value at the worked example (318
+before), 3 undecided (two integrals, one erf). Eleven points across sine's family each pass at their true value and are
+refused moved a millionth, and the two checkers agree on all of them. Checked with `npm run gate`.
+
+## 2026-11-01: every headset target measured as the eye sees it; I1 passes (spec 04, P10; spec 01, I1; spec 00, S10)
+
+P10's fifth verdict: targets were measured at each panel's centre, square on, but a flat panel's end buttons are seen at a
+slant (the bar's 2.36°, the keyboard's end keys 2.35°); the board's text was measured from the centre of the board's whole
+group, not from its canvas; wires were not probed; the 780 px was not measured. Now `comfort()` in
+`src/nexus/view/space.ts` lists every target a hand presses (the bar's and chat's buttons, every key, the strip's and side
+panel's buttons, every block wholly in view) and measures each as the eye sees it, from its corners where they stand; the
+board's text is measured at nine points across the canvas; the board's zoom floor and the least size of a block are worked
+from that same geometry; and the run scans the whole canvas and finds a ray takes only blocks and the sheet. To hold the
+limits so measured, the board's strip is in two rows in a headset, the bar's least button is 100 px, and the keyboard is
+0.70 m wide. One run of `npm run eval:headset`: every limit held; the smallest target as seen 2.68° (2.59° after zooming
+out ten times), the board's text as seen 0.62° (13 px) and 0.52° (11 px), the canvas 780 px wide, 9.90° below the eye at
+1.28 m. I1 passed its second judging. S10's sixth verdict: the answer reached `runOf` but not, there, the near-miss check;
+now `runOf` is run with numbers and no board (at-risk) and with a refusal owned up to (an error only). Checked with
+`npm run gate`.
+
+## 2026-11-01: the small brake caliper's bleed screw and bolts no longer drawn through its piston and pads (fault D14, T24)
+
+Two of the clashes interference found once nothing was excused by its name (fault D14) were in the small sliding caliper
+every light vehicle shares (`wheel()` in `src/nexus/machines.ts`): its bleed screw reached 1.1 mm into the piston with no
+hole cut for it, and its two bolts, at 0.3 of the caliper's length from its middle, went through the pads' friction. Now
+the bleed screw threads into a hole cut in the piston half from its outer edge, its inner end 1 mm short of the piston's
+bore and to the side of the bridge, and the two bolts pass beside the pads (the pad's half width, the bolt's radius and
+1.5 mm). A probe of `rulesOf` on the Honda Rancher: 7 interference findings before the bleed screw's hole, 5 after, 1 after
+the bolts (a frame cross tube through the engine's oil pickup, not mended yet); the go kart 0. The Cascadia's frame bolts
+are not mended. Checked with `npm run gate`.
+
+## 2026-11-01: a kernel check ends in time however its steps are stacked; the two checkers agree on why they refuse (spec 10, T23)
+
+The third red team could not make the kernel pass a false certificate (it compared 152 enclosures of exp, ln, roots and
+fractional powers against 120-digit decimals: every one held its true value), but two well-formed certificates made it
+compute far past 5 s: a power of a power of a power of two (199 bytes, 8 s, then Node's own BigInt limit) and a product
+of 4000 powers of two (75 s). Rounding to 96 bits bounded a number's digits, not its size. Now every value at every step
+is held to 2^±16384 (`held` in `src/kernel/rat.ts`, at each step of `tidy` in `interval.ts`, and before a whole power is
+worked out when it is sure to pass), and `scripts/kernel2.py` holds the same bound at each step of its sums and products.
+Making the two agree on why they refuse, not only on whether, found three places where they worked a power differently
+(a half's power of zero, a half's power past 1024, a power by exp past 1000), a fraction of any length read by the kernel,
+and an exponent of any size read by the second checker; each now done alike. The one test (the kernel's) checks each red
+team certificate in under 2 s, a product of 4000 twos decided, and both checkers' reasons equal over the whole corpus;
+with the bound taken out, it fails (the product of 4000 powers of two ran 75 s again). Checked with `npm run gate`.
+
+## 2026-11-01: every refusal the AI's tools make caught with its kind, made by the tools themselves (spec 00, S10)
+
+S10's seventh verdict: the near misses were shown through the run's own code for the build tool's refusals, failed tools
+and failed nodes, but the change tool's refusals were guarded by nothing (its "! " marking taken out, no refusal on a
+change could be logged, and the gate stayed green); nor were place's (a block not there, a setting it lacks) or a wire
+written wrong; nor a board opened after a refused build. Now the one test runs each through `toolsFor` and `callTools`
+and `runOf`, with no stand-in model: change's two refusals then an answer past them (error, error, reckless); place's two
+and the wire's, owned up to (three errors); a refused build then a starter board opened (one error, nothing standing).
+The node 'Claude builds a board' now gives its run's near misses (`nodeOutputsOf`, run in the test on a real run's
+record); agentBuild's whole text is pinned, its setup with its loop; the relay's handling is read exactly from the call to
+the send; the page's escape is tried with an escape that marks each field; and a table row written `|A2|`, with no space,
+is read by the test and by `plan/compile.py` (it was skipped in silence). With change's marking taken out, the test fails;
+with an open andon written `|A2|`, the test and `python3 plan/compile.py --check` fail. Checked with `npm run gate`.
+
+## 2026-11-01: the side panel's every state, the board's text as drawn and the keyboard's gap measured as the eye sees them (spec 04, P10)
+
+P10's sixth verdict: the side panel in its library state was measured only square on (as seen, a library button 4.7 %
+smaller was 2.48° and the run said ok); the keyboard's clearance of the bar was worked from the panels' boxes (it printed
+6.60°); and the board's text was worked from the constants 11 and 13 px, so a smaller label drawn was not seen. Now
+`npm run eval:headset` measures every target as seen in each of the side panel's states (a block chosen, the library, and
+wiring); the board records the least text it drew in its last paint, its font under the transform it was drawn with
+(`wall.leastText()` in `src/nexus/view/nodes.ts`), and that is what is measured as seen; and the keyboard's clearance is
+the least, at any direction across them, from the bar's lower edge down to the keyboard's upper edge. One clean run: every
+limit held; the keyboard 1.81° clear of the bar; the least target as seen 2.68° (bar), 2.59° (chosen), 2.52° (library),
+2.58° (wiring); the least text drawn 0.52° as seen. The evaluator's three uncaught plants, each tried once: the library's
+buttons 236 to 225 fails (2.48°); the keyboard at 43° below fails (−0.13° clear); a 7 px label on every block fails (0.33°).
+Checked with `npm run eval:headset` and `npm run gate`.
+
+## 2026-11-01: a bolted joint bores the plies seated in its grip; the Cascadia's frame bolts seated (fault D14, T24)
+
+Fault D14's larger half: the Freightliner Cascadia had 500 interference findings once nothing was excused by its name,
+most of them bolts and washers drawn through its frame rails with no hole. A rule instead of 200 hand fixes: every bolted
+joint bores what lies between the washer under its head and the washer under its nut, with an ISO 273 medium clearance
+hole on its line (`boreGrips` in `src/nexus/mate.ts`, run at the end of every machine's making in `machines.ts`). A piece
+whose material runs on more than 0.3 mm into a washer's seat is not a ply seated in the joint and is left unbored, its clash
+shown: the first try bored every piece in the grip, and a washer drawn inside a rail's web went unseen (the checker does not
+see a washer inside a wall once a hole is through it). With that rule the truck's cross members showed the real fault: each
+gusset stood 11 mm off the rail's web and each bolt's washer was drawn inside the web; now each gusset is on the web's face
+and each washer on its ply (`ladderFrame` in `fittings.ts`), and the bumper brackets' bolts seated on their brackets. A probe
+of `rulesOf` on the Cascadia: 500 findings before, 334 after, none on its rails' bolts, washers or nuts (frame rails × hex
+bolts 52 to 0, washers 52 to 0, nuts 12 to 1, gussets × cross members 20 to 0, bumper brackets × bolts 8 to 0); the same
+categories compared before and after the seating: only fewer, none new. The Honda Rancher keeps 1 (a cross tube through the
+oil pickup), the go kart 0. Not mended: the tank straps' bolts, the differential's insides, the grille and hood; and the rails
+are drawn with their web inboard, where a ladder frame's is outboard (turned round, the cross members meet the engine and the
+hood: left for its own round). The one test gives the rule two plates, bored and clean, and a plate drawn into a washer,
+unbored and found. Checked with `npm run gate`.
+
+## 2026-11-01: P10 passes; S10's node and runners read exactly, every refusal the tools make made (spec 04, P10; spec 00, S10)
+
+P10 passed its seventh judging (the evaluator's 49 plants, each caught but four it does not hold against the task; its
+verdict in `plan/specs/00-structure/verdicts/04.P10.json`). S10's eighth verdict: the node 'Claude builds a board' could go
+back to dropping its near misses, and the two evaluation runners could print none, or print them without their kind, with
+the gate green: each was guarded by a declared port or a regexp. Now the node's run is read exactly (agentBuild's run
+handed to `nodeOutputsOf`, nothing between); both runners print each near miss by `nearMissLine` (its kind first), run in
+the one test on a real run's near misses, and their lines are read exactly; change's two other refusals (a node to take away
+that is not there, an input nothing feeds) and open's (a starter board that is not there) are made by the real tools in the
+test and caught with their kinds; the page's summary counts are checked against its rows. With the runner's list emptied,
+the test fails. Checked with `npm run gate`.
+
+## 2026-11-01: the tables a negative is sized from, each row from a document opened (spec 01, I3)
+
+The tables a hole, a counterbore, a countersink, a tapped hole and a bolt pattern need (spec 01, design §2.3) were opened,
+copied and checked by a workflow of two readers a table: one opened a document holding it and copied its rows with a quote
+of each; the other opened the same document again and a second copy from another publisher, and compared every value.
+ISO 273 (15 sizes, three series: 45 values, all agreed with IS 1821, its Indian adoption); ISO 2306 tap drills (23 sizes:
+92 values agreed); DIN 974-1 counterbores (series 1, from a Beuth reproduction, agreeing with Ifanger's table) and ISO 15065
+countersinks (to M10, where the standard ends); EN 1993-1-8 Table 3.3 (every cell agreed with a BSI scan and the Ukrainian
+adoption; the second reader found the first had put two figure captions under the wrong panel, which nothing here uses);
+Bossard's engagement lengths (VDI 2230 named; no second source gives its bracketed values); ISO 286-1's formula and grades
+(32 values agreed with IS 919). They are `CLEARANCE`, `TAP_DRILL`, `COUNTERBORE`, `COUNTERSINK`, `BOLT_SPACING`,
+`ENGAGEMENT` and `itTolerance` in `src/nexus/interfaces.ts`, each row naming its source in `TABLE_SOURCES` (its address, its
+publisher, whether it is the standard's own text). What a standard does not fix is said: DIN 974-1 gives no counterbore
+depth; ISO 15065 stops at M10. `boreGrips` now takes its holes from `CLEARANCE`. The one test (the test "the tables negatives
+need, each row with its source") holds every row to a source and the tables to each other (the kinds' clearance holes are
+ISO 273 medium; each tap drill within 0.05 mm of d − P; each counterbore wider than its head; the formula within a tenth of
+the standard's rounded table). Checked with `npm run gate`.
+
+## 2026-11-01: a counterbore cut as it is made: its turned profile an exact solid, in the views and in the rule (spec 01, I4)
+
+A cut may now be turned: `Cut.prof` in `src/nexus/kits.ts` gives its profile from its face (radius, depth), revolved about
+its line. `brep.ts` makes it an exact solid by OpenCascade's revolution, the views drill it with a lathe (`kit3d.ts`), and
+the interference rule takes the cut's width where the guest's middle is along it (a head in its counterbore, a shank in its
+hole). The one test (the test "a counterbore cut as a solid, its volume its profile's, its STEP the same") cuts an M8
+counterbore to DIN 974-1 (15 mm across, 8.4 mm deep: the head's 8 mm and 0.4 mm, typical) over its 9 mm hole through 20 mm
+of steel: the volume taken is its profile's volume of revolution within 0.1 %, the solid is valid, its STEP reads back as
+one solid of the same volume, and the views' drilled mesh is within 0.5 % (24 sides). Writing it found two clashes the rule
+does not see (fault D15, open): a piece wider than the hole it stands in (a head 9.5 mm round in a 7.5 mm hole, plain or
+turned), and a piece sunk wholly in another with a face flush. Checked with `npm run gate`.
+
+## 2026-11-01: the negative of an interface: what a screw or a motor's face asks of what receives it (spec 01, I5)
+
+`negativeOf` in `src/nexus/interfaces.ts` gives, for a screw's thread or a motor's face and a host's material and thickness,
+the interface the host gains and the bodies to cut, keep clear and bear on, every size from I3's tables or labelled typical,
+or a refusal with its rule, its numbers and its source. Through a plate: a clearance hole (ISO 273) and, for a cap screw, a
+counterbore (DIN 974-1, its depth the ISO 4762 head's height and 0.5 mm, typical), the face its head bears on, and a keep
+along the axis for the key (typical). Into a metal: a tapped hole drilled to ISO 2306 as deep as Bossard's engagement for the
+host's family and Rm asks, with two pitches for the tap's run-out (typical) and the drill's 118° point; refused where the
+part is thinner. Into a polymer: no thread cut, a heat-set insert's hole from its maker's table (CNC Kitchen's standard
+inserts, a blind hole L + 1 mm deep as its drawing says; opened and read again by a second reader against ruthex's table,
+whose holes are 0.1 mm smaller from M4 up) and the insert as a part. A NEMA face: its four holes on their square and its
+pilot's bore, 22 H7 from ISO 286-1's table. The evaluation set's cases 1, 2, 3 and 7 (`evals/interfaces/cases.json`, their
+numbers worked by hand from the sources first) each give their numbers in the one test (the test "the negative of an
+interface: the evaluation cases give their numbers"): an M8 cap screw through 10 mm of steel, a 9.0 mm hole under a 15 mm
+counterbore 8.5 mm deep; an M6 into 8 mm of 6061 refused, 12 mm of thread needed (2.0 d, its Rm 310 MPa); an M4 into PLA, a
+5.7 mm hole 9.1 mm deep and the TC-M4x8.1 insert; a NEMA 17 on 5 mm, four 3.4 mm holes on a 31 mm square and a 22 mm bore,
+0 to +21 µm. Checked with `npm run gate`.
+
+## 2026-11-01: I3 and I4 pass; S10's near misses held to their kind's response and sent whole (spec 01, I3, I4; spec 00, S10)
+
+I3 passed its first judging (the evaluator opened the sources and checked spot values from every table against them;
+`plan/specs/00-structure/verdicts/01.I3.json`), and I4 its first (it cut a countersink, a drill point and a stacked
+profile along a tilted line besides, each within 1e-10 % of its profile and read back from STEP; it noted that `mass.ts`
+does not yet take a turned cut's volume off a part's mass, and that a bowtie profile is not refused). S10's ninth verdict:
+the relay could strip each near miss's kind or its response, the run's own near misses were held to no response, and a
+runner's print could be skipped around its checked line. Now the one test requires the relay's near misses equal to the
+run's, field by field; every near miss the run catches takes its kind and response from one table (`NEAR_MISS_RESPONSE` in
+`src/nexus/agent.ts`), each response said and a reckless one's to stop and tell the user; and the runners' and the page's
+handling of a run, from agentBuild's call or the reply to the near misses printed or shown, are read exactly (pinned). The
+evaluator's three uncaught faults and a fourth, each tried once, now fail the test. Checked with `npm run gate`.
+
+## 2026-11-01: an interface stood on any point of any surface (spec 01, I6)
+
+`standOn` in `src/nexus/mate.ts` meets a ray with a thing's surface and gives the frame an interface stands in there: the
+point, the surface's outward normal (a hole runs along its reverse, into the host) and `u` laid along the piece's own first
+axis as it lies in the surface, turned about the normal as asked. Boxes, plain cylinders and spheres are met exactly in
+their own frames, since a faceted mesh misses a curved side by more than the tenth of a millimetre asked (a 24-sided
+cylinder of 20 mm radius by up to 0.17 mm); any other shape is met on the views' mesh, its normal blended from the mesh's
+own normals across the triangle met. The one test (the test "an interface stands on a box's top, a cylinder's side and a
+sloped face") gives it a box's top, a cylinder's side, a box turned 30° inside a turned group, and a wedge's slope through
+its mesh: each frame's normal within 0.5° of the surface's and each point within 0.1 mm of the one worked out by hand; a
+quarter turn turns `u` by 90°; a ray that meets nothing gives nothing. Checked with `npm run gate`.
+
+## 2026-11-01: the checks before cutting, each refusing with its rule, its numbers and its source (spec 01, I7)
+
+`imprint` in `src/nexus/mate.ts` stands an interface on a host where a ray meets it (`standOn`), measures the host along
+the hole's line (its depth there, the far face met from beyond it) and across it (its edge, by twelve rays from the hole's
+middle), makes the negative for the host's own material and that depth (`negativeOf`), and checks before anything is cut:
+the edge distance and the spacing from the host's other holes by EN 1993-1-8 Table 3.3 from the hole d0, that it breaks
+into no other hole, and the room its keep needs among the thing's other pieces. The first check that fails is the refusal,
+with the value needed and the value found; nothing is cut (that is I8). The evaluation set gained cases 4 and 5, each worked
+by hand first, and the one test (the test "the checks before cutting: cases 2, 4 and 5 refused by their rule and value, case
+1 passing") imprints each on its plate: case 2 refused for its thread (12 mm needed, 8 found), case 4 for its edge (10.8
+needed, 4 found), case 5 for its spacing (19.8 needed, 15 found), case 1 passing its edge, room and depth. Checked with
+`npm run gate`.
+
+## 2026-11-01: an imprint applied, and the hole finds its bolt (spec 01, I8)
+
+`applyImprint` in `src/nexus/mate.ts` takes an imprint that passed its checks and applies it: its remove bodies become cuts
+in the piece's own frame (a counterbore as a turned cut), its keep bodies the piece's keep zones, and the piece gains the
+mirror interface as a port (holes for a clearance hole; threads for a tapped hole or an insert's), with the imprint recorded
+on it (`Part.imprints` in `kits.ts`); the thing asked is not changed. `portOfInterface` reads a fastener's thread interface
+as a port. The one test (the test "after an imprint, the host's new interface finds its bolt by fit()") imprints an M8 cap
+screw on a 10 mm steel plate and applies it: one counterbored cut where it was put, one keep zone, the imprint recorded; the
+plate's new port finds the M8 bolt by `fit()`, and an M10 bolt does not fit it. Checked with `npm run gate`.
+
+## 2026-11-01: I5 passes; S10's pinned lines call only agent.ts's own, the relay read whole (spec 01, I5; spec 00, S10)
+
+I5 passed its first judging (the evaluator planted faults in the tables and the negative; each that moves a number the cases
+expect failed the test; it noted that the successful tapped hole and the two thin-part refusals are held by no case).
+S10's tenth verdict: a pinned line could be kept while what it calls was swapped (a local stand-in for `nearMissesView` in
+the page, or for `nearMissLine` in a runner), the relay could be patched one line above its pin or unmounted, and the run's
+own error and at-risk responses were held only to their length. Now the one test requires each of those names imported from
+`agent.ts` and named nowhere else; reads the relay's whole handler exactly, that it is mounted and that it answers where the
+page asks; holds each runtime response as the log's rows are held (a reckless one says to stop and tell the user first; an
+error's or at-risk's names the check or rule that caught it), and each caught thing to its own entry; and shows
+`plan/compile.py`'s own andon refusal on a copy of the plan with an open andon. The three uncaught faults, each tried once,
+now fail it. Checked with `npm run gate`.
+
+## 2026-11-01: I6 and I7 pass; an imprint keeps to its face when the part is changed (spec 01, I6, I7, I9)
+
+I6 and I7 passed their first judging. I6's evaluator found faults outside its check's surfaces, now mended in `standOn`
+(`src/nexus/mate.ts`): through the views' mesh a turned solid drawn top-down was met on its far wall (the ray met only the
+triangles' front sides, and such a profile winds them inward), its vertex normals were blended without being made unit
+first, and a torus or a capsule was said exact; now both sides are met, the normals made unit, and only boxes, plain
+cylinders and spheres are said exact. The one test now meets a top-down lathe on its near wall and, of two stacked pieces,
+the one the ray meets first. For I9, an imprint's record keeps what asked it and a query for its face (its normal, the
+farthest out along it, near where it stood), and `reapplyImprints` takes each imprint's cuts, keep zones and port off, finds
+its face again by that query, and makes it afresh there; where no face answers, the surface faces otherwise, or its checks
+now refuse it, it is lost and said so, nothing of it moved. Evaluation case 10 (the test "a box made taller keeps its
+imprint on the top; a face removed says it is lost"): the plate made 10 mm taller keeps its imprint on its new top, its hole
+through the new 20 mm, the old cut gone; made too narrow for where it stood, or made a ball, the imprint is lost. Checked
+with `npm run gate`.
+
+## 2026-11-01: the fastener for a stack, from the catalogue, said why; the machines' fasteners unchanged (spec 01, I10)
+
+`fastenerFor` in `src/nexus/mate.ts` gives the fastener the catalogue sells for a stack of plies and why each length:
+through them all, an ISO 4017 hex bolt with an ISO 7089 washer under its head and its ISO 4032 nut, the shortest sold
+(`soldLengths` in `catalogue.ts`) that leaves two pitches past the nut (typical practice); into a tapped last ply, an
+ISO 4762 cap screw engaged as far as Bossard's table asks for that ply's material (1.5 d, typical, where it has no row),
+never deeper than the threads go less 0.5 mm; into a heat-set insert, engaged its length less 1 mm (typical), short of its
+hole. `mate()` lays both its kinds of fastener through it and says why; `boreThrough` cuts a bolt's or a screw's hole to
+ISO 273 medium for its thread (its 0.5 mm stays for anything else). Before the change, the fasteners of the Corolla, the
+Rancher, the go kart and the Cascadia were written down (`tests/nexus/fasteners.before.json`, at a8ecae3: 506, 220, 178 and
+1584 pieces); after it, the one test (the test "the fastener for a stack: case 8 chooses its bolt; the machines' fasteners
+unchanged") finds each machine's the same, and evaluation case 8 (plates of 10 and 6 mm, M8) chooses bolt M8x30, ISO 4017,
+as worked by hand (28.5 mm asked). My own hand figure for an M4 into an insert was wrong (I wrote 10 mm; the rule asks at
+least 10.1, so 12): the test holds the rule's 12. Checked with `npm run gate`.
+
+## 2026-11-01: a tapped or insert hole finds its screw; S10's page, relay and log rows read whole (spec 01, I8; spec 00, S10)
+
+I8's first verdict failed it: a tapped or insert imprint gave its host threads, and `fit()` had no pair for a screw's pin
+into threads, so two of the three kinds of hole could not find their fastener; and the test read the port `applyImprint`
+returned, not the host's own. Now `fit()` takes a pin into threads (and `mate()` refuses that pair between two parts, which
+mate through holes), each imprinted port is named apart, its pattern is laid as `mate()` reads a port (w = n × u), and the one
+test reads the host's own new port: a clearance hole finds its M8 bolt and not an M10; a tapped hole in steel finds its M6 and
+not an M8; an insert's hole in PLA finds its M4 and not an M5; on a turned plate in a turned group the cut lies where the ray
+met it and runs into it; two imprints on one piece give two ports named apart. S10's eleventh verdict: a fault one line past
+the page's pinned region, a relay mount dropped or its module wrapped, an andon row with a leading space, and a near-miss row
+with no date or nothing saying what caught it each passed. Now the page's whole handling of a reply, to its `renderAll()`, and
+the relay whole with both its mounts are read exactly; table rows are read however indented, in the test and in
+`plan/compile.py`; a near-miss row needs its date and what caught it; and a reckless response may not take its stop back.
+Each of the evaluator's uncaught faults, tried once, now fails the test. Checked with `npm run gate`.
+
+## 2026-11-01: the cover follows the bore: a shared bolt circle, its relation and its imprints as nodes (spec 01, I11)
+
+Four nodes in `src/nexus/blocks.ts`, each with its own test: `relation.boltcircle` gives the least bolt circle round a bore
+(the bore's radius and the end distance EN 1993-1-8 asks of each hole from its edge, 1.2 d0, d0 the ISO 273 medium hole);
+`pattern.circle` holds a bolt circle as one record every part wired from it reads, never a copy; `imprint.pattern` imprints
+each of its holes on a part's top face (stood on the face, its negative made, checked, cut, the part given the holes as a
+port); `fasten.pattern` lays `fastenerFor`'s bolt at each point. Evaluation case 9 (a flange's bore widened 40 to 50 mm,
+worked by hand first) is a board in the one test (the test "the bore widened: the bolt circle, the bolts and the cover's
+holes follow"): at 40 mm the circle is 30.8 mm round and the flange's six holes, the cover's six and the six bolts M8x30 lie
+on it; widened to 50 mm, all follow to 35.8 mm; the nodes that ran again, read from the engine's run counts in its own
+order, are the bore, the radius, the circle, both parts' holes and the bolts, each saying what it made, and the two plates
+are not made again. A first try read the engine's `cached` flag for this, which stays as it was for a node not visited:
+the run counts are what say a node ran. Checked with `npm run gate`.
+
+## 2026-11-01: the page's near misses checked by driving the page; I8 and I10 pass; I9 keeps to its own piece (spec 00, S10; spec 01, I8, I9, I10)
+
+S10's twelfth verdict said that widening the text pins on the page one region at a time would not converge (four more
+ways to hide the near misses lay just past them), and that the page should be run. `tests/evals/ask.eval.ts`
+(`npm run eval:ask`, no key needed) builds the pages, serves the dashboard in a headless browser, answers its request to the
+relay with `relayBody` of a run the AI's real tools made (a refused wire, a failing node, a tool that failed, an answer past
+the refusal: no model, no stand-in), presses Ask, waits for the board the answer opened to run, and reads the Ask Claude
+panel as a person sees it: visible, the answer there, the count of each kind, and each near miss as its kind and what it
+was. One run: it passed, the panel reading "Near misses caught: 4 (3 error, 0 at-risk, 1 reckless)". The evaluator's four
+page faults, each tried once: `renderAll` emptying the panel, the panel emptied after the board's run, the panel hidden,
+the panel in a comment: each fails it. The one test also now pins each near miss's step, compares the relay's whole body to
+the run, requires a near-miss row's "what happened" and holds a reckless row as strictly as the app's own table, and shows
+`plan/compile.py` refusing two steps down a chain. I8 (its second judging) and I10 (its first) passed. I9's first verdict:
+an imprint re-made after a change could hop onto another piece standing over it, a piece made into sub-parts kept a stale
+imprint, two of its "lost" paths had no test, and an imprint first put on a step would be lost with nothing changed. Now it
+is re-made only on its own piece, from just above its own face; lost, said why, where the piece has no surface of its own,
+its checks now refuse it (a lid in its key's room; a plate too thin for its counterbore) or the face it stood on as the
+farthest out is no longer so; and an imprint on a step keeps to its step. A face "made by" a feature is not held: there is
+no shape history here, said in the task's evidence. Checked with `npm run gate` and `npm run eval:ask`.
+
+## 2026-11-01: parts put together by joints, solved together: flipped, freedom left by rank, the fewest that fight (spec 01, I12)
+
+`solveJoints` (placement/proximity.ts, the one solver) puts parts together frame to frame: a joint holds a frame on one
+part to a frame on another, its kind (fixed, revolute, slider, cylindrical, planar, ball) saying which of their six
+differences it holds. Every part's pose is unknown; each starts where it meets the parts placed before it, then all the
+joints' residuals are brought to their least together by Levenberg–Marquardt (`leastSquares`, new in numeric.ts, its
+turns stepped on their own manifold). The freedom left is six for each part moved less the rank of the joints' Jacobian
+where they stop (`rankOf`), not a count of joints: a NEMA 17 motor on its face and four holes is 19 equations of rank 6,
+0 freedom left; a hinge leaves 1, as one revolute joint or as a pin in a knuckle with the knuckles' faces (7 equations,
+rank 5), said as "the lid turns about (1, 0, 0) through (0, 100, -100) mm". A motor given upside down is reported turned
+end for end and still placed. Where joints cannot all hold, each is left out in turn (the deletion filter) and the fewest
+that fight are named: a latch 5 mm off the lid's arc and the hinge (2.5 mm each), not the handle fixed on the lid; two
+hinges 1° out of line (0.2847° and 0.7153°, 0.4969 mm each, solved in 18.5 ms in one probe run); a misdrilled hole and
+the hole it fights, the misdrilled one the only one that, left out alone, lets the rest hold. Rigid clusters are not split
+out before solving, and a clearance hole's play is not a range: said in the task's evidence. Checked with `npm run gate`
+(the test "joints solved together: flipped, freedom left by rank, the fewest that fight named").
+
+## 2026-11-01: the interface tools as nodes, and their starter boards; S10, I9 and I11 pass (spec 01, I13; spec 00, S10)
+
+Round thirteen's verdicts: 00.S10 passed on its thirteenth judging (the page now driven, `npm run eval:ask`), 01.I9 on
+its second and 01.I11 on its first. Each named a gap it could not catch; the two that cost a line each are closed: a run
+with kernel certificates (a law node built) so a relay that dropped them fails the test "an open andon stops the line…",
+and a hex head under a lid 0.05 mm over its plate, so the own-piece check that holds an imprint to its plate is tested on
+its own (only the socket head's room check held that before); both checked by planting the fault once and seeing the test
+fail. New nodes, each with its own tests: `negative`, `imprint` (paste a bolt onto a surface), `joint`, `joints.solve` and
+`assert`. Two starter boards: "Paste a bolt onto anything" stands one M8 cap screw on a steel plate from above and on a
+round aluminium boss's side, each hole cut by its standards and the screw seated on the counterbore's floor by its joints
+(the turn about its axis left free), and refuses a steel angle's 5 mm leg (the counterbore is 8.5 mm deep); "The cover
+follows the bore" puts the cover on the flange by its six holes and its face (7 joints, 27 equations of rank 6, 0 freedom
+left), draws the six bolts with their washers and nuts, and follows when the bore is widened from 40 to 50 mm. The test
+"the interface nodes on their starter boards: a bolt pasted onto anything; the cover follows the bore" runs both. Seeing
+them in the page found two faults the tests had not: the bolts were not drawn at all, and then drawn 5 mm too high,
+because a cylinder is drawn about its middle and the bolts stood the plates from y = 0 (now they stand on the face the
+flange's holes were cut in); and the boss was pasted at its rim, not its middle, for the same reason. Screenshots by
+`node tests/evals/board-shot.cjs "<title>" out.png`, of each board, no page errors. Checked with `npm run gate`.
+
+## 2026-11-01: the AI puts parts together by joints, leads with what fails, and changes on a shadow (spec 01, I14)
+
+FOR-AI gains its rule: never place parts by typed positions where they have ports or a surface; `joint`, `joints.solve`,
+`imprint` (and `imprint.pattern` then `joint` for two parts through one pattern); hold what matters with `assert`; say
+first what fails. The AI's `build` and `change` replies now start with `FAILS` lines (each failing assertion, then each
+other check a node says it broke); a `change` is made on a copy and taken only when every check that held still holds,
+else the board stays as it was and the copy is a shadow `read` can read. Five placement requests were added to the AI's
+evaluation set, each checked by what stands on the board. Measured by `npm run eval:agent` with `EVAL_SET=placements
+EVAL_REPEAT=3`, claude-haiku-5-5, one set of three runs each: the baseline (the system at a545060 with the same runner)
+7 of 15 right, 9 of 15 placed by joints or imprints and 3 by typed places; first after, 7 of 15 again (the rule alone
+moved placements to joints, 13 of 15, but the tools tripped it); then, with the tools mended, 12 of 15; with one line for
+two parts through one pattern, 15 of 15, all by joints or imprints, none typed; the main 30 requests 30 of 30 (one run).
+What the runs found and mended: a point given on a plate's top started its ray on the surface and pasted onto the face
+beyond (the ray now starts 1 mm behind the point); a ray that missed said only that, so the AI could not aim again (it now
+says where the part spans); a plan's nodes sent as text gave one error a character, about 500 lines (read as JSON, or
+refused in one line); and, in the checks before cutting, a paste grazing an angle's corner was cut, because a direction
+that met no wall counted as endless wall (now no wall: refused by its edge distance, 0 mm against 10.8 mm). The angle
+request's check was widened after the first runs, from its counterbore alone to any rule of its standards, nothing cut.
+Checked with `npm run gate` (the tests "the AI's tools lead with what fails, and take a change only when what held still
+holds" and "the interface nodes on their starter boards…").
+
+## 2026-11-01: I12 and I13 pass; what their evaluators found, mended (spec 01, I12, I13)
+
+Round fourteen: 01.I12 passed (fifteen faults planted, each caught; the evaluator's own trials: sixty given poses of a
+motor, each joint kind alone, a four-bar loop, chains, one hundred and sixty injected fights, each named) and 01.I13
+passed (the boards run, its own screenshots taken and looked at). Mended from what they named: a system whose joints
+all hold, by construction, could stop at a least short of that and be reported as fighting (two of one hundred and
+fifty of the evaluator's random systems; one in a thousand of a probe's, two hinges and a pin): where a set does not all
+hold it is now solved again from other starting turns, seeded, before a fight is named, and that system is in the test;
+a part on a ball joint is no longer said to be flipped (a ball holds a point, its direction says nothing); and "the
+fewest that fight" said more than the deletion filter gives: it names one set in which each joint is needed to the
+fight, not always the smallest, and now says so. Two node outputs with no test of their own now have one: an
+assertion's warning text where it fails, and the joint solver's freedom and rank beside the joints that fight. A blind
+reader of the two boards' 3D views named the parts (a plate, a round boss, an angle; a disc with six bolts) and what
+looked wrong: kept as fault D16 (a dark part on the dark view, a ground grid on one board and not the other, pieces
+counted that cannot be seen, a round plate's facets). Checked with `npm run gate`.
+
+## 2026-11-01: I14 passes; the interfaces evaluation set whole (spec 01, I14, I15)
+
+01.I14 passed on its first judging. Its evaluator ran the AI itself, two sets per side: 30 of 30 placement requests right
+after, 14 of 30 at the baseline, and 6 of 15 when the rule's section was taken out of FOR-AI (the set catches losing it).
+Its two notes are mended: the design said a change is taken only when the copy's checks pass, where the code takes it
+unless it breaks a check that held (the design now says what is built), and one expected number in the placement set was
+typed (the least bolt circle's radius, now worked out from the tables the app uses). The interfaces evaluation set now
+holds all twelve of the design's cases. The three not yet built (a 6205 bearing in its housing and on its shaft, a 6 m6
+dowel, an 8 × 7 key) were read from SKF's catalogue, ISO 286-2, ISO 8734 and ISO 2338, DIN 6885-1 and ISO/R 773, each
+table by two readers apart; every value agreed but one keyseat cutter maker's N9 row, which the case says. Working them
+found that the app's ISO 286-1 tolerance is the standard's formula, unrounded, where its table rules: they agree where a
+fit has been needed so far, but at 3 to 6 mm the formula gives IT6 7.3 µm against the table's 8 (fault D17, for I17).
+Checked with `npm run gate` (the test "the interfaces evaluation set: every case of the design, worked by hand, run or
+waiting").
+
+## 2026-11-01: a standard tolerance from ISO 286's table where it is held (spec 01, I17 in part; fault D17)
+
+`itTolerance` gave ISO 286-1's formula alone; Table 1 is what rules, and they differ at some sizes (IT6 over 3 to 6 mm:
+7.3 µm by the formula, 8 by the table). It now gives Table 1's value wherever that size's row is held, the formula only
+where none is, and says which. Rows held: 3 to 6 mm (IT5 to IT9), 6 to 10 (IT6 to IT8), 18 to 30 and 50 to 80 (IT5 to
+IT8), those read from ISO 286-2:2010's own Table 1 by two readers for the evaluation set, each row within a tenth of the
+formula. A 6 mm size falls in the band over 3 up to and including 6, as the table's headings say. Checked with `npm run
+gate` (the tests "the tables negatives need, each row with its source" and "the interfaces evaluation set…").
+
+## 2026-11-01: I15 fails its first judging: "first" cannot be shown; a correction (spec 01, I15)
+
+The evaluator read the history of `evals/interfaces/cases.json`: cases 1, 2, 3 and 7 first appear in the same commit as
+`negativeOf` (I5), cases 4 and 5 with I7's checks, 10 with I9, 8 with I10, 9 with I11; only cases 6, 11 and 12 are in
+the set before their code. So the check's "the set exists … before I5 is built" is not shown, and earlier entries here
+that call those cases "worked by hand first" say more than the history can show: correct them by this one. The task's
+evidence and the set's own description now say what the history shows. Whether to reword the check to what can be
+shown, or to accept the order as it was, is the user's to say; it waits on them. The evaluator also found that the gate
+holds the three waiting cases' limits by their width only, not their offsets (k5's +2 µm, N9's 0): a wrong offset of the
+right width would pass until I17 builds them from rows that hold the offsets. Every number of cases 6, 11 and 12 it
+checked against the sources it opened itself, and found right. The order seen with `git log --follow -- evals/interfaces/cases.json`
+and `git show 4b20a12 --stat`.
+
+## 2026-11-01: a cut of any section (spec 01, I17 in part)
+
+A cut was round, turned (a counterbore's profile) or a round's polygon. A keyway and a panel's cut-out are neither, so a
+cut may now carry its outline (`Cut.sect`, points in the plane of its face, `u` along its face): the exact solid cuts that
+outline its depth along its axis (brep.ts), the views drill the same (kit3d.ts), the mass takes its area times the depth it
+runs inside (mass.ts), and the interference rule lets a part stand in it only where the part is as far from its edges as it
+is wide (rules.ts), where a round reading of it, its outer circle, would let through a part wider than it. The test "a cut
+of any section: a slot and a notched cut-out, alike in mass, solid and views" (`npm run gate`): a slot 40 × 8 mm with round
+ends, 4 mm deep in a block, and a 22.3 mm hole with its 3.2 × 1.7 mm notch through a 3 mm panel each take away their
+outline's area times their depth in the mass (to a part in a thousand million), the solid (within 0.1 %) and the views
+(within 0.5 %); a key in the slot is not a clash and a block 20 mm wide in it is. One 12 mm wide in it is not seen: fault
+D15's blind spot (a piece standing in a cut and wider than it), open under 10.T24.
+
+## 2026-11-01: a part's mass takes a turned cut's own volume (fault D18; spec 01, I17 in part)
+
+I17's designers found that a part's mass took every cut as a plain cylinder of its hole's radius, so a counterbore's ring
+was never taken out and a drill's point counted as full depth: an M8 counterbore with its 9 mm hole in a 20 mm plate took
+1272.3 mm³ where its profile holds 2222.4 mm³, 43 % short (one probe run). A turned cut now takes its profile's volume
+of revolution, frustum by frustum, as far as it runs inside the part. The test "a counterbore cut as a solid, its volume
+its profile's, its STEP the same" now holds the mass to the profile too. Checked with `npm run gate`.
+
+## 2026-11-01: a pipe port and a panel cut-out in the evaluation set, before their code (spec 01, I15, I17)
+
+I17 asks for a pipe thread and a cut-out by the same model. Their numbers went into the set first, so the history shows
+them before any code that makes them (what I15's verdict found missing for the earlier cases): case 13, a G 1/2 port in a
+30 mm 6061 block (ISO 228-1: pitch 1.814, major 20.955, minor 18.631 mm; a cutting tap's drill 19.0 mm; ISO 1179-1: drilled
+at least 19 deep, threaded at least 15, a spot face at least 28 across and no more than 2.5 deep, a chamfer to 21), and case
+14, a 22 mm push button in a 2 mm steel panel (IEC 60947-5-1: a 22.3 mm hole, +0.4/0, with its 3.2 mm key recess to 24.1
+across, corners at most 0.8 mm round; a panel 1 to 6 mm; centres 30 apart in a row, 50 between rows). Each read by two
+readers apart from the standards' own sample pages and makers' sheets (Parker, Newman; Siemens, Schneider, Eaton), every
+value agreeing but the wide spot face (ISO 29.6 mm, Parker 34: the standard rules). Both wait on 01.I17. Checked with
+`npm run gate` (the test "the interfaces evaluation set…", now the design's fourteen rows).
+
+## 2026-11-02: the rest of R18 as rows of data, read by one general path (spec 01, I17)
+
+A bearing's seats, a dowel's hole, a key's keyways, a pipe port and a panel cut-out are now rows of data, not code: each
+row reads the standards' tables it needs (by key, or by the size band a size falls in), works out its names, makes its
+tools (turned, or any outline cut a depth), the limits its surfaces are held to (an ISO 286 class, or the table's own), the
+checks before cutting, the interface the host gains and the parts it adds. One function reads every row; the scan in the
+test "the negative is rows: the engine names no kind; a row given at run time is answered" finds no kind of seat named in
+the code that makes, measures and cuts a negative, and a row given at run time over ISO 273's table gives exactly I5's M8
+hole. The five rows give the numbers the evaluation set worked by hand (the test "the rest of R18 by rows: a bearing's
+seats, a dowel, a key's keyways, a pipe port, a panel cut-out give their numbers"): the 6205's housing bore and shoulder
+and its H7, the journal's k5 (+2 to +11 µm), the dowel's two transition fits, the keyways' depths and N9 and JS9, the G 1/2
+port's drill and chamfer, the D22 cut-out and its recess. Imprinted on real pieces, cut, made exact solids and found by the
+asker's own interface (the test "the rest of R18 by rows: imprinted, cut, and found by their own interfaces"): the 6205's
+own bore takes the journal; the solids lose their tools' volume within 0.1 %; the hub's keyway starts 15 − √209 mm in
+front of the bore and its floor lies 18.3 mm from the axis; a hub made 10 mm longer keeps its keyway through its length.
+
+Probing the rows found three gaps in the general code, fixed before the rows went in and tested with rows given at run
+time: a turned part is now met exactly, not through its drawn mesh (the mesh's facets put the hub keyway's lead 0.039 mm
+off); a section's lead is sampled along its edges (a square slot's corners lie past the hub's ends); and an imprint inside
+a bore is re-applied from across the bore (from far out the ray met the hub's outside). The spec's edge measure for an
+outline (its reach set against the ray along each direction) refused a whole slot on a round shaft and was replaced by a
+ray toward each point of the outline. Six faults found and left open: D19 to D24 in `plan/DEFECTS.md`, the worst the
+interference checker not seeing a bar run through a round shaft (D24, under 10.T24). Checked with `npm run gate`.
+
+## 2026-11-02: the clash rule sees a bar run into a round shaft (fault D24; spec 10, T24)
+
+Writing I17's key test found the interference rule blind to a key in a shaft with no keyway. Two causes, both found by
+probes. The triangle test's measure of how deep one piece runs into another, which tells passing into it from resting on
+it, came out NaN wherever the drawn cylinder has a triangle with no area (48 of its 528), so a bar 3 mm into a shaft read as
+resting; the least distance now passes over those. And a piece whose box lies wholly within another's (a key inside a hub
+ring's box) was never tried at all; it is now tried for surfaces crossing. Seen at last, the gate's one-cylinder engine
+turned over showed six clashes that had been there all along, each mended in the engine builder: its rings drawn through a
+piston with no grooves (grooves turned now, with typical side and back clearances), its flywheel's bolts screwed into a
+crank flange with no holes and not turning with it, and its pan's gasket strip and a bolt across the crank where it passes
+the pan's end. The last was in all four machines' engines too: each loses the pan bolts that ran through its crank (the
+test "the fastener for a stack: case 8 chooses its bolt; the machines' fasteners unchanged" holds the new count). A piece
+sunk wholly inside another, crossing no surface, is still not seen (fault D15). Checked with `npm run gate`.
+
+## 2026-11-02: I17 judged: it passes; the faults it planted that went through, closed (spec 01, I17)
+
+The evaluator, in its own checkout of 2be7424, ran the tests and the gate, worked every case's numbers again by a probe,
+read three of the sources itself, and found the rows commit's code diff data only. It planted faults one at a time: most
+were caught; those that went through were a row named by a pattern in a function the kind scan did not read, three values
+the cases expect that no test read (the G 1/2 thread's major, the dowel's joint, the housing bore's depth taken), and two
+of the rows' own checks no case refused on (a keyway longer than its shaft, a hub wall thinner than its keyway). The scan
+now reads every function of the three files that make, measure and cut a negative, and the tests hold the rest (the tests
+"the negative is rows: the engine names no kind; a row given at run time is answered" and "the rest of R18 by rows:
+imprinted, cut, and found by their own interfaces"). It also found the gate red at 2be7424 itself: PROGRESS.md named a
+commit four behind, past the rule's three. Checked with `npm run gate`.
+
+## 2026-11-02: what the sharper clash rule showed in the engines at rest (fault D25; spec 10, T24)
+
+No gate test checks an engine at rest, only turned over, so after D24 the gate stayed green while the gate's own
+one-cylinder air-cooled engine (bore 77, stroke 58 mm) at rest showed 29 clashes where it had shown 9 (one probe each
+way). Each was mended in the engine builder, the general way where there is one: holes where the head bolts and pan bolts
+pass, cut by the bore-where-a-bolt-passes rule (`boreThrough`); clearance holes in the main caps and tapped holes over
+them; the flywheel holed for its bolts and turning with the crank; each port bored along its valve as the valve is
+turned; the plug tower's bore sized to clear the coil and the plug's hex it carries; the plug's ground electrode bent under
+the centre electrode's tip; the oil filter's can drawn open at its foot over its base plate; the pan's corner bolts set on
+its rail and its drain plug away from the pickup. That engine now shows none at rest (one probe). The larger engines are
+not clean, measured at rest by one probe each: a twin-cam four (80.5 × 97.6 mm) 22, a diesel ohv six (137 × 169 mm) 68, a
+60° V6 (89 × 80 mm) 105. They stay open in fault D25. Checked with `npm run gate`.
+
+## 2026-11-02: the standards' rows asked from the board, and seen in the 3D view (spec 01, I17; I13)
+
+The rows could not be asked from the node board, so nothing of them could be seen in the app. A node, Cut by a standard,
+now asks any row of a part at a point (each row carries the asking a board uses by default), and says its checks and the
+limits its surfaces are held to; a starter board, Cut by the standards, cuts all five into parts: the 6205's housing bore
+and shoulder and its journal on a stepped shaft, the key's keyways in a shaft and through a hub, a dowel's hole, a G 1/2
+port, the push button's cut-out. Photographed in the built app (its board, the 3D view filled, and close-ups by a double
+press on a part). The close-up of the panel showed its cut-out closed by a skin of no thickness: the views drilled a
+section to its depth exactly, so a cut through ended on the far face; one that runs out through the far side now runs a
+tenth of a millimetre past it, and one that stops inside keeps its depth (the views still take 793.5 mm³ from the panel,
+its outline times its thickness, the test "the rest of R18 by rows: imprinted, cut, and found by their own interfaces").
+Checked with `npm run gate`.
+
+## 2026-11-02: the engine board fails where the engine is broken (the user: "if it fails because it's broken then good")
+
+The engine board ("An engine from its first parts", Toyota's 2.0 L four) counted its clashes but did not fail on them, so
+it looked as if it worked. Measured by one probe on its exact engine: at rest 22 pieces running into others and one
+heat finding (the cams through the ignition coils and their plug tower, the starter's insides, the knock sensor, a hose,
+the converter in its tail pipe, the crank's flange in its crankcase), and turned over in 12 steps 3 more; and in that
+turning only the crank, pistons and rods move, the cams and valves held still (fault D26). The board now holds both to
+none with asserts, which fail; the clash check marks each finding red on the engine shown whole beside its exploded
+view (photographed in the built app). Its results panel still reads "all working" while they fail, and the board takes
+37 s to run in the page (fault D27). Building this, the I16 judge found the new "Cut by a standard" node had taken the
+id of "Negative of an interface" and silently replaced it; it has its own id now, and two nodes under one id stop the
+library from loading. Checked with `npm run gate`.
+
+## 2026-11-02: drag a bolt onto a part in the 3D view, its negative shown before anything is cut (spec 01, I16; fault D16)
+
+In the dashboard's 3D view a strip along its foot offers each bolt or screw the board makes. Held over a part, the view
+finds what is drawn under the pointer (the piece and its matrix), walks the board's wires up from the view to the first
+part that holds that piece there, stands the ray on it as the paste node does, and runs the board's own paste node on
+that point: only what that run gives is drawn (the hole and counterbore to be cut in red, seen through the part; the
+hex key's room as an amber cage; the ring the head bears on in green; the face's normal; the screw as it will sit) beside
+its checks in the standards' own words. Released, the card is pinned; Cut it (or Enter) is one node spliced into the wire
+toward the view, one undo step, and the board's own run then cuts it; Esc or Cancel leaves the board as it was. A refusal
+draws what would have been cut and says by how much it is short; Cut it is disabled. A right-click on a hole (or on the
+bolt in it) copies the interface by the node that made it, and pastes it elsewhere from the same screw node. On a phone:
+tap the chip, tap the part. The node test checks each step by hand-worked numbers (1.2 × 9.0 = 10.8 mm, √(50² + 30²) =
+58.31 mm) and the browser test drives it by real mouse, keys and touch, reading the colours off its own screenshots
+(`npm run gate`; `node tests/evals/imprint-drag.cjs <dir>`, 63 checks, all passing, each part under two minutes).
+
+Found on the way, each measured: a keep zone's box ran a radius past each end along its axis (a 24 mm key's room kept as
+39 mm: fault D28, fixed); the view could not find a piece drawn inside a stand-in (it keeps their leaves now); a move of
+the paste waited on a whole frame, and a frame in the test's software renderer took about 0.9 s at full size, so the view
+now draws only when something changed, coarser while things move, and sharp again when they stand still (moves went from
+about 2 s to about 0.3 to 0.5 s there); drilled faces showed the backdrop through their seams as dotted lines (drawn from
+both sides now). Rounds are drawn to within 0.05 mm (an 80 mm boss in 89 facets, sag 0.0498 mm); the clash checks keep
+24 facets, as finer ones took the engine board's run from 49.7 s to 263 s, one run each (fault D29, 10.T24's).
+
+Fault D16, the view: a backdrop of its own, the parts lit from the view; by WCAG's measure, what is shown stands 4.85:1
+and 7.88:1 against the backdrop beside it on the two boards, the plate 8.14:1 (it was 2.07:1 for the plate); the grid
+at the floor of what is shown; the label above the canvas, the count said as it is (`node tests/evals/imprint-drag.cjs
+<dir> d16`). The results panel now counts failing checks (fault D27, in part).
+
+The blind check (`npx vitest run --config vitest.eval.config.ts tests/evals/imprint-blind.eval.ts`, three readers a shot,
+told nothing) is run apart from the gate. Its first run, on shots taken before the last two fixes, stopped on a network
+reset after grading four of its eight shots: the readers named every fact of the held, pinned and cut shots, fewer of the
+first; and two or more named a fault of D16's on each (facets; on the held shot also darkness and the grid). Their words
+were lost with that run (it now keeps them as it goes), so which part they read as faceted is not known; the seams one
+reader described as dotted lines across the plate are fixed. It is being run again on the new shots.
+
+## 2026-11-02: I16 judged and failed; what the evaluator and three blind runs found, mended (spec 01, I16; fault D16)
+
+The evaluator (a fresh agent on another model, `plan/specs/00-structure/verdicts/01.I16.json`) failed I16 at e49de65.
+Every mechanism held under its own runs (the node test, the gate, the browser test's checks all passing, and each
+screenshot read by eye), and it planted 26 faults: 18 were caught. It failed the task because no blind check had run to
+its end on those shots (the Gemini run stopped on a spent quota), and because the legend's see-through screw was never
+seen: it was drawn inside the uncut plate, behind it. Now: the screw as it will sit is drawn through the part, counted,
+and seen in the browser test (its shank lighter through the plate); the node test catches what went through (the hole
+a paste made copied by that paste, not by the place node that reads it; a refused card's crossed check and the rest not
+measured; the guard on a node standing off the drop; a record looked for above or below its hole; a part's leaf where it
+is not drawn), each planted again and caught (`npx vitest run tests/nexus/domains.test.ts -t "drag to imprint"`).
+
+With Gemini's quota spent, the blind check was run as its spec allows: three fresh agents a shot, told nothing (the
+shots renamed to plain letters, the agents given no project files), and a grader who sees only their words and the
+facts hidden from them. The first run failed every single shot: nearly every reader read "8 pieces drawn" beside three
+things as a miscount; screws drawn as black mirrors read as black blobs; the steel read as white plastic; whole boards
+seemed to float with no ground; and no reader saw that a refused paste cannot be cut. Mended: the label counts the things
+in sight, then the pieces they are drawn from; a near-black finish on a metal (black oxide) is drawn as a dark gloss;
+softer shadows and a little less light; a grid a decade finer; the disabled button says "Cannot cut: it does not fit".
+In the second run the held, pinned and refused shots passed (every reader named every fact, none a fault of D16's) and
+both before-and-after pairs passed; the label then counted a thing framed off to the side, mended in turn (the browser
+test holds 3 and 2 things on the two boards; `node tests/evals/imprint-drag.cjs <dir>`). What readers still named that
+is the part as it is, not the view: a black-oxide screw head is dark; a hex bolt's head is six-sided; the plate floats
+because the board stands each thing on y = 0 (fault D30). The node board's faded blocks (those that feed nothing) let
+wires show through them; that is the board's cue, left as it is.
+
+Three more runs, each on the build of its day (`node tests/evals/imprint-drag.cjs <dir>`, then three fresh readers a shot):
+over all five runs the held and pinned shots passed in three, the refused shot in two, the before-and-after pairs in
+nine of ten; where they failed it was on a fault named, but for the first run's refusal, whose readers all missed that
+it could not be cut (mended: its button says so). What readers
+named next was mended in turn: rounds drawn within 0.02 mm and a preview's cut with 96 facets, a lighter backdrop and a
+brighter grid, and a label that counts nothing (a reader counts a pasted screw as a thing of its own; no count was read
+as meant in five runs). Decision 0018 settles what the evaluator asked be decided: a named fault counts against the view
+when it is the view's or unsure, and is filed against the part or the board when it is the part as it is (a black-oxide
+screw is near black) or the board's layout. In the fifth run, so graded, what readers still named was the dashboard's
+small grey text on near-black, a faint grid, and the count; the first two are the app's general legibility, beyond the
+3D view's own faults. I16 stays failing on its blind clause until a run on its shots passes; the readers' words of every
+run are kept beside the shots. Fault D31, found on the way (the pool's workers ran another checkout's engine), is mended
+(decision 0017).
+
+## 2026-11-02: nothing checks for overlap (decision 0021)
+
+The user chose "Gone now": the overlap checker is deleted, not kept as a list. Before it went, the engine board ("An
+engine from its first parts") was timed node by node, one run each in Node (a probe run with `npx vitest run`, its file
+not kept: the board from `starterBoards()` run by the engine, each node's time read from its state): 56.5 s whole, of
+which `check.rules` took 27.6 s, `check.turning` 24.0 s and `sweep.range` 4.1 s. With the checker and its nodes gone, the
+same probe gives 4.5 s for its 29 nodes, `sweep.range` (a stress test over speed, not an overlap check) 3.6 s of it.
+Deleted: the interference and clearance rules and their excuses, the check through a motion, the nodes `clash`,
+`check.turning` and `verify.interference`, the view's `clash` and "hidden inside" rule, the nudge repair, the overlap
+stage of the compiler and the gauntlet, `npm run check` and the tests of the checker itself. Kept: the heat rule
+(`check.rules` is now the heat exposure check, "Nothing too hot?" on the boards). In their place, where a place is still written by hand is counted builder by
+builder (`node scripts/by-hand.mjs`): 1,203 `at` and `rot` properties in 46 files under `src/nexus`, `engines.ts` the
+most at 222, and the one test fails if any count rises (`npm run gate`). The overlaps already drawn into builds (faults
+D14, D25) are now unmeasured; they go as the builders move onto the operations that cannot write one, which are designed
+and not built.
+
+## 2026-11-02: the engine board's freeze was the view drilling holes by booleans
+
+With the overlap checks gone the engine board ran in 2.5 s in the app, yet the page did not answer for 96.6 s. A CPU
+profile of the page as it opened the board (Chrome's profiler through Playwright, an unminified build: `npx vite build
+--config vite.view.config.ts --minify false`) put 93.9 s of a 99.0 s freeze in `drill` (`src/nexus/view/kit3d.ts`),
+the views' holes cut by mesh booleans (three-bvh-csg), all in one frame. Timed part by part in Node (a probe run with
+`npx vitest run`, not kept), the engine's 72 distinct parts with cuts took 65.2 s, the deck flange alone 51.5 s, coming
+out as 121,908 triangles: a 400 × 8 × 110 mm plate with 4 bores and 10 bolt holes, each subtracted in turn. A box
+drilled straight through by round holes is now drawn from its outline with the holes in it, extruded (`throughPlate`;
+the rest of its cuts, and every other part's, still by booleans): the 72 parts take 5.4 s, the deck flange 56 ms and
+8,788 triangles, and the longest freeze opening the board in the app is 7.8 s (one run each, the same shot script). The
+plate's holes and volume are held by the test "a plate drilled straight through" (`npm run gate`). Fault D36, small
+gaps the booleans leave in a thin gasket's slanted holes, was there before and is filed.
+
+## 2026-11-02: the space where nothing can overlap, first slice in the app
+
+The operations designed for the space (made, stack, around, into, onto, ring, through) are now `src/nexus/room.ts`,
+seven nodes in the library, and a starter board: a starter motor whose armature goes into its can's room, its solenoid
+against the motor's side, the pair on a bracket, a bolt along the bracket's hole. No node takes an x, a y or a z. Asked
+to put the solenoid into the motor as well, the node says "no room: the motor can has no free room left for the
+solenoid (a room is used once: what went in first has it)". The board runs its 13 nodes with none failing (the test
+"every domain, in one pass" runs each node's own tests and the starter boards, `npm run gate`). What is not closed: the
+red team's ten ways past the prototype (a room on a moving host, a bought host on a joint, the fixed 1e-12 m tolerance,
+rounding at 1e20 m, and caller data changed after it is checked) stand; round solids and lines run along y only; and no
+builder is moved onto it yet, so the count of places written by hand is unchanged (`node scripts/by-hand.mjs`).
+
+## 2026-11-02: the old builds deleted
+
+At the user's word ("get rid of the old builds", then "All hand-placed builds"), the builders that wrote places by hand
+are deleted with their nodes, starter boards and stored parts: `machines.ts`, `engines.ts`, `panels.ts`,
+`fittings.ts`, `drivetrain.ts`, `computer.ts`, `creatures.ts`, `reconstruct.ts`, `photo-marks.ts`, `power/`, every seed
+but the coil spring, the critic's checks of what turns or slides against what is round it, and the docs that described
+them (GAP-MAP, RECONSTRUCT, PLACEMENT). Measured on the code before this entry and its bookkeeping were added: 44 files changed, 14,115 lines out (`git diff
+--cached --shortstat`); 29 starter boards left of the 68; places still written by hand 612 in 37 files, down from 1,203 in 46
+(`node scripts/by-hand.mjs`). CLAUDE.md now says to build only with the operations of `room.ts` and names the nodes
+still in the library that set a place by number as old. The one test passes whole (`npm run gate`).
+
+## 2026-11-03: the critic's first audit
+
+`node scripts/audit.cjs` (every starter board opened in the built app) found 4 of 29 boards with something a person
+would see: the 6502 and the paint board each kept the page from answering for over 2 s (2,146 ms and 2,069 ms), the
+prompt trial fails because its image services do not answer here (fal.ai unreachable, the Gemini key over its quota),
+and a fit node dropped from the library failed, its default pointing at a load that needs a spring wired in. Looked at
+by eye: the battery board showed its exploded view as its picture, a jumble of plates (now shown whole; it reads as a
+plain black box, its posts not seen from the front); the controls board ran its key hint under its slider (moved to the
+bottom). The search nodes' defaults that named the deleted engine (`floatRpm`, `bore`) now name a bar under load. Open,
+in the order a person meets them: the black-box battery and the plain-box crates; 470 of 573 nodes on no starter board;
+113 plan tasks unbuilt, the node creator (spec 13) among them; the two slow boards.
+
+## 2026-11-03: common pieces and their matings, by the operations
+
+The user asked for the small common pieces first, each with its matings. `src/nexus/common.ts` makes them with the
+operations only (no place written): hex bolts and socket screws M3 to M12 (ISO 4017, ISO 4762), nuts (ISO 4032),
+washers (ISO 7089), standoffs, plates with holes or footprints, copper and aluminium pipe and tube (EN 1057) and their
+couplings, copper wire bare or insulated and stripped (IEC 60228), a winding on a bobbin, 3 and 5 mm LEDs, a lamp, pin
+headers, a push button, terminal blocks, and the bolted joint. The space gained the shapes they need (a hex, bored or
+not; a dome; a coil) and the operation Over a shaft (a washer, nut, coupling or coil slid on, refused with both sizes
+where its bore is too small or something is in the way). Their masses, from their shapes and materials, against the
+parts as sold (one probe, `npx vitest run`, not kept): an M8 × 40 hex bolt 21.9 g, an M8 nut 5.1 g, an M8 washer 1.8 g,
+200 mm of 15 mm copper pipe 56 g, a 5 mm LED 0.27 g. Three starter boards show them: the fasteners, plates and pipes;
+the wires, windings, lights and inputs; and four matings (two plates bolted twice, a wire's stripped end in its
+terminal, a coupling on a pipe, an LED's leads through a board), every node on them running (`npm run gate`). Not yet:
+bends and elbows in pipe, square boxes with a hollow (only round cases), threads drawn, multi-layer windings.
+
+## 2026-11-03: sections, hollow boxes, layered windings, and the first builds from the pieces
+
+The space gained a box hollow inside and open at the top, its cavity a box-shaped room (Into a room refuses with both
+sizes where a thing does not fit), bars of a section (an outline drawn along a length: aluminium angles, channels and
+tees, steel IPE beams from EN 10365), and coils of several layers. Over a shaft now lets a round piece on the same line
+that fits inside the bore pass (a shaft inside a core), where it had refused on the bounds. The first things built only
+from the pieces and the operations, as boards of nodes: a small DC motor (a rotor core with its coil in two layers slid
+over it, a commutator under it, a magnet ring slid round it with an air gap, the can made round all of it, the shaft
+passed along its axis, two terminal tabs against its foot) and a switch box (an LED and a push button through a board's
+footprints, the board into a project box's cavity). Every node on the three new boards runs (`npm run gate`). The in-app
+AI's guide (`docs/FOR-AI.md`) now tells it to build only with the pieces and the operations and never with the nodes
+that set places by number. Seen: from the 3D view's angle the box's 40 mm walls hide its floor, so the board is shown
+beside the box as well; the motor reads as a can with its shaft, its inside seen with Cut.
+
+## 2026-11-05: the phone page, a chat that builds (decision 0023); a bolt's head resting on its own hole
+
+`view/vibe.html` (`src/nexus/view/vibe.ts`): the 3D view fills a phone's screen, a chat at its foot goes to Claude
+through the relay, and each step comes back as it is taken with the board as it stands, so the thing is drawn while
+Claude works; seven piece boards open from chips with no AI. A phone opening the dashboard is sent there. One request at
+phone size (iPhone 13 in Playwright, not a phone), "Two 3 mm aluminium plates, 80 by 50 mm, bolted together with four M5
+bolts, nuts and washers": done in 31 s, 18 pieces, 81 g, 80 × 15.2 × 50 mm (`npm run eval:phone -- .audit/phone "…"` with
+`npm run app` serving, the page's own reading); by hand, two plates of 11.7 cm³ of aluminium are about 63 g and four M5 bolts with nuts and
+washers about 18 g. Seen in its picture first: the four heads at 3.5 mm steps above the plate, the shanks in the right
+holes. Stack had set each block on the highest piece anywhere in what came before; now on the pieces in its path (their
+bounds overlapping across the axis), else on all. A second joint's head now rests on the plate: 10 faces where pieces
+meet, against 8 before (`npx vitest run tests/nexus/domains.test.ts -t Mechanical`, the node's test). The second
+model's check of that run's answer said `FAULTS: 8` (claims in the answer no step supports); it is shown on the page as
+it came. A board with no "Show in space" node shows what it ends with (the first thing given by each node nothing
+builds on): the AI had left the show node out and nothing was drawn.
+
+The audit (`node scripts/audit.cjs`), 2026-11-05: its board match had stopped working (the library's search rows put the
+board's title first and "open this board" last), so every board read "not found" and no picture was taken; mended, and
+an audit that finds no board now says it is broken. On this machine each board took about a minute (its software
+renderer on all four cores), so the whole run stopped at its 30-minute limit after 30 of 34 boards; the other four were
+run apart. Every board's nodes ran but the prompt trial's (its image services). Freezes of 2 s or more on the battery,
+the 6502, paint, choosing a spring, export, what it is made of, the cart and the pendulum; with the stack change taken
+out the cart froze 4570 ms and the pendulum 2368 ms, with it 4324 and 2404 ms, so it is not this round's; the ball's
+board read 135 ms and 2364 ms on two runs, so the reading is noisy here. The five piece boards, the matings board and
+the two built from pieces opened with no fault and no freeze over 1 s.
+
+## 2026-11-05: parts turned to any angle, pipes that bend, twenty more pieces, three ways to build (decisions 0024, 0025)
+
+Built rough, in parallel, by three agents in their own worktrees, merged and gated here (`npm run gate`: 66 passed).
+A whole block turns rigidly by any angle about any axis (`room.turn`): each solid carries its frame, each line its
+direction, and through and over work along a turned line in its own frame; a bent tube (a torus segment) is a solid of
+its own; a run of tube is laid from its steps alone ("200; bend 90; 150; elbow 90 toward +z"), its segments that do not
+follow one another kept apart by their bounds. A turned bolted joint, pipe run and angle at six angles about each axis
+kept every pair of pieces apart at 9³ sampled points each (`npx vitest run tests/nexus/domains.test.ts -t "a turned
+block keeps every pair"`); the 1275 drawn vertices of a turned run lay on their solids' skins within 1e-6 m (the
+builder's probe, deleted). The socket elbows' figures are typical (no EN 1254-1 table found). Twenty more pieces by their
+standards, many figures typical or from memory and labelled so: resistors, capacitors, a TO-92, cells, a toggle, a fuse,
+a JST header, a pot, a lid, an L bracket bolted down, ball bearings (balls drawn as their bounding cylinders: the space
+has no sphere), dowels, set screws, a spur gear, a GT2 pulley, a spring, a hinge, inserts; cut for want of turning then:
+the DIP IC, the barrel jack, the bracket's upright holes, the tee. The phone page builds three ways: by hand (no AI),
+Assist (one call for a plan, changed, then built on the page) and Auto. On one fixed request, input-equivalent tokens (a
+cache read a tenth, a write 1.25 times: an estimate from the counts, not a bill) were about 21,100 before, 13,700 for
+Auto after (the second model's check made a toggle, steps 16, a shorter guide) and 4,500 for Assist, which built the same
+18 pieces, 81 g (`MODES=assist,auto node tests/evals/phone.cjs …`, three real calls in all). `docs/FOR-AI.md` went from
+6,590 to 5,149 bytes (`wc -c`), then gained a paragraph on turning, pipes and the new pieces.
+
+## 2026-11-05: the second pass: bigger builds, the pieces that waited for turning, the phone polished, a red team of the turn
+
+Built rough by three agents in their own worktrees and read by a fourth who only looked for faults; merged here. Four
+boards made only by nodes from the common pieces: a desk fan, a small robot base, a pipe loop with its tank, and a
+quadcopter. Their masses come from their measure nodes, every size an estimate: 0.215, 0.212, 3.77 (empty) and 0.193 kg
+(the builder's probe, deleted). Their audits opened with every node run: 31/31, 36/36, 12/12, 35/35 (`node
+scripts/audit.cjs <dir> "A desk fan"` and so on, a run per board). The pieces that waited for turning: DIP ICs of 8, 14
+and 16 leads (JEDEC MS-001 by Renesas' tables), the PJ-002A jack with its plug passed along its turned bore, a copper
+tee by a new operation `branch`, the L bracket's upright drilled and bolted to a wall plate, the hinge's leaves drilled.
+The tee was sampled at 18 turns with no point in two pieces (`npx vitest run tests/nexus/domains.test.ts -t "a turned
+block keeps"`). The TO-92's rounded back was not built: a section offers no line along its length. On the phone, by
+hand gained the bolted joint and every one-input operation as a joint on what is there, a fit tried from loose to tight
+and the refusal said with both sizes, the form kept, ends tapped in the view; one real Assist call made a plan of 8
+nodes whose stack failed ("not made by the constructor"), most likely a `thing` wired where a `block` goes, now said in
+the guide (`MODES=assist node tests/evals/phone.cjs …`). The red team broke the turn eleven ways. Closed here, each held
+by a test (`npx vitest run tests/nexus/domains.test.ts -t "red team"`):
+- a turn about an axis that is none of x, y, z gave a scaling or the zero matrix;
+- a case passed through a plate kept the plate inside its wall;
+- a section passed through on a clear fit kept no gap;
+- a post into an open cup met a rod laid across above it;
+- the drawn angles were off by 3e-4 near a quarter turn about y.
+
+Left open, written in room.ts's header or here:
+- two pieces against a turned plane share points within about 1e-18 m;
+- a tilt under 1e-12 is taken as upright at any length;
+- a pipe's ring cut, a case's cuts and a bend's bore are not drawn;
+- a run on a diagonal coming back parallel is wrongly refused;
+- an interference fit in a host turned about a general axis loses its pressure.
+
+A Stack takes its blocks in the order of their nodes' names, not as wired; its text now says so.
+
+The polish after it, on the phone page at iPhone 13 size (Playwright's, not a phone): the five new boards got their own
+chips; the chat keeps to a quarter of the height; the view is fitted to the box's corners in the narrower of its two
+angles, not to the sphere round it, so a build fills the view. Every board opened with no page error (a script in the
+scratch folder, `node boards.cjs <out> "Desk fan" …`, run against `npm run app`). A fresh agent shown only the pictures
+named the fan, the robot base, the quadcopter, and the pipes and tank. It called them flat and featureless: blades as
+plain boards, a battery box as one white block, a tank with no openings where the pipes meet it, props too thin to see.
+On the turned pieces board it could not pick out the DIPs or the jack. Those are the builds' own and stay open.
+
+## 2026-11-05: decision 0026, step 1: new solids, plans checked, part tables (rough, by three agents, merged here)
+
+The space gained a sphere, a cone, and a turned profile (a lathe). Holes can go on any face, blind, counterbored or
+countersunk. Lines run along a section's length (gears onto shafts). Ring copies can be turned to face out, and over can
+sit at a distance from an end. Bends are drawn hollow: a 90° 22 mm copper bend now draws at 64.52 g against 64.65 g for
+the same straight; drawn solid it was 412.0 g (the builder's probe, `npm run probe -- tests/nexus/zz_probe_room.test.ts`,
+deleted). Refusals name what is offered. `room.make` offers all 13 solids, `room.turn` turns about any direction, and
+`room.run` and `room.branch` are nodes. The AI's plans are checked as they are made, by a `block` port type and the
+engine's own wire check: one of the starter boards' existing wires is now refused (gauntlet g5.approved into
+tasks.done, an old fault). A node left waiting counts as failing. A Stack takes an `order` setting, because keeping
+wire order would have changed 21 of 43 many-inputs on the starter boards. Four worked plans follow the cards, and the
+cards are tiered (the core in full, the other pieces a line each). Part tables were copied with their licence notices
+from bd_warehouse (Apache-2.0) and BOSL2 (BSD-2). One maker turns a table row into a piece: bolts, nuts and washers
+M1.6 to M64, set screws, 82 bearings, circlips, keys, 349 O-rings, NPS pipe, NEMA steppers. Every one of the 340
+families can be placed as its envelope (`piece.kind`, labelled so). Every size was held to its row by `check.row` (the
+domains test, `npx vitest run tests/nexus/domains.test.ts`). Left open:
+- bearings are drawn at about half their mass, because each ball's cut goes through the rings as a whole hole;
+- threads.ts's nominal metric table is not merged with the copied maxima;
+- there are no countersunk or button heads yet;
+- no envelope has mounting holes except the stepper's;
+- bend end caps are not drawn;
+- a pipe into a tank closes its cavity;
+- no picture of the new solids was looked at.
+
+## 2026-11-05: decision 0026, step 2: the library filled from tables by trade (rough, by five agents, merged here)
+
+Five builders, one a trade, each wrote one file under `src/nexus/parts/`. Every family is rows from a table and one
+recipe of the room operations, with nothing placed by hand (`node scripts/by-hand.mjs`: 612 places in 37 files,
+unchanged). Counted with `grep -cE "^\s*id: 'piece\." src/nexus/parts/<file>.ts`:
+- hardware, 33 families: countersunk, button, pan, shoulder and wood screws, threaded rod, flange, nyloc, square, wing,
+  cap and T-slot nuts, rivets, rivet nuts, pins, lock and fender washers, heat-set inserts, magnets, handles, star knobs,
+  feet, drawer slides, gas struts, piano hinges, cable ties;
+- motion, 19: T-slot extrusion, corner brackets, shafts, lead screws and nuts, couplers, collars, LMxUU and SCxxUU
+  bushings, MGN rails, pillow and flange blocks, GT2 belt, wheels, castors, DC and gear motors, servos, motor plates;
+- electronics, 18: dev boards (Uno, Mega, Nano, Pi 4 and 5, Pico, ESP32, NodeMCU) with their holes where the makers'
+  drawings put them, USB, RJ45, audio, JST, D-sub, screw terminals, displays, fans, TO-220, diodes, crystals, buzzers,
+  relays, switches, breadboards;
+- plumbing, 17: ISO 228 fittings, ball, check and needle valves, hose and barbs, clamps, push-fit and air tube, PVC and
+  copper, EN 1092-1 and ASME B16.5 flanges, gaskets, a tank with a port in its side;
+- building, 14: timber, sheet goods, bricks and blocks, a wall laid of them, I and H beams, angles, hollow sections,
+  bar, rebar, anchors, nails, deck screws, joist hangers, angle brackets.
+Two builders both made a wall plug; the building one was deleted. Each builder held every row of its families to its
+row, by its own probe (deleted): hardware 514 checks, plumbing 455 builds in 548 ms, building 511 checks in 702 ms,
+electronics all 124 rows, motion 159 sizes, with no miss except as listed below. The motion builder found why bearings
+weighed half: each ball's cut was drawn through the rings as a whole hole. A cut that takes nothing from its piece is
+now not drawn. A 608 bearing draws 12.43 g against its row's 12.29 g, where it drew 6.62 g. The other pieces' cards are
+now their short ids, a line a trade, so the cards sent with every call came to 5336 characters (a probe printing
+`piecesCard().length`, deleted). Each builder's test runs a joined build: a drawer front with its handle screwed on; a
+stepper on a plate on an extrusion, a collar on its shaft, 30 pieces; a Pi bolted down with a fan; a DN50 flanged pipe
+end, 20 pieces; a steel post bolted through a block, 19 pieces. Left open, for the polish pass:
+- tees and crosses are drawn 15 to 60 % light: a branch's cuts are weighed whole (copper 15 tee 20.6 g drawn against
+  31.7 g sampled);
+- a countersunk or button screw through a plate cuts a counterbore, because `grow` cuts a cone or lathe passer as a
+  cylinder;
+- a passer's cut over an existing bore is subtracted twice;
+- no joints move (slides, hinges, struts drawn static); no threads drawn; valves have no insides;
+- connectors, displays and relays are envelopes, said so in their cards;
+- some rows are recalled and labelled typical (ISO 7040, 1234, 2341; UPN; seven RHS sizes not in FreeCAD's list);
+- there is no aircrete, OSB or mortar density;
+- no ball casters, T-nuts in a slot, MGN counterbores, belts round pulleys, stepper pilot mounts or D-shaft flats;
+- no picture of any new piece was looked at.
+
+## 2026-11-05: decision 0026, step 3: assemblies as blocks, search for building, the old makers' boards rebuilt (rough, by five agents, merged here)
+
+- **Assemblies as blocks.** A folded block's inputs can now set its inner nodes' settings (group.in `into`). The bound
+  copy is run once per set of values and kept (spec 13 NC5). Folding, opening and merging twins keep a many-input's order
+  (fault D32). The Stack's `order` setting alone did not hold it, because a fold gives the group a new id. A saved block
+  holding another saved block runs on the workers (D34): 4 jobs asked wide gave [3,5,7,9]. The small DC motor is one
+  library block, `seed.motor-dc`, with settings R, L and shaft; a pack of two cells is another, `seed.pack-two`. The four
+  boards that copied the motor helper place them now. Each board's shown thing is digest-equal to the old board's (the
+  builder's probe, deleted), at fewer nodes: the motor 15 to 3, the desk fan 31 to 24, the robot base 36 to 19 and the
+  quadcopter 35 to 23. These plan rows are not marked passing: the evaluator has not judged them.
+- **Search and Assist.** `find` answers a build with what builds first, one line each: its inputs, its settings, what it
+  offers, and the smallest starter board that uses it. About 1.2k to 1.3k characters for 'motor', 'bolt a plate' or 'pipe
+  valve' (`npx vitest run tests/nexus/domains.test.ts -t 'find answers a build'`). Assist's one call carries the person's
+  saved blocks. The guide, the cards and the worked plans are now one system block with its own cache mark. Before, the
+  only mark was at the request's end: the 40-build baseline, `npm run eval:builds` on 8cab483, read the cache in 1 call
+  of 72 and wrote 492,297 tokens to it. A setting named otherwise in a plan is read and said back as a note.
+- **Looks and materials boards.** Seven are built by room.make, room.stack and room.turn, with variant and look by
+  piece name. Every colour, finish, look, mixture and bar stiffness held exactly. The made-of board's rods now touch,
+  because no operation stands two blocks a set distance apart, so its heat path, warming stress and bend stiffness
+  changed (4.90 K/W, was 5.72).
+- **Physics and controls boards.** Let it go takes a room block, each piece a body by its name, and a hinge sits on a line
+  a block offers. The cart reached 6.583 m/s against the 6.62 m/s worked from its motor's constants. The pendulum's
+  period was 1.7315 s against 1.737 s. The ball and tower, and the controls board, run. The body board is kept, because
+  no operation turns a segment about another's end.
+- **Old makers.** The battery, the gauntlet's sensor, the bolt from its load and the M8 export boards are rebuilt by the
+  operations, with a new `piece.sized` (a family's piece at a size along a wire). Deleted: 15 `make.*` nodes, `card.part`,
+  and the sensor, fastener, turned, housing, chip and chain makers. Places written by hand fell from 612 to 564
+  (`node scripts/by-hand.mjs`).
+- **Kept.** `part.family` (the paste board, an AI-tools test), `make.coil` (a seed), components.ts, and the three spec 01
+  interface boards: imprint and cut.standard take Parts, not room blocks.
+- **Left open, for the polish pass:**
+  - the rebuilt battery's plates are solid lead (33.85 kg drawn, heavier than a real group 35, said on its board);
+  - no operation stands two things a set distance apart;
+  - a valve laid along x inside its own maker cannot take a pipe;
+  - `mate.lid` makes a lid with no holes;
+  - room.make takes no colour;
+  - no picture of any rebuilt board was looked at.
+
+## 2026-11-05: decision 0026, step 4: the bootstrap, the AI on forty things to build (rough, by four agents and a critic, merged here)
+
+Forty requests, each scored with no model (`tests/evals/builds.eval.ts`, `npm run eval:builds`: every node ok, the kinds
+asked used, one thing of at least so many pieces). Assist, Claude Haiku 5.5 at low effort, asked once more with what failed:
+- **Before step 3** (8cab483): 11 of 40 right. 1 call in 72 read the cache, and 492,297 tokens were written to it.
+  50,784 tokens in and out per right build, cache reads apart.
+- **After step 3** (ecc7f1d): 14 of 40, 7,780 tokens a right build. 450,978 tokens read from the cache, 34,165 written.
+- **After step 4's four agents** (972cf17): 20 of 40, 8,037 tokens a right build. 417,660 read from the cache, 34,805
+  written.
+
+What step 4 changed, each from a class of what failed:
+- **Line names.** An operation now takes the one offered line or room that a name plainly means and says so (the motor
+  plate's, the Pi's, the fan's and the lead screw's holes and axes). It refuses with the candidates listed where two fit.
+  It says the fix where the kind is wrong: a tank's cavity is a room, an extrusion's slot is a line.
+- **Cards for the request.** Assist is sent the cards of the pieces its request names, up to 8 and 1,500 characters, by
+  search and plain-word synonyms (2x4 to lumber, plywood to sheet, coupler, Raspberry Pi to devboard).
+- **Fits.** A gear is bored to its shaft. A screw goes into a tapped insert by its thread. A nut and a washer each slide to
+  the next free stretch of a rod. A wheel's hub sits clear of a gear motor's can. A bearing's balls no longer refuse it a
+  shaft.
+- **Repeats.** What the plans repeat was counted over 80 plans: joints chained on one line 13, a box with what goes in
+  and its lid 8. These were folded into `seed.bolted-two`, `seed.bolted-four`, `seed.boxed` and `seed.standoffs`.
+- **After that run,** from its plans:
+  - a block wired where a thing goes, from a node that gives a thing, is wired as plainly meant (four requests had asked
+    again only to swap it, then failed on unwiring a wire never made);
+  - an unwire of nothing is a note;
+  - a name given to a piece that takes none labels its node (it had failed two builds).
+  These are not yet measured by a run.
+
+**The critic,** report-only, took pictures of the 19 operation-built boards and 16 new pieces and gave 30 of them to a
+blind vision model:
+- **Recognised:** the beam, the wall, the wheel, the extrusion and the quadcopter.
+- **Worst first:**
+  - the bolt-from-its-load board drew nothing;
+  - the pendulum's stand vanished once it ran;
+  - a countersunk screw sat upside down in a countersunk hole;
+  - two boards drew the same things several times over;
+  - the fan had no blades;
+  - every room-made piece with no colour was drawn white whatever its material;
+  - the controls cart was one solid box;
+  - no L corner of extrusion could be built.
+
+Those are being mended in the next commit.
+
+## 2026-11-05: decision 0026, step 4b: what the critic saw, mended (rough, by four agents, cherry-picked here)
+
+Each fix was checked by a new picture, taken by the critic's own script against a viewer built apart, and looked at by the
+agent that made it. The numbers are read off those pictures' gauges and pixels, or held by the tests
+(`npx vitest run tests/nexus/domains.test.ts -t "a countersunk screw sits head up|the boards the critic saw broken|the pieces the critic saw"`).
+- **Looks.**
+  - A piece with no colour takes its material's: oak blocks #ad8155 where they were #999999, rubber wheels #1f1f20.
+  - A small scene is never drawn as stand-in boxes: the frame governor no longer coarsens a scene of fewer than 2,000
+    pieces. Three boards went from 1 to 3 boxes each to none.
+  - The view's tone mapping is Khronos PBR Neutral at exposure 1, so a brick face reads #9b472d against its own
+    0x9c4a32; it read #c56d54 under ACES at 1.3. Copper and gold keep their colour.
+  - Fit looks from the corner that hides the fewest pieces.
+- **Room operations.**
+  - A countersunk screw through a countersunk hole sits head up, its cone in the countersink: head at y 0.2 to 3 mm
+    where it was −3 to −0.2.
+  - Around keeps a bore that runs through its child open.
+  - Stack and Onto take an end (mid, the default; lo; hi), so two 2020 extrusions make an L (z 0 to 200 and 0 to 20) and
+    a bracket goes at an end.
+  - The flange's holes were checked through: a ray down one meets nothing.
+- **Boards.**
+  - The bolt-from-its-load board shows its bolt and bearing.
+  - Let it go's moved output keeps the pieces held fixed, so the pendulum's stand stays.
+  - The made-of and materials boards each show one thing.
+  - The controls cart is a plywood deck on four wheels with a hollow crate, 21.62 kg shown.
+  - The robot base stands on a castor.
+  - The battery's posts sit along one long edge.
+  - The physics cart's deck is a 10 mm plate, 25.8 kg; it settles at 0.998 of its motors' no-load speed.
+- **Pieces.**
+  - The fan has six thin pitched blades, a ring of copies round its hub (80x25: 39.13 g drawn).
+  - The castor has two fork legs and an axle.
+  - The Pi's connectors are hollow shells open at the board's edge.
+  - The mass gauge says "an envelope: not its real mass" where a node gives one.
+  - The servo has a toothed spline and a lead stub.
+  - The ball valve's lever runs one way from a nut on its stem.
+  - The motor block has an end bell.
+- **Left open:**
+  - polished metals still read alike;
+  - a through cut whose depth equals its piece's thickness leaves a skin on the far face when drawn;
+  - a G1 or larger ball valve is two groups;
+  - the fan's struts are a floor with windows, because spokes need a floorless room;
+  - no blind check of the new pictures.
+
+## 2026-11-05: decision 0026, the forty builds at its end, and the app restarted
+
+On 4a2c1f9, each request run once (`npm run eval:builds`; Auto with `EVAL_MODE=auto EVAL_ONLY=10 npm run eval:builds`).
+One run of each is too few to tell a case's change from chance: request 37 was right in the run before and wrong in this
+one.
+- **Assist:** 23 of 40 right, 21 of them at the first call. 6,398 tokens in and out per right build, cache reads apart
+  (384,505 read from the cache, 34,955 written, 75,591 out).
+- **Auto, on the first ten:** 5 of 10 right, 26,959 tokens per right build (854,108 read from the cache).
+
+What still fails, by class:
+- **Fits** refused (5 of 17): a nut's bore of 8.00 mm against the 8.5 mm a clear fit asks, where a nut goes on by its
+  thread; a washer and nut that meet what is already on a shank; an insert's thread line too small for the bolt the plan
+  chose.
+- **Not one thing** (3): parts left side by side.
+- **Fewer pieces than asked** (5).
+- **A turned or bent piece** given as a passer (2), and a fan's holes that are turned (1).
+- **Kinds left unused** (1): an MGN rail's plate made inside mate.plate, not a piece.plate.
+
+The app was rebuilt and restarted on port 5173 with the keys (`npm run app`). The phone page opened with no page error,
+and one Assist call through its relay came back with a plan in 10.8 s, reading 6,991 tokens from the cache and writing
+none (a scratch script, `node check.cjs`, in the session's scratch folder).
+
+## 2026-11-06: decision 0027: the app on claude.ai, and a thing of several things built from its parts
+
+- **On claude.ai.** The app is published as a private page on claude.ai (https://claude.ai/artifact/WAU1xtmeBYpVNVLHjEEpNF). The
+  node board is its main page and the phone page is beside it. The in-app AI runs on the viewer's own Claude account
+  (the page's `sample` capability), with no key in the page. A Report button takes a spot tapped in the 3D view and a
+  line of words. A chat line starting `dev:` does the same, and so does the in-app AI's `tell_developer` tool. Each
+  report is kept in the page's store and sent into the session that builds the app (send_message through the Claude
+  Code Remote connector). The exact-solids engine (23 MB of wasm) is over the page's 15 MB a file and is left out.
+- **The person's first test.** Asked for "a drone with a robot arm attached", the AI gave a plate and a rod, because it
+  wrote the whole machine in one plan with no drone or arm to start from.
+- **Now:**
+  - `composeBuild` splits a request into parts. It takes each from an assembly, a starter board, or one plan (asked again
+    once with what failed), folds each to one node, joins them by the operations, and checks every part is there, in
+    one group. Each step is a call of its own.
+  - Robot assemblies: `seed.quadcopter` (250 and 450 class), `seed.robot-arm` (3 to 5 servo joints and a gripper),
+    `seed.gripper`, `seed.pan-tilt`, `seed.wheeled-base`.
+  - Machine assemblies: `seed.linear-axis`, `seed.xy-gantry`, `seed.conveyor`, `seed.car-chassis`, `seed.crane`,
+    `seed.table`, `seed.shelf`, `seed.lamp-arm`, `seed.pump-loop`.
+  - A starter board, "A drone with a robot arm attached".
+- **Measured.** On 25 compound requests (`npm run eval:compose`, Claude on the relay, each once), 11 were right: a
+  drone with a robot arm, a crane on a truck, a robot base with an arm on top, a water tank on a trailer, a pump bolted
+  next to a tank, a robot arm on a linear rail, a table with a lamp, a rover with a solar panel and a camera mast, a
+  pan-tilt with a lamp, a shelf with a desk fan, and a drone with a camera and a gripper. The rest failed on:
+  - holes that are turned, which the bolted joint does not follow (3);
+  - parts left in separate groups (5);
+  - a part whose plan made no block, said as "nothing to start from" (it should say what the plan made);
+  - kinds missing (a camera, blades, wheels).
+
+## 2026-11-06: decision 0027: movement in general, builds able to do more, 224 new families, the parts catalogue (nine agents, merged here)
+
+- **Counted.** A probe walking the table-driven families, deleted, against the 149 piece ids there were before this
+  round (`npx vitest run` of the probe): 224 new families and 3,530 new sized parts (family by size row; a length
+  setting not counted). There are 373 piece nodes now. The new families by trade:
+  - drive: 29 families, 1,193 sizes;
+  - electronics: 41 families, 385 sizes;
+  - fixings: 40 families, 621 sizes;
+  - structure: 30 families, 505 sizes;
+  - fluid: 48 families, 450 sizes;
+  - enclosures and installation: 36 families, 376 sizes.
+- **Movement.** `motionOf` reads bodies, joints and gear meshes from how the operations joined the pieces. In the 3D
+  view, Move steps the physics live: a frozen piece stays put even in mid-air, and a loose one turns on its joint when
+  dragged. On the crank board (a gear and a crank on a rod frozen in the air, meshing a second gear on a second rod),
+  a 0.05 N·m torque for one simulated second turned the gears 28.62 and −38.17 rad, a ratio of −1.3334 for 40:30 teeth.
+  The rods stayed within 4e-8 of where they were (the motion builder's probe, deleted). In a headless browser the
+  handle was dragged round and the gears turned at 1.33. Not built yet:
+  - a sleeve sliding along its shaft;
+  - racks and belts;
+  - a motor node driving a joint at a set speed (Move has Spin at 1 turn a second);
+  - pieces colliding with what they turn on.
+- **Builds.** Nuts are tapped, so one goes on by its thread whatever fit is asked. Turned passers and sleeves are laid
+  as made. A bolted joint goes down a hole that is turned. A face is written wherever pieces touch.
+- **Catalogue.** Every piece is on an aisle (trade / category), there is a parts browser behind the phone page's +, and
+  search takes size words. The AI's cards list the other pieces by aisle.
+- **Mended at the merge.** The gauntlet's unique gate compared each candidate with every one of the 373 pieces by
+  building them, and took 19.3 s. A pure block's answer to a test is now kept, so the software field's board runs in
+  time. The cards' shared lists of choices are now counted over the cards sent in full only: they had come to 7,263
+  characters, against the 7,000 the test allows.
+
+## 2026-11-06: decision 0027: both sets of requests run again after the merge
+
+On 301365a, each request run once:
+- **Compound requests** (`npm run eval:compose`): 13 of 25 right, from 11. A robot car with a camera on a pan-tilt head,
+  a desk lamp with an arm that bends, and a cart towed behind a robot car went right. A pump bolted next to a tank went
+  wrong: the split gave the pump no start, and its plan made no block.
+- **The forty single builds** (`npm run eval:builds`): 19 of 40, from 23.
+  - The 23 plans that were right on bb1c1f5 were run again on 301365a (a probe, deleted). All 23 are still right, so
+    nothing merged broke them. The 9 lost are new plans the model wrote this run: five left parts in separate groups,
+    and one used a new flange family the scorer's kinds do not name.
+  - 7,629 tokens a right build.
+
+One run of each request is too few to tell a change from chance. No report has come in from the page yet: the store's
+`reports` collection is empty.
+
+## 2026-11-06: decision 0028: an orchestrator that remembers, motion 2, 23 more assemblies (six agents, merged here), and what the runs found
+
+What landed, by builders in their own worktrees, merged and gated on c0b0a67 (`npm run gate`):
+- **Orchestrator.** `composeBuild` recalls remembered parts before its split, splits a part of several things again (two
+  levels), builds three parts at once, never skips a part with nothing to start from, joins what is left loose with
+  more calls, and ends with a check call that builds what is missing. Each part that runs with nothing failing and is
+  one group is remembered (`memory.ts`).
+- **Pages.** A Yours / Remembered aisle in the parts browser (place or delete), Keep this build, and the build's steps as
+  a tree in the chat and the dashboard. On claude.ai, parts are kept in the page's shared store (`parts`).
+- **Motion 2.** Slides, rack and pinion, belts, servo joints that hold (a robot arm posed stays put), Motor and Hold in
+  Move, unjoined bodies colliding. The motion builder's own test, on its branch: the rack moved within 3% of 15 mm a
+  radian, and the 20T and 40T pulleys turned at 0.498 (`npx vitest run tests/nexus/domains.test.ts -t movement`).
+- **Assemblies.**
+  - `things.ts`: wind turbine, boat, camera, tripod, leg, quadruped, hexapod, winch, pump, truck.
+  - `everyday.ts`: chair, desk, bed frame, door, window, stud wall, fence, go-kart, trailer, wheelbarrow, mast, solar
+    panel, satellite dish.
+  - Not built: bicycle, stairs, shed.
+- **Evaluations.** A kind is read by what a part is (its aisle and name). There are 25 more compound requests
+  (`EVAL_SET=more`) and a second run against the first (`EVAL_REPEAT=2`).
+
+Measured with real calls, each request once a run:
+- **Memory** (`EVAL_REPEAT=2 npm run eval:compose`). Run 1 got 16 of 25 right in 140 calls; run 2 got 18 of 25 in 107
+  calls. In run 2, 11 requests placed parts remembered from run 1, and 11 took fewer calls. Examples:
+  - a water tank on a trailer: 10 calls, then 3 (wrong, then right);
+  - a cart towed behind a robot car: 13 calls, then 3 (wrong, then right).
+  - One went the other way: a pump bolted next to a tank (right, then wrong).
+- **What the runs found.** Six of the nine wrong were parts placed against each other with no face between them.
+  `stack` (and `onto`) lifted a block until its lowest point cleared the highest piece anywhere under it, so a block
+  whose lowest piece was not the one over the host's highest stopped short and touched nothing. It now comes to rest
+  on the first pair of pieces in each other's path. An arm beside a conveyor was 2 groups and is now 1; the test fails
+  on the old rule (`npx vitest run tests/nexus/domains.test.ts -t "rests on its first contact"`).
+  - The rule moved one starter board: the cart's front axle had sat 91 mm off its frame rod's end. Touching it, at a
+    shorter wheelbase, the driven wheels slipped (27.15 m in 8 s, from 47.11). The rod is now 780 mm, which puts the
+    wheelbase back at 802 mm and gives 47.11 m again (a probe, deleted). The check is unchanged.
+  - A bolted joint on holes of one name facing different ways (the XY gantry's carriage mounts) turned for ever
+    ("Maximum call stack size exceeded"). It now turns once and is refused with why.
+  - A part the final check rebuilt in place of one not made was still counted as not made. It is no longer counted.
+- **With both fixes, a fresh run, nothing remembered** (`npm run eval:compose`): 22 of 25 right in 123 calls. Still
+  wrong:
+  - the tank on a trailer (2 groups);
+  - the boat (its motor's can had no bore to slide on);
+  - the bicycle with a basket (a wheel hub too small for the frame's line).
+- **25 more compound requests** (`EVAL_SET=more npm run eval:compose`, run before the two fixes): 8 of 25 right, in 268
+  calls.
+  - Nine failed on a kind's words. Some of those are the scorer: the chair's legs and back, and the wheelbarrow's
+    handles, are named on the operations that placed them ("chair legs"), not on the pieces. Others are real gaps: a
+    robot dog with no head, a desk with no monitor made.
+  - Four were loose groups: the forklift, an arm on a turntable, the toy train and the helicopter.
+  - Four had nodes not ok: the boat with an outboard, the 3D printer, the ceiling fan and the excavator.
+- **The forty single builds** (`npm run eval:builds`, with both fixes and the new kinds): 23 of 40 right, from 19. That
+  is 5,841 tokens in and out a right build, from 7,629.
+- **Correction.** The last entry said the flanged joint failed for a new flange family. Its plan used two plates named
+  flange A and B (the last run's kept plans, `EVAL_OUT`, replayed with no model by the evaluations builder), so it was rightly
+  wrong.
+
+No report has come in from the page: the store's `reports` and `parts` collections are both empty (read with
+ArtifactData).

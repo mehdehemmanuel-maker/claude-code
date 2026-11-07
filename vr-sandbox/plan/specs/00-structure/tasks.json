@@ -1,0 +1,182 @@
+{
+ "spec": "00-structure",
+ "rule": "A task is failing until its check passes, run by the evaluator.",
+ "tasks": [
+  {
+   "id": "S1",
+   "title": "The constitution with its checks and states",
+   "meets": [
+    "S-R1"
+   ],
+   "owner": "plan/CONSTITUTION.md",
+   "check": "every rule names a check or says unenforced and which task adds it",
+   "status": "passing",
+   "evidence": "the evaluator passed it 2026-11-01 (verdicts/00.S1.json, at 956fe8c): 15 of its 19 plants caught; the four it missed (a placeholder check word, a bold rule id, an empty decision section, a misnamed decision file) now caught, each planted again",
+   "after": []
+  },
+  {
+   "id": "S2",
+   "title": "PROGRESS.md, and the session loop written into CLAUDE.md's working notes",
+   "meets": [
+    "S-R5"
+   ],
+   "owner": "PROGRESS.md, CLAUDE.md",
+   "check": "a fresh agent given only CLAUDE.md finds the spec in hand and the next task in under five reads",
+   "status": "passing",
+   "after": [],
+   "evidence": "the evaluator passed it 2026-11-01 at e834436 (verdicts/00.S2.json), after a first fail: two reads from CLAUDE.md to the spec in hand and the next task, each true at that commit; 22 plants caught; two residual gaps reported (the next three need not be the first three open; a task mended after a fail reads as failing)"
+  },
+  {
+   "id": "S3",
+   "title": "Hooks: push gate, budget, honesty, loop breaker",
+   "meets": [
+    "S-R6"
+   ],
+   "owner": ".claude/settings.json, scripts/, package.json, .gitignore",
+   "check": "each hook tried once on purpose and refuses: a push without a gate stamp; a commit past its owners; a number with no command; a fourth try",
+   "status": "passing",
+   "after": [],
+   "evidence": "the evaluator passed it 2026-11-01 at 956fe8c (verdicts/00.S3.json), after a first fail; 13 of its 19 plants caught by standing tests, the rest refused when tried live (gate.mjs and claude-push.mjs wiring)"
+  },
+  {
+   "id": "S4",
+   "title": "The provenance check, the placeholder scan and the secret scan in the gate",
+   "meets": [
+    "S-R7"
+   ],
+   "owner": "tests/nexus/domains.test.ts",
+   "check": "a planted unsourced figure, a planted placeholder and a planted key pattern each fail the gate; removed, it passes",
+   "status": "passing",
+   "after": [],
+   "evidence": "2026-11-01: tests/nexus/domains.test.ts with tests/nexus/scans.ts; a planted unsourced record and a TODO in src/data/woods.ts and an AWS-shaped key in a tracked doc each failed it, by file and line; removed, it passes"
+  },
+  {
+   "id": "S5",
+   "title": "Evaluation sets: the AI's 30 requests with the runner and today's baseline; the products set once the user names them",
+   "meets": [
+    "S-R4"
+   ],
+   "owner": "evals/, package.json",
+   "check": "npm run eval:agent prints steps, tokens, seconds, right or wrong for each, and the baseline is recorded in REALITY.md with its command",
+   "status": "passing",
+   "after": [],
+   "evidence": "2026-11-01: npm run eval:agent (tests/evals/agent.eval.ts), 30 requests; baseline 16 of 30 right with claude-haiku-5-5, then 30 of 30 with one rule added to docs/FOR-AI.md (every number from a node); one run each; recorded in docs/REALITY.md. The products set: U6 was answered with the one simple test (the-one-test.md), not a list of products; it waits on that test."
+  },
+  {
+   "id": "S6",
+   "title": "The routing test covers plan/ as it covers docs/",
+   "meets": [
+    "S-R1"
+   ],
+   "owner": "tests/nexus/domains.test.ts",
+   "check": "a plan file not routed from CLAUDE.md or plan/README.md fails the test",
+   "status": "passing",
+   "after": [],
+   "evidence": "2026-11-01: tests/nexus/domains.test.ts, \"every source file has an owner in the docs\": a planted plan/STRAY.md and a planted plan/specs/99-x/a.md each failed it; the real plan passes"
+  },
+  {
+   "id": "S7",
+   "title": "The evaluator: its brief, three scored examples, the rule that only it flips a task",
+   "meets": [
+    "S-R2"
+   ],
+   "owner": "plan/specs/00-structure/evaluator.md",
+   "check": "given a passing and a failing piece of past work, it judges both right",
+   "status": "passing",
+   "after": [
+    "S5"
+   ]
+  },
+  {
+   "id": "S8",
+   "title": "The first decision records (0001 to 0007) written",
+   "meets": [
+    "S-R3"
+   ],
+   "owner": "plan/decisions/",
+   "check": "each has options, choice, assumption and re-test",
+   "status": "failing",
+   "evidence": "written 2026-10-31; waiting on the evaluator (S7)",
+   "after": []
+  },
+  {
+   "id": "S9",
+   "title": "The reviewer panel (research 11) with a quorum and stop signals (research 12): code judges with a veto; judges of different families; any gate may raise a concern the orchestrator must answer (Crew Resource Management)",
+   "meets": [
+    "S-R2"
+   ],
+   "owner": "agent.ts, plan/specs/00-structure/evaluator.md",
+   "check": "a planted wrong answer is caught; a raised concern blocks until answered",
+   "status": "failing",
+   "after": [
+    "S7"
+   ]
+  },
+  {
+   "id": "S10",
+   "title": "Stop the line (C25) and a non-punitive near-miss log for the AI (error, at-risk, reckless, each with its response)",
+   "meets": [
+    "S-R6"
+   ],
+   "owner": "scripts/hooks/, plan/ANDON.md, plan/NEAR-MISS.md, agent.ts, view/nodes.ts (the page shows the near misses), vite.view.config.ts (the relay sends the whole run)",
+   "check": "an open andon blocks 'done'; a caught near miss is logged with its kind",
+   "status": "passing",
+   "after": [
+    "S3"
+   ],
+   "evidence": "failed its verdict 2026-11-01 (only direct dependents stopped; tool and node failures not caught; nothing read the near misses; probes looked for at the top of one folder); each mended and planted again; to be judged again"
+  },
+  {
+   "id": "S11",
+   "title": "Dailies: the AI shows what changed since the last session, and the person approves, notes or kills each version; versions never overwritten",
+   "meets": [
+    "S-R5"
+   ],
+   "owner": "agent.ts, view/",
+   "check": "a session opens with its changes listed; a killed version is kept but not used",
+   "status": "failing",
+   "after": [
+    "S2"
+   ]
+  },
+  {
+   "id": "S12",
+   "title": "Prompts as versioned prompt nodes with frozen suites; untrusted text only through a schema-only extractor (CaMeL)",
+   "meets": [
+    "S-R2"
+   ],
+   "owner": "agent.ts, genai.ts",
+   "check": "an injected instruction in a fetched page does not reach the planner",
+   "status": "failing",
+   "after": [
+    "S5"
+   ]
+  },
+  {
+   "id": "S13",
+   "title": "Post-mortems as a timeline, contributing factors and a hindsight guard (Allspaw, Dekker, SRE), replacing five whys; Perrow's chart computed from any board's structure (research 20)",
+   "meets": [
+    "S-R3"
+   ],
+   "owner": "plan/, graph.ts",
+   "check": "a failed task's post-mortem has a timeline and factors, and names no culprit",
+   "status": "failing",
+   "after": [
+    "S10"
+   ]
+  },
+  {
+   "id": "S14",
+   "title": "The one test (specs/00-structure/the-one-test.md): the lamp on the shelf, run from the request through the AI, each pass line scored against numbers worked out by hand first; today's baseline recorded",
+   "meets": [
+    "S-R4"
+   ],
+   "owner": "tests/evals/, evals/one-test/, package.json",
+   "check": "npm run eval:one prints each of the 18 pass lines as passed, failed (with the measured value beside the expected) or not yet possible (naming the missing part); the expected numbers are in a file with their sources and never change after a run",
+   "status": "failing",
+   "after": [
+    "S5"
+   ]
+  }
+ ]
+}

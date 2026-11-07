@@ -5,6 +5,7 @@
 // same few dozen elements, and each element says where it is got from.
 
 import { MOLECULES } from './life/molecules';
+import { MIXES, mixDensity } from '../data/mixes';
 
 /** Standard atomic weights (IUPAC 2021, abridged), and where each element comes from. */
 export const ELEMENTS: Record<string, { name: string; w: number; group: string; from: string }> = {
@@ -73,7 +74,9 @@ export function formula(f: string): Record<string, number> {
  *  [what, %] pairs, each a material of the inventory or a formula. */
 type Spec = { alloy: Record<string, number | 'bal'>; grade: string } | { formula: string; says?: string } | { blend: [string, number][]; says: string };
 export const MATERIALS: Record<string, Spec> = {
-  'steel-low': { alloy: { C: 0.2, Mn: 0.45, Si: 0.2, Fe: 'bal' }, grade: 'AISI 1020, nominal' },
+  // one steel throughout: its strength is the handbook's AISI 1018 cold drawn, so its make-up is 1018's (ASTM A108: C 0.15
+  // to 0.20, Mn 0.60 to 0.90; the middle of each)
+  'steel-low': { alloy: { C: 0.175, Mn: 0.75, Fe: 'bal' }, grade: 'AISI 1018 (ASTM A108), nominal: the middle of its ranges' },
   'steel-alloy': { alloy: { C: 0.4, Mn: 0.85, Cr: 0.95, Mo: 0.2, Si: 0.25, Fe: 'bal' }, grade: 'AISI 4140, nominal' },
   'steel-spring': { alloy: { C: 0.85, Mn: 0.45, Si: 0.2, Fe: 'bal' }, grade: 'music wire (ASTM A228), nominal' },
   'steel-chrome': { alloy: { C: 1.0, Cr: 1.45, Mn: 0.35, Si: 0.25, Fe: 'bal' }, grade: 'AISI 52100, nominal' },
@@ -101,6 +104,7 @@ export const MATERIALS: Record<string, Spec> = {
   silicone: { formula: 'C2H6OSi', says: 'polydimethylsiloxane' }, rubber: { formula: 'C5H8', says: 'polyisoprene (the polymer only: fillers and carbon black are a third of a tyre)' }, neoprene: { formula: 'C4H5Cl' }, phenolic: { formula: 'C7H6O', says: 'phenol-formaldehyde (Bakelite)' },
   pet: { formula: 'C10H8O4' }, paper: { formula: 'C6H10O5', says: 'cellulose' }, graphite: { formula: 'C' }, glue: { formula: 'C4H6O2', says: 'polyvinyl acetate wood glue, dry' },
   alumina: { formula: 'Al2O3' }, batio3: { formula: 'BaTiO3' }, pzt: { formula: 'PbZr0.52Ti0.48O3' }, mgo: { formula: 'MgO' }, 'ntc-ceramic': { formula: 'NiMn2O4', says: 'a nickel-manganese spinel' }, quartz: { formula: 'SiO2' },
+  'friction-composite': { blend: [['phenolic', 20], ['steel-low', 25], ['graphite', 15], ['BaSO4', 25], ['Cu', 15]], says: 'a semi-metallic brake pad\'s friction material: phenolic resin binding steel fibre, graphite, barite and copper (typical shares, an estimate)' },
   silicon: { formula: 'Si' }, gan: { formula: 'GaN' }, nmc: { formula: 'LiNi0.333Mn0.333Co0.333O2', says: 'NMC 111' }, nitrogen: { formula: 'N2' }, water: { formula: 'H2O' }, bi2te3: { formula: 'Bi2Te3' }, sic: { formula: 'SiC' },
   mica: { formula: 'KAl3Si3O12H2', says: 'muscovite' }, oil: { formula: 'CH2', says: 'mineral oil, as (CH₂)ₙ' },
   abs: { blend: [['C3H3N', 25], ['C4H6', 20], ['C8H8', 55]], says: 'acrylonitrile, butadiene and styrene, typical shares' },
@@ -110,6 +114,7 @@ export const MATERIALS: Record<string, Spec> = {
   eva: { blend: [['pe', 72], ['C4H6O2', 28]], says: 'ethylene with 28 % vinyl acetate' },
   glass: { blend: [['SiO2', 73], ['Na2O', 14], ['CaO', 9], ['MgO', 4]], says: 'soda-lime glass' },
   fibreglass: { blend: [['SiO2', 54], ['Al2O3', 14], ['CaO', 22], ['B2O3', 8], ['MgO', 2]], says: 'E-glass' },
+  'glass-wool': { blend: [['fibreglass', 100]], says: 'E-glass fibre, loose' },
   fr4: { blend: [['fibreglass', 60], ['epoxy', 40]], says: 'glass cloth in epoxy' },
   cfrp: { blend: [['graphite', 60], ['epoxy', 40]], says: 'carbon fibre in epoxy' },
   'wood-veneer': { blend: [['paper', 50], ['C5H8O4', 25], ['C10H12O3', 25]], says: 'cellulose, hemicellulose and lignin' },
@@ -142,6 +147,15 @@ export const MATERIALS: Record<string, Spec> = {
   fkm: { blend: [['C2H2F2', 60], ['C3F6', 40]], says: 'vinylidene fluoride and hexafluoropropylene, typical shares' },
   asa: { blend: [['C3H3N', 30], ['C8H8', 50], ['C7H12O2', 20]], says: 'acrylonitrile, styrene and butyl acrylate, typical shares' },
   wood: { blend: [['paper', 45], ['C5H8O4', 25], ['C10H12O3', 30]], says: 'softwood: cellulose, hemicellulose and lignin' },
+  // species at 12 % moisture (the moisture their density is given at: 0.12 / 1.12 of the mass is water), the rest oven-dry
+  // wood in typical shares within the Wood Handbook's ranges (ch. 3: cellulose 40 to 50 %; hemicelluloses 25 to 35 % in
+  // hardwoods, less in softwoods; lignin 25 to 35 % in softwoods, 18 to 25 % in hardwoods)
+  'douglas-fir': { blend: [['water', 10.7], ['cellulose', 39.3], ['hemicellulose', 24.1], ['lignin', 25.9]], says: 'Douglas-fir at 12 % moisture: water, then cellulose, hemicelluloses and lignin in a softwood\'s typical shares' },
+  'red-oak': { blend: [['water', 10.7], ['cellulose', 40.2], ['hemicellulose', 26.8], ['lignin', 22.3]], says: 'northern red oak at 12 % moisture: water, then cellulose, hemicelluloses and lignin in a hardwood\'s typical shares' },
+  mdf: { blend: [['wood', 89], ['C2H6N2O2', 10], ['C25H52', 1]], says: 'wood fibre bound with urea-formaldehyde resin (as methylolurea, about 10 %) and a little paraffin wax: typical shares' },
+  // ASTM C150 Type I, typical oxide analysis
+  'portland-cement': { blend: [['CaO', 64], ['SiO2', 21], ['Al2O3', 5.5], ['Fe2O3', 3], ['MgO', 2.5], ['SO3', 3], ['K2O', 1]], says: 'Portland cement, Type I: typical oxide shares (Mindess, Young & Darwin, Concrete, 2nd ed., 2003, ch. 4)' },
+  'sand-quartz': { formula: 'SiO2', says: 'quartz sand' },
   bk7: { blend: [['SiO2', 70], ['B2O3', 10], ['Na2O', 8], ['K2O', 8], ['BaO', 4]], says: 'borosilicate crown glass (N-BK7 type), approximate' },
   'al-2024': { alloy: { Cu: 4.4, Mg: 1.5, Mn: 0.6, Al: 'bal' }, grade: 'AA 2024, nominal' },
   concrete: { blend: [['SiO2', 64], ['CaO', 15], ['Al2O3', 6], ['Fe2O3', 3], ['MgO', 2], ['H2O', 10]], says: 'cement, sand and gravel, as oxides, with the water bound in it; typical shares' },
@@ -159,6 +173,8 @@ export const MATERIALS: Record<string, Spec> = {
 };
 // the molecules of life (src/nexus/life/molecules.ts), each by its formula or blend
 for (const mo of MOLECULES) { if (mo.id in MATERIALS) throw new Error(`molecule ${mo.id} is already a material`); MATERIALS[mo.id] = 'formula' in mo.spec ? { formula: mo.spec.formula, says: mo.name } : { blend: mo.spec.blend, says: mo.says }; }
+// a mix's make-up follows from what goes into its cubic metre (src/data/mixes.ts)
+for (const [id, m] of Object.entries(MIXES)) { const total = mixDensity(m); MATERIALS[id] = { blend: m.parts.map(([p, kg]) => [p, (100 * kg) / total] as [string, number]), says: `${m.name}: ${m.parts.map(([p, kg]) => `${p} ${kg} kg`).join(', ')} in each m³ (${m.source})` }; }
 const isMaterial = (x: string) => x in MATERIALS;
 /** A material's own make-up, one level: [element symbol or material id, %]. */
 export function makeup(id: string): [string, number][] {
@@ -179,3 +195,11 @@ export function elementsOf(id: string, depth = 0): Record<string, number> {
 /** What a material's make-up is said to be (its grade, or what its formula or blend stands for). */
 export function makeupSays(id: string): string { const s = MATERIALS[id]; if (!s) return ''; return 'grade' in s ? s.grade : 'formula' in s ? `${s.formula}${s.says ? `: ${s.says}` : ''}` : s.says; }
 export const elementId = (sym: string) => `el-${sym.toLowerCase()}`;
+
+/** The one element a material is (99 % of it or more by mass), if it is one: so its density and melting point are the
+ *  element's. */
+export function pureElement(id: string): string | null {
+  const m = makeup(id); if (!m.length) return null;
+  const total = m.reduce((a, [, p]) => a + p, 0), [top, pct] = [...m].sort((a, b) => b[1] - a[1])[0]!;
+  return ELEMENTS[top] && pct / total >= 0.99 ? top : null;
+}

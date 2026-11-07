@@ -26,6 +26,7 @@ export function shapeBox(s: Shape | undefined, base?: boolean): THREE.Box3 | nul
   else if ('cone' in s) { const [r, h] = s.cone; min = new THREE.Vector3(-r, -h / 2, -r); max = new THREE.Vector3(r, h / 2, r); }
   else if ('torus' in s) { const [R, r] = s.torus; min = new THREE.Vector3(-R - r, -R - r, -r); max = new THREE.Vector3(R + r, R + r, r); }
   else if ('capsule' in s) { const [r, h] = s.capsule; min = new THREE.Vector3(-r, -h / 2 - r, -r); max = new THREE.Vector3(r, h / 2 + r, r); }
+  else if ('ground' in s) { const g = s.ground; min = new THREE.Vector3(-g.w / 2, Math.min(...g.h) - g.base, -g.d / 2); max = new THREE.Vector3(g.w / 2, Math.max(...g.h), g.d / 2); }
   else if ('loft' in s || 'tube' in s || 'lathe' in s || 'surf' in s || 'prism' in s) { const b = boundsOf(piecesOf(s)); min = new THREE.Vector3(...b.min); max = new THREE.Vector3(...b.max); }
   else return null; // stars, fields and heaps are not solids to join
   const b = new THREE.Box3(min, max); if (base) b.translate(new THREE.Vector3(0, -min.y, 0)); return b;
@@ -46,17 +47,41 @@ const obbOf = (local: THREE.Box3, m: THREE.Matrix4): OBB => {
 
 /** The thing laid out: every part with its turn and place in the world, its oriented box, its bounds, and the bounds of
  *  all it holds. */
-export function layout(root: Part, at = new THREE.Matrix4()): Node[] {
+export function layout(root: Part, at = new THREE.Matrix4(), o: { sealedWhole?: boolean } = {}): Node[] {
   const out: Node[] = [];
   const walk = (p: Part, parent: Node | null, m0: THREE.Matrix4, depth: number, path: string): Node => {
+    // (a sealed part, designed whole and fitted as it comes, laid out as the box round its pieces, not piece by piece: a
+    // traction pack's 3,000 cells are not each worked on by the pipeline, which lays nothing inside a sealed part; one
+    // with a piece that moves in it, a rail's carriage, is laid out piece by piece, so its room to move is still checked)
+    if (o.sealedWhole && p.sealed && p.parts?.length && still(p)) {
+      const local = new THREE.Matrix4().compose(new THREE.Vector3(...(p.at ?? [0, 0, 0])), new THREE.Quaternion().setFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))), new THREE.Vector3(1, 1, 1));
+      const m = m0.clone().multiply(local), lb = sealedBox(p), sub = lb ? lb.clone().applyMatrix4(m) : null;
+      const n: Node = { p, parent, kids: [], m, box: null, obb: null, pieces: [], local: null, sub, depth, path }; out.push(n); parent?.kids.push(n);
+      return n;
+    }
     const local = new THREE.Matrix4().compose(new THREE.Vector3(...(p.at ?? [0, 0, 0])), new THREE.Quaternion().setFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))), new THREE.Vector3(1, 1, 1));
-    const m = m0.clone().multiply(local), lb = shapeBox(p.shape, p.base), box = lb ? lb.clone().applyMatrix4(m) : null;
-    const n: Node = { p, parent, kids: [], m, box, obb: lb ? obbOf(lb, m) : null, pieces: lb ? piecesIn(p.shape, lb, m, p.base) : [], local: lb, sub: box?.clone() ?? null, depth, path }; out.push(n); parent?.kids.push(n);
+    // (a part with an envelope, a winding's wire, is laid out by it: the simple solid it fills, as the rules test it)
+    const sh = p.envelope ?? p.shape, m = m0.clone().multiply(local), lb = shapeBox(sh, p.base), box = lb ? lb.clone().applyMatrix4(m) : null;
+    const n: Node = { p, parent, kids: [], m, box, obb: lb ? obbOf(lb, m) : null, pieces: lb ? piecesIn(sh, lb, m, p.base) : [], local: lb, sub: box?.clone() ?? null, depth, path }; out.push(n); parent?.kids.push(n);
     (p.parts ?? []).forEach((q, i) => { const k = walk(q, n, m, depth + 1, `${path}/${i}`); if (k.sub && !q.detail) n.sub = n.sub ? n.sub.union(k.sub) : k.sub.clone(); });
     return n;
   };
   walk(root, null, at, 0, '');
   return out;
+}
+// (nothing in it moves: no travel, joint, link, swing or spin on any of its pieces)
+const stills = new WeakMap<Part, boolean>();
+function still(p: Part): boolean {
+  let s = stills.get(p); if (s !== undefined) return s;
+  s = !(p.travel || p.joint || p.link || p.movesWith || p.swing || p.spin) && (p.parts ?? []).every(still); stills.set(p, s); return s;
+}
+// (the box round a sealed part's pieces in its own frame, worked out once for each, shared by every place it is fitted)
+const sealedBoxes = new WeakMap<Part, THREE.Box3 | null>();
+function sealedBox(p: Part): THREE.Box3 | null {
+  if (sealedBoxes.has(p)) return sealedBoxes.get(p)!;
+  const b = new THREE.Box3(); let any = false;
+  for (const n of layout({ ...p, at: [0, 0, 0], rot: [0, 0, 0], sealed: undefined }, undefined, { sealedWhole: true })) if (n.sub && !n.parent) { b.copy(n.sub); any = true; }
+  const r = any ? b : null; sealedBoxes.set(p, r); return r;
 }
 
 export const least = (b: THREE.Box3) => { const s = b.getSize(new THREE.Vector3()); return Math.min(s.x, s.y, s.z); };
@@ -64,16 +89,25 @@ const leastH = (o: OBB) => 2 * Math.min(...o.h);
 /** The separating-axis test of two oriented boxes: null if apart by more than tol, else the axis of least overlap and how
  *  far they press into each other along it (negative: a gap within tol). */
 export function sat(A: OBB, B: OBB, tol: number): { normal: THREE.Vector3; depth: number } | null {
-  const T = B.c.clone().sub(A.c), axes: THREE.Vector3[] = [...A.u, ...B.u];
-  for (const a of A.u) for (const b of B.u) { const x = new THREE.Vector3().crossVectors(a, b); if (x.lengthSq() > 1e-10) axes.push(x.normalize()); }
-  let best: { normal: THREE.Vector3; depth: number } | null = null;
-  for (const L of axes) {
-    const ra = A.h[0] * Math.abs(A.u[0].dot(L)) + A.h[1] * Math.abs(A.u[1].dot(L)) + A.h[2] * Math.abs(A.u[2].dot(L));
-    const rb = B.h[0] * Math.abs(B.u[0].dot(L)) + B.h[1] * Math.abs(B.u[1].dot(L)) + B.h[2] * Math.abs(B.u[2].dot(L)), d = Math.abs(T.dot(L)), pen = ra + rb - d;
-    if (pen < -tol) return null;
-    if (!best || pen < best.depth) best = { normal: L.clone().multiplyScalar(T.dot(L) >= 0 ? 1 : -1), depth: pen };
+  // (numbers, not vectors: run for every pair of pieces that might touch, so nothing is made but the answer; the axes
+  // in the same order and the least overlap chosen as before: each box's three, then each pair's cross)
+  const tx = B.c.x - A.c.x, ty = B.c.y - A.c.y, tz = B.c.z - A.c.z, a = A.u, b = B.u;
+  let bx = 0, by = 0, bz = 0, bd = Infinity, found = false;
+  const test = (lx: number, ly: number, lz: number): boolean => {
+    const ra = A.h[0] * Math.abs(a[0].x * lx + a[0].y * ly + a[0].z * lz) + A.h[1] * Math.abs(a[1].x * lx + a[1].y * ly + a[1].z * lz) + A.h[2] * Math.abs(a[2].x * lx + a[2].y * ly + a[2].z * lz);
+    const rb = B.h[0] * Math.abs(b[0].x * lx + b[0].y * ly + b[0].z * lz) + B.h[1] * Math.abs(b[1].x * lx + b[1].y * ly + b[1].z * lz) + B.h[2] * Math.abs(b[2].x * lx + b[2].y * ly + b[2].z * lz);
+    const td = tx * lx + ty * ly + tz * lz, pen = ra + rb - Math.abs(td);
+    if (pen < -tol) return false;
+    if (!found || pen < bd) { found = true; bd = pen; const sg = td >= 0 ? 1 : -1; bx = lx * sg; by = ly * sg; bz = lz * sg; }
+    return true;
+  };
+  for (const u of a) if (!test(u.x, u.y, u.z)) return null;
+  for (const u of b) if (!test(u.x, u.y, u.z)) return null;
+  for (const u of a) for (const v of b) {
+    let cx = u.y * v.z - u.z * v.y, cy = u.z * v.x - u.x * v.z, cz = u.x * v.y - u.y * v.x; const l2 = cx * cx + cy * cy + cz * cz;
+    if (l2 > 1e-10) { const k = 1 / Math.sqrt(l2); cx *= k; cy *= k; cz *= k; if (!test(cx, cy, cz)) return null; }
   }
-  return best;
+  return found ? { normal: new THREE.Vector3(bx, by, bz), depth: bd } : null;
 }
 /** Whether one oriented box lies wholly inside another (all its corners within it). */
 export function within(inner: OBB, outer: OBB, tol = 1e-4): boolean {
@@ -87,21 +121,36 @@ export function within(inner: OBB, outer: OBB, tol = 1e-4): boolean {
 /** The parts that touch: swept along x by their bounds, then tested as oriented boxes. One wholly inside another that
  *  does not hold it (an engine inside a car's shell) is inside it, not joined to it. */
 export function contacts(nodes: Node[], keep: (n: Node) => boolean = () => true): Contact[] {
-  const solid = nodes.filter((n) => n.obb && keep(n)).sort((a, b) => a.box!.min.x - b.box!.min.x), out: Contact[] = [];
+  // (swept along the axis the parts spread furthest over; each part's least size, and each covering piece's bounds,
+  // worked out once, so two pieces whose bounds are apart by more than the tolerance are never tested as boxes)
+  const solid0 = nodes.filter((n) => n.obb && keep(n)), out: Contact[] = [];
+  const all = new THREE.Box3(); for (const n of solid0) all.union(n.box!);
+  const sz = all.getSize(new THREE.Vector3()), ax: 'x' | 'y' | 'z' = sz.x >= sz.y && sz.x >= sz.z ? 'x' : sz.y >= sz.z ? 'y' : 'z';
+  // (each pair said in the order a sweep along x gives, and the list in that order, so what reads it is unchanged)
+  const rank = new Map([...solid0].sort((a, b) => a.box!.min.x - b.box!.min.x).map((n, i) => [n, i]));
+  const solid = solid0.sort((a, b) => a.box!.min[ax] - b.box!.min[ax]), lh = solid.map((n) => leastH(n.obb!)), found: [number, number, Contact][] = [];
+  const bounds = new Map<OBB, number[]>(), boundsOf = (o: OBB): number[] => {
+    let r = bounds.get(o); if (r) return r;
+    const e = [0, 1, 2].map((k) => o.h[0] * Math.abs(o.u[0].getComponent(k)) + o.h[1] * Math.abs(o.u[1].getComponent(k)) + o.h[2] * Math.abs(o.u[2].getComponent(k)));
+    r = [o.c.x - e[0]!, o.c.y - e[1]!, o.c.z - e[2]!, o.c.x + e[0]!, o.c.y + e[1]!, o.c.z + e[2]!]; bounds.set(o, r); return r;
+  };
+  const near = (x: OBB, y: OBB, tol: number) => { const p = boundsOf(x), q = boundsOf(y); return !(q[0]! > p[3]! + tol || q[3]! < p[0]! - tol || q[1]! > p[4]! + tol || q[4]! < p[1]! - tol || q[2]! > p[5]! + tol || q[5]! < p[2]! - tol); };
   for (let i = 0; i < solid.length; i++) {
-    const a = solid[i]!, A = a.box!;
+    const A = solid[i]!.box!;
     for (let j = i + 1; j < solid.length; j++) {
-      const b = solid[j]!, B = b.box!, tol = Math.max(0.002, 0.01 * Math.min(leastH(a.obb!), leastH(b.obb!)));
-      if (B.min.x > A.max.x + tol) break;
-      if (B.min.y > A.max.y + tol || B.max.y < A.min.y - tol || B.min.z > A.max.z + tol || B.max.z < A.min.z - tol) continue;
+      const B = solid[j]!.box!, tol = Math.max(0.002, 0.01 * Math.min(lh[i]!, lh[j]!));
+      if (B.min[ax] > A.max[ax] + 0.01 * lh[i]! + 0.002) break;
+      if (B.min.x > A.max.x + tol || B.max.x < A.min.x - tol || B.min.y > A.max.y + tol || B.max.y < A.min.y - tol || B.min.z > A.max.z + tol || B.max.z < A.min.z - tol) continue;
+      const swap = rank.get(solid[i]!)! > rank.get(solid[j]!)!, a = swap ? solid[j]! : solid[i]!, b = swap ? solid[i]! : solid[j]!;
       // (between their covering pieces: a part inside a kart's frame touches the tubes it meets, not the frame's bounds)
       let s: { normal: THREE.Vector3; depth: number } | null = null, pa = a.obb!, pb = b.obb!;
-      for (const x of a.pieces) for (const y of b.pieces) { const t = sat(x, y, tol); if (t && (!s || t.depth > s.depth)) { s = t; pa = x; pb = y; } }
+      for (const x of a.pieces) for (const y of b.pieces) { if ((a.pieces.length > 1 || b.pieces.length > 1) && !near(x, y, tol)) continue; const t = sat(x, y, tol); if (t && (!s || t.depth > s.depth)) { s = t; pa = x; pb = y; } }
       if (!s) continue;
       if (b.parent !== a && a.parent !== b && a.pieces.length === 1 && b.pieces.length === 1 && ((within(a.obb!, b.obb!) && !seated(b, a)) || (within(b.obb!, a.obb!) && !seated(a, b)))) continue;
-      out.push({ a, b, normal: s.normal, depth: s.depth, mid: pa.c.clone().add(pb.c).multiplyScalar(0.5), pa, pb });
+      found.push([rank.get(a)!, rank.get(b)!, { a, b, normal: s.normal, depth: s.depth, mid: pa.c.clone().add(pb.c).multiplyScalar(0.5), pa, pb }]);
     }
   }
+  for (const f of found.sort((x, y) => x[0] - y[0] || x[1] - y[1])) out.push(f[2]);
   return out;
 }
 // a ring (a tyre: a torus or a turned section) holds what sits in its bore on its own axis (a rim), though its box holds
@@ -143,3 +192,51 @@ export function grownOf(nodes: Node[]): (n: Node) => boolean {
 /** A world point or direction brought into a part's own frame (to place what is added to it). */
 export const toLocal = (n: Node, world: THREE.Vector3) => world.clone().applyMatrix4(n.m.clone().invert());
 export const dirToLocal = (n: Node, world: THREE.Vector3) => world.clone().transformDirection(n.m.clone().invert());
+
+/** A path clear of what is in its way: the first of the ways given (each a polyline) whose every point, sampled every
+ *  5 mm, is outside every box (each grown by the radius of what runs along it and a clearance). Points within `near` of
+ *  either end are not tried (where it is pushed on to what it joins). Null when none is clear. */
+export function clearPath(ways: THREE.Vector3[][], boxes: OBB[], r: number, near = 0.03): THREE.Vector3[] | null {
+  // (each box tried only against the segments that pass within its bounding sphere and the clearance)
+  const reach = boxes.map((b) => Math.hypot(b.h[0], b.h[1], b.h[2]) + r), seg = new THREE.Line3(), on = new THREE.Vector3();
+  const inside = (q: THREE.Vector3, bs: OBB[]) => bs.some((b) => { const d = q.clone().sub(b.c); return Math.abs(d.dot(b.u[0])) < b.h[0] + r && Math.abs(d.dot(b.u[1])) < b.h[1] + r && Math.abs(d.dot(b.u[2])) < b.h[2] + r; });
+  for (const w of ways) {
+    const a = w[0]!, z = w[w.length - 1]!; let ok = true;
+    for (let i = 1; i < w.length && ok; i++) {
+      const p0 = w[i - 1]!, p1 = w[i]!, n = Math.max(1, Math.ceil(p0.distanceTo(p1) / 0.005)); seg.set(p0, p1);
+      const bs = boxes.filter((b, k) => seg.closestPointToPoint(b.c, true, on).distanceTo(b.c) < reach[k]!);
+      if (!bs.length) continue;
+      for (let k = 0; k <= n && ok; k++) { const q = p0.clone().lerp(p1, k / n); if (q.distanceTo(a) < near || q.distanceTo(z) < near) continue; if (inside(q, bs)) ok = false; }
+    }
+    if (ok) return w;
+  }
+  return null;
+}
+
+
+// ---- what is near: a spatial index over points ---------------------------------------------------------------------------
+/** Points indexed by where they are (proximity hashing): each in a cube of side `h`, so what lies near a place, or inside a
+ *  box, is found by looking only in the cubes there, not at every point. For any thing's points: a skin a kit is fitted to,
+ *  parts a checker looks among, agents a sense reaches. */
+export class PointGrid<T> {
+  private readonly cells = new Map<number, T[]>(); private readonly lo: [number, number, number]; private readonly n: [number, number, number];
+  constructor(items: readonly T[], private readonly at: (t: T) => readonly [number, number, number], readonly h = 0.05) {
+    const lo: [number, number, number] = [Infinity, Infinity, Infinity], hi: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+    for (const t of items) { const p = at(t); for (let j = 0; j < 3; j++) { lo[j] = Math.min(lo[j]!, p[j]!); hi[j] = Math.max(hi[j]!, p[j]!); } }
+    if (!items.length) { this.lo = [0, 0, 0]; this.n = [1, 1, 1]; return; }
+    this.lo = lo; this.n = [0, 1, 2].map((j) => Math.floor((hi[j]! - lo[j]!) / h) + 1) as [number, number, number];
+    for (const t of items) { const k = this.keyOf(at(t)); let c = this.cells.get(k); if (!c) this.cells.set(k, (c = [])); c.push(t); }
+  }
+  private cell(v: number, j: number): number { return Math.min(this.n[j]! - 1, Math.max(0, Math.floor((v - this.lo[j]!) / this.h))); }
+  private keyOf(p: readonly [number, number, number]): number { return (this.cell(p[0], 0) * this.n[1] + this.cell(p[1], 1)) * this.n[2] + this.cell(p[2], 2); }
+  /** Every point inside the box (its edges in), each axis's bounds open where not finite. */
+  inBox(lo: readonly [number, number, number], hi: readonly [number, number, number]): T[] {
+    const a = [0, 1, 2].map((j) => this.cell(lo[j]!, j)), b = [0, 1, 2].map((j) => this.cell(hi[j]!, j)), out: T[] = [];
+    for (let i = a[0]!; i <= b[0]!; i++) for (let j = a[1]!; j <= b[1]!; j++) for (let k = a[2]!; k <= b[2]!; k++) {
+      const c = this.cells.get((i * this.n[1] + j) * this.n[2] + k); if (!c) continue;
+      for (const t of c) { const p = this.at(t); if (p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1] && p[2] >= lo[2] && p[2] <= hi[2]) out.push(t); } }
+    return out;
+  }
+  /** Every point within r of p. */
+  near(p: readonly [number, number, number], r: number): T[] { return this.inBox([p[0] - r, p[1] - r, p[2] - r], [p[0] + r, p[1] + r, p[2] + r]).filter((t) => { const q = this.at(t); return (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 + (q[2] - p[2]) ** 2 <= r * r; }); }
+}

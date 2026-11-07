@@ -146,7 +146,6 @@ const LOOK: Record<string, { c: number; clear?: number; glow?: number; rough?: n
   fibre: { c: C.muscle }, spindle: { c: 0xd06058 }, star: { c: C.glia }, neuron: { c: C.neuron, glow: 0.12 }, sperm: { c: 0xe8e8f4 }, sphere: { c: C.fat, clear: 0.9 }, motor: { c: 0x9ab0c8 }, sarcomere: { c: C.muscle }, axon: { c: C.neuron }, nephron: { c: C.kidney },
   hair: { c: 0x3a2a1e }, cochlea: { c: C.bone }, leaf: { c: C.leaf }, spirillum: { c: C.bacterium }, mycelium: { c: C.fungus }, ball: { c: C.protein }, valve: { c: C.tendon }, gut: { c: C.gut }, vessels: { c: C.artery }, blood: { c: C.blood }, skin: { c: C.skin },
 };
-export const FORMS = new Set([...Object.keys(FIELDS), ...Object.keys(LOOK)]);
 
 // ---- hard forms: lathes and tubes -----------------------------------------------------------------------------------
 /** A long bone along y: shaft between two knobbly ends; a femur or humerus with its head set off on a neck. */

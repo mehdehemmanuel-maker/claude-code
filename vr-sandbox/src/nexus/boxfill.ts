@@ -1,5 +1,5 @@
 // The share of its box a shape fills, by geometry alone, and the least box that holds a volume: what lets a size and a
-// mass check each other (src/nexus/derive.ts) and lets a table give a part's proportions and leave its size to its mass.
+// mass check each other and lets a table give a part's proportions and leave its size to its mass.
 
 /** The shape a look draws, and the share of its box it fills: a block or sheet all of it (and anything drawn as a slab:
  *  a gram's swatch, a mat of mycelium, blood as a pool), a hexagonal prism √3/2, a disc, rod or tube a cylinder's π/4,

@@ -1,0 +1,26 @@
+{
+ "task": "01.I1",
+ "verdict": "pass",
+ "model": "claude-sonnet",
+ "date": "2026-11-01",
+ "commit": "61681e9",
+ "ran": [
+  "git checkout --detach 61681e9; ln -s node_modules; git rev-parse HEAD = 61681e9be7695c26994fe2a3db6f2215d9fa0a79",
+  "Read plan/specs/00-structure/evaluator.md and the I1 entry in plan/specs/01-interfaces/tasks.json. The check reads: 'the routing test passes with interfaces.ts named; the decision record exists'. Read the prior fail verdict (verdicts/01.I1.json, commit d20a29c) and the fix commit's diff: tests/nexus/domains.test.ts now (a) requires a file directly in src/nexus/ to be named by its own file name (the folder clause no longer excuses it), (b) asserts both CLAUDE.md and docs/OWNERS.md match /interfaces\\.ts/, (c) fails when a task in tasks.json or spec.md cites a decision number with no file in plan/decisions/.",
+  "npx vitest run tests/nexus/domains.test.ts -t 'every source file has an owner in the docs': 1 passed. Same with -t 'every rule names its check and its task': 1 passed. Whole file on the clean tree at the start of judging and again after all restores: 44 passed (44).",
+  "grep: CLAUDE.md:91 is a table row for `nexus/interfaces.ts` (spec 01; decisions 0004, 0014); docs/OWNERS.md:19 is a row for `src/nexus/interfaces.ts`; src/nexus/interfaces.ts exists (132 lines: the Interface record and interfacesOf). These are the only mentions of interfaces.ts in either doc.",
+  "Read plan/decisions/0004-interfaces-owner.md (accepted 2026-10-31) and 0014-interfaces-read-first.md (accepted 2026-11-01, refines 0004). Each has Context, Options (two each), Choice, The assumption it rests on, and When to test it again, all non-empty. tasks.json I1 evidence cites 'decisions 0004 and 0014'.",
+  "Probe python3 -I over src/nexus/*.ts (73 files): at HEAD~1's CLAUDE.md+OWNERS.md 17 files are not named by their own name (anatomy, boards, boxfill, breakdown-main, built, creatures, dimension, evaluate, flows, identity, law, photo-marks, realize, reconstruct, status, term, threads), matching the commit message's 17; at HEAD 0 are unnamed and 0 are named only as a substring of a longer name.",
+  "git status --short after every restore: only the node_modules symlink from setup; git diff empty. Verdict file in the worktree not touched."
+ ],
+ "planted": [
+  "Deleted every line naming interfaces.ts from CLAUDE.md and docs/OWNERS.md (grep count 0 in both): routing test FAILED ('CLAUDE.md names interfaces.ts: expected ... to match /interfaces\\.ts/'). Caught. This is the fault the first verdict found uncaught. Restored from backup.",
+  "Removed the interfaces.ts row from docs/OWNERS.md only (CLAUDE.md kept): routing test FAILED ('docs/OWNERS.md names interfaces.ts'). Caught. Restored. (The CLAUDE.md-only deletion is covered by the first plant, which failed on CLAUDE.md first; the assertion loops over both docs.)",
+  "Planted src/nexus/zzi1sonnetstray.ts, a new file directly in src/nexus/ that no row names: routing test FAILED ('files no owner row names: nexus/zzi1sonnetstray.ts'). Caught. This is the second fault the first verdict found uncaught (the folder clause excused every file in src/nexus/). Removed.",
+  "Moved decision 0004 out of plan/decisions/: rules test FAILED ('01-interfaces/tasks.json cites decision 0004, which does not exist'). Caught. Restored.",
+  "Moved decision 0014 out of plan/decisions/: rules test FAILED ('01-interfaces/tasks.json cites decision 0014, which does not exist'). Caught. Restored.",
+  "Deleted the one line of 0004's '## Choice' body: rules test FAILED ('0004-interfaces-owner.md: \"## Choice\" is empty'). Caught. Restored with git checkout.",
+  "Caveat found, not a failure of the words of the check: removed the text 'decisions 0004 and 0014; ' from I1's evidence in tasks.json AND moved both decision files away together: the rules test and the whole domains.test.ts (44 tests) PASSED. The rule is 'a decision a task cites by number must exist', so it protects 0004 and 0014 only while tasks.json or spec.md cites them (design.md cites 0004 by path, which the regex does not read). Deleting the records alone is caught; hiding the cite and the records in one edit is not. Restored."
+ ],
+ "missing": []
+}

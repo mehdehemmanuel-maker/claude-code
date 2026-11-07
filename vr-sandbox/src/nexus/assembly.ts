@@ -1,0 +1,470 @@
+// Assemblies: things placed, not copied. A part (src/nexus/kits.ts) or another assembly is placed at a place, turned, at
+// a scale, and with what is changed about it there (its colour, its material, its finish, its size, hidden); the thing
+// itself is shared by every place it is put, never copied. So a motor saved once and put on a drone four times, the drone
+// put a hundred times in a swarm, and the swarm over a city of a thousand buildings are each stored once: what grows with
+// the city is the list of places, and what is drawn is one instanced mesh for each distinct piece (src/nexus/view/
+// space3d.ts). What it weighs, what it spans and how many pieces it places are worked out once for each distinct thing
+// and change, and kept with it.
+//
+// A part's own tree (a bolt's head, shank and thread) is laid out once into its leaves, each with its matrix in the
+// part's frame (make/space.ts's layout); an assembly composes matrices down to them.
+
+import * as THREE from 'three';
+import type { Look } from './appearance';
+import type { Part, Port, V3 } from './kits';
+import { densityKg, massOf } from './mass';
+import { layout } from './make/space';
+
+/** What is changed about a thing where it is placed: on every piece, or those whose names a pattern finds. The change
+ *  made further out wins (a swarm's colour over the drone's), as a variant of a whole thing should. */
+/**
+ * A level (a temperature, a voltage, from 0 to 1) varying through one piece, as the law that carries it shapes it between
+ * the points where it is known, the way a string's shape between two hands is set by the string's own law: the level at
+ * the piece's middle (its frame's origin) and at each face where it meets a neighbour or its next slice (`at`, in its
+ * frame). Steady conduction through a piece with no source in it and no loss from its sides is Fourier's law in one
+ * dimension: the level falls in a straight line from the middle to each face. Each point takes the face it lies toward
+ * (its share along the line from the middle to that face, 0 at the middle, 1 at the face), blended where several faces
+ * lie the same way; a side with no face (an end touching nothing) carries nothing and stays at the middle's level.
+ * Exact along a bar or a stack; across a piece met at several patches, an estimate. Or, for a piece worked out in slices
+ * along an axis (`along`, a unit direction in its frame), the levels known along it (`pts`: the distance along it from its
+ * frame's origin, and the level there: each slice's middle and faces), straight between each two as the same law gives.
+ */
+export type Field = { v: number; faces: { at: V3; v: number }[] } | { along: V3; pts: [number, number][] };
+/** The field's level at a point in the piece's frame. */
+export function fieldAt(f: Field, x: number, y: number, z: number): number {
+  if ('along' in f) {
+    const t = x * f.along[0] + y * f.along[1] + z * f.along[2], p = f.pts;
+    if (t <= p[0]![0]) return p[0]![1]; if (t >= p[p.length - 1]![0]) return p[p.length - 1]![1];
+    let lo = 0, hi = p.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (p[m]![0] <= t) lo = m; else hi = m; }
+    const [ta, va] = p[lo]!, [tb, vb] = p[hi]!; return tb > ta ? va + ((t - ta) / (tb - ta)) * (vb - va) : vb;
+  }
+  let w = 0, acc = 0;
+  for (const c of f.faces) {
+    const L2 = c.at[0] * c.at[0] + c.at[1] * c.at[1] + c.at[2] * c.at[2]; if (!(L2 > 0)) continue;
+    const t = (x * c.at[0] + y * c.at[1] + z * c.at[2]) / L2; if (t <= 0) continue;
+    const k = t ** 4; w += k; acc += k * (f.v + Math.min(1, t) * (c.v - f.v));
+  }
+  return w > 0 ? acc / w : f.v;
+}
+/** A level from 0 to 1 as heat maps are read: blue at 0 through green and yellow to red at 1. */
+export function levelColour(x: number): number { return new THREE.Color().setHSL((2 / 3) * (1 - Math.max(0, Math.min(1, x))), 0.85, 0.5).getHex(); }
+
+/**
+ * A piece drawn bent, as the beam it was worked out as bends between the points where its movement is known: each slice's
+ * middle (`pts`: its distance `t` along the axis `along` from the piece's frame's origin, its movement `d` and turn `r`,
+ * in the piece's frame, already scaled to be seen). Between two, Euler and Bernoulli's beam carrying load only at its ends
+ * takes the cubic its two ends' movements and slopes set (Hermite's: the slope of the movement along the axis is the turn
+ * crossed with it); its stretch is straight between; each section turns as a whole, by the turn between its ends'. Past
+ * the last, carried on as it moves there. Coloured by how far each point moves, over `most`.
+ */
+export interface Bend { along: V3; pts: { t: number; d: V3; r: V3 }[]; most: number }
+/** How far a point in the piece's frame moves, bent as `Bend` says. */
+export function bentAt(b: Bend, x: number, y: number, z: number): V3 {
+  const u = b.along, p = b.pts, t = x * u[0] + y * u[1] + z * u[2], q: V3 = [x - t * u[0], y - t * u[1], z - t * u[2]];
+  const cross = (a: V3, c: V3): V3 => [a[1] * c[2] - a[2] * c[1], a[2] * c[0] - a[0] * c[2], a[0] * c[1] - a[1] * c[0]];
+  let d: V3, r: V3;
+  const end = t <= p[0]!.t ? p[0]! : t >= p[p.length - 1]!.t ? p[p.length - 1]! : null;
+  if (end || p.length === 1) {
+    const e = end ?? p[0]!, s = cross(e.r, u), h = t - e.t; d = [e.d[0] + s[0] * h, e.d[1] + s[1] * h, e.d[2] + s[2] * h]; r = e.r;
+  } else {
+    let lo = 0, hi = p.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (p[m]!.t <= t) lo = m; else hi = m; }
+    const a = p[lo]!, c = p[hi]!, L = c.t - a.t, x1 = L > 0 ? (t - a.t) / L : 0, x2 = x1 * x1, x3 = x2 * x1;
+    const h00 = 2 * x3 - 3 * x2 + 1, h10 = x3 - 2 * x2 + x1, h01 = -2 * x3 + 3 * x2, h11 = x3 - x2, ma = cross(a.r, u), mc = cross(c.r, u);
+    d = [0, 1, 2].map((i) => h00 * a.d[i]! + h10 * L * ma[i]! + h01 * c.d[i]! + h11 * L * mc[i]!) as V3;
+    // (its stretch straight between, as a bar's is)
+    const ax = (1 - x1) * (a.d[0] * u[0] + a.d[1] * u[1] + a.d[2] * u[2]) + x1 * (c.d[0] * u[0] + c.d[1] * u[1] + c.d[2] * u[2]), now = d[0] * u[0] + d[1] * u[1] + d[2] * u[2];
+    d = [d[0] + (ax - now) * u[0], d[1] + (ax - now) * u[1], d[2] + (ax - now) * u[2]];
+    r = [0, 1, 2].map((i) => (1 - x1) * a.r[i]! + x1 * c.r[i]!) as V3;
+  }
+  const w = cross(r, q); return [d[0] + w[0], d[1] + w[1], d[2] + w[2]];
+}
+
+export interface Override { /** drawn over everything, seen through what is in front (a marker: what flows across a contact inside a thing) */ overlay?: boolean; /** a level varying through the piece, drawn by `levelColour` at every point (over its colour) */ field?: Field; /** drawn bent, and coloured by how far each point moves */ bend?: Bend; color?: number; mat?: string; finish?: string; /** its look's layers (appearance.ts), over its own */ look?: Look; hide?: boolean; /** stretched along its own x, y, z */ scale?: V3; /** a pattern on the pieces' names ("motor", "prop|blade") */ path?: string }
+export interface Placed { of: Part | Assembly; at: V3; rot: V3; s: number; over?: Override }
+export interface Assembly {
+  /** the inventory item it is, where it is one (a cell, a battery), so a tree made of it says so */ item?: string;
+  name: string; items: Placed[]; ports?: Port[]; says?: string;
+  /** Repeated for ever on a lattice (`step` apart along x, y and z; 0: not along that one), each cell one of `variants`
+   *  picked by a hash of the cell and the seed: drawn only round where it is seen from. Its items are the cell at the
+   *  origin, so what it weighs and spans is one cell's. */
+  tiled?: { step: V3; variants: (Part | Assembly)[]; seed: number };
+}
+/** The variant a cell of a lattice gets: the same cell and seed, the same one, wherever it is drawn from. */
+export function cellPick(i: number, j: number, k: number, seed: number, n: number): number {
+  let h = (Math.imul(i | 0, 73856093) ^ Math.imul(j | 0, 19349663) ^ Math.imul(k | 0, 83492791) ^ Math.imul(seed | 0, 2654435761)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 2246822507) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0; h = (h ^ (h >>> 16)) >>> 0;
+  return n > 0 ? h % n : 0;
+}
+
+export const isAssembly = (x: unknown): x is Assembly => !!x && typeof x === 'object' && Array.isArray((x as Assembly).items);
+export const isPart = (x: unknown): x is Part => !!x && typeof x === 'object' && !isAssembly(x) && typeof (x as Part).name === 'string';
+/** A part, or an assembly, as an assembly: a part alone is one placed at the origin. */
+export const place = (of: Part | Assembly, at: V3 = [0, 0, 0], rot: V3 = [0, 0, 0], s = 1, over?: Override): Placed => ({ of, at, rot, s, ...(over ? { over } : {}) });
+
+/** (Kept per placement, as worked out from these: a placement changed after is worked out again. Read it; never change it.) */
+const matKept = new WeakMap<object, { at: V3; rot: V3; s: number; k?: V3; m: THREE.Matrix4 }>();
+export function matrixOf(p: { at: V3; rot: V3; s: number; over?: Override }): THREE.Matrix4 {
+  const k = p.over?.scale ?? [1, 1, 1], was = matKept.get(p);
+  if (was && was.at === p.at && was.rot === p.rot && was.s === p.s && was.k === p.over?.scale) return was.m;
+  const m = madeMatrix(p, k); matKept.set(p, { at: p.at, rot: p.rot, s: p.s, k: p.over?.scale, m }); return m;
+}
+function madeMatrix(p: { at: V3; rot: V3; s: number }, k: V3): THREE.Matrix4 {
+  return new THREE.Matrix4().compose(new THREE.Vector3(...p.at), new THREE.Quaternion().setFromEuler(new THREE.Euler(...p.rot)), new THREE.Vector3(p.s * k[0], p.s * k[1], p.s * k[2]));
+}
+
+// ---- a part's leaves --------------------------------------------------------------------------------------------------
+/** A piece that is drawn: a part with a shape, its matrix in the frame of the part it was laid out from. */
+export interface Leaf { part: Part; m: THREE.Matrix4 }
+const leavesKept = new WeakMap<Part, Leaf[]>();
+/** A part's drawn pieces, laid out once and kept with it. */
+export function leavesOf(p: Part): Leaf[] {
+  let l = leavesKept.get(p);
+  if (!l) { const inv = new THREE.Matrix4().compose(new THREE.Vector3(...(p.at ?? [0, 0, 0])), new THREE.Quaternion().setFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))), new THREE.Vector3(1, 1, 1)).invert(); l = layout(p).filter((n) => n.p.shape).map((n) => ({ part: n.p, m: inv.clone().multiply(n.m) })); leavesKept.set(p, l); }
+  return l;
+}
+
+// ---- flattening: every piece placed, with its matrix and what is changed about it ---------------------------------------
+export interface Flat { leaf: Part; m: THREE.Matrix4; over: Override }
+const patterns = new Map<string, RegExp>();
+const matches = (o: Override, name: string) => { if (!o.path) return true; let r = patterns.get(o.path); if (!r) { r = new RegExp(o.path, 'i'); patterns.set(o.path, r); } return r.test(name); };
+/** What is changed about one piece: every change it is under that finds it, the innermost first, so the outermost wins.
+ *  (A stretch is not here: it is in the matrix.) */
+export function effective(overs: Override[], name: string): Override {
+  const out: Override = {};
+  for (let i = overs.length - 1; i >= 0; i--) { const o = overs[i]!; if (!matches(o, name)) continue; for (const k of ['color', 'mat', 'finish', 'look', 'hide', 'field', 'bend', 'overlay'] as const) if (o[k] !== undefined) (out as Record<string, unknown>)[k] = o[k]; }
+  return out;
+}
+/** Every drawn piece of an assembly, placed: what renders it and what checks it read. `visit` returns false to stop. */
+export function flatten(a: Part | Assembly, visit: (f: Flat) => boolean | void, at = new THREE.Matrix4(), overs: Override[] = []): boolean {
+  if (isPart(a)) {
+    for (const l of leavesOf(a)) { const o = effective(overs, l.part.name); if (o.hide) continue; if (visit({ leaf: l.part, m: at.clone().multiply(l.m), over: o }) === false) return false; }
+    return true;
+  }
+  for (const it of a.items) if (!flatten(it.of, visit, at.clone().multiply(matrixOf(it)), it.over ? [...overs, it.over] : overs)) return false;
+  return true;
+}
+
+// ---- what it weighs, spans and holds, worked out once per distinct thing ------------------------------------------------
+const massKept = new WeakMap<object, Map<string, number>>();
+/** Its mass, kg: each piece's own mass (by its shape and material, or the material placed over it), times the volume its
+ *  scale gives it, summed. Worked out once for each distinct thing under each set of changes. */
+export function massOfAll(a: Part | Assembly, overs: Override[] = []): number {
+  const key = JSON.stringify(overs.map((o) => [o.mat, o.hide, o.path])), byOver = massKept.get(a) ?? massKept.set(a, new Map()).get(a)!;
+  const was = byOver.get(key); if (was !== undefined) return was;
+  let m = 0;
+  if (isPart(a)) {
+    for (const l of leavesOf(a)) {
+      const o = effective(overs, l.part.name); if (o.hide) continue;
+      const own = massOf({ ...l.part, parts: [] }), rho = l.part.mat ? densityKg(l.part.mat) : undefined, rhoNew = o.mat ? densityKg(o.mat) : undefined;
+      m += (rho && rhoNew ? (own * rhoNew) / rho : own) * Math.abs(l.m.determinant());
+    }
+    // (and what is weighed but not drawn: a part with a mass and no shape, as a machine's "rest of it")
+    const unseen = (q: Part): number => (!q.shape && q.kg !== undefined && !effective(overs, q.name).hide ? q.kg : 0) + (q.parts ?? []).reduce((t, c) => t + unseen(c), 0);
+    m += unseen(a);
+  } else for (const it of a.items) { const k = it.over?.scale ?? [1, 1, 1]; m += massOfAll(it.of, it.over ? [...overs, it.over] : overs) * Math.abs(it.s ** 3 * k[0] * k[1] * k[2]); }
+  byOver.set(key, m); return m;
+}
+const boundsKept = new WeakMap<object, THREE.Box3>();
+/** The box round it, in its own frame. */
+export function boundsOfAll(a: Part | Assembly): THREE.Box3 {
+  const was = boundsKept.get(a); if (was) return was;
+  const b = new THREE.Box3();
+  if (isPart(a)) { for (const n of layout({ ...a, at: [0, 0, 0], rot: [0, 0, 0] })) if (n.box) b.union(n.box); }
+  else for (const it of a.items) { const c = boundsOfAll(it.of); if (!c.isEmpty()) b.union(c.clone().applyMatrix4(matrixOf(it))); }
+  boundsKept.set(a, b); return b;
+}
+const countKept = new WeakMap<object, number>();
+/** How many pieces it places, all the way down (a city's every bolt). */
+export function placedCount(a: Part | Assembly): number {
+  const was = countKept.get(a); if (was !== undefined) return was;
+  const n = isPart(a) ? leavesOf(a).length : a.items.reduce((t, it) => t + placedCount(it.of), 0);
+  countKept.set(a, n); return n;
+}
+/** How many distinct things it is made of (each stored once however often it is placed). */
+export function distinctCount(a: Part | Assembly): number {
+  const seen = new Set<object>(), walk = (x: Part | Assembly) => { if (seen.has(x)) return; seen.add(x); if (isAssembly(x)) for (const it of x.items) walk(it.of); };
+  walk(a); return seen.size;
+}
+
+// ---- patterns: one thing placed many times -----------------------------------------------------------------------------
+/** In a row: n of it, each `step` on from the last. */
+export function arrayLine(of: Part | Assembly, n: number, step: V3, name = `${n} × ${of.name}`): Assembly {
+  return { name, items: Array.from({ length: Math.max(0, Math.round(n)) }, (_, i) => place(of, [step[0] * i, step[1] * i, step[2] * i])) };
+}
+/** Round an axis: n of it on a circle of radius r, each turned to face out (about y, the way a drone's arms go round). */
+export function arrayCircle(of: Part | Assembly, n: number, r: number, turn = true, name = `${n} × ${of.name} round`): Assembly {
+  const k = Math.max(0, Math.round(n));
+  return { name, items: Array.from({ length: k }, (_, i) => { const a = (2 * Math.PI * i) / k; return place(of, [r * Math.cos(a), 0, r * Math.sin(a)], [0, turn ? -a : 0, 0]); }) };
+}
+/** On a grid: nx by nz (and ny high), `step` apart, centred on the origin in x and z. With `vary`, each one's height is
+ *  stretched by a factor between 1 − vary and 1 + vary, drawn from the seed: the same seed, the same street. */
+export function arrayGrid(of: Part | Assembly, nx: number, nz: number, step: V3, ny = 1, name = `${nx} × ${nz} × ${of.name}`, vary = 0, seed = 1): Assembly {
+  const items: Placed[] = [], X = Math.round(nx), Z = Math.round(nz), Y = Math.max(1, Math.round(ny)); let r = (Math.abs(Math.round(seed)) % 2147483646) + 1;
+  const next = () => { r = (r * 48271) % 2147483647; return r / 2147483647; };
+  for (let y = 0; y < Y; y++) for (let x = 0; x < X; x++) for (let z = 0; z < Z; z++) {
+    const p = place(of, [(x - (X - 1) / 2) * step[0], y * step[1], (z - (Z - 1) / 2) * step[2]]);
+    if (vary > 0) p.over = { scale: [1, Math.max(0.05, 1 + vary * (2 * next() - 1)), 1] };
+    items.push(p);
+  }
+  return { name, items };
+}
+/** It and its mirror image across a plane through the origin. */
+export function mirror(of: Part | Assembly, axis: 'x' | 'y' | 'z', name = `${of.name} and its mirror`): Assembly {
+  const k: V3 = [axis === 'x' ? -1 : 1, axis === 'y' ? -1 : 1, axis === 'z' ? -1 : 1];
+  return { name, items: [place(of), { ...place(of), over: { scale: k } }] };
+}
+/** Several things as one, each where it already is. */
+export function combine(things: (Part | Assembly)[], name = 'assembly'): Assembly { return { name, items: things.map((t) => place(t)) }; }
+
+// ---- frames: where a thing is set on another ----------------------------------------------------------------------------
+/** A frame: a named place on a thing, facing n with u up (a door's middle facing out of the room, a wall's opening). */
+export const frame = (name: string, at: V3, n: V3 = [0, 0, 1], u: V3 = [0, 1, 0]): Port => ({ name, sex: 'frame', thread: '', pattern: [], at, n, u, t: 0 });
+const framesKept = new WeakMap<object, Port[]>();
+/** Every frame on a thing, in its own frame: its own, and those of what is placed in it, three levels down, named by the
+ *  path to them ("front wall/opening"). */
+export function framesOf(t: Part | Assembly, depth = 3): Port[] {
+  const was = framesKept.get(t); if (was && depth === 3) return was;
+  const own = (t.ports ?? []).filter((q) => q.n && q.u);
+  const out = [...own];
+  if (isAssembly(t) && depth > 0) for (const it of t.items) {
+    const m = matrixOf(it), r = new THREE.Matrix4().extractRotation(m);
+    for (const q of framesOf(it.of, depth - 1)) {
+      const at = new THREE.Vector3(...q.at).applyMatrix4(m), n = new THREE.Vector3(...q.n).applyMatrix4(r).normalize(), u = new THREE.Vector3(...q.u).applyMatrix4(r).normalize();
+      out.push({ ...q, name: `${it.of.name}/${q.name}`, at: [at.x, at.y, at.z], n: [n.x, n.y, n.z], u: [u.x, u.y, u.z] });
+    }
+  }
+  if (depth === 3) framesKept.set(t, out);
+  return out;
+}
+/** A frame found by its name, or by the end of its path ("opening" finds "front wall/opening"). */
+export function findFrame(t: Part | Assembly, name: string): Port | undefined {
+  const all = framesOf(t); return all.find((q) => q.name === name) ?? all.find((q) => q.name.endsWith(`/${name}`));
+}
+/** A thing placed so its frame `fa` lands on `fb` of what it goes on: `into` turns it to face as `fb` faces (a door in its
+ *  opening), `against` turns it to face back at `fb` (a plug into its socket, a face on a face). Its up goes to `fb`'s up. */
+export function mateTo(t: Part | Assembly, fa: string, onto: Part | Assembly, fb: string, how: 'into' | 'against' = 'into', s = 1): Placed | string {
+  const a = findFrame(t, fa), b = findFrame(onto, fb);
+  if (!a) return `${t.name} has no frame "${fa}" (it has ${framesOf(t).map((q) => q.name).join(', ') || 'none'})`;
+  if (!b) return `${onto.name} has no frame "${fb}" (it has ${framesOf(onto).map((q) => q.name).join(', ') || 'none'})`;
+  const basis = (n: THREE.Vector3, u: THREE.Vector3) => { const w = n.clone().cross(u).normalize(), u2 = w.clone().cross(n).normalize(); return new THREE.Matrix4().makeBasis(n, u2, w); };
+  const na = new THREE.Vector3(...a.n).normalize(), ua = new THREE.Vector3(...a.u).normalize(), nb = new THREE.Vector3(...b.n).normalize().multiplyScalar(how === 'into' ? 1 : -1), ub = new THREE.Vector3(...b.u).normalize();
+  const R = basis(nb, ub).multiply(basis(na, ua).transpose()), e = new THREE.Euler().setFromRotationMatrix(R);
+  const off = new THREE.Vector3(...a.at).multiplyScalar(s).applyMatrix4(R), at = new THREE.Vector3(...b.at).sub(off);
+  const r6 = (x: number) => Math.round(x * 1e9) / 1e9;
+  return place(t, [r6(at.x), r6(at.y), r6(at.z)], [r6(e.x), r6(e.y), r6(e.z)], s);
+}
+
+// ---- a part's tree opened: each part that holds parts an assembly of them, so any of them can be taken out, swapped or
+// moved apart without copying the rest ------------------------------------------------------------------------------------
+const openedKept = new WeakMap<Part, Map<string, Assembly>>(), ids = new WeakMap<object, number>(); let nextId = 1;
+const idOf = (x: object) => ids.get(x) ?? (ids.set(x, nextId++), nextId - 1);
+export interface Swap { /** what the swap is called, so the same swap is made once */ key: string; by: (q: Part) => Part | Assembly | null }
+/** A part's tree as assemblies, one for each part holding parts (its own shape, if it has one, the first thing in it),
+ *  each part where it was. With a swap, every part the swap gives something for is replaced by that, placed where the
+ *  part was and turned as it was: shared, so a car's four tyres are one tyre stored once. Made once per part and swap. */
+export function opened(p: Part, swap?: Swap): Assembly {
+  const k = swap?.key ?? '', byKey = openedKept.get(p) ?? openedKept.set(p, new Map()).get(p)!, was = byKey.get(k); if (was) return was;
+  const items: Placed[] = [];
+  if (p.shape) items.push(place({ ...p, at: [0, 0, 0], rot: [0, 0, 0], parts: undefined }));
+  for (const c of p.parts ?? []) { const s = swap?.by(c); items.push(place(s ?? (c.parts?.length ? opened(c, swap) : c), c.at ?? [0, 0, 0], c.rot ?? [0, 0, 0])); }
+  const a: Assembly = { name: p.name, items, ...(p.ports ? { ports: p.ports } : {}) }; byKey.set(k, a); return a;
+}
+/** Every piece of a thing whose name the pattern finds, taken out and `by` put in its place (where it was, turned as it
+ *  was), the same one in every place: a tyre made in depth on every wheel of a car, one battery in every machine that
+ *  takes it. How many it replaced is said. */
+export function fitIn(t: Part | Assembly, pattern: string, by: Part | Assembly): { thing: Part | Assembly; fitted: number } {
+  let re: RegExp; try { re = new RegExp(pattern, 'i'); } catch { throw new Error(`"${pattern}" is not a pattern`); }
+  const swap: Swap = { key: `${pattern}#${idOf(by)}`, by: (q) => (re.test(q.name) ? by : null) };
+  const walk = (x: Part | Assembly): Part | Assembly => {
+    if (isPart(x)) return re.test(x.name) ? by : x.parts?.length ? opened(x, swap) : x;
+    // (a thing named like it is swapped whole, whether drawn as one piece or built of many: a tyre built in depth too)
+    if (re.test(x.name)) return by;
+    return { name: x.name, items: x.items.map((it) => ({ ...it, of: walk(it.of) })), ...(x.ports ? { ports: x.ports } : {}) };
+  };
+  const thing = walk(t), kept = new Map<object, number>();
+  const count = (x: Part | Assembly): number => { if (x === by) return 1; if (isPart(x)) return 0; let c = kept.get(x); if (c === undefined) { c = x.items.reduce((s, it) => s + count(it.of), 0); kept.set(x, c); } return c; };
+  const n = count(thing);
+  return { thing, fitted: n };
+}
+/** A thing taken apart: each thing in it moved out from the middle of what holds it by `f` of how far its own middle is
+ *  from there (0: together; 1: twice as far out), so many levels down (to the bottom by default), each level apart about
+ *  its own middle, so what is inside a piece comes apart inside it; what is at the middle stays. With `focus`, only the
+ *  pieces named like it are taken apart (all the way down) and pulled out of what holds them; the rest stays put: a
+ *  battery taken out of a truck and opened, a cell out of the battery, a plate out of the cell. Nothing is copied. */
+export function exploded(t: Part | Assembly, f: number, levels = 64, focus?: RegExp): Part | Assembly {
+  // (a piece made in one (a moulding's walls, a casting's bars: its parts all `one`) stays one: it does not come apart)
+  const a = isPart(t) ? (t.parts?.length && !t.parts.every((q) => q.one) ? opened(t) : t) : t;
+  if (levels <= 0 || f === 0 || isPart(a)) return a;
+  const whole = boundsOfAll(a), c = whole.getCenter(new THREE.Vector3()), H = whole.getSize(new THREE.Vector3());
+  // (a container and what is in it: the biggest thing here whose box holds the middles of others (a case and its cells) goes
+  // down, and what it holds comes up out of it together, as a drawing takes a thing apart; the rest go out from the middle)
+  const placedBox = (it: Placed) => { const b = boundsOfAll(it.of); return b.isEmpty() ? null : b.clone().applyMatrix4(matrixOf(it)); };
+  const boxes = new Map(a.items.map((it) => [it, placedBox(it)] as const)), vol = (b: THREE.Box3) => { const z = b.getSize(new THREE.Vector3()); return z.x * z.y * z.z; };
+  const lift = new Map<Placed, number>(), wholeVol = vol(whole) || 1;
+  const host = [...a.items].filter((it) => boxes.get(it) && vol(boxes.get(it)!) > 0.25 * wholeVol).sort((x, y) => vol(boxes.get(y)!) - vol(boxes.get(x)!))
+    .find((it) => a.items.some((o) => o !== it && boxes.get(o) && boxes.get(it)!.containsPoint(boxes.get(o)!.getCenter(new THREE.Vector3()))));
+  if (host) { lift.set(host, -f * H.y * 0.6); for (const o of a.items) if (o !== host && boxes.get(o) && boxes.get(host)!.containsPoint(boxes.get(o)!.getCenter(new THREE.Vector3()))) lift.set(o, f * H.y * 0.6); }
+  const out = (it: Placed): Placed => { const b = boxes.get(it) ?? placedBox(it); if (!b) return it; const d = b.getCenter(new THREE.Vector3()).sub(c).multiplyScalar(f); d.y += lift.get(it) ?? 0; return { ...it, at: [it.at[0] + d.x, it.at[1] + d.y, it.at[2] + d.z] as V3 }; };
+  if (!focus) return { name: a.name, items: a.items.map((it) => ({ ...out(it), of: exploded(it.of, f, levels - 1) })) };
+  return { name: a.name, items: a.items.map((it) => focus.test(it.of.name) ? { ...out(it), of: exploded(it.of, f, levels - 1) } : holds(it.of, focus) ? { ...it, of: exploded(it.of, f, levels - 1, focus) } : it) };
+}
+/** Whether anything in it, all the way down, is named like the pattern. */
+const holdsKept = new WeakMap<object, Map<string, boolean>>();
+function holds(t: Part | Assembly, re: RegExp): boolean {
+  const m = holdsKept.get(t) ?? holdsKept.set(t, new Map()).get(t)!, was = m.get(re.source); if (was !== undefined) return was;
+  const v = isPart(t) ? (t.parts ?? []).some((q) => re.test(q.name) || holds(q, re)) : t.items.some((it) => re.test(it.of.name) || holds(it.of, re));
+  m.set(re.source, v); return v;
+}
+/** An assembly as a part's tree (for a maker that builds trees of parts: a machine fitting a battery built as an
+ *  assembly): each placement a part at its place, turned as it is; the placed pieces' own parts shared, not copied.
+ *  (Scales and changes made where a thing is placed are not carried: a tree of parts has neither.) */
+export function partOf(t: Part | Assembly, at: V3 = [0, 0, 0], rot: V3 = [0, 0, 0], more: Partial<Part> = {}): Part {
+  if (isPart(t)) return { ...t, at, rot, ...more };
+  let parts = partsOf.get(t); if (!parts) { parts = t.items.map((it) => partOf(it.of, it.at, it.rot)); partsOf.set(t, parts); }
+  return { name: t.name, at, rot, ...(t.item ? { item: t.item } : {}), ...(t.ports ? { ports: t.ports } : {}), ...more, parts };
+}
+// (an assembly's pieces as parts, made once and shared by every place it is put: a pack of 3,000 cells is one cell's parts,
+// not 3,000 copies; never changed in place, as nothing here changes a part in place)
+const partsOf = new WeakMap<Assembly, Part[]>();
+
+/** FNV-1a over a string, two lanes, as base 36: a key, not a secret. */
+export function hash(s: string): string {
+  let a = 0x811c9dc5, b = 0x01000193 ^ s.length;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); a = Math.imul(a ^ c, 0x01000193); b = Math.imul(b ^ c, 0x5bd1e995) ^ (b >>> 15); }
+  return (a >>> 0).toString(36) + (b >>> 0).toString(36);
+}
+/** What a function gives, remembered by its input's content (the hash of its key): asked again for the same, anywhere in
+ *  the app, it is not worked out again. Kept for the last `limit` inputs. For a maker's work: a car made once from its
+ *  record is not made again for the next board, node or fit that asks for the same record. */
+export function remembered<A, R>(keyOf: (a: A) => string, fn: (a: A) => R, limit = 32): ((a: A) => R) & { hits: () => number; misses: () => number } {
+  const kept = new Map<string, R>(); let hits = 0, misses = 0;
+  const f = (a: A): R => { const k = hash(keyOf(a)), was = kept.get(k); if (was !== undefined) { hits++; kept.delete(k); kept.set(k, was); return was; } misses++; const r = fn(a); kept.set(k, r); if (kept.size > limit) kept.delete(kept.keys().next().value!); return r; };
+  return Object.assign(f, { hits: () => hits, misses: () => misses });
+}
+
+// ---- a piece's design, and pieces taken from the library -------------------------------------------------------------
+/** Not the design: where it is, what it is called and said to be, its colour and look (variants over it), and what it is
+ *  next to (its neighbours by name). */
+const NOT_DESIGN = new Set(['name', 'at', 'rot', 'parts', 'color', 'look', 'wear', 'text', 'says', 'link', 'passes', 'joins', 'movesWith', 'runsOn', 'kit', 'detail', 'meant', 'mates']);
+const round = (n: number) => (Math.abs(n) < 1e-12 ? 0 : Number(n.toPrecision(7)));
+const num = (_k: string, v: unknown) => (typeof v === 'number' ? round(v) : v);
+const v3 = (v: V3 | undefined) => (v ?? [0, 0, 0]).map(round).join(',');
+interface Design { key: string; off: V3 }
+const designs = new WeakMap<object, Design>();
+/** A thing's design key, and where its drawing starts in its own frame (a path-drawn tube, moved to start at its origin
+ *  for its key: its holder places it by that). */
+export function designOf(t: Part | Assembly): Design {
+  const was = designs.get(t); if (was) return was;
+  let own: Record<string, unknown> = {}, off: V3 = [0, 0, 0], kids: string[];
+  if (isAssembly(t)) {
+    kids = t.items.map((it) => { const d = designOf(it.of), o = it.over ? Object.fromEntries(Object.entries(it.over).filter(([k]) => k !== 'color' && k !== 'look')) : {}; return `${d.key}|${v3(it.at)}|${v3(it.rot)}|${round(it.s)}|${v3(d.off)}|${JSON.stringify(o, num)}`; });
+  } else {
+    for (const [k, v] of Object.entries(t)) if (!NOT_DESIGN.has(k) && v !== undefined) own[k] = v;
+    const s = t.shape;
+    if (s && 'tube' in s && s.tube.pts.length) { const p0 = s.tube.pts[0]!; off = [p0[0], p0[1], p0[2]]; own = { ...own, shape: { tube: { ...s.tube, pts: s.tube.pts.map((p) => [p[0] - p0[0], p[1] - p0[1], p[2] - p0[2]]) } } }; }
+    kids = (t.parts ?? []).map((q) => { const d = designOf(q); return `${d.key}|${v3(q.at)}|${v3(q.rot)}|${v3(d.off)}`; });
+  }
+  const d = { key: hash(JSON.stringify(own, num) + '#' + kids.sort().join(';')), off };
+  designs.set(t, d); return d;
+}
+/** Everything about a piece that is not its design (where it is, what it is called, its colour, its neighbours), so a
+ *  piece equal to another in every way is found by its design and this. */
+const contextOf = (p: Part) => JSON.stringify(Object.fromEntries(Object.entries(p).filter(([k, v]) => k !== 'parts' && NOT_DESIGN.has(k) && v !== undefined)), num);
+/** The library's pieces as they are held while building: one object for each piece equal in every way. */
+const pool = new Map<string, Part>();
+const shared = new WeakSet<object>();
+/** The library law in a build (src/nexus/stock.ts): every piece inside a part designed whole and still (Part.sealed, which
+ *  nothing after it is made changes inside: the make pipeline lays nothing in it and moves nothing in it) is taken from
+ *  the library's pieces held while building, where one equal in every way is there, and is put there where it is not:
+ *  so a bolt drawn a thousand times is one object, and so is every valve spring. In place; what a build gives is the same
+ *  in every value. A part that moves inside (a rail's carriage) is left as made, as the pipeline works on it piece by
+ *  piece. */
+export function fromLibrary<T>(t: T): T {
+  const take = (q: Part): Part => {
+    if (shared.has(q)) return q;
+    const k = `${designOf(q).key}|${v3(designOf(q).off)}|${contextOf(q)}`, was = pool.get(k); if (was) return was;
+    if (q.parts) for (let i = 0; i < q.parts.length; i++) q.parts[i] = take(q.parts[i]!);
+    pool.set(k, q); shared.add(q); return q;
+  };
+  const walk = (x: unknown): void => {
+    if (Array.isArray(x)) { x.forEach(walk); return; }
+    if (!x || typeof x !== 'object' || shared.has(x)) return;
+    if (isAssembly(x)) { shared.add(x); x.items.forEach((it) => walk(it.of)); return; }
+    if (!isPart(x)) return;
+    shared.add(x);
+    if (x.sealed && x.parts?.length && stillAll(x)) { for (let i = 0; i < x.parts.length; i++) x.parts[i] = take(x.parts[i]!); }
+    else x.parts?.forEach(walk);
+  };
+  walk(t); return t;
+}
+const stillAll = (p: Part): boolean => !(p.travel || p.joint || p.link || p.movesWith || p.swing || p.spin) && (p.parts ?? []).every(stillAll);
+
+// ---- the difference between any two things ---------------------------------------------------------------------------
+/** One difference found: where (a path down the two, by names), what kind, what it was and is, and by how much. */
+export interface DiffRow { path: string; change: 'changed' | 'added' | 'removed' | 'reshaped' | 'material' | 'recoloured' | 'moved' | 'turned' | 'kind'; a?: unknown; b?: unknown; by?: number; share?: number }
+export interface Diff { rows: DiffRow[]; same: number; marked?: Part | Assembly; more: number }
+/** Colours a difference is shown in, on the second thing: the same dimmed, the new green, the reshaped or remade orange,
+ *  the moved or turned blue, what is gone red (drawn where it was). */
+export const DIFF_COLOURS = { same: 0x4a4f57, added: 0x2fbf71, changed: 0xff8a1f, moved: 0x3a8dde, removed: 0xe5484d } as const;
+const SHOWN_ELSEWHERE = new Set(['name', 'parts', 'at', 'rot', 'color', 'says', 'item', 'kit', 'made', 'sealed', 'look', 'wear', 'text', 'link', 'meant', 'mates']);
+/** Every difference between a and b, down to each number, each piece and each place: numbers, words, lists, records,
+ *  tables, parts and assemblies alike. Numbers equal within `tol` of the larger are the same; a part or assembly whose
+ *  design and place are the same as the other's is passed over whole (its design key says so). At most `most` rows are
+ *  kept; how many more there were is said. A thing's difference also comes back drawn: b, each piece coloured by what
+ *  became of it, and what a had and b has not put back in red where it was. */
+export function diff(a: unknown, b: unknown, o: { tol?: number; most?: number } = {}): Diff {
+  const tol = o.tol ?? 1e-6, most = o.most ?? 400, rows: DiffRow[] = []; let same = 0, more = 0;
+  const push = (r: DiffRow) => { if (rows.length < most) rows.push(r); else more++; };
+  const show = (x: unknown): unknown => (isPart(x) ? `part ${x.name}` : isAssembly(x) ? `assembly ${x.name}` : Array.isArray(x) ? `${x.length} items` : x && typeof x === 'object' ? `{${Object.keys(x).slice(0, 4).join(', ')}}` : x);
+  const values = (p: string, x: unknown, y: unknown, kind: DiffRow['change'] = 'changed'): void => {
+    if (x === y) return;
+    if ((isPart(x) || isAssembly(x)) && (isPart(y) || isAssembly(y))) { things(p, x, y); return; }
+    if (typeof x === 'number' && typeof y === 'number') { if (Number.isNaN(x) && Number.isNaN(y)) return; const by = y - x, big = Math.max(Math.abs(x), Math.abs(y)); if (Math.abs(by) > tol * big) push({ path: p, change: kind, a: x, b: y, by, ...(x !== 0 ? { share: by / Math.abs(x) } : {}) }); return; }
+    if (Array.isArray(x) && Array.isArray(y)) { for (let k = 0; k < Math.max(x.length, y.length); k++) { const q = `${p}[${k}]`; if (k >= x.length) push({ path: q, change: 'added', b: show(y[k]) }); else if (k >= y.length) push({ path: q, change: 'removed', a: show(x[k]) }); else values(q, x[k], y[k], kind); } return; }
+    if (x && y && typeof x === 'object' && typeof y === 'object' && !Array.isArray(x) && !Array.isArray(y)) { for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) { const q = p ? `${p}.${k}` : k, u = (x as Record<string, unknown>)[k], v = (y as Record<string, unknown>)[k]; if (u === undefined && v !== undefined) push({ path: q, change: 'added', b: show(v) }); else if (v === undefined && u !== undefined) push({ path: q, change: 'removed', a: show(u) }); else values(q, u, v, kind); } return; }
+    push({ path: p, change: typeof x !== typeof y || Array.isArray(x) !== Array.isArray(y) ? 'kind' : kind, a: show(x), b: show(y) });
+  };
+  const place = (p: string, x: { at?: V3; rot?: V3 }, y: { at?: V3; rot?: V3 }): boolean => {
+    const at0 = x.at ?? [0, 0, 0], at1 = y.at ?? [0, 0, 0], r0 = x.rot ?? [0, 0, 0], r1 = y.rot ?? [0, 0, 0], d = Math.hypot(at1[0] - at0[0], at1[1] - at0[1], at1[2] - at0[2]), t = Math.max(...r0.map((r, k) => Math.abs(r1[k]! - r)));
+    if (d > 1e-7) push({ path: p, change: 'moved', a: at0.map(round), b: at1.map(round), by: d }); if (t > 1e-7) push({ path: p, change: 'turned', a: r0.map(round), b: r1.map(round), by: t }); return d > 1e-7 || t > 1e-7;
+  };
+  /** Pieces paired by name, the k-th of a name in a with the k-th in b. */
+  const pair = <T>(xs: T[], ys: T[], nameOf: (t: T) => string): { both: [T, T][]; gone: T[]; come: T[] } => {
+    const left = new Map<string, T[]>(); for (const x of xs) (left.get(nameOf(x)) ?? left.set(nameOf(x), []).get(nameOf(x))!).push(x);
+    const both: [T, T][] = [], come: T[] = []; for (const y of ys) { const l = left.get(nameOf(y)); const x = l?.shift(); if (x !== undefined) both.push([x, y]); else come.push(y); }
+    return { both, gone: [...left.values()].flat(), come };
+  };
+  const things = (p: string, x: Part | Assembly, y: Part | Assembly): void => {
+    if (designOf(x).key === designOf(y).key && (isPart(x) ? (x as Part).color === (y as Part).color : true)) { same++; return; }
+    if (isPart(x) !== isPart(y)) { push({ path: p, change: 'kind', a: show(x), b: show(y) }); return; }
+    if (isPart(x) && isPart(y)) {
+      for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) { if (SHOWN_ELSEWHERE.has(k)) continue; const u = (x as unknown as Record<string, unknown>)[k], v = (y as unknown as Record<string, unknown>)[k];
+        if (u === undefined && v === undefined) continue; values(`${p}.${k}`, u, v, k === 'shape' || k === 'cuts' ? 'reshaped' : k === 'mat' || k === 'finish' ? 'material' : 'changed'); }
+      if (x.color !== y.color) push({ path: `${p}.color`, change: 'recoloured', a: x.color === undefined ? undefined : `#${x.color.toString(16).padStart(6, '0')}`, b: y.color === undefined ? undefined : `#${y.color.toString(16).padStart(6, '0')}` });
+      const m = pair(x.parts ?? [], y.parts ?? [], (q) => q.name);
+      for (const [u, v] of m.both) { const q = `${p}/${v.name}`; place(q, u, v); things(q, u, v); }
+      for (const u of m.gone) push({ path: `${p}/${u.name}`, change: 'removed', a: show(u) }); for (const v of m.come) push({ path: `${p}/${v.name}`, change: 'added', b: show(v) });
+      return;
+    }
+    const xa = x as Assembly, ya = y as Assembly, m = pair(xa.items, ya.items, (it) => it.of.name);
+    for (const [u, v] of m.both) { const q = `${p}/${v.of.name}`; place(q, u, v); if (Math.abs((u.s ?? 1) - (v.s ?? 1)) > tol) push({ path: `${q}.s`, change: 'reshaped', a: u.s, b: v.s, by: v.s - u.s }); things(q, u.of, v.of); }
+    for (const u of m.gone) push({ path: `${p}/${u.of.name}`, change: 'removed', a: show(u.of) }); for (const v of m.come) push({ path: `${p}/${v.of.name}`, change: 'added', b: show(v.of) });
+  };
+  values('', a, b);
+  // (the second thing drawn by what became of each piece: paths as above, so a piece takes the colour its own row gives it)
+  let marked: Part | Assembly | undefined;
+  if ((isPart(a) || isAssembly(a)) && (isPart(b) || isAssembly(b))) {
+    const kindAt = new Map<string, DiffRow['change']>(); for (const r of rows) { const at = r.path.replace(/\.[^/]*$/, ''), was = kindAt.get(at); if (!was || r.change === 'added' || (r.change !== 'moved' && r.change !== 'turned')) kindAt.set(at, r.change); }
+    const colourOf = (path: string, inherited: number): number => { const k = kindAt.get(path); return k === 'added' ? DIFF_COLOURS.added : k === 'removed' ? DIFF_COLOURS.removed : k === 'moved' || k === 'turned' ? DIFF_COLOURS.moved : k ? DIFF_COLOURS.changed : inherited; };
+    const changedUnder = (path: string) => [...kindAt.keys()].some((q) => q.startsWith(path + '/'));
+    const paint = (t: Part | Assembly, path: string, inherited: number, gone: Part | Assembly | undefined): Part | Assembly => {
+      const c = colourOf(path, inherited), keep = c === DIFF_COLOURS.added ? c : changedUnder(path) || c !== inherited ? c : inherited;
+      if (isPart(t)) { const g = gone && isPart(gone) ? pair(gone.parts ?? [], t.parts ?? [], (q) => q.name).gone : [];
+        return { ...t, color: keep, parts: [...(t.parts ?? []).map((q) => { const w = gone && isPart(gone) ? (gone.parts ?? []).find((z) => z.name === q.name) : undefined; return { ...(paint(q, `${path}/${q.name}`, keep === DIFF_COLOURS.added ? keep : DIFF_COLOURS.same, w) as Part), at: q.at, rot: q.rot }; }), ...g.map((q) => ({ ...(paint(q, `${path}/${q.name}`, DIFF_COLOURS.removed, undefined) as Part), color: DIFF_COLOURS.removed }))] } as Part; }
+      const g = gone && isAssembly(gone) ? pair(gone.items, t.items, (it) => it.of.name).gone : [];
+      return { ...t, items: [...t.items.map((it) => { const w = gone && isAssembly(gone) ? gone.items.find((z) => z.of.name === it.of.name)?.of : undefined; return { ...it, of: paint(it.of, `${path}/${it.of.name}`, keep === DIFF_COLOURS.added ? keep : DIFF_COLOURS.same, w) }; }), ...g.map((it) => ({ ...it, of: paint(it.of, `${path}/${it.of.name}`, DIFF_COLOURS.removed, undefined) }))] };
+    };
+    marked = paint(b, '', DIFF_COLOURS.same, a);
+  }
+  return { rows, same, more, ...(marked ? { marked } : {}) };
+}

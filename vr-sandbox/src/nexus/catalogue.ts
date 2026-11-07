@@ -6,8 +6,7 @@
 // like any other: its sizes, its make-up down to the elements, how it is made, and what it does by its law.
 // Where a series is not a standard's but a grid of the common sizes makers sell (springs, heaters, fans), it says so.
 
-import { BEARINGS, CHAINS, CIRCLIPS, IPE, KEYS, LM, METRIC, NPS40, callFamily } from './families';
-import type { Item } from './inventory';
+import { BEARINGS, CHAINS, CIRCLIPS, IPE, KEYS, LM, METRIC, NPS40 } from './families';
 import { KINDS } from './kinds';
 import { linesOf } from './kinds/core';
 
@@ -18,6 +17,9 @@ const within = (lo: number, hi: number) => PREF.filter((x) => x >= lo && x <= hi
 const SOCKET: Record<string, [number, number]> = { 'M1.6': [3, 16], M2: [3, 20], 'M2.5': [4, 25], M3: [5, 30], M4: [6, 40], M5: [8, 50], M6: [10, 60], M8: [12, 80], M10: [16, 100], M12: [20, 120], M14: [25, 140], M16: [25, 160], M20: [30, 200], M24: [40, 200] };
 const HEX: Record<string, [number, number]> = { M3: [6, 30], M4: [8, 40], M5: [10, 50], M6: [12, 60], M8: [16, 80], M10: [20, 100], M12: [25, 120], M14: [30, 140], M16: [30, 150], M20: [40, 200], M24: [50, 200] };
 const SET: Record<string, [number, number]> = { M2: [2, 10], 'M2.5': [2.5, 12], M3: [3, 16], M4: [4, 20], M5: [5, 25], M6: [6, 30], M8: [8, 40], M10: [10, 50], M12: [12, 60] };
+/** The lengths a standard's fastener of a thread is sold in, mm, shortest first (ISO 4017 hex bolts; ISO 4762 socket
+ *  cap screws): what fastenerFor (mate.ts) chooses from. */
+export const soldLengths = (std: 'ISO 4017' | 'ISO 4762', thread: string): number[] => { const r = (std === 'ISO 4017' ? HEX : SOCKET)[thread]; return r ? within(r[0], r[1]) : []; };
 /** The E series of preferred values (IEC 60063): E24 for resistors, E6 for capacitors. */
 export const E24 = [1, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2, 2.2, 2.4, 2.7, 3, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1];
 export const E6 = [1, 1.5, 2.2, 3.3, 4.7, 6.8];
@@ -102,14 +104,13 @@ export function catalogue(family?: string): string[] {
   if (family) { let l = byFamily.get(family); if (!l) byFamily.set(family, (l = SERIES[family]?.lines() ?? [])); return l; }
   return (lines ??= Object.keys(SERIES).flatMap((f) => catalogue(f)));
 }
-const made = new Map<string, Item | null>();
-/** The part a line of the catalogue calls, made by its family the first time, kept after. */
-export function catalogueItem(line: string): Item | null { if (!made.has(line)) { const r = callFamily(line); made.set(line, r && typeof r === 'object' ? r : null); } return made.get(line)!; }
 /** The lines a few words find, without making their parts: each word a part of the line, the more the better. */
+let lowLines: [string, string, string[]][] | undefined;
 export function searchCatalogue(q: string, n = 20): string[] {
   const ws = q.toLowerCase().split(/\s+/).filter(Boolean); if (!ws.length) return [];
   const scored: [string, number][] = [];
-  const toks = (l: string) => l.toLowerCase().split(/\s+/);
-  for (const l of catalogue()) { const low = l.toLowerCase(); let s = 0, whole = 0; for (const w of ws) if (low.includes(w)) { s += w.length; if (toks(l).some((t) => t === w || t.startsWith(w))) whole += w.length; } if (s >= ws.join('').length * 0.75) scored.push([l, s + whole - low.length / 100]); }
+  // (each line lower-cased and cut into words once, for every search after)
+  lowLines ??= catalogue().map((l) => { const low = l.toLowerCase(); return [l, low, low.split(/\s+/)] as [string, string, string[]]; });
+  for (const [l, low, tk] of lowLines) { let s = 0, whole = 0; for (const w of ws) if (low.includes(w)) { s += w.length; if (tk.some((t) => t === w || t.startsWith(w))) whole += w.length; } if (s >= ws.join('').length * 0.75) scored.push([l, s + whole - low.length / 100]); }
   return scored.sort((a, b) => b[1] - a[1]).slice(0, n).map(([l]) => l);
 }

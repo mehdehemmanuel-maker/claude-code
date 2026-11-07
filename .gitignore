@@ -1,2 +1,4 @@
 .DS_Store
 
+# (agents' own copies of the repo, each on its own branch: merged by their branches, never committed as files)
+.claude/worktrees/
