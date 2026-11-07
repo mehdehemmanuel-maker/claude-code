@@ -3087,3 +3087,29 @@ fixing.
   gate has not passed on this tree yet and nothing of it is pushed until it does.
 - **Honest limits:** nothing here was looked at; sizes are typical and say so; the only check on each thing is that it
   builds once with every node ok.
+
+## 2026-11-07: wave 9 (five builders, 31 min, hard stop): root 1 in its minimal form, the loft in the room, 17 robot assemblies, the contact sheet
+
+- **Root 1, minimal** (room.ts `firstContact`): a block in a stack or onto a face rests where the two solids first touch,
+  found by a column cast on the inside test (the bound rest only where no column has both materials); Over's "would
+  meet" by the solids too (`solidsMeet`). The builder's test: a 600 mm roof tilted 20° on a wall it overhangs rests on
+  the wall's corner with one line face; a rod lying on a plate and a ball on a plate each write one face; a rim whose
+  bore clears a spoke goes over the hub (`npx vitest run tests/nexus/domains.test.ts -t "rests on its first contact"`).
+  Through, Ring, Between, Along, Key, Mesh, Rack, Belt and Branch still test by bounds: the rest of root 1.
+- **A lofted solid** (room.make shape 'loft', stations "x:w:lo:hi; …"): the boat's hull is a loft of six stations
+  (`seed.hull`), drawn, weighed and made exact through the existing form.ts/kit3d.ts/brep.ts loft.
+- **17 assemblies** in `assemblies/robots2.ts` (turntable, humanoid torso, delta and SCARA arms, telescope, microscope,
+  gimbal drone, rover, balancing robot, line follower, Pi case, monitor, floor lamp, toy car, rocket, catapult, gear-train
+  toy), rough.
+- **The contact sheet** (`node scripts/sheet.cjs`): every seed.* assembly rendered 320×240 on one page, `docs/sheet/index.html`.
+- **Not done:** the AI's menus by domain (the builder's worktree was cut from an old commit and made nothing); listed
+  for the next wave. Faults met: 20, filed in `plan/FIX-PLAN.md`.
+- **The loft in the room** (wave 9, the 'loft' builder): a lofted solid (room.make loft, its stations as text
+  "x:w:lo:hi; …" mm, n and mid after if wanted, its length a setting that scales them): inside by its stations eased
+  between (`stationAt`, each section read as its rectangle, a superset of the superellipse drawn), its box from its
+  stations, weighed by `loftVolume`, drawn and made exact as form.ts's loft already was (no renderer change needed). One
+  face where its flat bottom rests on a plate (the test's 2 × 1.2 m hull: between 1.1 and 1.35 m², measured by sampling).
+  `seed.hull`: a boat hull of six stations laid along z, a plywood transom and a foredeck, every node ok at two lengths,
+  one group, no point in two pieces; `seed.boat` builds on it (its U-section hull and bow plate gone). Not done: the hull
+  is weighed as a solid loft (no 3 mm skin); `seed.hull` is undated until the docs pass runs (`UPDATE_DOCS=quick`), so the
+  Mechanical field gate reports that one line until then.

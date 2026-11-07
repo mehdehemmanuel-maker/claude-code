@@ -46,6 +46,7 @@ import { METRIC } from '../../src/nexus/threads';
 import { DESIGNED, boltedJoint, exampleOf, use } from '../../src/nexus/components';
 import { applyImprint, boreGrips, boreThrough, fastenerFor, fit, imprint, portOfInterface, reapplyImprints, standOn, type Fastener, type Imprinted } from '../../src/nexus/mate';
 import { massOf } from '../../src/nexus/mass';
+import { loftVolume } from '../../src/nexus/form';
 import { jointsOfPorts, solveJoints, type Joint, type JointsSolved } from '../../src/nexus/placement/proximity';
 import { NEMA_FACE } from '../../src/nexus/families';
 import type { Part, V3 } from '../../src/nexus/kits';
@@ -1537,6 +1538,15 @@ describe('every domain, in one pass', () => {
     const reach = wt.pieces.filter((p) => p.name === 'turbine blade').map((p) => Math.round(Math.hypot(p.solid.base.c[1] - hc[1], p.solid.base.c[2] - hc[2]) * 1e6));
     expect(new Set(reach).size, `the three blades as far from the hub's axis each (the rotor laid along x): ${reach.join(', ')} µm`).toBe(1);
   }, 120_000);
+  // (decision 0029, rough: the robots, electronics, tools and toys of robots2.ts, each built once at its defaults, every node ok and pieces made)
+  it('robots, electronics, tools and toys as assemblies: each builds once, every node ok', async () => {
+    const ids = ['seed.turntable', 'seed.humanoid-torso', 'seed.delta-robot', 'seed.scara', 'seed.telescope', 'seed.microscope', 'seed.gimbal-drone', 'seed.rover', 'seed.balancing-robot', 'seed.line-follower', 'seed.pi-case', 'seed.monitor', 'seed.floor-lamp', 'seed.toy-car', 'seed.model-rocket', 'seed.catapult', 'seed.gear-train-toy'];
+    for (const id of ids) {
+      const b = emptyBoard(id); placeBlock(b, id, 0, 0, {}, 'x'); const e = new Engine(b, env, new Memo()); await e.run();
+      expect([...e.state].filter(([, s]) => s.status !== 'ok').map(([n, s]) => `${n}: ${s.error}`), `${id}: every node runs`).toEqual([]);
+      expect((e.state.get('x')!.out!.block as RoomBlock).pieces.length, `${id}: it makes pieces`).toBeGreaterThan(2);
+    }
+  }, 30_000);
   // (decision 0027: robot and aircraft assemblies, each one library block of settings: placed at two settings it gives two
   // builds, every node ok, its pieces one group (each joined to the rest by a face), no point in two pieces, and the counts
   // a person reads it by (four motors and four props, so many servos and horns, two wheels or four); and the drone with
@@ -2532,6 +2542,31 @@ describe('every domain, in one pass', () => {
     for (const k of [KINDS.flange, asNew]) expect(score(none.board, none.e, want(k)), 'no flange of any kind: plates named so, a gasket on the flanges\' aisle').toMatch(/^no a flange on the board/);
     expect(holds(KINDS.flange, ['piece.flangegasket', 'piece.oring', 'piece.plate', 'piece.gatevalve'], ['flange A', 'flange B', 'DN50 gate valve flange 1']), 'a gasket, an O-ring, plates named so, a flanged valve: none is a pipe flange').toBe(false);
   }, 60_000);
+  // (root 1, decision 0029, plan/FIX-PLAN.md: a block rests where the solids first touch, by a column cast (room.ts
+  // firstContact), not where their boxes do: a roof tilted on a wall it overhangs comes down to the wall's corner instead
+  // of floating on its box's lowest corner, and the pair writes one face there; a cylinder lying on a flat and a sphere on
+  // a plate each write one face, at the plate's top)
+  it('a tilted box onto a wall, a cylinder lying on a flat and a sphere on a plate each rest on their first contact and write one face', () => {
+    const one = (b: RoomBlock, host: string, child: string) => { const f = b.faces.filter((x) => b.pieces[x.a]!.name === host && b.pieces[x.b]!.name === child); expect(f, `${child} on ${host}: one face`).toHaveLength(1); expect(b.faces, 'and no other').toHaveLength(1); return f[0]!; };
+    // (a 600 mm roof tilted 20° about z on a 200 mm wall standing from y = 0: its −x end goes down past the wall, so it
+    // rests on the wall's top corner at x = −100 mm, y = 500 mm, its underside there within a micron; the face a line
+    // along that corner)
+    const wall = roomMade('wall', 'steel-low', { box: [0.2, 0.5, 0.1] }), roof = roomMade('roof', 'steel-low', { box: [0.6, 0.02, 0.1] });
+    const a = roomOnto(wall, '+y', roof, 'touch', undefined, 'mid', { about: 2, degrees: 20 }), fa = one(a, 'wall', 'roof'), rp = a.pieces.find((p) => p.name === 'roof')!;
+    expect([fa.patch, +fa.at[1].toFixed(6), +fa.at[0].toFixed(3)]).toEqual(['line', 0.5, -0.1]);
+    expect([insideOf(rp, -0.1 + 1e-9, 0.5 + 1e-6, 0), insideOf(rp, -0.1 + 1e-9, 0.5 - 1e-6, 0), insideOf(rp, -0.1 + 1e-9, 0.505, 0)], 'the roof\'s underside at the corner, within a micron').toEqual([true, false, true]);
+    // (a rod lying along z on a 10 mm plate: its line on the plate's top, as long as the rod; a ball on it: a point, a short line)
+    const plate = roomMade('plate', 'steel-low', { box: [0.1, 0.01, 0.1] });
+    const c = roomOnto(plate, '+y', roomTurn(roomMade('rod', 'steel-low', { cyl: [0.01, 0.08] }), 0, 90)), fc = one(c, 'plate', 'rod');
+    expect([fc.patch, +fc.at[1].toFixed(6), +(fc.length ?? 0).toFixed(3)]).toEqual(['line', 0.01, 0.08]);
+    const s = roomOnto(plate, '+y', roomMade('ball', 'steel-low', { sphere: [0.01] })), fs = one(s, 'plate', 'ball');
+    expect([fs.patch, +fs.at[1].toFixed(6), Math.hypot(fs.at[0], fs.at[2]) < 0.002]).toEqual(['line', 0.01, true]);
+    // (Over's "would meet" by the solids too: a rim whose bore clears a spoke's tip goes over the hub, though the rim's box
+    // and the spoke's meet (refused before: "would meet the spoke"); one whose bore the spoke reaches into is still refused)
+    const hub = roomOnto(roomMade('hub', 'steel-low', { cyl: [0.01, 0.02] }), '+x', roomMade('spoke', 'steel-low', { box: [0.04, 0.02, 0.01] }));
+    expect(roomOver(hub, 'hub/axis', roomMade('rim', 'steel-low', { tube: [0.06, 0.07, 0.02] })).pieces.map((p) => p.name)).toEqual(['hub', 'spoke', 'rim']);
+    expect(() => roomOver(hub, 'hub/axis', roomMade('rim', 'steel-low', { tube: [0.045, 0.07, 0.02] }))).toThrow(/would meet the spoke/);
+  });
   // decision 0028: a block laid on another comes to rest on the first pair of pieces in each other's path, not past the
   // highest piece anywhere under it (the arm beside the conveyor, measured: two groups before, `npm run eval:compose`)
   it('a block laid on another rests on its first contact, so the two are one thing; a bolt on holes facing different ways refused with why', async () => {
@@ -2967,6 +3002,34 @@ describe('every domain, in one pass', () => {
         if (b.pieces.filter((r) => insideOf(r, ...q)).length > 1) shared++; } }
     return { shared, outOwn, outBlock, inside: inside > 0 }; };
   const APART = { shared: 0, outOwn: 0, outBlock: 0, inside: true };
+  // (decision 0029: a lofted solid in the room (room.make loft), so a hull or a car body is not a box: inside by its
+  // stations' sections eased between them (read as their rectangles), its box from its stations, weighed by loftVolume,
+  // one face where its flat bottom rests on a plate; and the hull assembly (seed.hull: a loft of six stations laid along
+  // z, a transom, a foredeck) runs with every node ok, its three pieces one group, no point in two pieces)
+  it('a loft in the room: inside by its stations, its box, weighed as a loft, one face on a flat; the hull assembly runs with every node ok', async () => {
+    const st = [{ x: 0, w: 0.6, lo: 0, hi: 0.4, n: 4, mid: 0.39 }, { x: 1, w: 0.6, lo: 0, hi: 0.4, n: 4, mid: 0.39 }, { x: 2, w: 0.2, lo: 0.25, hi: 0.4, n: 2, mid: 0.39 }];
+    const hull = roomMade('hull', 'al-5052', { loft: { st } }), H = hull.pieces[0]!;
+    expect(roomBound(H).map((v) => v.map((x) => +x.toFixed(6))), 'its box about the origin: 2 long, 0.4 tall, 1.2 wide').toEqual([[-1, -0.2, -0.6], [1, 0.2, 0.6]]);
+    expect([insideOf(H, 0, 0, 0), insideOf(H, 0, 0, 0.59), insideOf(H, 0.9, 0.15, 0.3), insideOf(H, 0.9, 0, 0.1), insideOf(H, 1.01, 0, 0)], 'its middle; within its wide station; past its bow station\'s width; below its bow\'s bottom; past its end').toEqual([true, true, false, false, false]);
+    expect(H.lines, 'a loft offers no line').toEqual([]); expect(H.solid.base.k).toBe('loft');
+    // (weighed by loftVolume against a box of the same stuff: the sections' superellipses, not their rectangles)
+    const box = roomMade('block', 'al-5052', { box: [1, 1, 1] }), vol = massOf(partOfBlock(hull).parts![0]!) / massOf(partOfBlock(box).parts![0]!);
+    expect(Math.abs(vol / loftVolume({ st }) - 1), `weighed as a loft (${vol.toFixed(4)} m³ against ${loftVolume({ st }).toFixed(4)})`).toBeLessThan(1e-6);
+    expect(vol, 'less than its box, more than half of it').toBeGreaterThan(0.5 * 2 * 0.4 * 1.2); expect(vol).toBeLessThan(2 * 0.4 * 1.2);
+    // (onto a flat: one face, its flat bottom (1 long × 1.2 wide aft, then easing up to the bow), every point in one piece)
+    const plate = roomMade('plate', 'steel-low', { box: [2.4, 0.01, 1.4] }), on = roomOnto(plate, '+y', hull);
+    expect(on.faces.length, 'one face where the hull rests on the plate').toBe(1);
+    expect(on.faces[0]!.area, `its flat bottom's area (${on.faces[0]!.area.toFixed(3)} m²)`).toBeGreaterThan(1.1); expect(on.faces[0]!.area).toBeLessThan(1.35);
+    expect(sampleRoom(on, 8), 'the hull on its plate').toEqual(APART);
+    // (the hull assembly: its three pieces, one group by its faces, every node ok; its length a setting)
+    const built = async (set: Record<string, unknown>) => { const b = emptyBoard('seed.hull'); placeBlock(b, 'seed.hull', 0, 0, set, 'x'); const e = new Engine(b, env, new Memo()); await e.run();
+      expect([...e.state].filter(([, s]) => s.status !== 'ok').map(([n, s]) => `${n}: ${s.error}`), `seed.hull at ${JSON.stringify(set)}: every node ok`).toEqual([]); return e.state.get('x')!.out!.block as RoomBlock; };
+    const [h, h3] = await Promise.all([built({}), built({ length: 3000 })]);
+    expect(h.pieces.map((p) => [p.name, p.solid.base.k])).toEqual([['transom', 'box'], ['hull', 'loft'], ['deck', 'box']]);
+    expect(new Set(h.faces.flatMap((f) => [f.a, f.b])).size, 'every piece in a face (one group)').toBe(3);
+    expect(sampleRoom(h, 5), 'the hull assembly: no point in two pieces').toEqual(APART);
+    expect(+((h.hi[2] - h.lo[2]) * 1000).toFixed(1), 'transom and hull along z').toBe(3685); expect(+((h3.hi[2] - h3.lo[2]) * 1000).toFixed(1), 'its length a setting').toBe(3025);
+  }, 30_000);
   it('a sphere, a cone and a turned profile: exact inside tests, every pair apart after stack, through, over, ring and turn', () => {
     const ball = roomMade('ball', 'steel-alloy', { sphere: [0.01] }), bead = roomMade('bead', 'glass', { sphere: [0.008, 0.003] });
     const cone = roomMade('cone', 'al-6061', { cone: [0.02, 0.01, 0.03, 0.004] }), point = roomMade('point', 'abs', { cone: [0.01, 0, 0.02] });

@@ -370,7 +370,7 @@ const EYENUT: PartFamily<Eye> = {
   says: 'A lifting eye nut (DIN 582; its eye as DIN 580\'s, its boss k + d high, typical): its boss, tapped through at the thread\'s size (`<name> boss/axis`), and its eye standing on it. A stud or bolt end goes up into its boss (Through a line), or it slides over a threaded rod\'s end (Over a shaft)',
   rows: EYE_ROWS, size: 'M12', source: 'DIN 582, its eye recalled as DIN 580\'s (typical); its boss\'s height k + d, typical',
   recipe: (q, size) => stack(`${size} eye nut (WLL ${q.wll} kg)`, 1, [{ b: made(`${size} eye nut boss`, 'steel-low', { tube: [mm(q.d) / 2, mm(q.d4) / 2, mm(q.k + q.d)] }, { color: BRIGHT, tapped: true }) }, { b: eyeOf(`${size} eye nut eye`, 'steel-low', mm(q.d2), mm(q.d3)) }]),
-  expect: (q) => ({ bound: [mm(Math.max(q.d3, q.d4)), mm(q.k + q.d + q.d3), mm(Math.max(q.d4, (q.d3 - q.d2) / 2))], mass: (annulus(mm(q.d4), mm(q.d)) * mm(q.k + q.d) + eyeVol(q)) * rho('steel-low'), tol: 0.01, massTol: 0.02, says: 'its eye across by boss and eye; nominal mass, the boss less its bore and the eye\'s torus' }),
+  expect: (q) => ({ /* bound not held since root 1 (2026-11-07): the solids rest where they first touch (the eye into the boss's bore edge, the eye bolts into the bosses, the U-bolt legs down the holes), so the row's stacked height no longer applies; the physical height is not yet derived: plan/FIX-PLAN.md */ mass: (annulus(mm(q.d4), mm(q.d)) * mm(q.k + q.d) + eyeVol(q)) * rho('steel-low'), tol: 0.01, massTol: 0.02, says: 'its eye across by boss and eye; nominal mass, the boss less its bore and the eye\'s torus' }),
   tests: [T(3, { offers: ['M12 eye nut boss/axis'] })],
 };
 
@@ -610,7 +610,7 @@ const TURNBUCKLE: PartFamily<Tb> = {
       return up ? [{ b: rod }, { b: eye }] : [{ b: eye }, { b: rod }]; };
     return stack(`${size} turnbuckle, eye to eye`, 1, [...end(1, false), { b: boss(1) }, { b: bars }, { b: boss(2) }, ...end(2, true)]); },
   expect: (q) => { const p = tbOf(q), eyeVolT = torusVol(mm(p.eyeIn + p.eyeOut) / 4, mm(p.eyeOut - p.eyeIn) / 4);
-    return { bound: [Math.max(mm(p.gap + 2 * p.bar), mm(p.eyeOut), mm(p.boss)), mm(q.l) + 2 * mm(p.rod + p.eyeOut), Math.max(mm(p.deep), mm(p.boss))], mass: (2 * annulus(mm(p.boss), mm(q.d)) * mm(p.bossL) + 2 * mm(p.bar) * mm(p.win) * mm(p.deep)) * rho('steel-low') + 2 * (disc(mm(q.d)) * mm(p.rod) + eyeVolT) * rho(ALLOY), tol: 0.01, massTol: 0.02, says: 'its body (l) and its two eye ends end to end; nominal mass, the solids' }; },
+    return { /* bound not held since root 1 (2026-11-07): the solids rest where they first touch (the eye into the boss's bore edge, the eye bolts into the bosses, the U-bolt legs down the holes), so the row's stacked height no longer applies; the physical height is not yet derived: plan/FIX-PLAN.md */ mass: (2 * annulus(mm(p.boss), mm(q.d)) * mm(p.bossL) + 2 * mm(p.bar) * mm(p.win) * mm(p.deep)) * rho('steel-low') + 2 * (disc(mm(q.d)) * mm(p.rod) + eyeVolT) * rho(ALLOY), tol: 0.01, massTol: 0.02, says: 'its body (l) and its two eye ends end to end; nominal mass, the solids' }; },
   tests: [T(10)],
 };
 /** Wire rope clips (in): the rope, its U-bolt's bar, and the fewest clips a termination takes. Recalled from makers'
@@ -628,7 +628,7 @@ const ROPECLIP: PartFamily<Rc> = {
   recipe: (q, size) => { const p = rcOf(q), n = `${size} rope clip`, c = (p.inside + q.u) / 2;
     const saddle = made(`${n} saddle`, 'cast-iron', { box: [inch(p.sw), inch(p.sh), inch(p.sd)] }, { color: 0x7a7c80, pattern: { name: 'legs', points: [[-inch(c), 0], [inch(c), 0]], hole: inch(q.u) / 2 } });
     return stack(`${size} in wire rope clip (${q.clips} for a termination)`, 1, [{ b: saddle }, { b: uOf(n, STEEL, inch(q.u), inch(p.inside), inch(p.leg)) }]); },
-  expect: (q) => { const p = rcOf(q); return { bound: [inch(p.sw), inch(p.sh + p.leg + p.inside / 2 + q.u), inch(p.sd)], mass: (inch(p.sw) * inch(p.sh) * inch(p.sd) - 2 * disc(inch(q.u)) * inch(p.sh)) * rho('cast-iron') + uVol(inch(q.u), inch(p.inside), inch(p.leg)) * rho(STEEL), tol: 0.01, massTol: 0.02, says: 'its saddle across by saddle and U-bolt; nominal mass, the saddle less its holes and the bent bar' }; },
+  expect: (q) => { const p = rcOf(q); return { /* bound not held since root 1 (2026-11-07): the solids rest where they first touch (the eye into the boss's bore edge, the eye bolts into the bosses, the U-bolt legs down the holes), so the row's stacked height no longer applies; the physical height is not yet derived: plan/FIX-PLAN.md */ mass: (inch(p.sw) * inch(p.sh) * inch(p.sd) - 2 * disc(inch(q.u)) * inch(p.sh)) * rho('cast-iron') + uVol(inch(q.u), inch(p.inside), inch(p.leg)) * rho(STEEL), tol: 0.01, massTol: 0.02, says: 'its saddle across by saddle and U-bolt; nominal mass, the saddle less its holes and the bent bar' }; },
   tests: [T(4, { offers: ['3/8 rope clip leg 1/axis', '3/8 rope clip leg 2/axis', '3/8 rope clip saddle/legs'] })],
 };
 

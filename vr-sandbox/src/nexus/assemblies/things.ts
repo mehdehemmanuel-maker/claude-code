@@ -92,6 +92,29 @@ function windTurbine(): void {
     'A three-bladed wind turbine on a mast, as one node of a few settings', ['mechanical', 'electrical', 'structural']);
 }
 
+// ---- a hull (decision 0029: a lofted solid in the room, so a hull is not a box) ------------------------------------------
+function hull(): void {
+  // (a small flat-bottomed boat's hull as a loft of six stations along its length, sizes typical of a 12 ft jon boat: 3.66 m
+  // long, 1.22 m beam, 380 mm sides, flat-bottomed and full-beam for its aft half, its bow rising and narrowing to a 120 mm
+  // stem (each station "x:w:lo:hi:n:mid" mm, n 4 aft (a squarish section, a rounded bilge) easing to 2 at the stem, widest
+  // 10 mm under its sheer); its length a setting (the stations scaled along it). Read as a solid loft, so its mass is the
+  // whole hull's volume at aluminium's density: an overstatement, said here (a skin of 3 mm is not made yet). A plywood
+  // transom across its stern and a 3 mm aluminium foredeck on its sheer at the bow. The loft runs along x as made and is
+  // laid along z (its bow at +z) so what goes on a boat (seed.boat) stacks along z as before)
+  const s = new Asm('A boat hull');
+  s.input('length', 'number', 3660, 'the hull\'s length, mm', [], 'loft.a');
+  s.input('transom', 'number', 25, 'the transom\'s thickness, mm (marine plywood)', [], 'tr.c');
+  s.n('room.make', { name: 'hull', shape: 'loft', mat: 'al-5052', a: 3660, stations: '0:1220:0:380:4:370; 800:1220:0:380:4:370; 1600:1220:0:380:4:370; 2400:1180:20:380:3:370; 3200:900:120:380:2.5:370; 3660:120:300:380:2:370' }, 'The hull: a loft of six stations, 1220 beam, 380 deep, flat aft, its bow rising to a stem', 'loft');
+  s.op('laid', 'room.turn', { axis: 'y', degrees: -90 }, 'Laid along z, its bow at +z', { block: 'loft' });
+  s.n('room.make', { name: 'transom', shape: 'box', mat: 'wood', a: 1220, b: 380, c: 25 }, 'The transom (plywood)', 'tr');
+  s.op('hulled', 'room.stack', { name: 'hull', axis: 'z', fit: 'touch', order: 'tr, laid' }, 'Transom, then the hull', { blocks: ['tr', 'laid'] });
+  s.n('room.make', { name: 'deck', shape: 'box', mat: 'al-5052', a: 1220, b: 3, c: 1200 }, 'The foredeck, 3 mm aluminium, 1200 long', 'deck');
+  s.op('decked', 'room.onto', { face: '+y', fit: 'touch', end: 'hi' }, 'The foredeck on the sheer, flush with the bow', { host: 'hulled', child: 'deck' });
+  s.outs('decked');
+  s.save('seed.hull', 'Boat hull (lofted)', 'A small boat\'s hull as a lofted solid (sizes typical of a 12 ft jon boat: 3.66 m, 1.22 m beam, 380 mm sides): six stations along its length, flat-bottomed and full-beam aft, its bow rising and narrowing to a stem; a plywood transom across its stern (at −z) and a 3 mm foredeck on its sheer at the bow (+z). Weighed as a solid loft (an overstatement: its skin is not made yet). Settings: length (the hull\'s) and transom (its thickness), mm. It offers its transom\'s stern face (Onto a face −z, for an outboard) and its sheer (Onto a face +y, for a seat)',
+    'A lofted boat hull with its transom and foredeck, as one node', ['mechanical', 'vehicles']);
+}
+
 // ---- a boat -------------------------------------------------------------------------------------------------------------
 function boat(): void {
   // (a small flat-bottomed aluminium boat, its sizes typical of a 12 ft jon boat: 3.66 m long, 1.22 m beam, 380 mm sides,
@@ -100,12 +123,10 @@ function boat(): void {
   // clamp on the tube against the transom, the lower unit (a pod the prop shaft turns in, a clear fit), a three-bladed
   // prop on the shaft aft, and a rudder fin under the pod (an outboard steers by turning the whole motor))
   const s = new Asm('A small boat');
-  s.input('length', 'number', 3660, 'the hull\'s length, mm', [], 'hull.a');
-  s.input('transom', 'number', 25, 'the transom\'s thickness, mm (marine plywood)', [], 'tr.c');
-  s.n('room.make', { name: 'hull', shape: 'section', mat: 'al-5052', a: 3660, pts: '-610,0; 610,0; 610,380; 607,380; 607,3; -607,3; -607,380; -610,380' }, 'The hull: a U section, 1220 wide, 380 deep, 3 mm aluminium', 'hull');
-  s.n('room.make', { name: 'transom', shape: 'box', mat: 'wood', a: 1220, b: 380, c: 25 }, 'The transom (plywood)', 'tr');
-  s.n('room.make', { name: 'bow plate', shape: 'box', mat: 'al-5052', a: 1220, b: 380, c: 3 }, 'The bow plate', 'bow');
-  s.op('boat', 'room.stack', { name: 'boat', axis: 'z', fit: 'touch', order: 'tr, hull, bow' }, 'Transom, hull, bow', { blocks: ['tr', 'hull', 'bow'] });
+  // (decision 0029: the hull is the lofted hull (seed.hull) with its transom and foredeck, its length and transom wired on)
+  s.input('length', 'number', 3660, 'the hull\'s length, mm');
+  s.input('transom', 'number', 25, 'the transom\'s thickness, mm (marine plywood)');
+  s.n('seed.hull', { length: 3660, transom: 25 }, 'The lofted hull, its transom and foredeck (seed.hull)', 'boat'); s.w('in_length', 'value', 'boat', 'length'); s.w('in_transom', 'value', 'boat', 'transom');
   // (the lower unit, built standing and laid aft)
   s.n('piece.shaft', { size: '10', length: 300 }, 'The prop shaft, Ø10', 'ps');
   s.n('room.make', { name: 'motor pod', shape: 'tube', mat: 'al-6061', a: 6, b: 45, c: 160 }, 'The motor pod, Ø90', 'pod');
@@ -126,7 +147,7 @@ function boat(): void {
   s.op('motor', 'room.stack', { name: 'outboard', axis: 'y', fit: 'touch', align: '25x2 aluminium tube/axis', order: 'lower, clamped, mh' }, 'Lower unit, tube, head, on the tube\'s axis', { blocks: ['lower', 'clamped', 'mh'] });
   s.op('all', 'room.onto', { face: '-z', fit: 'touch' }, 'The outboard on the transom', { host: 'boat', child: 'motor' });
   s.outs('all');
-  s.save('seed.boat', 'Small boat with an outboard', 'A small flat-bottomed aluminium boat (sizes typical of a 12 ft jon boat: 3.66 m, 1.22 m beam, 380 mm sides): a U-section hull, a plywood transom at the stern, a bow plate; an electric outboard clamped on the transom: its head, a 760 mm shaft tube, the pod the prop shaft turns in (its joint), a three-bladed prop aft, a rudder fin under the pod. Settings: length (the hull\'s) and transom (its thickness), mm. It offers hull (Onto a face +y for a seat or a deck), Ø10 shaft/axis (the prop shaft)',
+  s.save('seed.boat', 'Small boat with an outboard', 'A small flat-bottomed aluminium boat (sizes typical of a 12 ft jon boat: 3.66 m, 1.22 m beam, 380 mm sides): a lofted hull of six stations (seed.hull) with its plywood transom at the stern and a foredeck; an electric outboard clamped on the transom: its head, a 760 mm shaft tube, the pod the prop shaft turns in (its joint), a three-bladed prop aft, a rudder fin under the pod. Settings: length (the hull\'s) and transom (its thickness), mm. It offers hull (Onto a face +y for a seat or a deck), Ø10 shaft/axis (the prop shaft)',
     'A small boat with a motor and a propeller at its stern, as one node', ['mechanical', 'vehicles']);
 }
 
@@ -328,7 +349,7 @@ function truck(): void {
 let made = false;
 export function makeThings(): void {
   if (made) return; made = true;
-  windTurbine(); boat(); camera(); tripod(); leg();
+  windTurbine(); hull(); boat(); camera(); tripod(); leg();
   walker('seed.quadruped', 'A quadruped', 4, 'A walking robot on four legs: the leg (seed.leg) four times at the body\'s corners, the body (ABS, 240 × 240) on their hip plates and a mount plate on top (body mount/holes, four M3). Settings: joints (each leg\'s, 2 or 3) and spread (the legs\' distance from the middle), mm');
   walker('seed.hexapod', 'A hexapod', 6, 'A walking robot on six legs: the leg (seed.leg) six times round a round body (ABS, Ø380), each turned to face out, and a mount plate on top (body mount/holes, four M3). Settings: joints (each leg\'s, 2 or 3) and spread (the legs\' distance from the middle), mm');
   winch(); pump(); truck();

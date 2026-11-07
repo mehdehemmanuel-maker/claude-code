@@ -619,7 +619,7 @@ export class LiveMotion {
     const shapeOf = (i: number): { st: InstanceType<Jolt['ShapeSettings']>; pos: V3; R: M3 } => {
       const p = block.pieces[i]!, P = p.solid.base, f = (P.frame ?? [1, 0, 0, 0, 1, 0, 0, 0, 1]) as M3, c: V3 = [P.c[0], P.c[1], P.c[2]];
       if (P.k === 'box' && P.sect) { const g = gearOf(p); if (g) return { st: new J.CylinderShapeSettings(P.size[2] / 2, g.ra, cr(P.size[2] / 2)), pos: [g.at[0], g.at[1], P.c[2]], R: mul(f, RX) }; }
-      if (P.k === 'box') return { st: new J.BoxShapeSettings(V([P.size[0] / 2, P.size[1] / 2, P.size[2] / 2]), cr(Math.min(...P.size) / 2)), pos: c, R: f };
+      if (P.k === 'box' || P.k === 'loft') return { st: new J.BoxShapeSettings(V([P.size[0] / 2, P.size[1] / 2, P.size[2] / 2]), cr(Math.min(...P.size) / 2)), pos: c, R: f };
       if (P.k === 'bend') { const [lo, hi] = primBox(P); return { st: new J.BoxShapeSettings(V([(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, (hi[2] - lo[2]) / 2]), 0.0005), pos: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2], R: [1, 0, 0, 0, 1, 0, 0, 0, 1] }; }
       if (P.k === 'sphere') return { st: new J.SphereShapeSettings(P.r), pos: c, R: f };
       return { st: new J.CylinderShapeSettings(P.h / 2, P.r, cr(Math.min(P.h, 2 * P.r) / 2)), pos: c, R: f };
