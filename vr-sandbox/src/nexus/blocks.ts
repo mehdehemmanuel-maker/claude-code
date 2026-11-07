@@ -35,7 +35,7 @@ import { QUANTITIES, quantityById, quantityOf } from './quantities';
 import { BOOK, KEPT, KINDS as LAW_KINDS } from './book';
 import { TAGS } from './book/tags';
 import { FIELDS } from './book/fields';
-import { MATTER, matterOf, mixedMatter } from './matter';
+import { MATTER, knownMaterial, matterOf, mixedMatter, notMaterial } from './matter';
 import { ARRANGEMENTS, type Arrangement } from './mixture';
 import { FILMS_MEASURED, METALS_MEASURED, colourOfNK, filmColour, metalColour, reflectanceFilm, xyzOf, linearSRGB, hexOf } from './colour';
 import { FILM_NK, METAL_NK, NM } from '../data/optics';
@@ -46,7 +46,7 @@ import { madeOf, massProperties } from './madeof';
 import { arrowsOf, bentUnder, bentWhole, coloured, flowOver, graphOf, groupsOf, piecesBy, sliced, temperaturesOf, type Contact } from './graph';
 import { apply, type Law } from './law';
 import { varsOf } from './term';
-import { breakdown, chain, setting, solve as solveLaw, valueIn, type Known } from './lawgraph';
+import { breakdown, chain, measured, setting, solve as solveLaw, step as stepLaw, valueIn, type Known } from './lawgraph';
 import { evaluate, type Derivation } from './evaluate';
 import { DERIVATIVE_METHODS, INTEGRAL_METHODS, ODE_METHODS, ROOT_METHODS, derivative, integrate, ode, root, saysFound, step as stepOde, type Found } from './numeric';
 import { DESIGNED, boltedJoint, componentFromParams } from './components';
@@ -54,7 +54,8 @@ import { FAMILIES } from './families';
 import { METRIC } from './threads';
 import { DENSITY } from './mass';
 import * as THREE from 'three';
-import { bodiesOf, posedAt, simulate, type SimJoint, type SimOut } from './sim';
+import { bodiesOf, motionOf, posedAt, simulate, type SimJoint, type SimOut } from './sim';
+import { classOf, type Interface, type PortClass } from './interfaces';
 import { Servo } from './motion';
 import { GEARHEADS, MOTORS } from '../data/motors';
 import { motorModel, windingR } from '../engineering/dcmotor';
@@ -100,7 +101,7 @@ import { SPRING_WIRES } from '../engineering/springs';
 /** A load case's row as a table's: its figure, limit and factor, in the units it is said in. */
 const tableRow = (r: LoadRow): Record<string, unknown> => ({ what: r.what, value: +r.value.toPrecision(4), unit: r.unit, limit: +r.limit.toPrecision(4), factor: +r.factor.toFixed(2), ok: r.ok ? 'yes' : 'NO', says: r.says });
 import { BCI_GROUPS, CELL_FORMATS } from '../data/batteries';
-import { exploded, fitIn, leavesOf, partOf } from './assembly';
+import { exploded, fitIn, flatten, leavesOf, partOf } from './assembly';
 import { coil } from './makers';
 import { compileNotes, feedLinesOf, fidelityOf, gapOf, mergeReferences, REFERENCE_NOTES, referenceOf, referenceTree, webParts, type Reference, type WebParts } from './research';
 import { allVerdicts, approveProposals, candidatesOf, deleteThing, eventsSince, GATES, proposalsAll, researchLoop, runGauntlet, sortUnknowns, tasksNow, unknownQueue, unknownsUnder, webResolver, wordsOf, type EventKind, type GateId, type Lib } from './gauntlet';
@@ -255,7 +256,11 @@ export interface BlockDef {
   every?: string;
   /** An old id kept for the boards made with it: the block it was merged into. */
   alias?: string;
+  /** How what it makes is made (AUDIT §4: manufacturing): each process with its source. Optional; none written yet. */
+  make?: Make[];
 }
+/** A process that makes a block's thing ("turned", "laser cut 3 mm mild steel"), and where that is said. */
+export interface Make { process: string; src: string; says?: string }
 /** Whether a block, so set, reads the clock. */
 export const clockOf = (b: BlockDef, set: Record<string, unknown> = {}): boolean => (typeof b.clock === 'function' ? b.clock({ ...defaultsOf(b), ...set }) : !!b.clock);
 export const portsOf = (b: BlockDef, set: Record<string, unknown> = {}): Ports => (typeof b.ports === 'function' ? b.ports(set) : b.ports);
@@ -384,6 +389,71 @@ export async function testBlock(b: BlockDef, runGraph?: (b: BlockDef, inputs: Re
 }
 export const defaultsOf = (b: BlockDef): Record<string, unknown> => Object.fromEntries((b.settings ?? []).map((s) => [s.key, s.default]));
 
+// ---- the component contract (AUDIT §4) --------------------------------------------------------------------------------
+// One read over what exists, not a new schema: a BlockDef (a piece, a seed, a law, a board folded by groupBlock) and the
+// room Block it makes give every field the directive's data model names, the same keys for each; a field the block does
+// not have is empty and a field that needs the made thing is null until it is given.
+
+/** A parameter: a setting or a value input, its value as set (or its default), and its unit where it states one (its own
+ *  unit field, or its label's last words: "Length, mm", "Anodising voltage (V)"), with the value in SI where both are known. */
+export interface Param { key: string; label: string; from: 'setting' | 'input'; type: string; value: unknown; default: unknown; unit?: string; unitFrom?: 'its unit' | 'its label'; si?: number; choices?: unknown[] }
+const unitInLabel = (label: string): string | undefined => {
+  const m = /,\s*([^,()]+?)\s*(?:\(.*\))?$/.exec(label) ?? /\(([^()]+)\)\s*$/.exec(label), u = m?.[1]?.trim();
+  return u && u.length <= 12 && /^[A-Za-zµΩ°%]/.test(u) && dimOf(u) ? u : undefined; };
+/** Its parameters, one list: every setting, then every input that takes a value (a number, yes or no, text). */
+export function paramsOf(def: BlockDef, set: Record<string, unknown> = {}): Param[] {
+  const one = (key: string, label: string, from: Param['from'], type: string, dflt: unknown, own?: string, choices?: unknown[]): Param => {
+    const unit = own || unitInLabel(label), value = set[key] ?? dflt; let si: number | undefined;
+    if (unit && typeof value === 'number') { try { si = toSI(value, unit); } catch { si = undefined; } }
+    return { key, label, from, type, value, default: dflt, ...(unit ? { unit, unitFrom: own ? 'its unit' as const : 'its label' as const } : {}), ...(si !== undefined ? { si } : {}), ...(choices?.length ? { choices } : {}) };
+  };
+  const ins = portsOf(def, set).inputs.filter((p) => p.type === 'number' || p.type === 'integer' || p.type === 'boolean' || p.type === 'text');
+  return [...(def.settings ?? []).map((s) => one(s.key, s.label, 'setting', s.type, s.default, s.unit, s.choices)), ...ins.map((p) => one(p.name, p.label ?? p.name, 'input', p.type, p.default, p.unit, p.choices))];
+}
+/** What it is made from: for a folded board, each block its board places (how many times; whether the library has it);
+ *  a block with its own code depends on nothing a board shows. */
+export function depsOf(def: BlockDef): { id: string; n: number; found: boolean }[] {
+  const n = new Map<string, number>();
+  for (const x of Object.values(def.graph?.nodes ?? {})) if (x.block && !x.deleted && x.block !== 'group.in' && x.block !== 'group.out') n.set(x.block, (n.get(x.block) ?? 0) + 1);
+  return [...n].map(([id, k]) => ({ id, n: k, found: LIBRARY.has(id) }));
+}
+/** Its variants: each setting or input with choices (a family's rows are its Size's), what it is at, and whether every
+ *  choice is a different thing made (`every`). */
+export function variantsOf(def: BlockDef, set: Record<string, unknown> = {}): { key: string; choices: unknown[]; at: unknown; every: boolean }[] {
+  return paramsOf(def, set).filter((p) => p.choices?.length).map((p) => ({ key: p.key, choices: p.choices!, at: p.value, every: def.every === p.key }));
+}
+/** The models it rests on, as its specification states them (laws, equations, class, references); none where it states none. */
+export function modelsOf(def: BlockDef): NonNullable<Spec['model']>[] { return def.spec?.model ? [def.spec.model] : []; }
+/** The component contract of a block, so set, and of the room block it made where that is given. */
+export interface Contract {
+  id: string; type: { kind: Kind; ability: Ability; aisle: string | null; role: Role | null };
+  geometry: { by: 'run' | 'graph' | 'none'; pieces: number | null; bound: [readonly number[], readonly number[]] | null };
+  parameters: Param[]; materials: string[] | null;
+  /** its connection ports: the room block's lines as interface records, each with the directive's classes it serves */ ports: (Interface & { classes: readonly PortClass[] })[] | null;
+  /** what its node takes and gives on a board */ wires: Ports;
+  freedom: number | null; freedomSays: string;
+  constraints: { a: string; b: string; kind: string; gap: number; fit?: string; by: string }[] | null;
+  models: NonNullable<Spec['model']>[]; make: Make[]; tolerances: { where: string; tol: string }[] | null;
+  deps: { id: string; n: number; found: boolean }[]; variants: { key: string; choices: unknown[]; at: unknown; every: boolean }[];
+  standards: string[]; provenance: { by: BlockDef['by']; version: number; sources: Source[] }; validation: { kind: string; says: string }; tests: number;
+}
+export function contractOf(def: BlockDef, set: Record<string, unknown> = {}, made?: Block): Contract {
+  const s = { ...defaultsOf(def), ...set }, m = made ? motionOf(made) : undefined, ev = evidenceOf(def);
+  const ports = made ? interfacesOf(made).list.map((x) => ({ ...x, classes: classOf(x.kind) })) : null, name = (i: number) => made?.pieces[i]?.name ?? String(i);
+  return {
+    id: def.id, type: { kind: def.kind, ability: def.ability, aisle: def.aisle ?? null, role: def.spec?.role ?? null },
+    geometry: { by: def.graph ? 'graph' : def.run ? 'run' : 'none', pieces: made ? made.pieces.length : null, bound: made ? [made.lo, made.hi] : null },
+    parameters: paramsOf(def, s), materials: made ? [...new Set(made.pieces.map((p) => p.mat))] : null, ports, wires: portsOf(def, s),
+    freedom: m ? m.freedom : null, freedomSays: m ? m.freedomSays : 'not made here: give the block it made',
+    constraints: made ? made.faces.map((f) => ({ a: name(f.a), b: name(f.b), kind: f.kind, gap: f.gap, ...(f.fit ? { fit: f.fit } : {}), by: f.by })) : null,
+    models: modelsOf(def), make: def.make ?? [],
+    tolerances: made ? [...made.faces.filter((f) => f.fit).map((f) => ({ where: `${name(f.a)} and ${name(f.b)}`, tol: String(f.fit) })), ...made.pieces.flatMap((p) => p.lines.filter((l) => l.size?.tol !== undefined).map((l) => ({ where: l.port, tol: String(l.size!.tol) })))] : null,
+    deps: depsOf(def), variants: variantsOf(def, s),
+    standards: [...new Set([...(def.sources ?? []).filter((x) => x.kind === 'standard').map((x) => x.cite), ...(ports ?? []).flatMap((x) => (x.std ? [x.std] : []))])],
+    provenance: { by: def.by, version: def.version, sources: def.sources ?? [] }, validation: { kind: ev.kind, says: ev.why }, tests: def.tests?.length ?? 0,
+  };
+}
+
 /** The library sorted one of the three ways: domain, ability or kind, each heading with its blocks, by name. */
 /** The stages of the work, in the order a board runs: the library's first shelves, so a node is found by what you are
  *  doing with it, not by which of 19 fields it was filed under. A node's stage is read from what it is (its kind, its
@@ -459,6 +529,31 @@ export function shelves(by: 'stage' | 'domain' | 'ability' | 'kind', q = ''): { 
 // ---- built-in blocks ------------------------------------------------------------------------------------------------
 const P = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });
 const N = (name: string, unit?: string, more: Partial<PortDef> = {}): PortDef => ({ name, type: 'number', ...(unit ? { unit } : {}), ...more });
+/** A thing twisted by a torque T: its round pieces (rods) carry T in series, a shaft line, each twisted about its own
+ *  axis; each sheared most at its surface, τ = T r / J, and twisted θ = T L / (G J) over its own length, J and θ by the
+ *  book's laws from the piece's own section as built and its material's G (matter.ts). A piece that is not a round rod is
+ *  refused, saying so: its twist is not worked here. */
+function twisted(t: Part | Assembly, T: number): { tau: number; theta: number; G: number; J: number; L: number; says: string } {
+  const rows: { name: string; r: number; L: number; G: number; J: number; tau: number; theta: number }[] = [], not: string[] = [];
+  flatten(t, ({ leaf, m, over }) => {
+    const s = leaf.shape as Record<string, unknown> | undefined; if (!s) return;
+    const cyl = s.cyl as [number, number, number?] | undefined;
+    if (!cyl || (cyl[2] !== undefined && cyl[2] !== cyl[0]) || leaf.facets) { not.push(`the ${leaf.name} (${cyl ? (leaf.facets ? `drawn with ${leaf.facets} flats` : 'tapered') : `a ${Object.keys(s)[0]}`})`); return; }
+    const e = m.elements, sx = Math.hypot(e[0]!, e[1]!, e[2]!), sy = Math.hypot(e[4]!, e[5]!, e[6]!), sz = Math.hypot(e[8]!, e[9]!, e[10]!);
+    if (Math.abs(sx - sz) > 1e-12 * sx) { not.push(`the ${leaf.name} (stretched across: not round)`); return; }
+    const r = cyl[0] * sx, L = cyl[1] * sy, mat = String(over.mat ?? leaf.mat ?? ''), Gp = mat ? matterOf(mat).props.find((p) => p.key === 'G') : undefined;
+    if (!Gp) throw new Error(`the ${leaf.name}: ${mat ? `its material ${mat} has no shear modulus here (${notMaterial(mat) ?? 'no E and ν, or not isotropic'})` : 'no material'}, so its twist cannot be worked`);
+    const Td = setting('torque', T, 'N m', 'the twist set'), rd = measured('radius', r, 'm', `read off the built ${leaf.name}`), Ld = measured('length', L, 'm', `read off the built ${leaf.name}`), Gd = measured('shear modulus', Gp.value, 'Pa', Gp.source);
+    const Jd = stepLaw('section.circle.polar-moment', { r: rd }), tau = stepLaw('torsion.solid', { T: Td, d: measured('diameter', 2 * r, 'm', `read off the built ${leaf.name}`) }), th = stepLaw('torsion.twist', { T: Td, L: Ld, G: Gd, J: Jd });
+    if (Jd.value === null || tau.value === null || th.value === null) throw new Error(`the ${leaf.name}: the torsion laws refused (${[Jd, tau, th].map((d) => d.refusal?.domain).filter(Boolean).join('; ')})`);
+    rows.push({ name: leaf.name, r, L, G: Gp.value, J: Jd.value, tau: tau.value, theta: th.value });
+  });
+  if (not.length) throw new Error(`twisted, only round rods are worked here (a shaft line): ${not.slice(0, 6).join(', ')}${not.length > 6 ? ` and ${not.length - 6} more` : ''} not`);
+  if (!rows.length) throw new Error('nothing round to twist');
+  const worst = rows.reduce((a, b) => (b.tau > a.tau ? b : a)), theta = rows.reduce((a, b) => a + b.theta, 0);
+  return { tau: worst.tau, theta, G: worst.G, J: worst.J, L: rows.reduce((a, b) => a + b.L, 0),
+    says: `twisted ${T} N m: ${rows.length === 1 ? `the ${worst.name}` : `${rows.length} round pieces in series`}, Ø${(2000 * worst.r).toPrecision(4)} mm, ${(1000 * rows.reduce((a, b) => a + b.L, 0)).toPrecision(4)} mm long, G ${(worst.G / 1e9).toPrecision(4)} GPa: sheared most at its surface ${(worst.tau / 1e6).toPrecision(4)} MPa (τ = T r / J), twisted ${theta.toPrecision(4)} rad (θ = T L / G J), by the book's laws over each piece as built, not by the frame` };
+}
 const BREALEY: Source = { cite: 'Brealey, Myers & Allen, Principles of Corporate Finance, 13th ed., McGraw-Hill 2020, ch. 2 (present values, annuities)', kind: 'textbook' };
 const HORNGREN: Source = { cite: 'Datar & Rajan, Horngren\'s Cost Accounting, 17th ed., Pearson 2021, ch. 3 (cost-volume-profit)', kind: 'textbook' };
 const SIBROCHURE: Source = { cite: 'BIPM, The International System of Units (SI Brochure), 9th ed., 2019', kind: 'standard' };
@@ -700,12 +795,16 @@ const BUILT_IN: BlockDef[] = [
       { set: { phases: 'al-6061 1', arrangement: 'open foam', porosity: 0.9 }, inputs: {}, outputs: { E: 0.01 * (matterOf('al-6061').props.find((p) => p.key === 'E')?.value ?? NaN) }, rel: 1e-9 }] }),
   def({ id: 'matter', name: 'What a material is', kind: 'input', ability: 'measure', domains: ['materials', 'science', 'mechanical'], says: 'What a material is, as exactly as it is known (its grade or species, or only its family: then said unspecified, with the span its family covers), what it is made of down to its elements, and every property with its value, unit, source and how it is known: the handbook\'s, a standard\'s, typical, estimated, worked out, or a stand-in (the nearest grade the handbook holds, said as such)',
     settings: [{ key: 'mat', label: 'Material', type: 'choice', default: 'steel-low', choices: Object.keys(MATTER).sort() }],
-    ports: { inputs: [P('mat', 'text', { optional: true, label: 'material (wired: over the setting)' })], outputs: [P('is', 'text'), P('specified', 'boolean'), P('props', 'table'), P('elements', 'table'), P('makeup', 'text'), P('disagreements', 'list<text>'), P('says', 'text')] },
+    ports: { inputs: [P('mat', 'text', { optional: true, label: 'material (wired: over the setting)' })], outputs: [P('is', 'text'), P('specified', 'boolean'), N('density', 'kg/m^3'), N('E', 'Pa', { label: 'elastic modulus' }), N('G', 'Pa', { label: 'shear modulus' }), N('nu', '1', { label: 'Poisson\'s ratio' }), N('yield', 'Pa', { label: 'yield strength' }), N('Tmax', 'K', { label: 'maximum service temperature' }), P('props', 'table'), P('elements', 'table'), P('makeup', 'text'), P('disagreements', 'list<text>'), P('says', 'text')] },
     run: (i, c) => {
-      const m = matterOf(String(i.mat ?? c.set.mat ?? 'steel-low'));
-      return { is: m.is, specified: m.specified, props: m.props.map((p) => ({ property: p.name, value: p.value, unit: p.unit, evidence: p.evidence, source: p.source, ...(p.note ? { note: p.note } : {}) })), elements: Object.entries(m.makeup.elements).sort((a, b) => b[1] - a[1]).map(([el, pct]) => ({ element: el, percent: pct })), makeup: m.makeup.says, disagreements: m.disagreements, says: `${m.is}${m.specified ? '' : ': unspecified, only its family is known'}${m.handbook ? `; ${m.handbook.same ? 'its handbook grade' : 'standing in'}: ${m.handbook.name}` : ''}${m.span ? `; its family spans ${Object.entries(m.span).filter(([k]) => k === 'density').map(([, s]) => `${s[0]} to ${s[1]} kg/m³`).join('')}` : ''}` };
+      const id = String(i.mat ?? c.set.mat ?? 'steel-low'); if (!knownMaterial(id)) throw new Error(notMaterial(id)!);
+      const m = matterOf(id), num = (key: string) => m.props.find((p) => p.key === key)?.value;
+      // (each figure as a number on its own port, where it is known; its source and how it is known stay in props)
+      const nums = Object.fromEntries((['density', 'E', 'G', 'nu', 'yield', 'Tmax'] as const).flatMap((k) => (num(k) === undefined ? [] : [[k, num(k)!]])));
+      return { ...nums, is: m.is, specified: m.specified, props: m.props.map((p) => ({ property: p.name, value: p.value, unit: p.unit, evidence: p.evidence, source: p.source, ...(p.note ? { note: p.note } : {}) })), elements: Object.entries(m.makeup.elements).sort((a, b) => b[1] - a[1]).map(([el, pct]) => ({ element: el, percent: pct })), makeup: m.makeup.says, disagreements: m.disagreements, says: `${m.is}${m.specified ? '' : ': unspecified, only its family is known'}${m.handbook ? `; ${m.handbook.same ? 'its handbook grade' : 'standing in'}: ${m.handbook.name}` : ''}${m.span ? `; its family spans ${Object.entries(m.span).filter(([k]) => k === 'density').map(([, s]) => `${s[0]} to ${s[1]} kg/m³`).join('')}` : ''}` };
     },
-    tests: [{ set: { mat: 'steel-low' }, inputs: {}, outputs: { specified: true } }, { set: { mat: 'wood' }, inputs: {}, outputs: { specified: false } }], sources: [{ cite: 'the material tables of src/nexus/matter.ts, each value with its own source', kind: 'database' }] }),
+    // (AISI 1018: its handbook E 205 GPa and ν 0.29, so G = E / 2 (1 + ν), derived)
+    tests: [{ set: { mat: 'steel-low' }, inputs: {}, outputs: { specified: true, E: 205e9, nu: 0.29, G: 205e9 / (2 * 1.29) }, rel: 1e-12 }, { set: { mat: 'wood' }, inputs: {}, outputs: { specified: false } }], sources: [{ cite: 'the material tables of src/nexus/matter.ts, each value with its own source', kind: 'database' }] }),
   def({ id: 'law.fields', name: 'Laws by field', kind: 'input', ability: 'measure', domains: ['science'], says: 'Each field of physics, chemistry and engineering, the core laws its standard textbook teaches, which of them are law nodes here and which are still missing (named with their formulas)',
     settings: [{ key: 'field', label: 'Field (blank: all)', type: 'choice', default: '', choices: ['', ...FIELDS.map((f) => f.field)] }],
     ports: { inputs: [], outputs: [P('rows', 'table'), P('missing', 'list<text>'), P('says', 'text')] },
@@ -1869,10 +1968,12 @@ const BUILT_THINGS: BlockDef[] = [
   def({ id: 'bend', name: 'Frame analysis (3D beams)', spec: { gloss: 'How it bends under a load', discipline: 'civil.structural.analysis', role: 'analysis', codes: [{ scheme: 'MSC2020', code: '74K10', label: 'Rods (beams, columns, shafts, arches, rings, etc.)' }], model: { equations: ['K u = f: each slice-to-slice beam a 12×12 Euler–Bernoulli element, Tᵀ K T into the thing’s frame', '(K + λ K_g) φ = 0 for the least λ (linear buckling, consistent geometric stiffness)', 'σ_vM = √(σ² + 3τ²) at each beam’s outer fibre', 'thermal load E A α ΔT as fixed-end forces'], class: '3-D discretised', time: 'steady', linear: true, method: 'direct stiffness method; conjugate gradients; inverse iteration; supports by kind, held at a point by u = θ × r', references: ['Przemieniecki, Theory of Matrix Structural Analysis (1968)', 'Roark’s Formulas for Stress and Strain, table 10.7 (torsion constant of a rectangle)'] } }, kind: 'critic', ability: 'measure', domains: ['mechanical', 'structural', 'vehicles', 'aerospace'], says: 'Any thing as a 3D frame of beams, read from its geometry (What touches what), nothing typed: each piece cut into slices, each slice a beam of its own section and material (stretch, twist and bending both ways, Euler–Bernoulli), pieces that touch bonded through the patch they meet over; held where said (the lowest, the highest, a name or material), pushed where said, in a direction. Gives how far the pushed end moves, the stiffness that is, each piece\'s movement, and the thing drawn bent (exaggerated) and coloured by how far each slice moved',
     valid: 'small, elastic movements; slender pieces (a solid block is a beam too: shear and its own spreading left out); contacts bonded, never parting; linear buckling (a perfect column; real ones go a little sooner)',
     spread: (_s, out): Record<string, number> => (out?._u && typeof out._u === 'object' ? (out._u as Record<string, number>) : {}),
-    settings: [{ key: 'load', label: 'The push, N', type: 'number', default: 100 }, { key: 'dir', label: 'Which way', type: 'choice', default: 'down', choices: ['down', 'up', '+x', '-x', '+z', '-z'] }, { key: 'at', label: 'Pushed at (the highest, the lowest, or a name or material)', type: 'text', default: 'the highest pieces' }, { key: 'as', label: 'How each is held: clamped, pinned, or the components held, 1–6 as in a Nastran SPC (1 2 3 along x y z, 4 5 6 turning about them); one for each held, joined by "and"', type: 'text', default: 'clamped' }, { key: 'held', label: 'Held at', type: 'text', default: 'the lowest pieces' }, { key: 'slices', label: 'Each piece cut into slices (1: whole)', type: 'number', default: 8 }, { key: 'warmed', label: 'Warmed evenly by, K (0: not)', type: 'number', default: 0 }],
-    ports: { inputs: [thing()], outputs: [N('give', 'm', { label: 'how far it moves where pushed, along the push' }), N('stiffness', 'N/m'), N('yields', 'N', { label: 'the push at which it first yields' }), N('buckles', 'N', { label: 'the push at which it buckles' }), N('stress', 'Pa', { label: 'the worst stress (von Mises) anywhere' }), P('stresses', 'table', { label: 'the worst stresses, over what each material stands' }), P('pieces', 'table', { label: 'each slice: how far it moved' }), P('seen', 'assembly', { label: 'drawn bent (exaggerated), coloured by how far each moved' }), P('says', 'text')] },
+    settings: [{ key: 'load', label: 'The push, N', type: 'number', default: 100 }, { key: 'dir', label: 'Which way', type: 'choice', default: 'down', choices: ['down', 'up', '+x', '-x', '+z', '-z'] }, { key: 'at', label: 'Pushed at (the highest, the lowest, or a name or material)', type: 'text', default: 'the highest pieces' }, { key: 'as', label: 'How each is held: clamped, pinned, or the components held, 1–6 as in a Nastran SPC (1 2 3 along x y z, 4 5 6 turning about them); one for each held, joined by "and"', type: 'text', default: 'clamped' }, { key: 'held', label: 'Held at', type: 'text', default: 'the lowest pieces' }, { key: 'slices', label: 'Each piece cut into slices (1: whole)', type: 'number', default: 8 }, { key: 'warmed', label: 'Warmed evenly by, K (0: not)', type: 'number', default: 0 }, { key: 'torque', label: 'Twisted by, N m, about each round piece\'s own axis (0: not)', type: 'number', default: 0 }],
+    ports: { inputs: [thing()], outputs: [N('give', 'm', { label: 'how far it moves where pushed, along the push' }), N('tau', 'Pa', { label: 'twisted: the most shear, at the surface (T r / J)' }), N('theta', 'rad', { label: 'twisted: how far it twists (T L / G J)' }), N('stiffness', 'N/m'), N('yields', 'N', { label: 'the push at which it first yields' }), N('buckles', 'N', { label: 'the push at which it buckles' }), N('stress', 'Pa', { label: 'the worst stress (von Mises) anywhere' }), P('stresses', 'table', { label: 'the worst stresses, over what each material stands' }), P('pieces', 'table', { label: 'each slice: how far it moved' }), P('seen', 'assembly', { label: 'drawn bent (exaggerated), coloured by how far each moved' }), P('says', 'text')] },
     run: (i, c) => {
       const D: Record<string, [number, number, number]> = { down: [0, -1, 0], up: [0, 1, 0], '+x': [1, 0, 0], '-x': [-1, 0, 0], '+z': [0, 0, 1], '-z': [0, 0, -1] };
+      // (twisted alone: no push, no warmth: the torsion laws over its round pieces as built)
+      const Tq = Number(c.set.torque ?? 0); if (Tq && !Number(c.set.load ?? 100) && !Number(c.set.warmed ?? 0)) { const tw = twisted(asThing(i.thing), Tq); return { tau: tw.tau, theta: tw.theta, says: tw.says }; }
       const F = Number(c.set.load ?? 100), d = D[String(c.set.dir ?? 'down')] ?? D.down!, load = d.map((v) => v * F) as [number, number, number], atS = String(c.set.at ?? 'the highest pieces'), heldS = String(c.set.held ?? 'the lowest pieces');
       const n = Math.max(1, Math.min(64, Math.round(Number(c.set.slices ?? 8)))), g0 = graphOf(asThing(i.thing));
       const mids = (xs: number[]) => xs.reduce((m, k) => m.add(g0.pieces[k]!.node.box!.getCenter(new THREE.Vector3())), new THREE.Vector3()).multiplyScalar(1 / Math.max(1, xs.length));
@@ -1904,6 +2005,7 @@ const BUILT_THINGS: BlockDef[] = [
       }
       if (!b.converged) out.says = `${String(out.says)}. It did not settle: it may be held too loosely to stand (free to turn or slide as a whole); hold it by more components`;
       out.stresses = [...b.stress].sort((x, y) => (y.share ?? 0) - (x.share ?? 0) || y.vm - x.vm).slice(0, 50).map((x) => ({ a: g.pieces[x.a]!.name, b: g.pieces[x.b]!.name, 'MPa': +(x.vm / 1e6).toPrecision(4), 'of what it stands': x.share === null ? null : +x.share.toPrecision(3) }));
+      if (Tq) { const tw = twisted(asThing(i.thing), Tq); out.tau = tw.tau; out.theta = tw.theta; out.says = `${String(out.says)}; ${tw.says} (the push and the twist worked apart, not combined)`; }
       return out;
     },
     // a 1 m steel bar 20 mm square standing, held at its bottom slice, pushed 10 N sideways at its top: a cantilever, its

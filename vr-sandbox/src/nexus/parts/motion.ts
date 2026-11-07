@@ -178,9 +178,9 @@ const SHAFT: PartFamily<number> = {
   id: 'piece.shaft', name: 'Round shaft', gloss: 'A ground round shaft (h6), 3 to 25 mm, by its diameter and length', domains: ['mechanical', 'manufacturing'],
   says: 'A ground steel shaft (its diameter to h6; the sizes linear shafts are sold in, typical) by its diameter and length: a rod along y. It offers Ø<size> shaft/axis: a bearing, a bushing, a collar, a wheel or a coupler slides over it (Over a shaft), or it passes through a bore (Through a line). D-cut shafts are drawn round (their flat not drawn)',
   rows: SHAFTS, size: '8', source: 'the diameters ground linear shafts are sold in (typical), tolerance h6 (ISO 286-2)',
-  settings: [lengthSet(200)], cannot: needLength,
-  recipe: (d, size, set) => made(`Ø${size} shaft`, 'steel-alloy', { cyl: [mm(d) / 2, len(set)] }, { color: 0xb8bcc2 }),
-  expect: (d, _s, set) => ({ bound: [mm(d), len(set), mm(d)], mass: disc(mm(d)) * len(set) * rho('steel-alloy'), tol: 0.01, massTol: 0.02, says: 'its diameter by its length; nominal mass, the rod' }),
+  settings: [lengthSet(200)], cannot: needLength, mat: 'steel-alloy',
+  recipe: (d, size, set) => made(`Ø${size} shaft`, String(set.mat ?? 'steel-alloy'), { cyl: [mm(d) / 2, len(set)] }, String(set.mat ?? 'steel-alloy') === 'steel-alloy' ? { color: 0xb8bcc2 } : {}),
+  expect: (d, _s, set) => ({ bound: [mm(d), len(set), mm(d)], mass: disc(mm(d)) * len(set) * rho(String(set.mat ?? 'steel-alloy')), tol: 0.01, massTol: 0.02, says: 'its diameter by its length; nominal mass, the rod' }),
   tests: [{ inputs: {}, outputs: { pieces: 1, offers: ['Ø8 shaft/axis'] } }],
 };
 type LeadRow = { d: number; P: number; lead: number };

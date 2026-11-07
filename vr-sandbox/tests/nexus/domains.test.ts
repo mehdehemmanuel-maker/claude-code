@@ -3395,7 +3395,7 @@ describe('every domain, in one pass', () => {
     const leg = front.pieces[0]!, screws = front.pieces.filter((p) => /screw( 2)?$/.test(p.name)).map((p) => R.boundOf(p));
     expect(screws.map((b) => +((R.boundOf(leg)[1][1] - b[0][1]) * 1000).toFixed(2)), 'each screw 8 mm into its leg').toEqual([8, 8]);
     expect(offered(front), 'what it still offers').toEqual(expect.arrayContaining(['M4 screw/axis', 'M4 screw 2/axis', 'pull handle 128 mm/screw holes']));
-  }, 30_000);
+  }, 90_000); // (a wall-clock limit, not a check: 31.4 s against 30 s with builders running (critique, 2026-11-07))
   // (decision 0026, step 2, motion and drive (src/nexus/parts/motion.ts): every family builds at its first, middle and
   // last size and holds to its row; each joined to a plate or a shaft by an operation is one group of pieces (each piece
   // reached from the others through the faces the operations wrote); a bearing's balls' cuts are no longer drawn through

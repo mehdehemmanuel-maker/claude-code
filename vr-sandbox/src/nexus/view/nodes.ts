@@ -20,7 +20,7 @@ import { starterBoards } from '../starters';
 import { LIBRARY_TYPES, allLibraries, fieldOf, needsOf, nextFor, reachText, search, useOf, type Found } from '../navigate';
 import { fullScreen, shot } from './nodes3d';
 import { setGuideMd } from '../agent';
-import { registerSaved } from '../memory';
+import { keep, registerSaved } from '../memory';
 import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
 // (the guide bundled, for the page on claude.ai, where no Node reads the file: decision 0027)
 setGuideMd(GUIDE_MD);
@@ -28,9 +28,8 @@ import '../seeds';
 import type { Part } from '../kits';
 
 // ---- where things are kept ------------------------------------------------------------------------------------------
-const KEY = 'nexus.nodeboard.v1', BLOCKS_KEY = 'nexus.nodeblocks.v1', CHOSEN_KEY = 'nexus.nodeboard.chosen.v1';
+const KEY = 'nexus.nodeboard.v1', CHOSEN_KEY = 'nexus.nodeboard.chosen.v1';
 const store = { get(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }, set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* private window: kept for this visit only */ } } };
-interface Saved { id: string; name: string; says: string; domains: string[]; graph: Board }
 const BOARDS_KEY = 'nexus.boards.v1';
 interface SavedBoard { title: string; field: string; board: Board }
 function savedBoards(): SavedBoard[] { try { return JSON.parse(store.get(BOARDS_KEY) ?? '[]') as SavedBoard[]; } catch { return []; } }
@@ -39,7 +38,8 @@ function keepBoard(field: string): void { const all = savedBoards().filter((x) =
 function forgetBoard(title: string): void { store.set(BOARDS_KEY, JSON.stringify(savedBoards().filter((x) => x.title !== title))); }
 /** Every block saved and every part remembered (decision 0028: memory.ts reads the same store) put in the library. */
 function loadBlocks(): void { registerSaved(); }
-function keepBlock(d: BlockDef): void { let all: Saved[] = []; try { all = JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { /* start again */ } all = all.filter((s) => s.id !== d.id); all.push({ id: d.id, name: d.name, says: d.says, domains: d.domains, graph: d.graph! }); store.set(BLOCKS_KEY, JSON.stringify(all)); }
+/** A block made here kept by memory.ts, the one writer of the saved blocks' store (decision 0029 P7). */
+function keepBlock(d: BlockDef): void { keep({ id: d.id, name: d.name, says: d.says, domains: d.domains, graph: d.graph! }); }
 
 // ---- code, off the page ---------------------------------------------------------------------------------------------
 let worker: Worker | null = null, seq = 0;
@@ -389,10 +389,10 @@ function pointerDown(p: At, pid: number, shift = false): void {
   }
   if (h?.kind === 'node' && cur().nodes[h.id]?.block === 'view.3d') {
     const gg = geo(h.id), [, wy] = toWorld(p.x, p.y);
-    if (wy >= gg.bodyY && wy <= gg.bodyY + gg.bodyH) { mode = 'orbit'; orbiting = h.id; sel.clear(); sel.add(h.id); renderInspector(true); return; }
+    if (wy >= gg.bodyY && wy <= gg.bodyY + gg.bodyH) { mode = 'orbit'; orbiting = h.id; sel.clear(); sel.add(h.id); openedFor = ''; renderInspector(true); return; }
   }
   if (h?.kind === 'node') {
-    if (shift) { if (sel.has(h.id)) sel.delete(h.id); else sel.add(h.id); } else if (!sel.has(h.id)) { sel.clear(); sel.add(h.id); }
+    openedFor = ''; if (shift) { if (sel.has(h.id)) sel.delete(h.id); else sel.add(h.id); } else if (!sel.has(h.id)) { sel.clear(); sel.add(h.id); }
     selWire = null; mode = 'drag'; dragStart = new Map([...sel].map((id) => [id, [cur().nodes[id]!.x ?? 0, cur().nodes[id]!.y ?? 0]]));
     renderInspector(true); draw(); return;
   }
@@ -459,6 +459,16 @@ function addBlock(blockId: string, x?: number, y?: number, opts: { set?: Record<
     if (opts.after) wired = fit(opts.after, id); else if (opts.before) wired = fit(id, opts.before);
   });
   if (!wired) toast('placed beside it: no port of one takes what the other gives as they are set', true);
+  sel.clear(); sel.add(id); quietAdd = true; try { renderInspector(true); } finally { quietAdd = false; } draw();
+}
+// (the choice the drawer was last opened for: it opens once for each new choice, not again on every run after it)
+let quietAdd = false, openedFor = '';
+/** A node again beside it, with its settings, its label and what is inside it (a group's board), wired to nothing. */
+function duplicate(src: string): void {
+  const n = cur().nodes[src]; if (!n) return; const id = uid('n');
+  // (under the original's card, a row's height clear of it (its card as drawn: geo), not 40 px over it)
+  const g = geo(src);
+  edit((b) => { b.nodes[id] = { ...(JSON.parse(JSON.stringify(n)) as typeof n), x: g.x, y: g.y + g.h + ROW }; });
   sel.clear(); sel.add(id); renderInspector(true); draw();
 }
 function removeSelected(): void {
@@ -626,7 +636,10 @@ function renderInspector(full: boolean): void {
   const el = document.getElementById('inspector')!;
   if (!full && el.contains(document.activeElement) && document.activeElement !== document.body) { const o = document.getElementById('iouts'); if (o && sel.size === 1) o.innerHTML = outsHtml([...sel][0]!); return; }
   // (a node or a wire chosen: its settings shown in the drawer, opened for it)
-  if (sel.size || selWire) el.classList.add('open');
+  // (not on an add: the drawer opened over the 3D view's Fit, Cut and Enter and the board's ＋ Parts each time a block was
+  // put on; the block added is chosen, its settings a tap away)
+  const chose = [...sel].join(',') + '|' + (selWire ?? '');
+  if (!sel.size && !selWire) openedFor = ''; else if (chose !== openedFor) { if (!quietAdd) el.classList.add('open'); openedFor = chose; }
   if (sel.size === 1) return nodeInspector(el, [...sel][0]!);
   if (sel.size > 1) {
     el.innerHTML = `<div class="ititle">${sel.size} blocks chosen</div><div class="btns"><button id="iGroup" class="hot">▣ Fold into a group</button><button id="iDel">Delete</button></div><p class="says">A group holds them as one block: what crosses its edge becomes its ports. Open it to change it; save it to the library to use it anywhere.</p>`;
@@ -683,12 +696,20 @@ function goesWith(el: HTMLElement, id: string, blockId: string): void {
     for (const t of g.usedIn.slice(0, 4)) { const b = document.createElement('button'); b.className = 'demo'; b.textContent = `▦ ${t}`; b.onclick = () => { const x = allBoards().find((y) => y.title === t); if (x) { pushUndo(); useBoard(x.make()); save(); fit(); runSoon(); renderAll(); } }; el.appendChild(b); }
   } else { const h = document.createElement('div'); h.className = 'src'; h.textContent = 'No starter board uses it yet'; el.appendChild(h); }
 }
+const blobUrls = new WeakMap<Blob, string>(), urlOfBlob = (b: Blob) => { let u = blobUrls.get(b); if (!u) { u = URL.createObjectURL(b); blobUrls.set(b, u); } return u; };
 function outsHtml(id: string): string {
   const s = stateOf(id), p = portsFor(id);
   let h = '';
   if (s?.status === 'failed') h += `<div class="err">✕ ${esc(s.error ?? '')}</div>`;
   if (s?.status === 'waiting') h += `<div class="wait">… ${esc(s.error ?? '')}</div>`;
-  for (const o of p.outputs) { const v = s?.out?.[o.name]; h += `<div class="out" style="border-left-color:${typeColour(o)}"><span>${esc(o.label ?? o.name)}</span><b>${esc(v === undefined ? '—' : Array.isArray(v) ? show(v, o.unit) : show(v, o.unit))}${s?.uncertainty?.[o.name] ? ` ± ${esc(show(s.uncertainty[o.name], o.unit))}` : ''}</b></div>`; }
+  for (const o of p.outputs) { const v = s?.out?.[o.name];
+    // (a record of files, each a Blob (Export's): each one a download, by its name and size)
+    const blobs = v && typeof v === 'object' && !Array.isArray(v) && typeof Blob !== 'undefined' ? Object.entries(v as Record<string, unknown>).filter((e): e is [string, Blob] => e[1] instanceof Blob) : [];
+    if (blobs.length) { h += `<div class="out" style="border-left-color:${typeColour(o)}"><span>${esc(o.label ?? o.name)}</span><b>${blobs.map(([k, b]) => `<a class="dl" download="${esc(k)}" href="${urlOfBlob(b)}">⤓ ${esc(k)} <span style="opacity:.6">${(b.size / 1024).toFixed(1)} kB</span></a>`).join('<br>')}</b></div>`; continue; }
+    // (a record of numbers (an import's bound: x, y, z) each shown by its name and value, not as its keys)
+    const nums = v && typeof v === 'object' && !Array.isArray(v) ? Object.entries(v as Record<string, unknown>) : [];
+    if (nums.length && nums.every(([, x]) => typeof x === 'number')) { h += `<div class="out" style="border-left-color:${typeColour(o)}"><span>${esc(o.label ?? o.name)}</span><b>${nums.map(([k, x]) => `${esc(k)} ${esc(show(x, o.unit))}`).join(' · ')}</b></div>`; continue; }
+    h += `<div class="out" style="border-left-color:${typeColour(o)}"><span>${esc(o.label ?? o.name)}</span><b>${esc(v === undefined ? '—' : Array.isArray(v) ? show(v, o.unit) : show(v, o.unit))}${s?.uncertainty?.[o.name] ? ` ± ${esc(show(s.uncertainty[o.name], o.unit))}` : ''}</b></div>`; }
   if (s?.status === 'ok') h += `<p class="src">${s.cached ? 'reused: nothing it reads changed' : `ran in ${s.ms.toFixed(2)} ms`}${s.mapped ? `, once for each of ${s.mapped.toLocaleString()} items` : ''}</p>`;
   for (const w of s?.warnings ?? []) h += `<div class="wait">⚠ ${esc(w)}</div>`;
   if (s?.uncertaintyLost) h += `<div class="wait">± ${esc(s.uncertaintyLost)}</div>`;
@@ -729,7 +750,7 @@ function nodeInspector(el: HTMLElement, id: string): void {
     ${ins ? `<h3>Inputs</h3>${ins}` : ''}
     ${into.length ? `<p class="src">${into.length} input${into.length > 1 ? 's' : ''} wired</p>` : ''}
     <h3>Results</h3><div id="iouts">${outsHtml(id)}</div>
-    <div class="btns">${n.inner ? '<button id="iOpen" class="hot">▣ Open inside</button><button id="iUnfold">Unfold</button><button id="iSave">Save to library</button>' : ''}${d?.graph && !n.inner ? '<button id="iCopy">Open a copy to change</button>' : ''}${n.block === 'view.3d' ? '<button id="i3d" class="hot">⤢ See it in 3D, full screen</button>' : ''}<button id="iCut">Cut branch</button><button id="iDel">Delete</button>${d?.tests?.length ? '<button id="iTest">Run its tests</button>' : ''}</div>
+    <div class="btns">${n.inner ? '<button id="iOpen" class="hot">▣ Open inside</button><button id="iUnfold">Unfold</button><button id="iSave">Save to library</button>' : ''}${d?.graph && !n.inner ? '<button id="iCopy">Open a copy to change</button>' : ''}${n.block === 'view.3d' ? '<button id="i3d" class="hot">⤢ See it in 3D, full screen</button>' : ''}<button id="iDup">Duplicate</button><button id="iCut">Cut branch</button><button id="iDel">Delete</button>${d?.tests?.length ? '<button id="iTest">Run its tests</button>' : ''}</div>
     <p class="src">${d ? `${esc(STAGES.find((x) => x.id === stageOf(d))?.name ?? '')} · ` : ''}${esc(KINDS[k].name)} · ${esc(ABILITIES[d?.ability ?? 'transform'])} · ${esc((d?.domains ?? []).map((x) => DOMAINS.find((y) => y.id === x)?.name ?? x).join(', '))}${d ? ` · v${d.version} · ${esc(d.by)}` : ''}${d?.tests?.length ? ` · ${d.tests.length} test${d.tests.length > 1 ? 's' : ''}` : ' · draft: no tests yet'}</p>
     ${d?.sources?.length ? `<p class="src">From: ${d.sources.map((s) => esc(s.cite)).join('; ')}</p>` : ''}
     <div id="iTestOut"></div>
@@ -761,7 +782,7 @@ function nodeInspector(el: HTMLElement, id: string): void {
     if (!st?.out?.part) { toast('nothing to draw yet: wire a Part into it', true); return; }
     fullScreen(st.out.part as Part, String(st.out.name ?? ''), String(st.out.check ?? ''));
   });
-  on('iOpen', () => enter(id)); on('iUnfold', () => unfold(id)); on('iSave', () => saveAsBlock(id)); on('iCopy', () => openCopy(id)); on('iCut', () => cut(id)); on('iDel', removeSelected);
+  on('iOpen', () => enter(id)); on('iUnfold', () => unfold(id)); on('iSave', () => saveAsBlock(id)); on('iCopy', () => openCopy(id)); on('iCut', () => cut(id)); on('iDup', () => duplicate(id)); on('iDel', removeSelected);
   on('iTest', async () => { const r = await testBlock(d!); document.getElementById('iTestOut')!.innerHTML = r.ok ? `<p class="src" style="color:var(--ok)">✓ all ${r.ran} test${r.ran > 1 ? 's' : ''} pass</p>` : `<div class="err">${r.fails.map(esc).join('<br>')}</div>`; });
 }
 
@@ -996,7 +1017,7 @@ export const wall = {
    *  chosen, what it says said. The 3D view's paste is made by it. */
   change(fn: (b: Board) => string, says?: string): string {
     if (path.length) up(0); let id = ''; edit((b) => { id = fn(b); });
-    if (id && root.nodes[id]) { sel.clear(); sel.add(id); } renderInspector(true); draw(); if (says) toast(says); wall.changed?.(); return id;
+    if (id && root.nodes[id]) { sel.clear(); sel.add(id); } quietAdd = true; try { renderInspector(true); } finally { quietAdd = false; } draw(); if (says) toast(says); wall.changed?.(); return id;
   },
   /** Whether the board has finished running (nothing running, nothing waiting to). */
   settled: (): boolean => !running && !again,

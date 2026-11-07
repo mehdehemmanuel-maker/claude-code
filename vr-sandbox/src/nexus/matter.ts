@@ -21,6 +21,7 @@ import { WOODS, woodDensity } from '../data/woods';
 import { MIXES, MIXTURES, mixDensity } from '../data/mixes';
 import { CONSTITUENTS } from '../data/constituents';
 import { mix, type Arrangement, type Phase } from './mixture';
+import { MAX_SERVICE } from './make/heat-limits';
 
 export type Evidence = 'handbook' | 'specified' | 'typical' | 'estimated' | 'derived' | 'stand-in' | 'secondary';
 export interface Prop { key: string; name: string; value: number; unit: string; source: string; evidence: Evidence; note?: string }
@@ -67,8 +68,8 @@ export const MATTER: Record<string, Row> = {
   solder: r('other metal', 'tin-lead or lead-free solder, alloy unsaid', false),
   ndfeb: r('other metal', 'sintered neodymium-iron-boron magnet', true),
   wood: r('wood', 'wood, species unsaid', false, 'wood.birch-plywood'),
-  'douglas-fir': r('wood', 'Douglas-fir (coast), Pseudotsuga menziesii, at 12 % moisture', true, 'wood.birch-plywood'),
-  'red-oak': r('wood', 'northern red oak, Quercus rubra, at 12 % moisture', true, 'wood.birch-plywood'),
+  'douglas-fir': r('wood', 'Douglas-fir (coast), Pseudotsuga menziesii, at 12 % moisture', true, 'wood.douglas-fir', true),
+  'red-oak': r('wood', 'northern red oak, Quercus rubra, at 12 % moisture', true, 'wood.red-oak', true),
   mdf: r('wood product', 'medium-density fibreboard (EN 622-5)', true, 'wood.mdf', true),
   'concrete-c25': r('concrete and mortar', 'normal-weight concrete, about 25 MPa, plain (no reinforcing): a typical mix', true, 'concrete.c30'),
   oak: r('wood', 'oak (Quercus), red or white unsaid', false, 'wood.birch-plywood'),
@@ -76,20 +77,20 @@ export const MATTER: Record<string, Row> = {
   bamboo: r('wood', 'bamboo culm, species unsaid', false, 'wood.birch-plywood'),
   cardboard: r('wood product', 'corrugated board', false),
   paper: r('textile and paper', 'paper, grade unsaid', false),
-  abs: r('polymer', 'acrylonitrile butadiene styrene (ABS)', true, 'polymer.pmma'),
+  abs: r('polymer', 'acrylonitrile butadiene styrene (ABS)', true, 'polymer.abs', true),
   pp: r('polymer', 'polypropylene', true, 'polymer.pmma'),
-  pc: r('polymer', 'polycarbonate', true, 'polymer.pmma'),
+  pc: r('polymer', 'polycarbonate', true, 'polymer.pc', true),
   pmma: r('polymer', 'polymethyl methacrylate (acrylic)', true, 'polymer.pmma', true),
   nylon: r('polymer', 'polyamide, PA6 or PA66 unsaid', false, 'polymer.nylon-microcarbon'),
   'pa66-gf30': r('composite', 'polyamide 66, 30 % glass filled', true, 'polymer.nylon-microcarbon'),
   pe: r('polymer', 'polyethylene, density grade unsaid', false, 'polymer.pmma'),
   xlpe: r('polymer', 'cross-linked polyethylene', true, 'polymer.pmma'),
   pvc: r('polymer', 'polyvinyl chloride, rigid or flexible unsaid', false, 'polymer.pmma'),
-  pom: r('polymer', 'polyoxymethylene (acetal)', true, 'polymer.pmma'),
-  ptfe: r('polymer', 'polytetrafluoroethylene', true, 'polymer.pmma'),
+  pom: r('polymer', 'polyoxymethylene (acetal)', true, 'polymer.pom', true),
+  ptfe: r('polymer', 'polytetrafluoroethylene', true, 'polymer.ptfe', true),
   pet: r('polymer', 'polyethylene terephthalate', true, 'polymer.pmma'),
   pbt: r('polymer', 'polybutylene terephthalate', true, 'polymer.pmma'),
-  pla: r('polymer', 'polylactic acid', true, 'polymer.pmma'),
+  pla: r('polymer', 'polylactic acid', true, 'polymer.pla', true),
   pu: r('polymer', 'polyurethane, solid or elastomeric unsaid', false, 'polymer.pmma'),
   // (no stand-in: the handbook's only thermoset is a filled phenolic billiard ball, whose friction says nothing of this)
   epoxy: r('polymer', 'bisphenol-A epoxy, amine cured', true),
@@ -122,8 +123,8 @@ export const MATTER: Record<string, Row> = {
   concrete: r('concrete and mortar', 'concrete, mix and strength class unsaid, plain (no reinforcing said)', false, 'concrete.c30'),
   render: r('concrete and mortar', 'cement render, mix unsaid', false, 'concrete.c30'),
   asphalt: r('concrete and mortar', 'asphalt concrete, mix unsaid', false, 'concrete.c30'),
-  granite: r('stone', 'granite', true, 'concrete.c30'),
-  marble: r('stone', 'marble', true, 'concrete.c30'),
+  granite: r('stone', 'granite', true, 'stone.granite', true),
+  marble: r('stone', 'marble', true, 'stone.marble', true),
   cotton: r('textile and paper', 'cotton fibre (loose)', true, 'textile.canvas'),
   silk: r('textile and paper', 'silk', true, 'textile.nylon-ripstop'),
   leather: r('textile and paper', 'leather, tannage unsaid', false, 'leather.veg-tan'),
@@ -133,6 +134,24 @@ export const MATTER: Record<string, Row> = {
   battery: r('battery', 'a battery, chemistry unsaid', false),
   tissue: r('living tissue', 'soft tissue', false), stingray: r('living tissue', 'a stingray\'s body', false), leaf: r('living tissue', 'leaf', false), foliage: r('living tissue', 'foliage (a crown, mostly air)', false),
   bread: r('food', 'bread', false), cheese: r('food', 'cheese', false), ham: r('food', 'ham', false), tomato: r('food', 'tomato', false), lettuce: r('food', 'lettuce', false), butter: r('food', 'butter', false), chicken: r('food', 'chicken', false), egg: r('food', 'egg', false), avocado: r('food', 'avocado', false), bacon: r('food', 'bacon', false), chocolate: r('food', 'chocolate', false),
+  // the handbook's grades no row above reached (the audit, 2026-11-07: 26 of 55 never reached), each its own material
+  'steel-a36': r('steel', 'structural steel, ASTM A36', true, 'steel.a36', true),
+  'steel-4140-ann': r('steel', 'AISI 4140 chromium-molybdenum steel, annealed', true, 'steel.4140-ann', true),
+  'southern-pine': r('wood', 'southern pine (loblolly), clear wood at 12 % moisture', true, 'wood.southern-pine', true),
+  'white-pine': r('wood', 'eastern white pine, clear wood at 12 % moisture', true, 'wood.white-pine', true),
+  'white-oak': r('wood', 'white oak, clear wood at 12 % moisture', true, 'wood.white-oak', true),
+  'hard-maple': r('wood', 'hard (sugar) maple, clear wood at 12 % moisture', true, 'wood.hard-maple', true),
+  balsa: r('wood', 'balsa, clear wood at 12 % moisture', true, 'wood.balsa', true),
+  c24: r('wood', 'sawn softwood of strength class C24 (EN 338)', true, 'wood.c24', true),
+  pa66: r('polymer', 'polyamide 66, unfilled, dry as moulded', true, 'polymer.nylon66', true),
+  hdpe: r('polymer', 'high-density polyethylene (HDPE)', true, 'polymer.hdpe', true),
+  slate: r('stone', 'slate (billiard grade)', true, 'stone.slate', true),
+  baize: r('textile and paper', 'wool baize (billiard cloth)', true, 'textile.baize', true),
+  cork: r('wood product', 'agglomerated cork', true, 'cork.agglomerated', true),
+  'ndfeb-n35': r('other metal', 'sintered neodymium-iron-boron magnet, grade N35', true, 'magnet.n35', true),
+  'ndfeb-n42': r('other metal', 'sintered neodymium-iron-boron magnet, grade N42', true, 'magnet.n42', true),
+  'ndfeb-n52': r('other metal', 'sintered neodymium-iron-boron magnet, grade N52', true, 'magnet.n52', true),
+  'ferrite-c8': r('ceramic', 'hard ferrite magnet, ceramic grade C8', true, 'magnet.ferrite-c8', true),
 };
 
 // the phases mixtures are made of, and the mixtures themselves: materials like any other
@@ -143,6 +162,10 @@ const says = (key: string): [string, string] => { const [b, ...rest] = key.split
 const RANK: Record<Evidence, number> = { specified: 5, handbook: 5, secondary: 4, derived: 4, typical: 2, estimated: 1, 'stand-in': 0 };
 
 const handbookById = new Map(HANDBOOK.map((m) => [m.id, m]));
+// a material of its own handbook grade with no density in the tables (`mass.ts`): its grade's, said as the grade's
+const DENSITY_OF_GRADE = new Set<string>();
+for (const [id, row] of Object.entries(MATTER)) { const m = row.same && row.handbook ? handbookById.get(row.handbook) : undefined; if (m && DENSITY[id] === undefined) { DENSITY[id] = m.density; DENSITY_OF_GRADE.add(id); } }
+const gradeEvidence = (m: Material): Evidence => (m.confidence === 'spec' ? 'specified' : m.confidence === 'estimated' ? 'estimated' : 'handbook');
 /** The handbook grade a material's numbers come from, and whether it is that material or a stand-in for it. */
 export function handbookOf(id: string | undefined): { m: Material; same: boolean } | null {
   const row = id ? MATTER[id] : undefined, m = row?.handbook ? handbookById.get(row.handbook) : undefined;
@@ -153,6 +176,8 @@ export function densityOf(id: string): Prop | null {
   const w = WOODS[id], x = MIXES[id];
   if (w) return { key: 'density', name: 'density', value: woodDensity(w), unit: 'kg/m^3', source: `${w.source}: specific gravity ${w.G12}, ρ = 1000 G (1 + 0.12)`, evidence: 'derived' };
   if (x) return { key: 'density', name: 'density', value: mixDensity(x), unit: 'kg/m^3', source: `the mix's parts in its cubic metre, summed (${x.source})`, evidence: 'derived' };
+  const g = DENSITY_OF_GRADE.has(id) ? handbookOf(id)?.m : undefined;
+  if (g) return { key: 'density', name: 'density', value: g.density, unit: 'kg/m^3', source: `${g.name}: ${g.source}`, evidence: gradeEvidence(g) };
   if (DENSITY[id] !== undefined) return { key: 'density', name: 'density', value: DENSITY[id]!, unit: 'kg/m^3', source: 'mass.ts (typical values)', evidence: 'typical' };
   const el = pureElement(id), d = el ? PERIODIC[el]?.density ?? null : null;
   return el && d ? { key: 'density', name: 'density', value: d, unit: 'kg/m^3', source: `${PERIODIC[el]!.name}: ${PERIODIC_SOURCE}`, evidence: 'secondary' } : null;
@@ -176,7 +201,7 @@ export function matterOf(id: string): Matter {
   const row = MATTER[id], hb = handbookOf(id), props: Prop[] = [], disagreements: string[] = [];
   const d = densityOf(id); if (d) props.push(d);
   if (hb) {
-    const m = hb.m, ev: Evidence = hb.same ? (m.confidence === 'spec' ? 'specified' : m.confidence === 'estimated' ? 'estimated' : 'handbook') : 'stand-in';
+    const m = hb.m, ev: Evidence = hb.same ? gradeEvidence(m) : 'stand-in';
     const note = hb.same ? undefined : `as ${m.name}, the nearest grade the handbook holds: not this material's own`;
     const add = (key: string, name: string, value: number, unit: string) => props.push({ key, name, value, unit, source: m.source, evidence: ev, ...(note ? { note } : {}) });
     if (hb.same) { add('E', 'elastic modulus', m.E, 'Pa'); add('nu', 'Poisson\'s ratio', m.nu, '1'); add('yield', 'yield strength', m.yield, 'Pa'); add('ultimate', 'ultimate strength', m.ultimate, 'Pa'); add('elongation', 'elongation at break', m.elongation, '1'); add('conductivity', 'electrical conductivity', m.conductivity, 'S/m'); }
@@ -187,10 +212,10 @@ export function matterOf(id: string): Matter {
       if (d && Math.abs(m.density - d.value) > 0.02 * m.density) disagreements.push(`density: ${d.value} kg/m³ typical (mass.ts), ${m.density} kg/m³ in the handbook (${m.name})`);
     }
   }
-  const w = WOODS[id];
+  const w = WOODS[id], species = (...qs: Prop[]) => { for (const q of qs) { const i = props.findIndex((p) => p.key === q.key); if (i >= 0) props.splice(i, 1); props.push(q); } };
   // (a species' heat from its specific gravity by the Wood Handbook's own relations: across the grain, at 12 % moisture)
-  if (w) { const t = woodThermal(w.G12); props.push({ key: 'c', name: 'specific heat', value: t.c, unit: 'J/kg K', source: `${t.source}; from its specific gravity ${w.G12}`, evidence: 'derived' }, { key: 'k', name: 'thermal conductivity (across the grain)', value: t.k, unit: 'W/m K', source: `${t.source}; from its specific gravity ${w.G12}`, evidence: 'derived', note: 'across the grain; along it 1.5 to 2.8 times as much (Wood Handbook ch. 4)' }); }
-  if (w) props.push({ key: 'E', name: 'modulus of elasticity (bending, along the grain)', value: w.MOE, unit: 'Pa', source: w.source, evidence: 'handbook', note: 'small clear specimens: lumber of a grade is less' }, { key: 'ultimate', name: 'modulus of rupture (bending, along the grain)', value: w.MOR, unit: 'Pa', source: w.source, evidence: 'handbook', note: 'small clear specimens: lumber of a grade is less' });
+  if (w) { const t = woodThermal(w.G12); species({ key: 'c', name: 'specific heat', value: t.c, unit: 'J/kg K', source: `${t.source}; from its specific gravity ${w.G12}`, evidence: 'derived' }, { key: 'k', name: 'thermal conductivity (across the grain)', value: t.k, unit: 'W/m K', source: `${t.source}; from its specific gravity ${w.G12}`, evidence: 'derived', note: 'across the grain; along it 1.5 to 2.8 times as much (Wood Handbook ch. 4)' }); }
+  if (w) species({ key: 'E', name: 'modulus of elasticity (bending, along the grain)', value: w.MOE, unit: 'Pa', source: w.source, evidence: 'handbook', note: 'small clear specimens: lumber of a grade is less' }, { key: 'ultimate', name: 'modulus of rupture (bending, along the grain)', value: w.MOR, unit: 'Pa', source: w.source, evidence: 'handbook', note: 'small clear specimens: lumber of a grade is less' });
   // a phase's own figures (src/data/constituents.ts): over any stand-in or typical figure, never over the handbook's own
   const own = (key: string) => props.findIndex((p) => p.key === key), put = (q: Prop) => { const i = own(q.key); if (i >= 0) { if (RANK[props[i]!.evidence] >= RANK[q.evidence] && props[i]!.evidence !== 'stand-in' && props[i]!.evidence !== 'typical') return; props.splice(i, 1); } props.push(q); };
   const cons = CONSTITUENTS[id]; if (cons) for (const [key, f] of Object.entries(cons.figures)) { const [name, unit] = says(key); put({ key, name, value: f.value, unit, source: f.source, evidence: f.evidence }); }
@@ -210,6 +235,15 @@ export function matterOf(id: string): Matter {
   if (mx) { const w = mixedMatter(mx); for (const q of w.props) put(q); for (const c of w.cannot) disagreements.push(`not worked out: ${c}`); }
   const el = pureElement(id);
   if (el && PERIODIC[el]?.melt) props.push({ key: 'melts', name: 'melting point', value: PERIODIC[el]!.melt!, unit: 'K', source: `${PERIODIC[el]!.name}: ${PERIODIC_SOURCE}`, evidence: 'secondary' });
+  // its shear modulus: none of the tables gives one, so G = E / 2 (1 + ν), which holds for an isotropic solid (Timoshenko
+  // and Goodier, Theory of Elasticity, ch. 1); not for wood (orthotropic: each plane its own G) or a woven sheet
+  const E = props.find((p) => p.key === 'E'), nu = props.find((p) => p.key === 'nu');
+  if (E && nu && !props.some((p) => p.key === 'G') && !(row && ['wood', 'wood product', 'textile and paper'].includes(row.family))) {
+    const weak = RANK[E.evidence] <= RANK[nu.evidence] ? E.evidence : nu.evidence;
+    props.push({ key: 'G', name: 'shear modulus', value: E.value / (2 * (1 + nu.value)), unit: 'Pa', source: `derived: G = E / 2 (1 + ν) for an isotropic solid, from its E (${E.source}) and ν (${nu.source})`, evidence: RANK[weak] >= 4 ? 'derived' : weak, ...(E.note ?? nu.note ? { note: E.note ?? nu.note } : {}) });
+  }
+  // the most it stands in service: the heat gate's figures (make/heat-limits.ts), typical continuous ratings
+  if (MAX_SERVICE[id] !== undefined) props.push({ key: 'Tmax', name: 'maximum service temperature', value: MAX_SERVICE[id]! + 273.15, unit: 'K', source: 'make/heat-limits.ts: typical continuous ratings (makers\' datasheets for each polymer family; metals and glass where they begin to lose their strength or temper)', evidence: 'typical' });
   const out: Matter = {
     id, is: row?.is ?? (COMPOSITION[id] ? makeupSays(id) : id), family: row?.family ?? 'unknown', specified: row?.specified ?? false,
     ...(hb ? { handbook: { id: hb.m.id, name: hb.m.name, same: hb.same } } : {}),
@@ -242,4 +276,13 @@ export function mixedMatter(mx: { phases: [string, number][]; by: 'volume' | 'ma
 export function matterSays(id: string): string {
   const m = matterOf(id);
   return `${m.is}${m.specified ? '' : ' (unspecified: only its family is known)'}${m.handbook ? `; its numbers ${m.handbook.same ? 'from the handbook' : `stand in from ${m.handbook.name}`}` : ''}`;
+}
+
+/** Why an id is not a material a piece can be made of, or null when it is: one this table, the compositions or the
+ *  elements know, with a density (else no mass can be worked from its shape). */
+export const knownMaterial = (id: string): boolean => !!(MATTER[id] || COMPOSITION[id] || pureElement(id));
+export function notMaterial(id: string): string | null {
+  if (!knownMaterial(id)) return `"${id}" is not a material here: no row in matter.ts, no composition, no element of that name, so nothing is known of it (no density, no strength); its nearest named: ${Object.keys(MATTER).filter((k) => k[0] === id[0]).slice(0, 6).join(', ') || 'none'}`;
+  if (!densityOf(id)) return `"${id}" has no density here, so a piece of it cannot be weighed`;
+  return null;
 }
