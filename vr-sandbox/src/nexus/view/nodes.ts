@@ -12,16 +12,14 @@
 import { CONTROL_BLOCKS, type ControlSpec } from '../controls';
 import { EVIDENCE_SAYS, boardBuiltOf, builtOf, evidenceOf } from '../evidence';
 import { DISCIPLINE } from '../../data/disciplines';
-import { ABILITIES, DOMAINS, KINDS, LIBRARY, STAGES, block, clockOf, defaultsOf, dimOf, elemOf, portsOf, readQuantity, register, shelves, show, stageOf, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
+import { ABILITIES, DOMAINS, KINDS, LIBRARY, STAGES, block, clockOf, defaultsOf, dimOf, elemOf, portsOf, readQuantity, shelves, show, stageOf, testBlock, type BlockDef, type PortDef, type Ports } from '../blocks';
 import { isAssembly, partOf } from '../assembly';
-import { Engine, SHARED, collapse, cutBranch, emptyBoard, expand, groupBlock, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
+import { Engine, SHARED, collapse, cutBranch, emptyBoard, expand, isWire, makeBlock, mergeTwins, placeBlock, suggest, wire, blockOf, type NodeState, type Suggestion, type Env } from '../dataflow';
 import { edgesOf, nodesOf, uid, type Board, type LiveEdge } from '../boards';
 import { starterBoards } from '../starters';
 import { LIBRARY_TYPES, allLibraries, fieldOf, needsOf, nextFor, reachText, search, useOf, type Found } from '../navigate';
 import { fullScreen, shot } from './nodes3d';
-import { certifiedView, composeBuild, gateOf, isCompound, nearMissesView, setGuideMd, type AgentRun, type ComposeRun, type ComposeStep, type NearMiss } from '../agent';
-import { askClaude, autoOnViewer, inViewer, whyNot } from './viewer';
-import { YOURS, askName, keepBuild, orchestration, orchestrationHtml } from './parts';
+import { setGuideMd } from '../agent';
 import { registerSaved } from '../memory';
 import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
 // (the guide bundled, for the page on claude.ai, where no Node reads the file: decision 0027)
@@ -30,7 +28,7 @@ import '../seeds';
 import type { Part } from '../kits';
 
 // ---- where things are kept ------------------------------------------------------------------------------------------
-const KEY = 'nexus.nodeboard.v1', BLOCKS_KEY = 'nexus.nodeblocks.v1';
+const KEY = 'nexus.nodeboard.v1', BLOCKS_KEY = 'nexus.nodeblocks.v1', CHOSEN_KEY = 'nexus.nodeboard.chosen.v1';
 const store = { get(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }, set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* private window: kept for this visit only */ } } };
 interface Saved { id: string; name: string; says: string; domains: string[]; graph: Board }
 const BOARDS_KEY = 'nexus.boards.v1';
@@ -98,7 +96,10 @@ function edit(fn: (b: Board) => void, node?: string): void {
   root.updatedAt = Date.now(); refreshLocal(); save(); runSoon();
 }
 const sigOf = (id: string) => { const p = portsFor(id); return `${p.inputs.map((x) => x.name + x.type + (x.unit ?? '')).join()}|${p.outputs.map((x) => x.name + x.type + (x.unit ?? '')).join()}`; };
-let saveT = 0; function save(): void { clearTimeout(saveT); saveT = window.setTimeout(() => store.set(KEY, JSON.stringify(root)), 250); }
+// (a board is kept only once the person chose or changed it: CHOSEN_KEY says so, and only then is it opened again on
+// the next visit; a starter is never opened by default (the user, 2026-11-07: "it just shows a battery that should not be a
+// thing unless I manually navigate to find the battery"))
+let saveT = 0; function save(): void { clearTimeout(saveT); saveT = window.setTimeout(() => { store.set(KEY, JSON.stringify(root)); store.set(CHOSEN_KEY, '1'); wall.saved?.(); }, 250); }
 
 // ---- running --------------------------------------------------------------------------------------------------------
 export interface RanNode { id: string; label: string; ms: number; status: NodeState['status']; error?: string; mapped?: number }
@@ -619,13 +620,13 @@ if (PAGE) document.getElementById('libQ')!.addEventListener('input', renderLibra
 for (const t of document.querySelectorAll<HTMLButtonElement>('#libTop .tabs button')) t.onclick = () => { libBy = t.dataset.by as typeof libBy; for (const x of document.querySelectorAll('.tabs button')) x.classList.toggle('on', x === t); renderLibrary(); };
 
 // ---- the inspector: each block's own calculator ---------------------------------------------------------------------
-/** Claude's last answer here, kept across redraws; and what it was asked (what a part kept from the board was made for). */
-let askShown = '', lastAsked = '';
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 function renderInspector(full: boolean): void {
   wall.changed?.(); if (!PAGE) return;
   const el = document.getElementById('inspector')!;
   if (!full && el.contains(document.activeElement) && document.activeElement !== document.body) { const o = document.getElementById('iouts'); if (o && sel.size === 1) o.innerHTML = outsHtml([...sel][0]!); return; }
+  // (a node or a wire chosen: its settings shown in the drawer, opened for it)
+  if (sel.size || selWire) el.classList.add('open');
   if (sel.size === 1) return nodeInspector(el, [...sel][0]!);
   if (sel.size > 1) {
     el.innerHTML = `<div class="ititle">${sel.size} blocks chosen</div><div class="btns"><button id="iGroup" class="hot">▣ Fold into a group</button><button id="iDel">Delete</button></div><p class="says">A group holds them as one block: what crosses its edge becomes its ports. Open it to change it; save it to the library to use it anywhere.</p>`;
@@ -638,62 +639,11 @@ function boardInspector(el: HTMLElement): void {
   const b = cur(), n = nodesOf(b).filter((x) => b.nodes[x.id]!.block || b.nodes[x.id]!.inner).length, sg = (suggestions ??= suggest(b, curEngine())), needs = needsOf(b);
   el.innerHTML = `<div class="ititle"><input id="iTitle" value="${esc(b.title ?? '')}" /></div>
     <p class="says">${n} block${n === 1 ? '' : 's'} · last change: ${lastReport.ran} block${lastReport.ran === 1 ? '' : 's'} ran, ${lastReport.cached} reused (nothing they read changed)${lastReport.failed ? `, ${lastReport.failed} failed` : ''}${lastReport.waiting ? `, ${lastReport.waiting} waiting` : ''}, in ${lastReport.ms.toFixed(1)} ms</p>
-    <h3>Suggestions</h3><div id="iSug">${sg.length || needs.length ? '' : '<p class="says">Nothing: no dead branches, no twins, no repeated wiring, and nothing its work leaves out.</p>'}</div>
-    <h3>Ask Claude</h3><div class="row"><textarea id="iAsk" rows="3" placeholder="Build … (Claude works through the nodes: it searches, reads, places, wires, runs and checks, then answers)"></textarea></div><div class="row"><button id="iAskGo">Build it</button><button id="iKeepBuild" title="The board open folded into one part, named by you, kept with the parts (${YOURS})">★ Keep this build</button></div><div id="iAskOut" class="says">${askShown}</div>
     <h3>Start from</h3><div id="iDemos"></div>
+    <h3>Suggestions</h3><div id="iSug">${sg.length || needs.length ? '' : '<p class="says">Nothing: no dead branches, no twins, no repeated wiring, and nothing its work leaves out.</p>'}</div>
     <h3>This board</h3><div class="row"><label>Its field</label><select id="iField">${DOMAINS.map((d) => `<option value="${d.id}" ${d.id === (savedBoards().find((x) => x.title === b.title)?.field ?? fieldOf(b)) ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}</select></div><div class="btns"><button id="iKeep" class="hot">Save to the library's Boards</button><button id="iExport">Export JSON</button><button id="iImport">Import JSON</button><button id="iTidy">Tidy</button><button id="iFresh">Run all afresh</button><button id="iClear">Clear</button></div>
     <h3>How</h3><div class="kbd"><b>Drag</b> from an output to an input to wire · <b>drag</b> an input's wire off to move it · <b>double-click</b> empty space to add, a group to open · <b>shift-drag</b> to choose many · <b>Ctrl G</b> fold into a group · <b>Del</b> delete · <b>Ctrl Z</b> undo · <b>F</b> fit · <b>Ctrl K</b> commands · a list wired into one value runs the block once for each item</div>`;
   (document.getElementById('iTitle') as HTMLInputElement).onchange = (e) => edit((x) => { x.title = (e.target as HTMLInputElement).value; });
-  // (Keep this build (decision 0028): the board open folded and remembered as one part, named by the person)
-  document.getElementById('iKeepBuild')!.onclick = async () => {
-    if (!nodesOf(root).length) { toast('nothing to keep yet: build something first', true); return; }
-    const name = await askName({ title: 'Keep this build as one part, named', value: (root.title || lastAsked || 'my build').slice(0, 60) }); if (!name) return;
-    try { const { part, again } = await keepBuild(root, name, lastAsked || root.title || name), c = part.checked;
-      toast(again ? `already kept as ${part.name} (${part.id}): used again` : `kept as ${part.name} (${part.id}): ${c.pieces} pieces, ${c.groups} group${c.groups === 1 ? '' : 's'}, ${c.failing} failing; in the parts under ${YOURS}`, c.failing > 0 || c.groups > 1); renderLibrary(); }
-    catch (e) { toast(`not kept: ${(e as Error).message}`, true); }
-  };
-  // (asking Claude: the relay this page is served with runs it under Node, where the key is; its board opened as an
-  // imported one is, undoable; its steps and its answer shown under the box)
-  document.getElementById('iAskGo')!.onclick = async () => {
-    const q = (document.getElementById('iAsk') as HTMLTextAreaElement).value.trim(), out = document.getElementById('iAskOut')!; if (!q) return;
-    out.textContent = 'Claude is working through the nodes…';
-    // (on claude.ai, a change to the board open: the same tools on the viewer's own Claude, no relay, no key: decision 0027)
-    if (inViewer && nodesOf(root).length && !isCompound(q)) { try { const saved = (() => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { return []; } })();
-      const r = await autoOnViewer(q, root, saved, { onStep: (line) => { out.textContent = `Claude: ${line}`; } });
-      askShown = `<b>${r.steps} steps</b> on your claude.ai account<br>${esc(r.answer).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}`; pushUndo(); useBoard(tidy(r.board)); save(); fit(); runSoon(); renderAll(); }
-      catch (e) { out.textContent = `could not: ${whyNot(e)}`; } return; }
-    // (a new thing, or one of several things, built from its parts (decision 0027, composeBuild): on claude.ai each call on
-    // the viewer's own account, elsewhere through the relay; each step's line shown as it comes)
-    if (inViewer || !nodesOf(root).length || isCompound(q)) {
-      // (its orchestration as a tree as it runs (decision 0028): the split, each part, how it was made, ✓ or ✕, what it was
-      // kept as; then the join and the check)
-      const steps: ComposeStep[] = [], heard = (s: ComposeStep) => { steps.push(s); out.innerHTML = orchestrationHtml(orchestration(steps)); };
-      const saved = (() => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { return []; } })(); lastAsked = q;
-      try { let done: ComposeRun | null = null;
-        if (inViewer) done = await composeBuild(q, { ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: saved, onStep: heard });
-        else { const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'compose', request: q, blocks: saved }) });
-          if (res.status === 404 || !res.body) throw new Error('this page is served without the relay: run it with npm run app, or open it on claude.ai');
-          const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
-          for (;;) { const { value, done: end } = await reader.read(); if (value) buf += dec.decode(value, { stream: true });
-            let k; while ((k = buf.indexOf('\n')) >= 0) { const l = buf.slice(0, k).trim(); buf = buf.slice(k + 1); if (!l) continue; const o = JSON.parse(l) as { compose?: ComposeStep; done?: ComposeRun; error?: string }; if (o.error) throw new Error(o.error); if (o.compose) heard(o.compose); if (o.done) done = o.done; }
-            if (end) break; } }
-        if (!done) throw new Error('the build stopped before it ended');
-        askShown = `<b>${esc(done.answer).replace(/\n/g, '<br>')}</b><details open><summary>${done.steps.length} steps, ${done.asks} calls</summary>${orchestrationHtml(orchestration(done.steps, done))}</details>`;
-        if (nodesOf(done.board).length) { pushUndo(); useBoard(tidy(done.board)); save(); fit(); runSoon(); }
-        renderAll();
-      } catch (e) { out.textContent = `could not: ${inViewer ? whyNot(e) : (e as Error).message}`; }
-      return;
-    }
-    try { const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request: q, board: root, blocks: (() => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as Saved[]; } catch { return []; } })() }) });
-      if (res.status === 404) throw new Error('this page is served without the relay: run it with npm run app');
-      const r = await res.json() as { board?: Board; steps?: { tool: string; result: string }[]; answer?: string; stopped?: string; error?: string; made?: Saved[]; checked?: string; nearMisses?: NearMiss[]; diff?: AgentRun['diff']; certificates?: AgentRun['certificates'] }; if (r.error || !r.board) throw new Error(r.error ?? 'no board came back');
-      const g = gateOf(r.certificates);
-      askShown = `${certifiedView(r.diff, g, esc)}<b>${r.steps?.length ?? 0} steps</b>${r.stopped ? ` (${esc(r.stopped)})` : ''}<br>${esc(r.answer ?? '').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\n/g, '<br>')}${r.made?.length ? `<br><b>Saved to the library:</b> ${r.made.map((x) => esc(x.name)).join(', ')}` : ''}${r.checked ? `<details><summary>Checked by a second model: ${esc(r.checked.trim().split('\n').pop() ?? '')}</summary>${esc(r.checked).replace(/\n/g, '<br>')}</details>` : ''}${nearMissesView(r.nearMisses, esc)}<details><summary>Each step</summary>${(r.steps ?? []).map((st, k) => `${k + 1}. ${esc(st.tool)}: ${esc(st.result.slice(0, 140))}`).join('<br>')}</details>`;
-      for (const x of r.made ?? []) { const d = groupBlock(x.graph, { id: x.id, name: x.name, says: x.says, domains: x.domains, by: 'you' }); register(d); keepBlock(d); }
-      if (g.take) { pushUndo(); useBoard(tidy(r.board)); save(); fit(); runSoon(); } else toast('the board was not taken: the kernel refused a certificate as wrong', true);
-      renderAll();
-    } catch (e) { out.textContent = `could not: ${(e as Error).message}`; }
-  };
   const s = document.getElementById('iSug')!;
   for (const x of sg) {
     const d = document.createElement('div'); d.className = 'sug'; d.innerHTML = `<span>${esc(x.says)}</span>`;
@@ -710,7 +660,7 @@ function boardInspector(el: HTMLElement): void {
     s.appendChild(d);
   }
   const dm = document.getElementById('iDemos')!;
-  for (const [name, fn] of DEMOS) { const bt = document.createElement('button'); bt.className = 'demo'; bt.textContent = name; bt.onclick = () => { pushUndo(); useBoard(fn()); sel.clear(); save(); fit(); runSoon(); renderAll(); }; dm.appendChild(bt); }
+  for (const [name, fn] of DEMOS) { const bt = document.createElement('button'); bt.className = 'demo'; bt.textContent = name; bt.onclick = () => { pushUndo(); useBoard(fn()); sel.clear(); save(); fit(); runSoon(); renderAll(); el.classList.remove('open'); }; dm.appendChild(bt); }
   document.getElementById('iExport')!.onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(root, null, 1)], { type: 'application/json' })); a.download = `${(root.title || 'board').replace(/[^\w-]+/g, '-')}.json`; a.click(); };
   document.getElementById('iImport')!.onclick = () => { const i = document.createElement('input'); i.type = 'file'; i.accept = '.json,application/json'; i.onchange = async () => { try { const b = JSON.parse(await i.files![0]!.text()) as Board; if (!b.nodes || !b.edges) throw new Error('not a board'); pushUndo(); useBoard(b); save(); fit(); runSoon(); renderAll(); } catch (e) { toast(`could not read it: ${(e as Error).message}`, true); } }; i.click(); };
   document.getElementById('iTidy')!.onclick = () => { edit((b) => { tidy(b); }); fit(); };
@@ -897,8 +847,9 @@ function allBoards(): { title: string; field: string; mine: boolean; make: () =>
 
 // ---- start ----------------------------------------------------------------------------------------------------------
 loadBlocks();
-try { const s = store.get(KEY); if (s) { const b = JSON.parse(s) as Board; if (b.nodes && b.edges) root = b; } } catch { /* start fresh */ }
-if (!nodesOf(root).length) root = DEMOS[0]![1]();
+// (it opens on an empty space: the board kept is opened again only if the person chose it (a board kept before the flag
+// was, only if it is not a starter left as it was opened by default))
+try { const s = store.get(KEY); if (s) { const b = JSON.parse(s) as Board; if (b.nodes && b.edges && (store.get(CHOSEN_KEY) === '1' || !DEMOS.some(([t]) => t === b.title))) root = b; } } catch { /* start fresh */ }
 engine = new Engine(root, env, memo); refreshLocal();
 requestAnimationFrame(() => { fit(); renderAll(); runSoon(); });
 // what a browser test drives it by (tests reach the page only through this)
@@ -983,6 +934,14 @@ export const wall = {
   shelves: (by: 'domain' | 'ability' | 'kind') => shelves(by),
   /** It ran: what it shows may have changed. */
   ran: null as null | (() => void),
+  /** The board was kept after a change made here (the chat beside it is told). */
+  saved: null as null | (() => void),
+  /** A board built elsewhere (the chat beside the board) taken in: laid out, one undo step; `live` while it is still being
+   *  built (shown, not kept: the chat keeps it when it ends). Not said back to the chat. */
+  take(b: Board, live = false): void {
+    if (!live) pushUndo(); useBoard(tidy(structuredClone(b))); if (!live && nodesOf(root).length) { store.set(KEY, JSON.stringify(root)); store.set(CHOSEN_KEY, '1'); }
+    fit(); runSoon(); renderAll();
+  },
   /** Every thing a "Show in space" node on the board is given, with that node's id. */
   shown(): { key: string; thing: unknown }[] {
     const out: { key: string; thing: unknown }[] = [];

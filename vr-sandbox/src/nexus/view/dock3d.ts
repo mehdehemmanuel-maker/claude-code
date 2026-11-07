@@ -347,7 +347,9 @@ export class Dock3D {
     // at their own far edge), toward the colour of the sky behind
     this.scene.fog = new THREE.FogExp2(BACKDROP, 0.01);
     this.scene.add(this.view.group, this.grid, this.overlays);
-    this.camera.position.set(6, 5, 8);
+    // (an empty space at the start: the ground's grid seen from a person's eye over a desk, its cells a tenth of a metre;
+    // from farther off its near cells were too faint to see and only the far edge showed, as a band at the top)
+    this.camera.position.set(2.4, 1.8, 3.2);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement); this.controls.enableDamping = true; this.controls.zoomSpeed = 1.4;
     // (the wheel zooms toward what is under the pointer, so a valve's keeper is reached by pointing at it and turning)
     this.controls.zoomToCursor = true;
@@ -378,7 +380,9 @@ export class Dock3D {
   readonly move: MoveMode;
 
   /** What to draw: the board's shown things. The first time anything is shown (or a new board), it is framed. */
-  show(things: Shown[], board: string): void { this.view.show(things); this.redraw(); if (board !== this.framed && things.length) { this.framed = board; requestAnimationFrame(() => this.fit()); } }
+  show(things: Shown[], board: string): void { this.view.show(things); this.redraw(); if (board !== this.framed && things.length) { this.framed = board; requestAnimationFrame(() => this.fit()); }
+    // (nothing shown: the empty space again, the grid alone)
+    else if (!things.length && this.framed) { this.framed = ''; this.look([2.4, 1.8, 3.2], [0, 0, 0]); } }
   /** A cutaway: what is shown cut by a plane square to an axis, through its middle (or `at` along that axis), the half
    *  toward the viewer taken away, so its insides show (its castings' cores, its crank in its bearings); null puts it whole
    *  again. Says the axis it cuts across, if any. */

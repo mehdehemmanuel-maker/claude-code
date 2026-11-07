@@ -3113,3 +3113,19 @@ fixing.
   one group, no point in two pieces; `seed.boat` builds on it (its U-section hull and bow plate gone). Not done: the hull
   is weighed as a solid loft (no 3 mm skin); `seed.hull` is undated until the docs pass runs (`UPDATE_DOCS=quick`), so the
   Mechanical field gate reports that one line until then.
+- **The dashboard opens on an empty space, the chat front and centre** (decision 0029; the user, 2026-11-07: "there's no
+  chat interface it just shows a battery"): no board is opened by default (nodes.ts and vibe.ts open the board kept only
+  when the person chose it: `nexus.nodeboard.chosen.v1`; a starter saved before that flag is not reopened); the 3D view
+  shows the grid alone, from a desk's height (it showed only a band of the grid's far edge). The phone page's chat
+  (vibe.ts: its messages, input, By hand / Assist / Auto and compose, the orchestration tree, Keep this build) is the
+  dashboard's left column, framed as `vibe.html?embed` (no 3D view of its own), its input focused on load, "Say what to
+  build"; what it builds is posted to the dashboard (`wall.take`) and drawn on the node board and in the 3D view (a board
+  with no "Show in space" node shows what it ends with, as on the phone); a board opened or changed on the dashboard is
+  posted back. The buried "Ask Claude" box in the board's inspector is gone (one chat). Header one line; starters and the
+  library are the "Boards" and "Library" drawers, shut at the start; the node board folds to its bar (folded while empty);
+  the run log, results and variations, and the clock's bar, only once a board runs or moves. Checked by
+  `timeout 250 npx tsc --noEmit -p .` (clean) and `npm run gate:field -- Software` (passed); pictures by Playwright of
+  `npx vite build --config vite.view.config.ts` at 1400 x 900 and 390 x 844 (the phone goes to vibe.html, as before),
+  looked at. A board opened on the dashboard is run in the chat's frame only when the chat needs it (by hand, or before the
+  next request): the frame shares the page's thread, and a second run of the gauntlet board at once left the view black
+  for as long again. Not done: the chat frame still holds its own hidden view (it draws nothing while hidden).
