@@ -33,6 +33,8 @@ export interface FamilyRow { id: string; name: string; sizes: string[]; envelope
 export interface PartsTree {
   trades: { name: string; families: number; sizes: number }[];
   yours: { name: string; parts: number };
+  /** The assemblies (seed.*) on an aisle of their own, grouped by domain below it (decision 0029, root 7). */
+  assemblies: { name: string; parts: number };
   trade: string;
   categories: { name: string; families: FamilyRow[] }[];
   hits: PartHit[];
@@ -40,17 +42,24 @@ export interface PartsTree {
 }
 /** The aisle of the parts remembered (decision 0028). */
 export const YOURS = 'Yours / Remembered';
+/** The aisle of the assemblies: the seeds, each placeable with one tap, grouped by domain. */
+export const ASSEMBLIES = 'Assemblies';
+const assembliesByDomain = (): { name: string; families: FamilyRow[] }[] => {
+  const by = new Map<string, FamilyRow[]>();
+  for (const d of LIBRARY.values()) { if (!d.id.startsWith('seed.') || d.id === 'seed.spring-checked') continue; const g = d.domains?.[0] ?? 'other'; by.set(g, [...(by.get(g) ?? []), { id: d.id, name: d.name, sizes: [], envelope: false }]); }
+  return [...by].sort(([a], [b]) => a.localeCompare(b)).map(([name, families]) => ({ name: name[0]!.toUpperCase() + name.slice(1), families: families.sort((a, b) => a.name.localeCompare(b.name)) }));
+};
 const envelopeOf = (e: PartEntry) => /an envelope/i.test(e.says);
 const keptOf = (p: SavedPart): FamilyRow => ({ id: p.id, name: p.name, sizes: [], envelope: false, kept: { from: p.from, uses: p.uses, checked: p.checked, by: p.by, made: p.made, says: p.says } });
 /** The browser's tree for a trade (the first where none or an unknown one is named; Yours / Remembered its own) and a
  *  search (none where blank; the parts remembered that match after the catalogue's). */
 export function partsTree(o: { trade?: string; q?: string } = {}): PartsTree {
-  const cat = partsCatalogue(), mine = savedParts().filter((p) => block(p.id)), yours = o.trade === YOURS;
-  const open = yours ? undefined : cat.find((t) => t.name === o.trade) ?? cat[0];
+  const cat = partsCatalogue(), mine = savedParts().filter((p) => block(p.id)), yours = o.trade === YOURS, asm = o.trade === ASSEMBLIES, groups = assembliesByDomain();
+  const open = yours || asm ? undefined : cat.find((t) => t.name === o.trade) ?? cat[0];
   const newest = [...mine].sort((a, b) => b.made.localeCompare(a.made) || b.uses - a.uses);
   const found = o.q?.trim() ? recall(o.q, 8).filter((p) => block(p.id)).map((p): PartHit => ({ id: p.id, name: p.name, aisle: YOURS, says: p.says, score: 0, full: false })) : [];
-  return { trades: cat.map((t) => ({ name: t.name, families: t.families, sizes: t.sizes })), yours: { name: YOURS, parts: mine.length }, trade: yours ? YOURS : open?.name ?? '',
-    categories: yours ? [{ name: mine.length ? 'Remembered, newest first' : 'Remembered', families: newest.map(keptOf) }]
+  return { trades: cat.map((t) => ({ name: t.name, families: t.families, sizes: t.sizes })), yours: { name: YOURS, parts: mine.length }, assemblies: { name: ASSEMBLIES, parts: groups.reduce((n, g) => n + g.families.length, 0) }, trade: yours ? YOURS : asm ? ASSEMBLIES : open?.name ?? '',
+    categories: asm ? groups : yours ? [{ name: mine.length ? 'Remembered, newest first' : 'Remembered', families: newest.map(keptOf) }]
       : (open?.categories ?? []).map((c) => ({ name: c.name, families: c.families.map((f) => ({ id: f.id, name: f.name, sizes: f.sizes, envelope: envelopeOf(f) })) })),
     hits: o.q?.trim() ? [...findParts(o.q, 24), ...found] : [],
     total: { families: cat.reduce((n, t) => n + t.families, 0), sizes: cat.reduce((n, t) => n + t.sizes, 0) } };
@@ -266,7 +275,7 @@ export function mountParts(o: { trigger?: HTMLElement; keepAs?: string; into?: H
   const draw = () => {
     tree = partsTree({ trade, q: q.value }); trade = tree.trade;
     ov.querySelector('.pb-hd .n')!.textContent = `${tree.total.families} families · ${tree.total.sizes} sizes`;
-    tr.innerHTML = `<button data-trade="${esc(YOURS)}" class="mine${trade === YOURS && !q.value.trim() ? ' on' : ''}">${esc(YOURS)}<i>${tree.yours.parts}</i></button>` + tree.trades.map((t) => `<button data-trade="${esc(t.name)}" class="${t.name === trade && !q.value.trim() ? 'on' : ''}">${esc(t.name)}<i>${t.families}</i></button>`).join('');
+    tr.innerHTML = `<button data-trade="${esc(YOURS)}" class="mine${trade === YOURS && !q.value.trim() ? ' on' : ''}">${esc(YOURS)}<i>${tree.yours.parts}</i></button><button data-trade="${esc(ASSEMBLIES)}" class="mine${trade === ASSEMBLIES && !q.value.trim() ? ' on' : ''}">${esc(ASSEMBLIES)}<i>${tree.assemblies.parts}</i></button>` + tree.trades.map((t) => `<button data-trade="${esc(t.name)}" class="${t.name === trade && !q.value.trim() ? 'on' : ''}">${esc(t.name)}<i>${t.families}</i></button>`).join('');
     if (trade === YOURS && !q.value.trim() && !tree.yours.parts) { ls.innerHTML = '<h4>Remembered · 0</h4><div class="pb-none">Nothing remembered yet. Every part the AI builds and checks is kept here, and "Keep this build" keeps the board open as one part, named by you.</div>'; return; }
     if (q.value.trim()) {
       ls.innerHTML = tree.hits.length ? `<h4>Found</h4>${tree.hits.map((h) => `<div class="pb-f"><div class="t"><span>${esc(h.name)}${h.size ? ` ${esc(h.size)}` : ''}</span><em>${esc(h.aisle)}</em></div><div class="pb-sz">${h.size ? sizeBtn(h.id, h.size, `＋ ${h.size}`) : (() => { const f = tree.categories.flatMap((c) => c.families).find((x) => x.id === h.id); const sizes = f?.sizes ?? (block(h.id)?.settings ?? []).find((s) => s.key === 'size')?.choices?.map(String) ?? []; return sizes.length ? sizes.slice(0, FIRST_SIZES).map((s) => sizeBtn(h.id, s, s)).join('') : sizeBtn(h.id, undefined, '＋ Add'); })()}</div></div>`).join('')}` : '<div class="pb-none">Nothing found: try what it is (nut, bearing, valve) or its size (M8, 608, DN20).</div>';

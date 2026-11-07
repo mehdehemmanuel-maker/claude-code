@@ -35,11 +35,24 @@ export function brief(v: unknown, room = 400): string {
   return `{${Object.keys(o).slice(0, 12).map((k) => `${k}: ${brief(o[k], 60)}`).join(', ')}}`.slice(0, room);
 }
 
+/** Where a block with more than one block output keeps its lines (decision 0029, root 7: "the motor can has no bore" named
+ *  the wrong output): read from the words of its text, each output's own clause and the `<name>/axis` or `/line` it names
+ *  ("the motor with its shaft and tabs (shaft/axis)": the shaft line is on `motor`). One short clause; empty where
+ *  the block has one block output or its text names no line. */
+export function carriesOf(d: BlockDef, outs: readonly PortDef[]): string {
+  const bo = outs.filter((p) => p.type === 'block').map((p) => p.name), says = d.says ?? ''; if (bo.length < 2) return '';
+  const got = new Map<string, string[]>();
+  for (const m of says.matchAll(/\(([^()]*)\)/g)) { const lines = m[1]!.match(/[\w ]{2,24}\/(?:axis|line|axes)/gi); if (!lines) continue;
+    // (a parenthesis belongs to the output named nearest before it)
+    const before = says.slice(0, m.index), owner = bo.map((n) => [n, before.search(new RegExp(`\\b${n}\\b(?![\\s\\S]*\\b(?:${bo.join('|')})\\b)`, 'i'))] as const).filter(([, k]) => k >= 0).sort((x, y) => y[1] - x[1])[0]?.[0];
+    if (owner) got.set(owner, [...new Set([...(got.get(owner) ?? []), ...lines.map((x) => x.replace(/^\s*its line\s+/i, '').trim())])]); }
+  return got.size ? ` | lines: ${[...got].map(([n, ls]) => `${n} carries ${ls.join(', ')}`).join('; ')}` : '';
+}
 /** A block on one line: what a builder needs of it and nothing more (its ports, `?` where optional, and its settings). */
 export function cardOf(d: BlockDef): string {
   const ps = portsOf(d, defaultsOf(d)), port = (p: PortDef) => `${p.name}:${p.type}${p.unit ? `(${p.unit})` : ''}${p.optional ? '?' : ''}${p.many ? '*' : ''}`;
   const sets = (d.settings ?? []).map((x) => `${x.key}=${brief(x.default, 30)}${x.choices ? ` [${x.choices.slice(0, 8).join('|')}${x.choices.length > 8 ? '|…' : ''}]` : ''}`), offers = offersOf(d);
-  return `${d.id}: ${d.name} | in: ${ps.inputs.map(port).join(', ') || '-'} | out: ${ps.outputs.map(port).join(', ')} | set: ${sets.join('; ') || '-'}${offers.length ? ` | offers: ${offers.join(', ')}` : ''} | ${(d.says ?? '').slice(0, 160)}`;
+  return `${d.id}: ${d.name} | in: ${ps.inputs.map(port).join(', ') || '-'} | out: ${ps.outputs.map(port).join(', ')}${carriesOf(d, ps.outputs)} | set: ${sets.join('; ') || '-'}${offers.length ? ` | offers: ${offers.join(', ')}` : ''} | ${(d.says ?? '').slice(0, 160)}`;
 }
 
 const offersKept = new Map<string, string[]>();
@@ -115,6 +128,11 @@ export async function namedCards(request: string, most = 8, room = 1500): Promis
     for (const f of search(w, 30)) { const id = f.add?.block ?? f.id, d = block(id); if (n >= 3 || f.add?.set || !d || !id.startsWith('piece.')) continue;
       const nm = d.name.toLowerCase().replace(/\s*\([^)]*\)/g, '').trim().split(/\s+/);
       if (!id.slice('piece.'.length).startsWith(w) && !nm[0]!.startsWith(w) && nm[nm.length - 1] !== w) continue; take(id, id === `piece.${w}` ? 15 : 10); n++; } }
+  // (and the aisles and the family names the words say, as `find` reads them: "garden" brings the first of the Garden aisle's
+  // families, "hinge" those of Hinges; below the words the pieces' own names matched, at most two to a word)
+  const aisleIds = new Map<string, string[]>();
+  for (const d of LIBRARY.values()) { if (!d.id.startsWith('piece.')) continue; const a = (aisleOf(d) ?? '').toLowerCase(); if (a) aisleIds.set(a, [...(aisleIds.get(a) ?? []), d.id]); }
+  for (const w of words) { let n = 0; for (const [a, xs] of aisleIds) { if (n >= 2) break; if (!new RegExp(`\\b${w}`).test(a)) continue; for (const id of xs) { if (n >= 2) break; if (!hits.has(id)) { take(id, 5); n++; } } } }
   const ids = [...hits].sort((a, b) => b[1] - a[1]).map(([id]) => id), lines: string[] = [], head = 'Cards of the pieces your request names (use these, not a box made to look like one; a size from its choices):';
   let n = head.length; for (const id of ids) { if (lines.length >= most) break; const l = namedCard(block(id)!, request); if (n + 1 + l.length > room) continue; lines.push(l); n += l.length + 1; }
   return lines.length ? `${head}\n${lines.join('\n')}` : '';
@@ -167,7 +185,7 @@ export async function findLines(q: string, most = 10): Promise<string> {
   builders.splice(ahead, Infinity, ...ranked.filter(([, n]) => !any || n > 0).map(([d]) => d));
   const lineOf = async (d: BlockDef) => { const ps = portsOf(d, defaultsOf(d)), outs = ps.outputs.map((p) => p.name).join(','), offers = offersOf(d), eg = await exampleOf(d.id);
     const sets = (d.settings ?? []).slice(0, 6).map((x) => (x.key === 'size' && asked.has(d.id) ? `size=${asked.get(d.id)} (asked)` : `${x.key}=${brief(x.default, 24)}`)).join(' ');
-    return `${d.id}: ${d.name.slice(0, 40)}${d.by === 'you' ? ' (yours)' : ''} | in ${ps.inputs.map((p) => `${p.name}${p.many ? '*' : ''}`).join(',') || '-'}${outs === ROOM_GIVES ? '' : ` | out ${outs}`}${sets ? ` | set ${sets}` : ''}${offers.length ? ` | offers ${offers.join(', ')}` : ''}${eg ? ` | e.g. board "${eg}"` : ''}`; };
+    return `${d.id}: ${d.name.slice(0, 40)}${d.by === 'you' ? ' (yours)' : ''} | in ${ps.inputs.map((p) => `${p.name}${p.many ? '*' : ''}`).join(',') || '-'}${outs === ROOM_GIVES ? '' : ` | out ${outs}${carriesOf(d, ps.outputs)}`}${sets ? ` | set ${sets}` : ''}${offers.length ? ` | offers ${offers.join(', ')}` : ''}${eg ? ` | e.g. board "${eg}"` : ''}`; };
   const top = await Promise.all(builders.slice(0, Math.max(1, most - 4)).map(lineOf));
   const lines = [...top, ...boards, ...rest, ...old].slice(0, most);
   return lines.length || aisleLines.length ? `${top.length ? `(what builds first; each gives ${ROOM_GIVES} unless out says; card one for its choices)\n` : ''}${[...lines, ...aisleLines].join('\n')}` : 'nothing matches';
@@ -354,6 +372,10 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
   /** The nodes whose checks hold on a run board: ran, and say nothing broken. */
   const heldOf = (e: Engine, b: Board): Set<string> => new Set(nodesOf(b).filter((n) => { const st = e.state.get(n.id), v = (st?.out as Record<string, unknown> | undefined)?.violation; return st?.status === 'ok' && !(typeof v === 'string' && v); }).map((n) => n.id));
   let shadow: { board: Board; engine: Engine } | undefined;
+  /** A node that only shows is never "held" (decision 0029, root 7): rewiring Show onto a new operation is always allowed
+   *  (the loose-join calls were refused for it). A measure or an assertion that held still is: what the checker keeps. */
+  const LOOKERS = new Set(['space.show']);
+  const isLooker = (b: Board, id: string) => LOOKERS.has(b.nodes[id]?.block ?? '');
   /** The board run, and a line a node: what fails first (FAILS: each failing assertion, then each other check broken), then
    *  each node's status and a short reading of its outputs (those asked first; failures always). */
   const runLines = async (only?: Set<string>): Promise<string[]> => {
@@ -413,7 +435,7 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
       case 'change': { const bad: string[] = [], touched = new Set<string>(); notes = [];
         // (made on a copy: the board open is replaced only when every check that held on it still holds (design §2.8))
         if (!engine) { engine = new Engine(board); await engine.run(); }
-        const accepted = board, before = engine, held = heldOf(before, accepted); board = JSON.parse(JSON.stringify(board)) as Board;
+        const accepted = board, before = engine, held = new Set([...heldOf(before, accepted)].filter((id) => !isLooker(accepted, id))); board = JSON.parse(JSON.stringify(board)) as Board;
         for (const id of (a.remove ?? []) as string[]) { if (!board.nodes[id]) { bad.push(`no node ${id}`); continue; } board.nodes[id] = { ...board.nodes[id]!, deleted: true }; for (const e of edgesOf(board)) if (e.from === id || e.to === id) board.edges[e.id] = { ...board.edges[e.id]!, deleted: true }; }
         for (const w of (a.unwire ?? []) as string[]) { const [to, inp] = String(w).split('.'); const hit = edgesOf(board).filter((e) => e.to === to && e.in === inp);
           // (an input that is there and fed by nothing: nothing to cut, said; a node or an input that is not there: refused)
@@ -746,13 +768,26 @@ export const isCompound = (request: string): boolean => MACHINES.filter((re) => 
 /** The short list the split chooses from: the assemblies (seed.*, and the blocks the person saved that are not parts kept
  *  in memory: those are recalled by the request's words, after the cached head) by id and a few words, the starter boards
  *  by the words before their colon, and the aisles of pieces by trade. */
-async function composeMenu(blocks?: AgentBlock[]): Promise<string> {
+export async function composeMenu(blocks?: AgentBlock[], request = ''): Promise<string> {
   savedCards(blocks);
-  const { starterBoards } = await import('./starters'), kept = new Set(savedParts().map((p) => p.id));
-  const asm = [...LIBRARY.values()].filter((d) => d.id.startsWith('seed.') && d.id !== 'seed.spring-checked' || d.by === 'you' && !kept.has(d.id)).map((d) => `${d.id}: ${d.name}: ${(d.says ?? '').slice(0, 90)}`);
+  const { starterBoards } = await import('./starters'), kept = new Set(savedParts().map((p) => p.id)), ROOM = 3000;
+  const asm = [...LIBRARY.values()].filter((d) => d.id.startsWith('seed.') && d.id !== 'seed.spring-checked' || d.by === 'you' && !kept.has(d.id));
+  // (grouped by domain, a short line each: id, name, eight words of what it is, its settings' names; the groups whose
+  // words the request says are given in full, every other assembly by its id alone (decision 0029, root 7))
+  const groups = new Map<string, BlockDef[]>(); for (const d of asm) { const g = d.by === 'you' ? 'yours' : d.domains?.[0] ?? 'other'; groups.set(g, [...(groups.get(g) ?? []), d]); }
+  const rq = request.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 3).map((w) => w.replace(/(?<=[a-z]{3}[^s])s$/, ''));
+  const words = (d: BlockDef) => `${d.id.slice(5)} ${d.name}`.toLowerCase(), hit = (d: BlockDef) => rq.some((w) => new RegExp(`\\b${w}`).test(words(d)));
+  const line = (d: BlockDef) => `${d.id}: ${d.name}: ${(d.says ?? '').replace(/\s+/g, ' ').split(' ').slice(0, 8).join(' ')}${(d.settings ?? []).length ? ` (${(d.settings ?? []).slice(0, 6).map((x) => x.key).join(' ')})` : ''}`;
+  const ids = `Every assembly (from: the id): ${asm.map((d) => d.id).join(' ')}`;
   const starts = starterBoards().map(([t]) => t.split(':')[0]!.trim()).filter((t) => t.length >= 6);
   const trades = new Map<string, number>(); for (const id of LIBRARY.keys()) if (id.startsWith('piece.')) { const t = block(id)!.domains?.[0] ?? 'other'; trades.set(t, (trades.get(t) ?? 0) + 1); }
-  return `Assemblies (from: the id):\n${asm.join('\n')}\nStarter boards (from: the title as written):\n${starts.join('; ')}\nAisles of pieces (from: "aisle <trade>"): ${[...trades].map(([t, n]) => `${t} (${n})`).join(', ')}`;
+  const tail = `\nAisles of pieces (from: "aisle <trade>"): ${[...trades].map(([t, n]) => `${t} (${n})`).join(', ')}`;
+  let room = ROOM - ids.length - tail.length - 150; const shown: string[] = [];
+  for (const [g, ds] of groups) { const whole = rq.some((w) => g.includes(w)), hits = whole ? ds : ds.filter(hit); if (!hits.length) continue;
+    const text = `${g}:\n${hits.map(line).join('\n')}`; if (text.length + 1 > room) continue; shown.push(text); room -= text.length + 1; }
+  // (the starter boards by the words before their colon: as many as the room leaves)
+  const st: string[] = []; for (const t of starts) { if (t.length + 2 > room) break; st.push(t); room -= t.length + 2; }
+  return `Assemblies by domain (those your words match, a line each):\n${shown.join('\n') || '(none matches; choose from the ids)'}\n${ids}\nStarter boards (from: the title as written):\n${st.join('; ')}${tail}`;
 }
 const SPLIT_RULE = `## Here: the parts of what is asked (one task: name the parts, build nothing)
 Reply with one JSON object and nothing else:
@@ -769,7 +804,7 @@ const rememberedLine = (p: SavedPart): string => `${p.id}: ${p.name}: ${p.says.s
  *  differ request by request), then the request. */
 export async function splitAsk(request: string, blocks?: AgentBlock[], recalled: readonly SavedPart[] = []): Promise<string> {
   const mem = recalled.length ? `Parts remembered (built before, each checked to run with nothing failing and be one thing; from: the id, placed as one node like an assembly):\n${recalled.map(rememberedLine).join('\n')}\n\n` : '';
-  return `${await composeMenu(blocks)}\n\n${SPLIT_RULE}${PROMPT_CUT}${mem}Request: ${request.slice(0, 600)}`;
+  return `${await composeMenu(blocks, request)}\n\n${SPLIT_RULE}${PROMPT_CUT}${mem}Request: ${request.slice(0, 600)}`;
 }
 /** The split as a model answers it, held to its form: parts with names a wire can read, each once; joins between them. */
 export function splitOf(text: string): { parts: ComposePart[]; joins: ComposeJoin[] } {

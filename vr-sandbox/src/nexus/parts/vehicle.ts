@@ -350,7 +350,7 @@ const CARWHEEL: PartFamily<Wheel> = {
   says: 'A cast alloy wheel (typical; bolt patterns recalled): its barrel a tube 8 mm thick from flange to flange (drop centre and bead seats not drawn) and its face a plain disc 12 mm thick 50 mm in from the outer face (spokes not cut), bored to its centre bore, its bolt holes on its pitch circle (`<size> wheel/bolts`); a tyre of its diameter goes round it, lug nuts on a hub\'s studs through its holes',
   rows: CAR_WHEELS, size: '17×7.5 5×114.3', source: 'typical (recalled fitments and bolt patterns)',
   recipe: (q, size) => made(`${size} wheel`, 'al-a380', { lathe: { pts: wheelPts(q) } }, { color: ALU, pattern: { name: 'bolts', circle: { n: q.n, r: mm(q.pcd) / 2 }, hole: mm(7) } }),
-  expect: (q) => ({ bound: bound(mm(25.4 * q.D + 4), mm(25.4 * q.W + 25), mm(25.4 * q.D + 4)), tol: 0.01, says: 'its flanges by its width; mass not checked: the gauge weighs each bolt hole as a cylinder the whole wheel high, not the disc\'s 12 mm (fault noted, decision 0029)' }),
+  expect: (q) => ({ bound: bound(mm(25.4 * q.D + 4), mm(25.4 * q.W + 25), mm(25.4 * q.D + 4)), mass: (turnedVol(wheelPts(q)) - q.n * disc(mm(14)) * mm(12)) * rho('al-a380'), tol: 0.01, says: 'its flanges by its width; nominal mass, its profile turned less its bolt holes through the 12 mm disc (each cut drawn only through the solid it meets, root 3)' }),
   tests: [T(1, { offers: ['17×7.5 5×114.3 wheel/axis', '17×7.5 5×114.3 wheel/bolts'] })],
 };
 type CarTyre = { w: number; a: number; R: number };
@@ -390,7 +390,7 @@ const WHEELHUB: PartFamily<Hub2> = {
   says: 'A wheel hub (typical; patterns recalled): its flange 12 mm thick with its stud holes on the pitch circle (`<size> hub/studs`, 12.4 mm), its pilot body above it (the wheel\'s centre bore sits over it), bored for its axle or bearing (studs, bearing and ABS ring not drawn); wheel studs go through its holes (Through a line), a brake disc\'s hat over its pilot',
   rows: WHEEL_HUBS, size: '5×114.3 Ø67.1', source: 'typical (recalled)',
   recipe: (q, size) => made(`${size} hub`, 'steel-low', { lathe: { pts: hub2Pts(q) } }, { color: STEEL, pattern: { name: 'studs', circle: { n: q.n, r: mm(q.pcd) / 2 }, hole: mm(6.2) } }),
-  expect: (q) => ({ bound: bound(mm(q.pcd + 28), mm(60), mm(q.pcd + 28)), tol: 0.01, says: 'its flange by its height; mass not checked: the gauge weighs each stud hole as a cylinder the whole hub high, not the flange\'s 12 mm (fault noted, decision 0029)' }),
+  expect: (q) => ({ bound: bound(mm(q.pcd + 28), mm(60), mm(q.pcd + 28)), mass: (turnedVol(hub2Pts(q)) - q.n * disc(mm(12.4)) * mm(12)) * rho('steel-low'), tol: 0.01, says: 'its flange by its height; nominal mass, its profile turned less its stud holes through the 12 mm flange (each cut drawn only through the solid it meets, root 3)' }),
   tests: [T(1, { offers: ['5×114.3 Ø67.1 hub/axis', '5×114.3 Ø67.1 hub/studs'] })],
 };
 type Disc = { D: number; t: number; n: number; pcd: number; bore: number; H: number };
@@ -403,7 +403,7 @@ const BRAKEDISC: PartFamily<Disc> = {
   says: 'A brake disc (typical sizes recalled): its braking ring of its diameter and thickness on a hat (wall 6 mm, plate 7 mm) bored to its centre bore, its wheel-stud holes on the pitch circle (`<size> disc/bolts`); vented discs drawn solid (vanes not cut, so heavier). It goes over a hub\'s pilot, studs through its holes',
   rows: BRAKE_DISCS, size: 'Ø280×22 5×114.3', source: 'typical (recalled)',
   recipe: (q, size) => made(`${size} disc`, 'cast-iron', { lathe: { pts: discPts(q) } }, { color: 0x5a5d62, pattern: { name: 'bolts', circle: { n: q.n, r: mm(q.pcd) / 2 }, hole: mm(6.5) } }),
-  expect: (q) => ({ bound: bound(mm(q.D), mm(q.H), mm(q.D)), tol: 0.01, says: 'its diameter by its hat height; mass not checked: the gauge weighs each bolt hole as a cylinder the whole hat high, not the plate\'s 7 mm (fault noted, decision 0029)' }),
+  expect: (q) => ({ bound: bound(mm(q.D), mm(q.H), mm(q.D)), mass: (turnedVol(discPts(q)) - q.n * disc(mm(13)) * mm(7)) * rho('cast-iron'), tol: 0.01, says: 'its diameter by its hat height; nominal mass, its profile turned less its bolt holes through the hat\'s 7 mm plate (each cut drawn only through the solid it meets, root 3)' }),
   tests: [T(1, { offers: ['Ø280×22 5×114.3 disc/axis', 'Ø280×22 5×114.3 disc/bolts'] })],
 };
 /** Car brake calipers' envelopes (mm; typical). */
@@ -480,7 +480,7 @@ const BALLJOINT: PartFamily<Ball> = {
   says: 'A ball joint (typical): its housing a cylinder (press-in) or flanged with its bolt holes (`<size> housing/bolts`), its tapered stud up out of it (`<size> stud/axis`; ball, boot and taper not drawn). It presses into a control arm\'s boss or bolts to it, its stud through a knuckle\'s taper',
   rows: BALL_JOINTS, size: 'press-in Ø42 M14', source: 'typical (recalled)',
   recipe: (q, size) => stack(`${size} ball joint`, 1, [{ b: q.n ? made(`${size} housing`, 'steel-alloy', { lathe: { pts: ballPts(q) } }, { color: DARK, pattern: { name: 'bolts', circle: { n: q.n, r: mm(q.pcd) / 2 }, hole: mm(4.5) } }) : made(`${size} housing`, 'steel-alloy', { cyl: [mm(q.D) / 2, mm(q.H)] }, { color: DARK }) }, { b: made(`${size} stud`, 'steel-alloy', { cyl: [mm(q.d) / 2, mm(50)] }, { color: STEEL }) }]),
-  expect: (q) => ({ bound: bound(mm(q.n ? q.pcd + 24 : q.D), mm(q.H + 50), mm(q.n ? q.pcd + 24 : q.D)), ...(q.n ? {} : { mass: (disc(mm(q.D)) * mm(q.H) + disc(mm(q.d)) * mm(50)) * rho('steel-alloy') }), tol: 0.01, massTol: 0.02, says: q.n ? 'its flange by housing and stud; mass not checked: the gauge weighs each bolt hole as a cylinder the whole housing high, not the flange\'s 6 mm (fault noted, decision 0029)' : 'its housing by housing and stud; nominal mass, housing and stud' }),
+  expect: (q) => ({ bound: bound(mm(q.n ? q.pcd + 24 : q.D), mm(q.H + 50), mm(q.n ? q.pcd + 24 : q.D)), mass: ((q.n ? turnedVol(ballPts(q)) - q.n * disc(mm(9)) * mm(6) : disc(mm(q.D)) * mm(q.H)) + disc(mm(q.d)) * mm(50)) * rho('steel-alloy'), tol: 0.01, massTol: 0.02, says: q.n ? 'its flange by housing and stud; nominal mass, housing (less its bolt holes through the 6 mm flange: each cut drawn only through the solid it meets, root 3) and stud' : 'its housing by housing and stud; nominal mass, housing and stud' }),
   tests: [T(2, { offers: ['press-in Ø42 M14 housing/axis', 'press-in Ø42 M14 stud/axis'] }), T(2, { offers: ['bolt-in 3-hole M14 housing/axis', 'bolt-in 3-hole M14 housing/bolts', 'bolt-in 3-hole M14 stud/axis'] }, { size: 'bolt-in 3-hole M14' })],
 };
 type Column = { L: number };
@@ -633,7 +633,7 @@ const HITCHRECEIVER: PartFamily<Hitch> = {
   says: 'A hitch receiver (typical; classes recalled): a square tube of its inside size and wall (or the solid shank that goes in one), its pin hole through both walls 60 mm from its end (`<size> receiver/pin`), laid along x (its crossmember and brackets not drawn); a ball mount\'s shank slides into it, a pin through the holes',
   rows: HITCH_RECEIVERS, size: 'class III 2 in', source: 'typical (recalled)',
   recipe: (q, size) => turn(made(`${size} receiver`, 'steel-low', { section: { pts: hitchPts(q), L: mm(q.L) } }, { color: DARK, pattern: { name: 'pin', face: '+x', points: [[0, -mm(q.L / 2 - 60)]], hole: mm(q.pin / 2 + 0.3) } }), 1, 90),
-  expect: (q) => { const a = q.a + 2 * q.t; return { bound: bound(mm(q.L), mm(a), mm(a)), ...(q.t ? {} : { mass: (areaOf(hitchPts(q)) * mm(q.L) - mm(q.a) * disc(mm(q.pin + 0.6))) * rho('steel-low') }), tol: 0.01, massTol: 0.02, says: q.t ? 'its length by its outside; mass not checked: the gauge weighs the pin hole through the whole square, not the two walls (fault noted, decision 0029)' : 'its length by its outside; nominal mass, the bar less its pin hole' }; },
+  expect: (q) => { const a = q.a + 2 * q.t; return { bound: bound(mm(q.L), mm(a), mm(a)), mass: (areaOf(hitchPts(q)) * mm(q.L) - (q.t ? 2 * mm(q.t) : mm(q.a)) * disc(mm(q.pin + 0.6))) * rho('steel-low'), tol: 0.01, massTol: 0.02, says: q.t ? 'its length by its outside; nominal mass, the tube less its pin hole through its two walls (each cut drawn only through the solid it meets, root 3)' : 'its length by its outside; nominal mass, the bar less its pin hole' }; },
   tests: [T(1, { offers: ['class III 2 in receiver/axis', 'class III 2 in receiver/pin'] })],
 };
 type Mount = { D: number; H: number; core: number; thread: number };

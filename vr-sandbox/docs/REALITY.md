@@ -3129,3 +3129,15 @@ fixing.
   looked at. A board opened on the dashboard is run in the chat's frame only when the chat needs it (by hand, or before the
   next request): the frame shares the page's thread, and a second run of the gauntlet board at once left the view black
   for as long again. Not done: the chat frame still holds its own hidden view (it draws nothing while hidden).
+
+## 2026-11-07: wave 10, partial (a container restart stopped it): root 1's rest, root 3 and root 8, root 7 in part
+
+- **Root 1, the rest:** the ring's room, its axis slot, through, between, along and key read the solids, not their
+  bounds: a ring of three radial blades, two long skids and a hub through a three-copy ring's axis stand apart.
+- **Root 3 and root 8:** a bore is read from the solid with its cuts (a sprocket or a gear drawn with a hole goes over a
+  shaft); a cut is clipped to the solid it meets, so a car wheel's, a brake disc's and a ball joint's masses are held to
+  their rows; by-hand counts only places handed to the room; Shape0 says each solid's frame.
+- **Root 7, in part:** Show, measure and assert are never "held" by the change checker; the cards say which output
+  carries a shaft line; the split call's assembly menu by domain, under 3,000 characters.
+- **Not done (relaunched):** root 6 (fits by size) and the contact sheet's blank pictures. Touched tests: 11 passed
+  (`npx vitest run tests/nexus/domains.test.ts -t "rests on its first contact|ring copies|vehicle|things as blocks|..."`).

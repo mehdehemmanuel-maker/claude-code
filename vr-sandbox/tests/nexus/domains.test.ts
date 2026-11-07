@@ -1409,6 +1409,49 @@ describe('every domain, in one pass', () => {
     for (const p of savedParts()) forget(p.id);
     expect([savedParts().length, LIBRARY.has('my.mast')], 'forgotten: out of the store and the library').toEqual([0, false]);
   }, 120_000);
+  // (decision 0029, root 7: the AI told what the operations mean, and its menus by domain; no model (C8): a board that only
+  // shows, measures or asserts is never "held", so cutting what feeds the Show node is taken; the card says which output of
+  // a motor carries the shaft line; the split call's list is under 3,000 characters with every assembly's id, a domain's
+  // lines given when the request says its words; the named cards read aisles; the scorer reads a kind from the
+  // operations' names and the aisles, the forty single builds' kinds not; the parts browser has the assemblies on an aisle)
+  it('the AI is told what the operations mean: show is never held, the card says where the shaft is, the menu is short and by domain, the assemblies are an aisle', async () => {
+    const { toolsFor, carriesOf, cardOf, composeMenu, namedCards } = await import('../../src/nexus/agent');
+    const { KINDS, holds, saidIn } = await import('../evals/score');
+    const { partsTree, ASSEMBLIES } = await import('../../src/nexus/view/parts');
+    const { aisleOf } = await import('../../src/nexus/parts/aisles');
+    // (1) cutting the Show node's feed is taken: show, measure and assert are not what held
+    const t = await toolsFor(emptyBoard('show'));
+    await t.doTool('build', { nodes: { p: { b: 'piece.plate' }, show: { b: 'space.show' } }, wires: ['p.block>show.thing'] });
+    const cut = await t.doTool('change', { unwire: ['show.thing'] });
+    expect(cut, 'the Show node unwired').not.toMatch(/NOT TAKEN/);
+    // (2) the motor's shaft line is on `motor`, said on its card
+    const motor = LIBRARY.get('seed.motor-dc')!;
+    expect(carriesOf(motor, portsOf(motor, defaultsOf(motor)).outputs), 'where the lines are').toMatch(/motor carries shaft\/axis/);
+    expect(cardOf(motor)).toMatch(/lines: .*motor carries shaft\/axis/);
+    // (3) the split call's list: under 3,000 characters, every assembly's id, the matching domain's lines
+    const seeds = [...LIBRARY.keys()].filter((id) => id.startsWith('seed.'));
+    for (const rq of ['', 'a drone with a robot arm and a chair', 'a bicycle, a truck and a crane']) {
+      const m = await composeMenu(undefined, rq);
+      expect(m.length, `menu for "${rq}"`).toBeLessThan(3000);
+      for (const id of seeds) if (id !== 'seed.spring-checked') expect(m, id).toContain(id);
+    }
+    expect(await composeMenu(undefined, 'a chair'), 'a line for the chair').toMatch(/seed\.chair: [^\n]+\(/);
+    // (4) the named cards read an aisle's words
+    const aisle = [...LIBRARY.values()].find((d) => d.id.startsWith('piece.') && /garden/i.test(aisleOf(d) ?? ''));
+    if (aisle) expect(await namedCards('something for the garden'), 'a card from the Garden aisle').toContain('piece.');
+    // (5) the scorer: a chair's legs named on the operation count for a kind read by name; the forty kinds do not read it
+    const legs = { says: 'legs', pieces: /legs/i };
+    expect(holds(legs, [], ['seat'], [], ['chair legs']), 'named on the operation').toBe(true);
+    expect(holds(legs, [], ['seat'], [], []), 'named nowhere').toBe(false);
+    expect(holds(KINDS.led, [], [], [], ['LED lamp']), 'the forty kinds stay on ids, aisles and families').toBe(false);
+    const b = emptyBoard('x'); b.nodes.r = { id: 'r', block: 'room.ring', x: 0, y: 0, set: { name: 'chair legs' } } as never;
+    expect(saidIn(b), 'the operation\'s name read').toContain('chair legs');
+    // (6) the browser: the assemblies on an aisle of their own, by domain, each one tap
+    const tree = partsTree({ trade: ASSEMBLIES });
+    expect(tree.assemblies.parts).toBeGreaterThan(50);
+    expect(tree.categories.length, 'grouped by domain').toBeGreaterThan(2);
+    expect(tree.categories.flatMap((c) => c.families).every((f) => f.sizes.length === 0 && LIBRARY.has(f.id)), 'one tap each').toBe(true);
+  }, 30_000);
   // (a thing of several things built from its parts (decision 0027, the user: "I asked for a drone with a robot arm
   // attached ... it was spitting out randomness like a plate with a rod"): composeBuild's mechanics with no model, its
   // ask answering each call as a model writes it (a split, a part's plan, a join that names an output wrong and then its
@@ -1978,10 +2021,12 @@ describe('every domain, in one pass', () => {
     const two = roomStack('two', 1, [{ b: roomMade('plate', 'steel-low', { box: [0.1, 0.01, 0.1] }, { pattern: { name: 'holes', points: [[0, 0]], hole: 0.005 } }) }, { b: roomMade('plate', 'steel-low', { box: [0.1, 0.01, 0.1] }, { pattern: { name: 'holes', points: [[0, 0]], hole: 0.005 } }) }]);
     const pinned = roomThrough(two, roomMade('pin', 'steel-alloy', { cyl: [0.004, 0.05] }), { port: 'plate/holes', from: 'lo' }, 'clear');
     expect([pinned.pieces.length, roomNoteOf(pinned), shared(pinned)]).toEqual([3, 'through: 2 pieces offer plate/holes; took the plate (piece 1, the lowest along it)', 0]);
-    // (6) an end bell with no bore slid over a shaft: bored to it, said; a plate refused with the way named
+    // (6) an end bell with no bore slid over a shaft: bored to it, said; a plate too (root 3: a plate used as a hub is
+    // bored); a case refused with the way named
     const shaft = roomMade('shaft', 'steel-alloy', { cyl: [0.005, 0.1] }), belled = roomOver(shaft, 'shaft/axis', roomMade('end bell', 'nylon', { cyl: [0.009, 0.003] }), 'lo', 'slide');
     expect([belled.pieces.length, roomNoteOf(belled), (belled.pieces[1]!.solid.base as { ri?: number }).ri]).toEqual([2, 'over bored the end bell to the shaft (Ø10.50 mm, the slide fit): it had no bore', 0.00525]);
-    expect(() => roomOver(shaft, 'shaft/axis', roomMade('plate', 'steel-low', { box: [0.03, 0.003, 0.03] }), 'hi', 'slide')).toThrow(/has no bore to slide on with: make it round/);
+    expect(roomNoteOf(roomOver(shaft, 'shaft/axis', roomMade('plate', 'steel-low', { box: [0.03, 0.003, 0.03] }), 'hi', 'slide'))).toBe('over bored the plate to the shaft (Ø10.50 mm, the slide fit): it had no bore');
+    expect(() => roomOver(shaft, 'shaft/axis', roomMade('tray', 'steel-low', { case: [0.03, 0.01, 0.03, 0.002, 0.002] }), 'hi', 'slide')).toThrow(/has no bore to slide on with: make it round/);
     // (7) an axle laid along z onto a V block: seated in the V, a line face on each flank
     const vee = roomMade('V block', 'steel-low', { section: { pts: [[-0.03, 0], [0.03, 0], [0.03, 0.03], [0.012, 0.03], [0, 0.018], [-0.012, 0.03], [-0.03, 0.03]], L: 0.05 } });
     const seated = roomOnto(vee, '+y', roomTurn(roomMade('axle', 'steel-alloy', { cyl: [0.01, 0.1] }), 0, 90));
@@ -3030,6 +3075,32 @@ describe('every domain, in one pass', () => {
     expect(sampleRoom(h, 5), 'the hull assembly: no point in two pieces').toEqual(APART);
     expect(+((h.hi[2] - h.lo[2]) * 1000).toFixed(1), 'transom and hull along z').toBe(3685); expect(+((h3.hi[2] - h3.lo[2]) * 1000).toFixed(1), 'its length a setting').toBe(3025);
   }, 30_000);
+  // (root 3, decision 0029, plan/FIX-PLAN.md: the free room about a line read from a solid with its cuts, so a sprocket, a
+  // spur gear drawn with its bore, a drilled plate and a plate used as a hub go over a shaft by Over; and a cut drawn only
+  // through the solid it meets, so a flange's bolt holes weigh the flange: each mass before (each hole the solid's whole
+  // height or width, as the gauge weighed it), after, and its row's nominal, printed)
+  it('root 3: a sprocket, an m2 z42 gear, a drilled plate and a plate used as a hub over an 8 mm shaft; a wheel, a disc, a hub and a receiver weighed toward their nominal', async () => {
+    const { checkRow, build, PART_FAMILIES } = await import('../../src/nexus/parts/maker'), { gearOf } = await import('../../src/nexus/room');
+    const shaft = roomMade('shaft', 'steel-alloy', { cyl: [0.004, 0.1] }), on = (b: RoomBlock, s = shaft) => roomOver(s, 'shaft/axis', b, 'mid', 'slide');
+    const plate = (o = {}) => roomMade('plate', 'steel-low', { box: [0.03, 0.003, 0.03] }, o);
+    const [sp, g, drilled, hub] = [on(build(PART_FAMILIES.get('piece.sprocket')!, 'ISO 08B 20T')), on(cpGear(2, 42, 0.02, 0.008)), on(plate({ pattern: { name: 'hole', points: [[0, 0]], hole: 0.0045 } })), on(plate())];
+    expect([sp, g, drilled, hub].map((b) => [b.pieces.length, b.faces.map((f) => f.by), sampleRoom(b, 12)]), 'each over the shaft by its bore, a face round it, no point in two pieces').toEqual(
+      ['ISO 08B 20T sprocket', 'm2 z42 spur gear', 'plate', 'plate'].map((n) => [2, [`${n} over shaft/axis`], APART]));
+    expect([sp, g, drilled, hub].map((b) => roomNoteOf(b) ?? ''), 'the gear\'s pilot opened, the solid plate bored, said').toEqual(['', 'over opened the m2 z42 spur gear\'s bore to the shaft (Ø8.50 mm, the slide fit)', '', 'over bored the plate to the shaft (Ø8.50 mm, the slide fit): it had no bore']);
+    expect(Math.abs(sp.pieces[1]!.solid.base.frame![5]), 'the sprocket laid with its axis along the shaft').toBe(1);
+    // (a gear over a shaft along z (its own axis as made) stays a gear its mesh can read)
+    expect(gearOf(on(cpGear(2, 42, 0.02, 0.009), roomTurn(shaft, 0, 90)).pieces[1]!)?.z, 'still a z42 gear on a shaft along z').toBe(42);
+    // (the masses: before as the gauge weighed each hole, after as drawn now, against the row's nominal)
+    for (const [id, size] of [['piece.carwheel', '17×7.5 5×114.3'], ['piece.brakedisc', 'Ø280×22 5×114.3'], ['piece.wheelhub', '5×114.3 Ø67.1'], ['piece.hitchreceiver', 'class III 2 in']] as const) {
+      const b = build(PART_FAMILIES.get(id)!, size), P = partOfBlock(b).parts![0]!, cuts = P.cuts ?? [], H = b.hi[1] - b.lo[1], r = checkRow(id, size);
+      const whole = id === 'piece.hitchreceiver' ? [{ ...cuts[0]!, depth: H + 2e-9 }] : cuts.map((c) => ({ ...c, at: [c.at[0], H / 2 + 1e-9, c.at[2]] as [number, number, number], depth: H + 2e-9 }));
+      const before = massOf({ ...P, cuts: whole }), after = r.mass, nominal = r.expect!.mass!;
+      console.log(`root 3: ${id} ${size}: before ${(before * 1000).toFixed(1)} g, after ${(after * 1000).toFixed(1)} g, nominal ${(nominal * 1000).toFixed(1)} g`);
+      expect([r.ok, Math.abs(after - nominal) < Math.abs(before - nominal)], `${id} ${size}: ${r.says}`).toEqual([true, true]);
+    }
+    const off = ['piece.carwheel', 'piece.brakedisc', 'piece.wheelhub', 'piece.hitchreceiver', 'piece.balljoint'].flatMap((id) => Object.keys(PART_FAMILIES.get(id)!.rows).map((s) => checkRow(id, s)).filter((x) => !x.ok).map((x) => x.says));
+    expect(off, 'every size of the five held to its row, its mass now among it').toEqual([]);
+  }, 30_000);
   it('a sphere, a cone and a turned profile: exact inside tests, every pair apart after stack, through, over, ring and turn', () => {
     const ball = roomMade('ball', 'steel-alloy', { sphere: [0.01] }), bead = roomMade('bead', 'glass', { sphere: [0.008, 0.003] });
     const cone = roomMade('cone', 'al-6061', { cone: [0.02, 0.01, 0.03, 0.004] }), point = roomMade('point', 'abs', { cone: [0.01, 0, 0.02] });
@@ -3166,11 +3237,54 @@ describe('every domain, in one pass', () => {
     for (const f of MACHINE) { try { const r = checkRow(f.id, f.size); n++; if (!r.ok) bad.push(r.says); } catch (e) { bad.push(`${f.id}: ${(e as Error).message}`); } }
     expect(bad).toEqual([]); expect(n, 'families built').toBe(MACHINE.length); expect(MACHINE.length).toBeGreaterThanOrEqual(40);
   }, 40_000);
+  // (root 1, the rest (decision 0029, plan/FIX-PLAN.md faults 22, 27, 28, 29, 33, 34): a ring's room, its axis's slot and
+  // what through, between, along and key meet read from the solids, not the bounds; each case refused before)
+  it('rings and passers read the solids: three pitched blades, two long skids, two rows of studs, a hub and a boss on a ring\'s axis, a wheel between shell legs', () => {
+    const slotOf = (r: RoomBlock, name: string) => r.pieces[0]!.lines.find((l) => l.port === `${name}/axis`)!.slot;
+    // (28: three blades at the 10.5×11 marine prop's sizes (span 103.85, chord 85, t 6, pitched 25.5°), roots 20 mm from
+    // the axis: their plans overlap at the roots, their pitched solids do not; the old disc wanted 131.6 mm, the pitch 124.5)
+    const th = Math.atan(11 / (2 * Math.PI * 0.7 * 5.25)), span = 0.10385, blade = roomTurn(roomMade('blade', 'al-6061', { box: [span, 0.006, 0.085] }), 0, (th * 180) / Math.PI);
+    const near = roomRing('prop', blade, 3, 0.02 + span / 2, 'clear', true);
+    expect(sampleRoom(near, 10), '28: three pitched blades, roots 20 mm out').toEqual(APART);
+    // (29: the same blades at the prop's own radius (roots 2 mm off its Ø55 hub), the hub through the ring's axis: the slot
+    // the blades' roots leave, 29.5 mm, not 3.6 mm from their turned bounds)
+    const prop = roomRing('prop', blade, 3, 0.0275 + 0.002 + span / 2, 'clear', true);
+    expect(+(slotOf(prop, 'prop') * 1000).toFixed(3), '29: the free room round the axis, mm').toBe(29.5);
+    const hubbed = roomThrough(prop, roomMade('hub', 'al-6061', { tube: [0.009, 0.0275, 0.08] }), { port: 'prop/axis', from: 'lo' }, 'clear');
+    expect([hubbed.pieces.length, sampleRoom(hubbed, 8), hubbed.pieces.slice(0, 3).map((p) => p.solid.minus.length)], '29: the hub through three blades, none cut').toEqual([4, APART, [0, 0, 0]]);
+    // (33: two 2,241 mm skids (Ø76 × 3 tube along z) 1,200 mm apart, a ring of two)
+    const skid = roomTurn(roomMade('skid', 'al-6061', { tube: [0.035, 0.038, 2.241] }), 0, 90), skids = roomRing('skids', skid, 2, 0.6);
+    expect([skids.pieces.length, sampleRoom(skids, 8)], '33: two skids a vehicle\'s width apart').toEqual([2, APART]);
+    // (22: two rows of four 2×4 studs (38 × 89, 2,400 high) 300 mm apart)
+    const stud = () => roomMade('stud', 'spruce', { box: [0.038, 2.4, 0.089] }), row = roomStack('row', 2, [{ b: stud(), fit: 'clear' }, { b: stud(), fit: 'clear' }, { b: stud(), fit: 'clear' }, { b: stud() }]);
+    const studs = roomRing('studs', row, 2, 0.15);
+    expect([studs.pieces.length, sampleRoom(studs, 6)], '22: two rows of studs').toEqual([8, APART]);
+    // (27: twelve Ø2 spokes 250 mm long, their inner ends 40 mm out, and a Ø70 boss through their ring's axis)
+    const spokes = roomRing('spokes', roomTurn(roomMade('spoke', 'steel-low', { cyl: [0.001, 0.25] }), 2, 90), 12, 0.04 + 0.125, 'clear', true);
+    const bossed = roomThrough(spokes, roomMade('boss', 'steel-low', { tube: [0.005, 0.035, 0.03] }), { port: 'spokes/axis', from: 'lo' }, 'clear');
+    expect([+(slotOf(spokes, 'spokes') * 1000).toFixed(3), bossed.pieces.length, sampleRoom(bossed, 6)], '27: the spokes\' free room, mm; a boss inside them').toEqual([40, 13, APART]);
+    // (34: a fork drawn as a shell (a case, 6 mm walls), a Ø10.4 hole through its legs, a Ø100 wheel over a Ø8 axle passed
+    // through them: the wheel clears the legs, so it is not in the hole's way)
+    const fork = roomMade('fork', 'al-6061', { case: [0.036, 0.12, 0.13, 0.006, 0.006] }, { pattern: { name: 'holes', points: [[0, 0]], hole: 0.0052, face: '+x' } });
+    const wheel = roomOver(roomMade('axle', 'steel-alloy', { cyl: [0.004, 0.036] }), 'axle/axis', roomMade('wheel', 'pu', { tube: [0.0043, 0.05, 0.02] }), 'mid', 'slide');
+    const forked = roomThrough(fork, wheel, { port: 'fork/holes', from: 'lo' }, 'clear');
+    expect([forked.pieces.length, sampleRoom(forked, 8)], '34: a wheel between shell legs').toEqual([3, APART]);
+    // (between: a brace from a post's hole 2 mm above the beam along their feet to the other post's high hole: its bound
+    // meets the beam, its solid clears it by about 5 mm, so the beam is not cut; the posts it runs into are)
+    const post = (v: number) => roomMade('post', 'steel-low', { box: [0.02, 0.3, 0.02] }, { pattern: { name: 'holes', points: [[0, v]], hole: 0.004, face: '+z' } });
+    const bay = roomStack('bay', 0, [{ b: post(-0.128) }, { b: roomMade('beam', 'steel-low', { box: [0.3, 0.02, 0.02] }) }, { b: post(0.128) }], undefined, false, 'lo');
+    const braced = roomBetween(bay, { port: 'post/holes', i: 0 }, { port: 'post/holes', i: 1 }, roomMade('brace', 'steel-low', { cyl: [0.004, Math.hypot(0.32, 0.256)] }), 'tight');
+    expect([braced.pieces.length, braced.pieces.slice(0, 3).map((p) => p.solid.minus.length), sampleRoom(braced, 8)], 'between: the beam under the brace not cut').toEqual([4, [2, 0, 2], APART]);
+    // (copies that meet are still refused by name: three flat blades whose roots overlap)
+    expect(() => roomRing('flat', roomMade('flat blade', 'abs', { box: [0.1, 0.006, 0.08] }), 3, 0.07, 'clear', true), 'flat blades meeting at their roots').toThrow(/no room in flat: copy 1's flat blade meets copy 2's flat blade/);
+  });
   it('ring copies turned to face out stay apart; a bend drawn hollow weighs what its tube does; a ring cut drawn with its core', () => {
     const blade = roomMade('blade', 'abs', { box: [0.06, 0.004, 0.012] }), fan = roomRing('fan', blade, 5, 0.06, 'clear', true);
     expect(sampleRoom(fan, 12), 'five blades turned out').toEqual(APART);
     expect(fan.pieces.map((p, i) => { const f = p.solid.base.frame, a = (2 * Math.PI * i) / 5; return +(f ? f[0]! * Math.cos(a) + f[6]! * Math.sin(a) : Math.cos(a) ** 2 + 0).toFixed(9); }), 'each blade\'s length along its own radius').toEqual([1, 1, 1, 1, 1]);
-    expect(() => roomRing('fan', blade, 9, 0.06, 'clear', true), 'nine at 60 mm: no room').toThrow(/no room in fan/);
+    // (root 1, the rest: nine of these at 60 mm stand 40° apart and meet nowhere (each spans 22.6° at its root), so their
+    // solids are let in; sixteen, 22.5° apart, meet at their roots)
+    expect(() => roomRing('fan', blade, 16, 0.06, 'clear', true), 'sixteen at 60 mm: no room').toThrow(/no room in fan/);
     // (a 90° bend of 22×0.9 copper at R 77 mm: drawn solid it weighed 412.0 g against 64.7 g for the same straight (research, 2026-11-05))
     const bend = roomMade('bend', 'copper', { bend: [0.077, 0.011, 90, 0.0101] }), straight = roomMade('straight', 'copper', { tube: [0.0101, 0.011, 0.077 * Math.PI / 2] });
     const mb = massOf(partOfBlock(bend).parts![0]!), ms = massOf(partOfBlock(straight).parts![0]!);
