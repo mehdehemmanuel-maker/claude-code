@@ -45,11 +45,22 @@ async function seedIds() {
         while (Date.now() < tw + 30000) { const settled = await p.evaluate(() => window.nexusNodes?.settled?.() ?? false); calm = settled ? (calm || Date.now()) : 0; if (calm && Date.now() - calm > 800) break; await p.waitForTimeout(200); }
         const info = await p.evaluate(() => { const st = window.nexusNodes.state('a'), b = window.dashboard.wall.outputsOf('a')?.block; return { pieces: b ? b.pieces.length : -1, error: st?.error ? String(st.error) : '', status: String(st?.status ?? st?.state ?? '') }; });
         if (info.pieces < 0) throw new Error(info.error || `it made no block (${info.status || 'no state'})`);
-        await p.click('#enter3d'); await p.waitForTimeout(500); await p.click('#fit3d'); await p.waitForTimeout(900);
+        await p.click('#enter3d'); await p.waitForTimeout(800); await p.click('#fit3d'); await p.waitForTimeout(1500);
         const canvas = await p.$('#dock canvas'); if (!canvas) throw new Error('no 3D view canvas');
-        const png = (await canvas.screenshot({ type: 'png' })).toString('base64');
-        const jpg = await shrink.evaluate(async (src) => { const img = new Image(); img.src = 'data:image/png;base64,' + src; await img.decode(); const c = document.createElement('canvas'); c.width = 320; c.height = 240; const g = c.getContext('2d'); g.fillStyle = '#10151f'; g.fillRect(0, 0, 320, 240);
-          const k = Math.min(320 / img.width, 240 / img.height); g.drawImage(img, (320 - img.width * k) / 2, (240 - img.height * k) / 2, img.width * k, img.height * k); return c.toDataURL('image/jpeg', 0.6).split(',')[1]; }, png);
+        // (kept only when the picture has something in it: its pixel variance, from the PNG as decoded, is not near zero; else fit again and wait longer, three tries)
+        let jpg = '', variance = 0;
+        for (let attempt = 0; attempt < 3 && !jpg; attempt++) {
+          if (attempt) { await p.click('#fit3d').catch(() => {}); await p.waitForTimeout(1500 * attempt + 1500); }
+          const png = (await canvas.screenshot({ type: 'png' })).toString('base64');
+          const r = await shrink.evaluate(async (src) => { const img = new Image(); img.src = 'data:image/png;base64,' + src; await img.decode();
+            const w = Math.min(160, img.width), h = Math.min(120, img.height), t = document.createElement('canvas'); t.width = w; t.height = h; const tg = t.getContext('2d'); tg.drawImage(img, 0, 0, w, h);
+            const d = tg.getImageData(0, 0, w, h).data; let n = 0, s = 0, s2 = 0; for (let i = 0; i < d.length; i += 4) { const y = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; n++; s += y; s2 += y * y; }
+            const c = document.createElement('canvas'); c.width = 320; c.height = 240; const g = c.getContext('2d'); g.fillStyle = '#10151f'; g.fillRect(0, 0, 320, 240);
+            const k = Math.min(320 / img.width, 240 / img.height); g.drawImage(img, (320 - img.width * k) / 2, (240 - img.height * k) / 2, img.width * k, img.height * k);
+            return { variance: s2 / n - (s / n) ** 2, jpg: c.toDataURL('image/jpeg', 0.6).split(',')[1] }; }, png);
+          variance = r.variance; if (variance >= 3) jpg = r.jpg;
+        }
+        if (!jpg) throw new Error(`no picture: the 3D view stayed blank after 3 tries (pixel variance ${variance.toFixed(2)}) though the assembly made ${info.pieces} pieces`);
         const file = id.replace(/[^\w.-]/g, '_') + '.jpg'; writeFileSync(join(OUT, file), Buffer.from(jpg, 'base64'));
         done.push({ id, name, pieces: info.pieces, file }); console.log(`ok   ${String(Date.now() - t0).padStart(6)} ms  ${id}  ${info.pieces} pieces${errs.length ? `  (${errs.length} page errors)` : ''}`);
       } catch (e) { failed.push({ id, name, error: e.message.split('\n')[0] }); console.log(`FAIL ${String(Date.now() - t0).padStart(6)} ms  ${id}  ${e.message.split('\n')[0]}`); }
@@ -65,7 +76,7 @@ figcaption{padding:5px 8px;display:flex;justify-content:space-between;gap:8px}fi
 .bad{margin-top:18px}.bad li{color:#ff8a80;margin:3px 0}.bad code{color:#dfe7f1}</style></head><body>
 <h1>Nexus contact sheet</h1><p>${done.length} of ${done.length + failed.length} seed assemblies, each at its default settings, seen from the front right above (the 3D view's own fit). Made by <code>node scripts/sheet.cjs</code>.</p>
 <div class="g">${done.map((d) => `<figure><img src="${esc(d.file)}" alt="${esc(d.id)}" width="320" height="240"><figcaption><b>${esc(d.id)}</b><span>${d.pieces} pieces</span></figcaption></figure>`).join('')}</div>
-${failed.length ? `<ul class="bad"><li><b>${failed.length} did not open:</b></li>${failed.map((f) => `<li><code>${esc(f.id)}</code>: ${esc(f.error)}</li>`).join('')}</ul>` : ''}</body></html>\n`;
+${failed.length ? `<ul class="bad"><li><b>${failed.length} without a picture:</b></li>${failed.map((f) => `<li><code>${esc(f.id)}</code>: ${esc(f.error)}</li>`).join('')}</ul>` : ''}</body></html>\n`;
   writeFileSync(join(OUT, 'index.html'), html);
   console.log(`docs/sheet/index.html: ${done.length} pictures, ${failed.length} failed, ${((Date.now() - t00) / 1000).toFixed(0)} s`);
 })().catch((e) => { console.error(e); process.exit(1); });

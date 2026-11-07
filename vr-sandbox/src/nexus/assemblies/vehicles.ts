@@ -4,7 +4,8 @@
 // block of the one or two settings that matter. Nothing here places by number: every piece is made by room.make or a
 // piece.* node and put together by stack, onto, over, through, ring and turn. Where a piece should move (a wheel, a rotor,
 // a boom on its pin, a body on its slewing post, a chuck's spindle), it goes over its shaft (or the shaft through it) with a
-// clear fit: the joint the movement work reads. Built ROUGH (the user, 2026-11-06: "do the whole app roughly"): sizes
+// clear fit: the joint the movement work reads (root 6: a wheel, a table's collar is drawn with no bore and over bores it
+// to the clear fit at its shaft's size; before, each was bored by hand 1.1 mm over its shaft's radius). Built ROUGH (the user, 2026-11-06: "do the whole app roughly"): sizes
 // typical (recalled, no source hunting), wheels drawn as turned discs (spokes not drawn), bodies as boxes, a frame as a
 // rectangle of tubes, no chain, no cables. The Asm class is things.ts's, copied (one owner a file; not imported).
 // Loaded by one import in seeds.ts, after everyday.ts (the robot dog reuses seed.quadruped).
@@ -40,9 +41,10 @@ function layOut(b: Board): void {
 }
 
 // ---- helpers used by several ------------------------------------------------------------------------------------------
-/** A road wheel: a rim (a tube, its bore the axle's) and its tyre over it; offers `<name> rim/axis`. */
-function roadWheel(s: Asm, k: string, name: string, bore: number, rim: number, tyre: number, width: number): string {
-  s.n('room.make', { name: `${name} rim`, shape: 'tube', mat: 'steel-low', a: bore, b: rim, c: width }, `${name}: its rim`, `${k}_r`);
+/** A road wheel: a rim (a disc drawn with no bore: the axle it goes over bores it to its fit, root 6) and its tyre over
+ *  it; offers `<name> rim/axis`. */
+function roadWheel(s: Asm, k: string, name: string, rim: number, tyre: number, width: number): string {
+  s.n('room.make', { name: `${name} rim`, shape: 'rod', mat: 'steel-low', a: rim, b: width }, `${name}: its rim`, `${k}_r`);
   s.n('room.make', { name: `${name} tyre`, shape: 'tube', mat: 'rubber', a: rim, b: tyre, c: width }, `${name}: its tyre`, `${k}_t`);
   return s.op(k, 'room.over', { line: `${name} rim/axis`, where: 'mid', fit: 'touch' }, `${name}: the tyre on its rim`, { host: `${k}_r`, sleeve: `${k}_t` });
 }
@@ -53,7 +55,9 @@ function axleWithWheels(s: Asm, k: string, axle: string, r: number, length: numb
   s.op(`${k}_2`, 'room.over', { line: `${axle}/axis`, where: 'hi', fit: 'clear' }, 'And the other', { host: `${k}_1`, sleeve: wheel });
   return s.op(k, 'room.turn', { axis: 'z', degrees: 90 }, 'Laid across', { block: `${k}_2` });
 }
-/** A rotor of n blades about y, centred on its own axis (things.ts's rotor, with n): its hub a tube bored for a shaft. */
+/** A rotor of n blades about y, centred on its own axis (things.ts's rotor, with n): its hub a tube bored for a shaft (by
+ *  hand, the old 1 mm clear gap over its shaft's radius: over refuses to bore a hub drawn with no bore when its sleeve
+ *  holds turned pieces, the pitched blades; root 6's fault). */
 function rotor(s: Asm, q: string, o: { name: string; mat: string; n: number; rin: number; blade: [number, number, number]; pitch: number; hub: [number, number, number] }): string {
   const [Lb, tb, ch] = o.blade, Lr = Math.round(Lb / 8), R = o.rin + (Lr + Lb) / 2;
   s.n('room.make', { name: `${o.name} blade root`, shape: 'box', mat: o.mat, a: Lr, b: ch / 3, c: ch }, 'A blade\'s root (upright, the hub on it)', `${q}root`);
@@ -64,10 +68,11 @@ function rotor(s: Asm, q: string, o: { name: string; mat: string; n: number; rin
   s.n('room.make', { name: `${o.name} hub`, shape: 'tube', mat: 'al-6061', a: o.hub[0], b: o.hub[1], c: o.hub[2] }, 'The hub, bored for its shaft', `${q}hub`);
   return s.op(`${q}rotor`, 'room.stack', { name: `${o.name} rotor`, axis: 'y', fit: 'touch', align: `${o.name} blades/axis`, order: `${q}ring, ${q}hub` }, 'The hub on the blades\' roots, on the ring\'s axis', { blocks: [`${q}ring`, `${q}hub`] });
 }
-/** A disc wheel turned in one piece (hub, web, rim: its spokes not drawn, rough) and its tyre; offers `<name>/axis`. */
-function discWheel(s: Asm, k: string, name: string, bore: number, hubR: number, hubW: number, rimR: number, rimW: number, tyreR: number, tyreW: number): string {
+/** A disc wheel turned in one piece (hub, web, rim: its spokes not drawn, rough; drawn with no bore: the axle it goes
+ *  over bores it to its fit, root 6) and its tyre; offers `<name>/axis`. */
+function discWheel(s: Asm, k: string, name: string, hubR: number, hubW: number, rimR: number, rimW: number, tyreR: number, tyreW: number): string {
   const pts = `0,${-hubW / 2}; ${hubR},${-hubW / 2}; ${hubR},-2; ${rimR - 6},-2; ${rimR - 6},${-rimW / 2}; ${rimR},${-rimW / 2}; ${rimR},${rimW / 2}; ${rimR - 6},${rimW / 2}; ${rimR - 6},2; ${hubR},2; ${hubR},${hubW / 2}; 0,${hubW / 2}`;
-  s.n('room.make', { name, shape: 'lathe', mat: 'al-6061', pts, c: bore }, `${name}: hub, web and rim turned in one (spokes not drawn)`, `${k}_w`);
+  s.n('room.make', { name, shape: 'lathe', mat: 'al-6061', pts }, `${name}: hub, web and rim turned in one (spokes not drawn)`, `${k}_w`);
   s.n('room.make', { name: `${name} tyre`, shape: 'tube', mat: 'rubber', a: rimR, b: tyreR, c: tyreW }, `${name}: its tyre`, `${k}_t`);
   return s.op(k, 'room.over', { line: `${name}/axis`, where: 'mid', fit: 'touch' }, `${name}: the tyre on its rim`, { host: `${k}_w`, sleeve: `${k}_t` });
 }
@@ -99,7 +104,7 @@ function bicycle(): void {
   const s = new Asm('A bicycle');
   s.input('seat', 'number', 480, 'the seat tube\'s length, mm', [], 'fst.b');
   s.input('top', 'number', 560, 'the top tube\'s length, mm', [], 'ftt0.b');
-  discWheel(s, 'wh', 'bicycle wheel', 6.1, 16, 90, 311, 22, 334, 32);
+  discWheel(s, 'wh', 'bicycle wheel', 16, 90, 311, 22, 334, 32);
   wheelOnAxle(s, 'fw', 'wh', 'front axle', 5, 130);
   s.n('room.make', { name: 'rear axle', shape: 'rod', mat: 'steel-alloy', a: 5, b: 150 }, 'The rear axle, Ø10', 'ra');
   s.op('rw0', 'room.over', { line: 'rear axle/axis', where: 'mid', fit: 'clear' }, 'The rear wheel over its axle, clear: it turns', { host: 'ra', sleeve: 'wh' });
@@ -115,7 +120,7 @@ function bicycle(): void {
   s.n('room.make', { name: 'pedal', shape: 'rod', mat: 'pp', a: 12, b: 90 }, 'A pedal', 'ped');
   s.op('c2', 'room.onto', { face: '+z', fit: 'touch', end: 'hi' }, 'The pedal off the crank\'s end', { host: 'arm', child: 'ped' });
   s.op('c3', 'room.onto', { face: '+y', fit: 'touch' }, 'The crank on the chainring', { host: 'c1', child: 'c2' });
-  s.n('room.make', { name: 'bottom bracket shell', shape: 'tube', mat: 'steel-alloy', a: 7, b: 21, c: 68 }, 'The bottom bracket shell', 'bb');
+  s.n('room.make', { name: 'bottom bracket shell', shape: 'rod', mat: 'steel-alloy', a: 21, b: 68 }, 'The bottom bracket shell (its spindle bores it to the clear fit)', 'bb');
   s.op('c4', 'room.over', { line: 'Ø12 shaft/axis', where: 'mid', fit: 'clear' }, 'The shell round the spindle: it turns', { host: 'c3', sleeve: 'bb' });
   s.op('crank', 'room.turn', { axis: 'z', degrees: 90 }, 'The spindle laid across', { block: 'c4' });
   s.op('fr1', 'room.stack', { name: 'bicycle frame', axis: 'y', fit: 'touch', align: 'seat tube/axis', order: 'crank, ff' }, 'The frame on its bottom bracket, under the seat tube', { blocks: ['crank', 'ff'] });
@@ -178,7 +183,7 @@ function excavator(): void {
   s.op('u1', 'room.stack', { name: 'undercarriage', axis: 'x', fit: 'touch', order: 'track, uc, track' }, 'A track either side of the undercarriage', { blocks: ['track', 'uc', 'track'] });
   s.n('room.make', { name: 'slewing post', shape: 'rod', mat: 'steel-alloy', a: 200, b: 300 }, 'The slewing post, Ø400', 'post');
   s.op('u2', 'room.onto', { face: '+y', fit: 'touch' }, 'The post up from the undercarriage', { host: 'u1', child: 'post' });
-  s.n('room.make', { name: 'slewing ring', shape: 'tube', mat: 'steel-low', a: 201, b: 300, c: 120 }, 'The slewing ring, bored for the post', 'ring');
+  s.n('room.make', { name: 'slewing ring', shape: 'rod', mat: 'steel-low', a: 300, b: 120 }, 'The slewing ring (the post bores it to the clear fit)', 'ring');
   s.op('u3', 'room.over', { line: 'slewing post/axis', where: 'hi', fit: 'clear' }, 'The ring over the post, clear: the body slews', { host: 'u2', sleeve: 'ring' });
   s.n('room.make', { name: 'excavator body', shape: 'box', mat: 'steel-low', a: 1500, b: 900, c: 2200 }, 'The body (engine house), a box', 'body');
   s.op('u4', 'room.onto', { face: '+y', fit: 'touch' }, 'The body on the ring', { host: 'u3', child: 'body' });
@@ -188,19 +193,19 @@ function excavator(): void {
   s.n('room.make', { name: 'boom foot', shape: 'box', mat: 'steel-low', a: 300, b: 40, c: 300 }, 'The boom\'s foot plate (the pin stands on it)', 'foot');
   s.n('room.make', { name: 'boom pin', shape: 'rod', mat: 'steel-alloy', a: 25, b: 500 }, 'The boom\'s pin, Ø50', 'p1');
   s.op('a0', 'room.onto', { face: '+y', fit: 'touch' }, 'The pin up from its foot', { host: 'foot', child: 'p1' });
-  s.n('room.make', { name: 'boom knuckle', shape: 'tube', mat: 'steel-low', a: 26, b: 60, c: 300 }, 'The boom\'s knuckle', 'k1');
+  s.n('room.make', { name: 'boom knuckle', shape: 'rod', mat: 'steel-low', a: 60, b: 300 }, 'The boom\'s knuckle', 'k1');
   s.op('a1', 'room.over', { line: 'boom pin/axis', where: 'hi', fit: 'clear' }, 'The knuckle over its pin, clear: it swings', { host: 'a0', sleeve: 'k1' });
   s.n('room.make', { name: 'boom', shape: 'box', mat: 'steel-low', a: 2400, b: 300, c: 300 }, 'The boom, a box section', 'boom');
   s.op('a2', 'room.onto', { face: '+x', fit: 'touch' }, 'The boom off its knuckle', { host: 'a1', child: 'boom' });
   s.n('room.make', { name: 'stick pin', shape: 'rod', mat: 'steel-alloy', a: 25, b: 500 }, 'The stick\'s pin', 'p2');
   s.op('a3', 'room.onto', { face: '+x', fit: 'touch' }, 'The stick\'s pin at the boom\'s end', { host: 'a2', child: 'p2' });
-  s.n('room.make', { name: 'stick knuckle', shape: 'tube', mat: 'steel-low', a: 26, b: 60, c: 200 }, 'The stick\'s knuckle', 'k2');
+  s.n('room.make', { name: 'stick knuckle', shape: 'rod', mat: 'steel-low', a: 60, b: 200 }, 'The stick\'s knuckle', 'k2');
   s.op('a4', 'room.over', { line: 'stick pin/axis', where: 'lo', fit: 'clear' }, 'Its knuckle over the pin, clear: it swings', { host: 'a3', sleeve: 'k2' });
   s.n('room.make', { name: 'stick', shape: 'box', mat: 'steel-low', a: 1600, b: 250, c: 250 }, 'The stick', 'stick');
   s.op('a5', 'room.onto', { face: '+x', fit: 'touch' }, 'The stick off its knuckle', { host: 'a4', child: 'stick' });
   s.n('room.make', { name: 'bucket pin', shape: 'rod', mat: 'steel-alloy', a: 25, b: 500 }, 'The bucket\'s pin', 'p3');
   s.op('a6', 'room.onto', { face: '+x', fit: 'touch' }, 'The bucket\'s pin at the stick\'s end', { host: 'a5', child: 'p3' });
-  s.n('room.make', { name: 'bucket knuckle', shape: 'tube', mat: 'steel-low', a: 26, b: 60, c: 200 }, 'The bucket\'s knuckle', 'k3');
+  s.n('room.make', { name: 'bucket knuckle', shape: 'rod', mat: 'steel-low', a: 60, b: 200 }, 'The bucket\'s knuckle', 'k3');
   s.op('a7', 'room.over', { line: 'bucket pin/axis', where: 'lo', fit: 'clear' }, 'Its knuckle over the pin, clear: it swings', { host: 'a6', sleeve: 'k3' });
   s.n('room.make', { name: 'bucket', shape: 'case', mat: 'steel-low', a: 700, b: 500, c: 600, d: 8, e: 8 }, 'The bucket, an open box', 'bkt');
   s.op('a8', 'room.onto', { face: '+x', fit: 'touch' }, 'The bucket off its knuckle', { host: 'a7', child: 'bkt' });
@@ -218,7 +223,7 @@ function forklift(): void {
   const s = new Asm('A forklift');
   s.input('lift', 'number', 2500, 'the mast\'s height, mm', [], 'up.b');
   s.input('fork', 'number', 1100, 'the forks\' blade length, mm', [], 'fk.a');
-  roadWheel(s, 'wh', 'forklift wheel', 26.1, 150, 250, 180);
+  roadWheel(s, 'wh', 'forklift wheel', 150, 250, 180);
   axleWithWheels(s, 'ax1', 'forklift front axle', 25, 1500, 'wh');
   axleWithWheels(s, 'ax2', 'forklift rear axle', 25, 1500, 'wh');
   s.n('room.make', { name: 'forklift chassis', shape: 'box', mat: 'steel-low', a: 300, b: 200, c: 1100 }, 'A spine between the axles', 'sp');
@@ -248,7 +253,7 @@ function train(): void {
   const s = new Asm('A train');
   s.input('wagon', 'number', 5000, 'a wagon\'s length, mm', [], 'wb.a; wsp.c');
   s.input('engine', 'number', 6000, 'the engine\'s length, mm', [], 'eh.c; esp.c');
-  s.n('room.make', { name: 'train wheel', shape: 'tube', mat: 'steel-low', a: 51.1, b: 350, c: 120 }, 'A wheel, Ø700 steel', 'tw');
+  s.n('room.make', { name: 'train wheel', shape: 'rod', mat: 'steel-low', a: 350, b: 120 }, 'A wheel, Ø700 steel (drawn with no bore: its axle bores it to the clear fit)', 'tw');
   for (const [k, sp, L] of [['e', 'esp', 6000], ['w', 'wsp', 5000]] as const) {
     axleWithWheels(s, `${k}a1`, `${k === 'e' ? 'engine' : 'wagon'} front axle`, 50, 1800, 'tw');
     axleWithWheels(s, `${k}a2`, `${k === 'e' ? 'engine' : 'wagon'} rear axle`, 50, 1800, 'tw');
@@ -316,7 +321,7 @@ function drillPress(): void {
   s.op('h2', 'room.onto', { face: '-y', fit: 'touch' }, 'The spindle hanging under the head', { host: 'h1', child: 'spd' });
   s.n('room.make', { name: 'drill chuck', shape: 'tube', mat: 'steel-alloy', a: 10, b: 25, c: 60 }, 'The chuck', 'chk');
   s.op('h3', 'room.over', { line: 'drill spindle/axis', where: 'lo', fit: 'touch' }, 'The chuck on the spindle\'s end', { host: 'h2', sleeve: 'chk' });
-  s.n('room.make', { name: 'drill table', shape: 'lathe', mat: 'iron-cast', pts: '0,0; 55,0; 55,70; 150,70; 150,95; 55,95; 55,110; 0,110', c: 36.1 }, 'The table and its collar, turned in one', 'tab');
+  s.n('room.make', { name: 'drill table', shape: 'lathe', mat: 'iron-cast', pts: '0,0; 55,0; 55,70; 150,70; 150,95; 55,95; 55,110; 0,110' }, 'The table and its collar, turned in one (no bore drawn: the column bores it to the clear fit)', 'tab');
   s.op('h4', 'room.over', { line: 'drill column/axis', where: 'lo', along: 300, fit: 'clear' }, 'The table\'s collar over the column, clear: it moves', { host: 'h3', sleeve: 'tab' });
   s.n('room.make', { name: 'drill base', shape: 'box', mat: 'iron-cast', a: 350, b: 50, c: 550 }, 'The base plate', 'base');
   s.op('dp', 'room.onto', { face: '-y', fit: 'touch' }, 'All on the base', { host: 'h4', child: 'base' });
@@ -337,7 +342,7 @@ function ceilingFan(): void {
   s.n('room.make', { name: 'fan blade root', shape: 'box', mat: 'steel-low', a: 70, b: 12, c: 110 }, 'A blade\'s root bracket (flat, the motor on it)', 'root');
   s.op('one', 'room.stack', { name: 'fan blade', axis: 'x', fit: 'touch', order: 'root, pitched' }, 'The blade on its root', { blocks: ['root', 'pitched'] });
   s.op('blades', 'room.ring', { name: 'fan blades', n: 4, R: 460, fit: 'clear', out: 'yes' }, 'Four blades, turned out', { block: 'one' });
-  s.n('room.make', { name: 'fan motor', shape: 'tube', mat: 'steel-low', a: 11, b: 200, c: 70 }, 'The motor can, Ø400 (rough), bored for the downrod', 'mot');
+  s.n('room.make', { name: 'fan motor', shape: 'rod', mat: 'steel-low', a: 200, b: 70 }, 'The motor can, Ø400 (rough): the downrod through it bores it to the clear fit', 'mot');
   s.op('f1', 'room.stack', { name: 'ceiling fan', axis: 'y', fit: 'touch', align: 'fan blades/axis', order: 'blades, mot' }, 'The motor on the blades\' roots, on their axis', { blocks: ['blades', 'mot'] });
   s.n('room.make', { name: 'downrod', shape: 'rod', mat: 'steel-low', a: 10, b: 300 }, 'The downrod, Ø20', 'rod');
   s.op('f2', 'room.through', { line: 'fan motor/axis', which: 0, from: 'below', fit: 'clear' }, 'The downrod up through the motor, clear: the fan turns on it', { host: 'f1', passer: 'rod' });
@@ -379,7 +384,7 @@ function lawnmower(): void {
   const s = new Asm('A lawnmower');
   s.input('deck', 'number', 230, 'the deck\'s radius, mm', [], 'deck.a');
   s.input('handle', 'number', 1200, 'the handle tubes\' length, mm', [], 'ht.length');
-  roadWheel(s, 'wh', 'mower wheel', 7.1, 60, 100, 45);
+  roadWheel(s, 'wh', 'mower wheel', 60, 100, 45);
   axleWithWheels(s, 'ax1', 'mower front axle', 6, 640, 'wh');
   axleWithWheels(s, 'ax2', 'mower rear axle', 6, 640, 'wh');
   s.n('room.make', { name: 'mower frame', shape: 'box', mat: 'steel-low', a: 60, b: 30, c: 300 }, 'A spine between the axles', 'sp');
@@ -406,7 +411,7 @@ function scooter(): void {
   const s = new Asm('A scooter');
   s.input('deck', 'number', 480, 'the deck\'s length, mm', [], 'deck.c; brace.c');
   s.input('column', 'number', 800, 'the steering column\'s length, mm', [], 'col.length');
-  roadWheel(s, 'wh', 'scooter wheel', 5.1, 36, 50, 24);
+  roadWheel(s, 'wh', 'scooter wheel', 36, 50, 24);
   s.n('room.make', { name: 'left fork leg', shape: 'box', mat: 'al-6061', a: 6, b: 120, c: 110, face: '+x', points: '-40,0', hole: 4.1 }, 'A fork leg, its axle hole near its foot', 'fl');
   s.n('room.make', { name: 'right fork leg', shape: 'box', mat: 'al-6061', a: 6, b: 120, c: 110, face: '+x', points: '-40,0', hole: 4.1 }, 'The other leg', 'fr');
   s.n('room.make', { name: 'fork crown', shape: 'box', mat: 'al-6061', a: 38, b: 8, c: 110 }, 'The crown between their tops', 'fcr');
@@ -437,7 +442,7 @@ function motorcycle(): void {
   const s = new Asm('A motorcycle');
   s.input('seat', 'number', 450, 'the seat tube\'s length, mm', [], 'fst.b');
   s.input('top', 'number', 700, 'the top tube\'s length, mm', [], 'ftt0.b');
-  discWheel(s, 'wh', 'motorcycle wheel', 11.1, 40, 150, 216, 80, 300, 120);
+  discWheel(s, 'wh', 'motorcycle wheel', 40, 150, 216, 80, 300, 120);
   wheelOnAxle(s, 'fw', 'wh', 'front axle', 10, 220);
   wheelOnAxle(s, 'rw', 'wh', 'rear axle', 10, 220);
   tubeFrame(s, 'f', 450, 700, 450, 22, 16);
@@ -465,8 +470,8 @@ function tractor(): void {
   const s = new Asm('A tractor');
   s.input('wheelbase', 'number', 1700, 'the wheelbase, mm (the spine between the axles is 1100 shorter)', [], 'sp.c');
   s.input('body', 'number', 2400, 'the body\'s length, mm', [], 'body.c');
-  roadWheel(s, 'rwh', 'tractor rear wheel', 31.1, 400, 700, 300);
-  roadWheel(s, 'fwh', 'tractor front wheel', 21.1, 200, 400, 150);
+  roadWheel(s, 'rwh', 'tractor rear wheel', 400, 700, 300);
+  roadWheel(s, 'fwh', 'tractor front wheel', 200, 400, 150);
   axleWithWheels(s, 'ra', 'tractor rear axle', 30, 1900, 'rwh');
   axleWithWheels(s, 'fa', 'tractor front axle', 20, 1500, 'fwh');
   s.n('room.make', { name: 'tractor spine', shape: 'box', mat: 'steel-low', a: 300, b: 760, c: 600 }, 'A spine between the axles, down to the ground (rough)', 'sp');
@@ -483,13 +488,13 @@ function tractor(): void {
 }
 
 // ---- a bus and a van: a box body set on its wheels --------------------------------------------------------------------------
-function boxVehicle(id: string, title: string, o: { body: [number, number, number]; wheel: [number, number, number, number]; axle: [number, number]; base: number; says: string; gloss: string }): void {
+function boxVehicle(id: string, title: string, o: { body: [number, number, number]; wheel: [number, number, number]; axle: [number, number]; base: number; says: string; gloss: string }): void {
   // (a body (a box) on two axles with a wheel over each end (clear: they turn): the body set on the wheels' tops, its
   // wheel arches not drawn, rough)
   const s = new Asm(title);
   s.input('length', 'number', o.body[2], 'the body\'s length, mm', [], 'body.c');
   s.input('wheelbase', 'number', o.base, 'the spine\'s length between the axles, mm', [], 'sp.c');
-  roadWheel(s, 'wh', `${title.replace(/^An? /, '')} wheel`, o.wheel[0], o.wheel[1], o.wheel[2], o.wheel[3]);
+  roadWheel(s, 'wh', `${title.replace(/^An? /, '')} wheel`, o.wheel[0], o.wheel[1], o.wheel[2]);
   axleWithWheels(s, 'ax1', 'front axle', o.axle[0], o.axle[1], 'wh');
   axleWithWheels(s, 'ax2', 'rear axle', o.axle[0], o.axle[1], 'wh');
   s.n('room.make', { name: 'chassis spine', shape: 'box', mat: 'steel-low', a: 300, b: 150, c: o.base }, 'A spine between the axles', 'sp');
@@ -523,8 +528,8 @@ let made = false;
 export function makeVehicles(): void {
   if (made) return; made = true;
   bicycle(); helicopter(); excavator(); forklift(); train(); printer3d(); drillPress(); ceilingFan(); lathe(); lawnmower(); scooter(); motorcycle(); tractor();
-  boxVehicle('seed.bus', 'A bus', { body: [2500, 3000, 11000], wheel: [41.1, 250, 520, 280], axle: [40, 2400], base: 5000, says: 'A city bus (sizes typical of a 12 m single-decker, rough): a body shell 2.5 m wide, 3 m tall, 11 m long (its roof, doors and windows not drawn) set on four Ø1040 wheels over two axles (they turn) with a spine between. Settings: length (the body\'s) and wheelbase (the spine\'s), mm. It offers front axle/axis and rear axle/axis', gloss: 'A bus: a long body on four wheels, as one node' });
-  boxVehicle('seed.van', 'A van', { body: [2000, 1900, 5000], wheel: [26.1, 200, 340, 200], axle: [25, 1900], base: 3000, says: 'A panel van (sizes typical of a mid-size van, rough): a body shell 2 m wide, 1.9 m tall, 5 m long (its roof and doors not drawn) set on four Ø680 wheels over two axles (they turn) with a spine between. Settings: length (the body\'s) and wheelbase (the spine\'s), mm. It offers front axle/axis and rear axle/axis', gloss: 'A van: a box body on four wheels, as one node' });
+  boxVehicle('seed.bus', 'A bus', { body: [2500, 3000, 11000], wheel: [250, 520, 280], axle: [40, 2400], base: 5000, says: 'A city bus (sizes typical of a 12 m single-decker, rough): a body shell 2.5 m wide, 3 m tall, 11 m long (its roof, doors and windows not drawn) set on four Ø1040 wheels over two axles (they turn) with a spine between. Settings: length (the body\'s) and wheelbase (the spine\'s), mm. It offers front axle/axis and rear axle/axis', gloss: 'A bus: a long body on four wheels, as one node' });
+  boxVehicle('seed.van', 'A van', { body: [2000, 1900, 5000], wheel: [200, 340, 200], axle: [25, 1900], base: 3000, says: 'A panel van (sizes typical of a mid-size van, rough): a body shell 2 m wide, 1.9 m tall, 5 m long (its roof and doors not drawn) set on four Ø680 wheels over two axles (they turn) with a spine between. Settings: length (the body\'s) and wheelbase (the spine\'s), mm. It offers front axle/axis and rear axle/axis', gloss: 'A van: a box body on four wheels, as one node' });
   robotDog();
 }
 makeVehicles();

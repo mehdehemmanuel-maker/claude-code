@@ -485,6 +485,9 @@ const dot = (a: V3, c: V3) => a[0] * c[0] + a[1] * c[1] + a[2] * c[2];
  *  joint, so the spline's root joins its case and its tip gives way to the horn; a lead screw in its tapped nut is a screw
  *  joint (the nut moved its lead a turn); a box stacked between two slide-fit faces of another (a rail between a
  *  carriage's skirts) slides along its length and never turns. */
+// (a slide fit's face: by the fit its operation recorded (root 6: its gap now scales with the size, so it is not one
+// number); a face written by an operation that does not record its fit yet, by FITS' one slide gap as before)
+const isSlide = (f: Block['faces'][number]): boolean => f.fit === 'slide' || (f.fit === undefined && Math.abs(f.gap - FITS.slide.gap) < 1e-9);
 export function motionOf(b: Block): Motion {
   const n = b.pieces.length, up = Array.from({ length: n }, (_, i) => i), find = (i: number): number => (up[i] === i ? i : (up[i] = find(up[i]!)));
   const join = (i: number, j: number) => { up[find(i)] = find(j); };
@@ -499,10 +502,10 @@ export function motionOf(b: Block): Motion {
     const lead = TURNS.test(f.by) && !f.gate && b.pieces[over ? f.b : f.a]!.tapped ? leadOf(b.pieces[over ? f.a : f.b]!.name) : undefined;
     if ((lead !== undefined || (f.gap > 0 && !f.gate && (TURNS.test(f.by) || sectHole))) && round.k !== 'box' && round.k !== 'bend') {
       const d = round.frame ? [round.frame[1], round.frame[4], round.frame[7]] as V3 : [0, 1, 0] as V3;
-      turns.push({ shaft: over ? f.a : f.b, on: over ? f.b : f.a, point: [round.c[0], round.c[1], round.c[2]], dir: d, by: f.by, slide: lead !== undefined || Math.abs(f.gap - FITS.slide.gap) < 1e-9, ...(lead !== undefined ? { screw: lead } : {}) }); continue; }
+      turns.push({ shaft: over ? f.a : f.b, on: over ? f.b : f.a, point: [round.c[0], round.c[1], round.c[2]], dir: d, by: f.by, slide: lead !== undefined || isSlide(f), ...(lead !== undefined ? { screw: lead } : {}) }); continue; }
     // (a box stacked against another with a slide fit (a rail between a carriage's skirts): the longer slides in the shorter's
     // grip along its length, the one across the face's normal; it never turns)
-    if (f.kind === 'gap' && Math.abs(f.gap - FITS.slide.gap) < 1e-9 && /: stacked$/.test(f.by)) {
+    if (f.kind === 'gap' && isSlide(f) && /: stacked$/.test(f.by)) {
       const A = b.pieces[f.a]!.solid.base, B = b.pieces[f.b]!.solid.base;
       if (A.k === 'box' && B.k === 'box') {
         const nrm = unitOf(f.normal as V3), axes = (P: typeof A & { k: 'box' }) => [0, 1, 2].map((k) => { const F = P.frame; return { u: unitOf(F ? [F[k]!, F[3 + k]!, F[6 + k]!] : [k === 0 ? 1 : 0, k === 1 ? 1 : 0, k === 2 ? 1 : 0]), L: P.size[k]! }; });

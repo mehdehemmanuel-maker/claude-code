@@ -795,7 +795,7 @@ describe('every domain, in one pass', () => {
     const swing = await runIt(/^Physics: a pendulum/), held = ((swing.out('go').moved as Assembly).items.map((x) => x.of.name)).sort();
     expect(held, 'Let it go gives back the plank where it swung and the backboard and foot it held').toEqual(['backboard', 'foot', 'plank']);
     const made = await runIt(/^What it is made of, and what it carries/), mats = await runIt(/^Materials from their phases/), bars = mats.out('bars').block as RoomBlock;
-    expect([made.shows.length, mats.shows.length, +((bars.hi[0] - bars.lo[0]) * 1000).toFixed(1)], 'one thing shown on each; the two 20 mm bars side by side, 1 mm apart').toEqual([1, 1, 41]);
+    expect([made.shows.length, mats.shows.length, +((bars.hi[0] - bars.lo[0]) * 1000).toFixed(4)], 'one thing shown on each; the two 20 mm bars side by side, the clear fit\'s gap at 20 mm apart (half d9\'s 65 µm, root 6)').toEqual([1, 1, 40.0325]);
     const ctl = await runIt(/^Controls you work/), yard = ctl.out('yard');
     expect([count(yard, 'cart'), count(yard, '125 mm wheel tyre'), count(yard, '125 mm wheel hub'), (ctl.out('crate').offers as string[]).includes('crate/cavity'), pieces(yard).find((p) => p.name === 'crate')!.solid.base.k], 'the cart a deck on four wheels; the crate a hollow box').toEqual([1, 4, 4, true, 'box']);
     expect(!!(pieces(yard).find((p) => p.name === 'crate')!.solid.base as { tray?: unknown }).tray, 'the crate is a case: walls and a floor round its cavity').toBe(true);
@@ -1650,11 +1650,12 @@ describe('every domain, in one pass', () => {
     const e2 = new Engine(h2.board); await e2.run(); const shank = (e2.state.get('through1')?.out?.offers as string[]).find((o) => /shank\/axis$/.test(o));
     expect(shank, 'the bolt offers its shank').toBeTruthy();
     // (a nut is tapped: it goes on by its thread whatever fit is asked, the operation's own default, a slide, too; a washer,
-    // a plain ring of ISO 7089's clearance, has no room for a slide's gap: refused with both sizes, said back to the person)
+    // a plain ring of ISO 7089's clearance (8.4 mm), goes on with a slide's gap too: root 6, the gap at Ø8 is g6's least
+    // clearance, 5 µm, half each side (before, one 0.25 mm gap for every size refused it))
     const slid = await runPlan(joinPlan(h2.board, { b: 'piece.nut', s: { size: 'M8' } }, { op: 'room.over', s: { line: shank, where: 'lo' }, host: 'through1' }), h2.board);
     expect(slid.failing, 'a nut on by its thread').toEqual([]);
     const slidW = await runPlan(joinPlan(h2.board, { b: 'piece.washer', s: { size: 'M8' } }, { op: 'room.over', s: { line: shank, where: 'lo' }, host: 'through1' }), h2.board);
-    expect(slidW.failing, 'refused with both sizes').toEqual([`over1 failed: no room over ${shank}: the M8 washer's bore is 8.40 mm across; it needs 8.50 mm`]);
+    expect(slidW.failing, 'a washer slid on with the fit\'s gap at its size').toEqual([]);
     const h3 = await runPlan(joinPlan(h2.board, { b: 'piece.nut', s: { size: 'M8' } }, { op: 'room.over', s: { line: shank, where: 'hi', fit: 'touch' }, host: 'through1' }), h2.board);
     expect(h3.failing, 'the nut over the shank').toEqual([]);
     const e3 = new Engine(h3.board); await e3.run(); expect(e3.state.get('over1')?.out?.pieces, 'the plate, the bolt\'s shank and head, the nut').toBe(4);
@@ -1826,7 +1827,8 @@ describe('every domain, in one pass', () => {
     for (const w of WORKED) { const { tool, ...input } = w.plan, r = await runPlan({ tool, input, says: w.says }, w.after ? built[w.after]! : emptyBoard('w')); built[w.says] = r.board;
       expect(r.failing, `the worked plan "${w.says}" runs`).toEqual([]); expect(workedPlans(), 'and is in the guide').toContain(JSON.stringify({ ...w.plan, says: w.says })); }
     const first = await runPlan({ tool: 'build', input: WORKED[0]!.plan, says: '' }, emptyBoard('w'));
-    expect(first.out, 'an operation by its pieces, mass and offers').toMatch(/^j1 ok pieces=10 mass=0\.09\d+ kg offers=\[M8 head 2\/axis; [^\]]*top plate\/holes\]$/m);
+    // (root 6: the bolts' cuts now take the slide fit's gap at Ø8, not 0.25 mm: j1 weighs 0.0999986 kg, said 0.1)
+    expect(first.out, 'an operation by its pieces, mass and offers').toMatch(/^j1 ok pieces=10 mass=0\.(?:09\d+|1) kg offers=\[M8 head 2\/axis; [^\]]*top plate\/holes\]$/m);
     const quad = starterBoards().find(([t]) => t.startsWith('A quadcopter'))![1](), brief = boardBrief(quad);
     expect([brief.length > 1600, /\nwires: /.test(brief), brief.includes('… (cut)')], 'the quadcopter\'s brief whole, its wires kept').toEqual([true, true, false]);
   }, 60_000);
@@ -1980,7 +1982,8 @@ describe('every domain, in one pass', () => {
     const b = roomThrough(cpPlate('pl', 0.2, 0.01, 0.2, 'steel-low', [[0, 0]]), roomMade('box case', 'abs', { case: [0.05, 0.05, 0.05, 0.005, 0.005] }), { port: 'pl/holes', from: 'lo' }, 'clear');
     const c = b.pieces[1]!.solid.base.c, y = b.pieces[0]!.solid.base.c[1];
     expect(b.pieces.filter((p) => insideOf(p, c[0] + 0.0205, y + 0.002, c[2])).map((p) => p.name), 'inside the case\'s wall: the case only').toEqual(['box case']);
-    expect(b.pieces.filter((p) => insideOf(p, c[0] + 0.0254, y + 0.002, c[2])).map((p) => p.name), 'in the gap: neither').toEqual([]);
+    const cg = b.faces.find((f) => f.by === 'box case through pl')!.gap; expect(cg, 'the clear fit\'s gap at the case\'s 50 mm width (root 6)').toBeCloseTo(40e-6, 12);
+    expect(b.pieces.filter((p) => insideOf(p, c[0] + 0.025 + cg / 2, y + 0.002, c[2])).map((p) => p.name), 'in the gap: neither').toEqual([]);
     // (a rod through a plate on edge, running over an open cup: a tall post into the cup is refused by name)
     const host = roomStack('h', 0, [{ b: cpRoundCase('cup', 0.02, 0.02, 0.002, 0.002, 'abs') }, { b: roomTurn(cpPlate('pl', 0.1, 0.01, 0.03, 'steel-low', [[0.04, 0]], 0.004), 2, 90) }]);
     const rod = roomThrough(host, roomMade('rod', 'steel-low', { cyl: [0.003, 0.08] }), { port: 'pl/holes', from: 'lo' }, 'slide');
@@ -2024,8 +2027,9 @@ describe('every domain, in one pass', () => {
     // (6) an end bell with no bore slid over a shaft: bored to it, said; a plate too (root 3: a plate used as a hub is
     // bored); a case refused with the way named
     const shaft = roomMade('shaft', 'steel-alloy', { cyl: [0.005, 0.1] }), belled = roomOver(shaft, 'shaft/axis', roomMade('end bell', 'nylon', { cyl: [0.009, 0.003] }), 'lo', 'slide');
-    expect([belled.pieces.length, roomNoteOf(belled), (belled.pieces[1]!.solid.base as { ri?: number }).ri]).toEqual([2, 'over bored the end bell to the shaft (Ø10.50 mm, the slide fit): it had no bore', 0.00525]);
-    expect(roomNoteOf(roomOver(shaft, 'shaft/axis', roomMade('plate', 'steel-low', { box: [0.03, 0.003, 0.03] }), 'hi', 'slide'))).toBe('over bored the plate to the shaft (Ø10.50 mm, the slide fit): it had no bore');
+    // (root 6: the slide fit's gap at Ø10 is half g6's 5 µm over 6 to 10 mm: the bore 10.005 mm, said to two places)
+    expect([belled.pieces.length, roomNoteOf(belled), (belled.pieces[1]!.solid.base as { ri?: number }).ri]).toEqual([2, 'over bored the end bell to the shaft (Ø10.01 mm, the slide fit): it had no bore', 0.0050025]);
+    expect(roomNoteOf(roomOver(shaft, 'shaft/axis', roomMade('plate', 'steel-low', { box: [0.03, 0.003, 0.03] }), 'hi', 'slide'))).toBe('over bored the plate to the shaft (Ø10.01 mm, the slide fit): it had no bore');
     expect(() => roomOver(shaft, 'shaft/axis', roomMade('tray', 'steel-low', { case: [0.03, 0.01, 0.03, 0.002, 0.002] }), 'hi', 'slide')).toThrow(/has no bore to slide on with: make it round/);
     // (7) an axle laid along z onto a V block: seated in the V, a line face on each flank
     const vee = roomMade('V block', 'steel-low', { section: { pts: [[-0.03, 0], [0.03, 0], [0.03, 0.03], [0.012, 0.03], [0, 0.018], [-0.012, 0.03], [-0.03, 0.03]], L: 0.05 } });
@@ -2042,6 +2046,31 @@ describe('every domain, in one pass', () => {
     expect(pins, 'both pins at one x and z, one at each end').toEqual([[0.003, 0.05, 0], [0.003, 1.931, 0]]);
     for (const id of ['room.between', 'room.along', 'room.key']) expect((await testBlock(LIBRARY.get(id)!)).fails, id).toEqual([]);
   });
+  // (root 6, decision 0029: a fit's gap scales with the size it is applied to. A clear wheel over a Ø8 axle and over a
+  // Ø100 one, each drawn with no bore and bored by over to its fit: H9/d9's least clearance, d's fundamental deviation
+  // (ISO 286-1: 40 µm over 6 to 10 mm, 120 µm over 80 to 120 mm), half of it each side; a flat takes the narrower width of
+  // the smaller piece; tight (H7/h6) and touch leave none; and the bicycle and the train build with their wheels so bored)
+  it('fits by size: a clear wheel on a Ø8 axle and on a Ø100 one, each its own ISO 286 gap; a flat by its width; the bicycle and the train build', async () => {
+    const { fitGap } = await import('../../src/nexus/room');
+    const onAxle = (d: number) => roomOver(roomMade('axle', 'steel-alloy', { cyl: [d / 2, 0.3] }), 'axle/axis', roomMade('wheel', 'steel-low', { cyl: [6 * d, 0.04] }), 'mid', 'clear');
+    const gapOn = (b: RoomBlock) => b.faces.filter((f) => f.kind === 'gap' && /^wheel over axle\/axis$/.test(f.by)).map((f) => f.gap);
+    const [b8, b100] = [onAxle(0.008), onAxle(0.1)], [g8, g100] = [gapOn(b8), gapOn(b100)];
+    expect(g8.length && g100.length, 'a gap face round each axle').toBeTruthy();
+    expect(g8[0], 'Ø8: half of d9\'s 40 µm').toBeCloseTo(20e-6, 12); expect(g100[0], 'Ø100: half of d9\'s 120 µm').toBeCloseTo(60e-6, 12);
+    expect(g100[0]! / g8[0]!, 'the gap scales with the size').toBeCloseTo(3, 9);
+    const ri = (b: RoomBlock) => (b.pieces.find((p) => p.name === 'wheel')!.solid.base as { ri?: number }).ri;
+    expect(ri(b8), 'the Ø8 wheel bored to the shaft and its gap').toBeCloseTo(0.004 + 20e-6, 12); expect(ri(b100)).toBeCloseTo(0.05 + 60e-6, 12);
+    expect([fitGap('slide', 0.1), fitGap('tight', 0.05), fitGap('touch', 1), fitGap('clear', 5)], 'g6 at Ø100 12 µm; h6 and touch none; past 3150 mm the last step').toEqual([6e-6, 0, 0, 260e-6]);
+    // (a flat: a 10 × 20 bar on a plate with a slide fit takes Ø10's band, g's 5 µm, half each side)
+    const flat = roomStack('flat', 1, [{ b: roomMade('plate', 'steel-low', { box: [0.2, 0.01, 0.2] }) }, { b: roomMade('bar', 'steel-low', { box: [0.01, 0.02, 0.02] }), fit: 'slide' }]);
+    const fb = flat.faces.find((f) => f.kind === 'gap'); expect(fb?.gap, 'the flat\'s gap by the bar\'s 10 mm width').toBeCloseTo(2.5e-6, 12); expect(fb?.fit).toBe('slide');
+    expect(roomBound(flat.pieces[1]!)[0][1] - roomBound(flat.pieces[0]!)[1][1], 'the bar stands that gap off the plate').toBeCloseTo(2.5e-6, 12);
+    const built = async (id: string) => { const b = emptyBoard(id); placeBlock(b, id, 0, 0, {}, 'x'); const e = new Engine(b, env, new Memo()); await e.run();
+      expect([...e.state].filter(([, s]) => s.status !== 'ok').map(([n, s]) => `${n}: ${s.error}`), `${id}: every node runs`).toEqual([]); return e.state.get('x')!.out!.block as RoomBlock; };
+    const wheels = (b: RoomBlock) => [...new Set(b.faces.filter((f) => f.kind === 'gap' && / wheel over .*axle\/axis$/.test(f.by)).map((f) => +f.gap.toFixed(9)))];
+    expect(wheels(await built('seed.bicycle')), 'the bicycle\'s Ø10 axles: d9 over 6 to 10 mm').toEqual([20e-6]);
+    expect(wheels(await built('seed.train')), 'the train\'s Ø100 axles: d9 over 80 to 120 mm').toEqual([60e-6]);
+  }, 30_000);
   it('a turned block keeps every pair of its pieces apart at every angle; a run\'s segments meet end to end', async () => {
     const sample = (b: RoomBlock, n: number) => { let shared = 0, outOwn = 0, outBlock = 0, inside = 0;
       for (const p of b.pieces) { const [lo, hi] = roomBound(p), g = [0, 1, 2].map((k) => (hi[k]! - lo[k]!) * 0.15);
@@ -3086,7 +3115,7 @@ describe('every domain, in one pass', () => {
     const [sp, g, drilled, hub] = [on(build(PART_FAMILIES.get('piece.sprocket')!, 'ISO 08B 20T')), on(cpGear(2, 42, 0.02, 0.008)), on(plate({ pattern: { name: 'hole', points: [[0, 0]], hole: 0.0045 } })), on(plate())];
     expect([sp, g, drilled, hub].map((b) => [b.pieces.length, b.faces.map((f) => f.by), sampleRoom(b, 12)]), 'each over the shaft by its bore, a face round it, no point in two pieces').toEqual(
       ['ISO 08B 20T sprocket', 'm2 z42 spur gear', 'plate', 'plate'].map((n) => [2, [`${n} over shaft/axis`], APART]));
-    expect([sp, g, drilled, hub].map((b) => roomNoteOf(b) ?? ''), 'the gear\'s pilot opened, the solid plate bored, said').toEqual(['', 'over opened the m2 z42 spur gear\'s bore to the shaft (Ø8.50 mm, the slide fit)', '', 'over bored the plate to the shaft (Ø8.50 mm, the slide fit): it had no bore']);
+    expect([sp, g, drilled, hub].map((b) => roomNoteOf(b) ?? ''), 'the gear\'s pilot opened, the solid plate bored, said').toEqual(['', 'over opened the m2 z42 spur gear\'s bore to the shaft (Ø8.01 mm, the slide fit)', '', 'over bored the plate to the shaft (Ø8.01 mm, the slide fit): it had no bore']); // (root 6: half g6's 5 µm at Ø8)
     expect(Math.abs(sp.pieces[1]!.solid.base.frame![5]), 'the sprocket laid with its axis along the shaft').toBe(1);
     // (a gear over a shaft along z (its own axis as made) stays a gear its mesh can read)
     expect(gearOf(on(cpGear(2, 42, 0.02, 0.009), roomTurn(shaft, 0, 90)).pieces[1]!)?.z, 'still a z42 gear on a shaft along z').toBe(42);
@@ -3165,7 +3194,8 @@ describe('every domain, in one pass', () => {
     expect(sampleRoom(fed, 14), 'the pipe through the tank\'s side').toEqual(APART);
     expect(roomBound(fed.pieces[1]!).map((v) => +(v[0] * 1000).toFixed(2)), 'the pipe from the +x face 30 mm in').toEqual([20, 50]);
     const T = fed.pieces[0]!;
-    expect([insideOf(T, 0.048, 0.02, 0.0082), insideOf(T, 0.048, 0.02, 0.009), insideOf(T, -0.048, 0.02, 0)], 'its wall cut round the pipe with the gap, solid past it; the far wall whole').toEqual([false, true, true]);
+    // (root 6: the clear fit's gap at the pipe's Ø15 is half d9's 50 µm over 10 to 18 mm; a point halfway across it)
+    expect([insideOf(T, 0.048, 0.02, 0.0075 + 12.5e-6), insideOf(T, 0.048, 0.02, 0.009), insideOf(T, -0.048, 0.02, 0)], 'its wall cut round the pipe with the gap, solid past it; the far wall whole').toEqual([false, true, true]);
     expect(partOfBlock(fed).parts![0]!.parts!.map((w) => w.cuts?.length ?? 0), 'the cut drawn on the wall it is in, only').toEqual([0, 0, 1, 0, 0]);
     const sh = roomMade('shaft', 'steel-low', { cyl: [0.01, 0.1] }, { pattern: { name: 'cross', points: [[0.02, 0]], hole: 0.002, face: '+x' } });
     const pinned = roomThrough(sh, roomMade('pin', 'steel-alloy', { cyl: [0.0019, 0.03] }), { port: 'shaft/cross', from: 'lo' }, 'touch');

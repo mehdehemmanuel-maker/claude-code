@@ -56,7 +56,7 @@
 //   SERVOS) and the vendor figures below, labelled typical. The rest typical, each table says so.
 // (Figures are mm in the tables and m in the solids.)
 
-import { made, over, stack, through, turn, run, onto, type Block, type RunSeg } from '../room';
+import { made, over, stack, through, turn, run, onto, fitGap, type Block, type RunSeg } from '../room';
 import { bracket, METRIC } from '../common';
 import { densityKg } from '../mass';
 import { TAP_DRILL } from '../interfaces';
@@ -251,19 +251,21 @@ type MgnRow = { sz: number; t: 'C' | 'H' };
 const MGNS: Record<string, MgnRow> = Object.fromEntries(Object.keys(MGN).flatMap((s) => (['C', 'H'] as const).map((t) => [`MGN${s}${t}`, { sz: Number(s), t }])));
 const RAIL: PartFamily<MgnRow> = {
   id: 'piece.mgn', name: 'Miniature rail and carriage (MGN)', gloss: 'An MGN miniature linear rail (7, 9, 12, 15) with its short (C) or long (H) carriage on it', domains: ['mechanical', 'manufacturing'],
-  says: 'An MGN rail (HIWIN, 7 to 15 mm) by its length, its holes through it at its pitch (their counterbores not drawn: a bolted joint takes holes along +y only, and a counterbore is cut from a face), and its carriage (C or H) at its middle: the block\'s top with its four tapped holes, its two skirts beside the rail (a slide\'s gap each side) standing up to 1 mm proud of the rail (typical), so the block clears the rail and the carriage slides along it (the joint the movement reads). Approximated: the ball grooves, end caps, seals and balls not drawn (the block solid steel, its skirts down to the rail\'s foot). It offers MGN<n> rail/holes (bolt it down onto an extrusion: Bolted joint) and MGN<n><C|H> block/holes (what it carries)',
+  says: 'An MGN rail (HIWIN, 7 to 15 mm) by its length, its holes through it at its pitch (their counterbores not drawn: a bolted joint takes holes along +y only, and a counterbore is cut from a face), and its carriage (C or H) at its middle: the block\'s top with its four tapped holes, the block on the rail across the slide fit\'s gap at the rail\'s width (ISO 286, room.ts), so the carriage slides along it (the joint the movement reads), its two skirts hung under it either side of the rail, H1 off the rail\'s foot (HIWIN\'s H1 for its size: the clearance under the carriage). Approximated: the ball grooves, end caps, seals and balls not drawn (the block and its skirts solid steel; the skirts\' sides stand the slide gap off the rail\'s, written as no face). It offers MGN<n> rail/holes (bolt it down onto an extrusion: Bolted joint) and MGN<n><C|H> block/holes (what it carries)',
   rows: MGNS, size: 'MGN12H', source: 'HIWIN MG series catalogue, as families.ts gives it (MGN)',
   settings: [lengthSet(300, 'Rail length, mm')],
   cannot: (m, size, set) => { const b = MGN[m.sz]!.blocks[m.t].L; return len(set) > mm(b + 5) ? null : `an ${size} carriage is ${b} mm long: its rail must be longer, ${Math.ceil(b + 5)} mm or more`; },
   recipe: (m, size, set) => {
-    // (the skirts stand c over the rail's top, 1 mm (typical of the clearance under a carriage) or what leaves the block its
-    // tapped holes' depth and 0.2 mm, so the block on them clears the rail and the carriage is read as sliding on it
-    // (decision 0029); before, the block rested on rail and skirts alike)
-    const R = MGN[m.sz]!, blk = R.blocks[m.t], L = len(set), nh = Math.max(1, Math.floor((L * 1000 - 2 * R.E) / R.P) + 1), E1 = (L * 1000 - (nh - 1) * R.P) / 2, g = 0.25, c = Math.max(0.3, Math.min(1, R.H - R.HR - R.Ml - 0.2)), steel = 0x9ea2a8;
+    // (root 6: the block on the rail across the slide fit's gap at the rail's width (fitGap, ISO 286's band; before, a 1 mm
+    // lift typical, scaled by hand for MGN7, and a 0.25 mm gap by hand), so the carriage is read as sliding on it; its skirts
+    // hung under it each side, their feet H1 off the rail's foot, HIWIN's H1 for every size held (none typical), their
+    // inner sides the slide gap off the rail's)
+    const R = MGN[m.sz]!, blk = R.blocks[m.t], L = len(set), nh = Math.max(1, Math.floor((L * 1000 - 2 * R.E) / R.P) + 1), E1 = (L * 1000 - (nh - 1) * R.P) / 2, g = fitGap('slide', mm(R.WR)) * 1000, steel = 0x9ea2a8;
     const rail = made(`MGN${m.sz} rail`, 'stainless-440c', { box: [mm(R.WR), mm(R.HR), L] }, { color: steel, pattern: { name: 'holes', points: Array.from({ length: nh }, (_, i) => [0, mm(-L * 500 + E1 + i * R.P)] as [number, number]), hole: mm(R.d) / 2 } });
-    const skirt = (k: string) => made(`${size} skirt ${k}`, 'stainless-440c', { box: [mm((R.W - R.WR) / 2 - g), mm(R.HR + c), mm(blk.L)] }, { color: steel });
-    const top = made(`${size} block`, 'stainless-440c', { box: [mm(R.W), mm(R.H - R.HR - c), mm(blk.L)] }, { color: steel, pattern: { name: 'holes', face: '+y', points: [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => [mm((a! * R.B) / 2), mm((b! * blk.C) / 2)] as [number, number]), hole: mm(tap(R.M)) / 2, depth: mm(R.Ml) } });
-    return stack(`${size} rail and carriage`, 1, [{ b: stack(`${size} rail and skirts`, 0, [{ b: skirt('A') }, { b: rail, fit: 'slide' }, { b: skirt('B'), fit: 'slide' }], undefined, true) }, { b: top }]); },
+    const skirt = (k: string) => made(`${size} skirt ${k}`, 'stainless-440c', { box: [mm((R.W - R.WR) / 2 - g), mm(R.HR + g - R.H1), mm(blk.L)] }, { color: steel });
+    const top = made(`${size} block`, 'stainless-440c', { box: [mm(R.W), mm(R.H - R.HR - g), mm(blk.L)] }, { color: steel, pattern: { name: 'holes', face: '+y', points: [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => [mm((a! * R.B) / 2), mm((b! * blk.C) / 2)] as [number, number]), hole: mm(tap(R.M)) / 2, depth: mm(R.Ml) } });
+    const on = stack(`${size} rail and carriage`, 1, [{ b: rail }, { b: top, fit: 'slide' }]);
+    return onto(onto(on, '-y', skirt('A'), 'touch', undefined, ['lo', 'mid']), '-y', skirt('B'), 'touch', undefined, ['hi', 'mid']); },
   expect: (m, _s, set) => { const R = MGN[m.sz]!, blk = R.blocks[m.t]; return { bound: [mm(R.W), mm(R.H), len(set)], mass: R.kgm * len(set) + blk.kg, tol: 0.01, massTol: 0.35, says: 'its block\'s width and height by its rail\'s length; HIWIN\'s rail a metre and block masses (drawn solid where its grooves, end caps and seals are)' }; },
   tests: [{ inputs: {}, outputs: { pieces: 4, offers: ['MGN12 rail/holes', 'MGN12H block/holes'] } }],
 };
