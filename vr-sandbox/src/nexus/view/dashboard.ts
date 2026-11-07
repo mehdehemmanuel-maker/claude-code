@@ -19,6 +19,7 @@ import type { Part } from '../kits';
 import { massGauge } from '../parts/maker';
 import { addPiece, mountParts, startRemembered } from './parts';
 import { inViewer } from './viewer';
+import { edgesOf, nodesOf, type Board } from '../boards';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -37,7 +38,15 @@ dock.piecePress = (name, down) => pad.pressPiece(name, down);
 // (drag to imprint (spec 01, I16): the strip of bolts the board makes along the view's foot; one held over a part shows the
 // board's own paste node's run there, its negative and its verdict; accepted, it is one node on the board)
 const paste = new PasteSession(dock, wall); paste.card = new PasteCard($('view3d'), paste); dock.paste = paste; paste.chips();
-const shown = (): Shown[] => wall.shown().filter((s) => thingy(s.thing)) as Shown[];
+// (what the board shows: its "Show in space" nodes; a board with none (as the chat builds them) shows what it ends with, as
+// the phone page does: the first thing given by each node nothing that gives a thing builds on)
+const shown = (): Shown[] => {
+  const marked = wall.shown().filter((s) => thingy(s.thing)) as Shown[]; if (marked.length) return marked;
+  const b = wall.board(), out = (id: string) => wall.outputsOf(id) ?? {}, gives = (id: string) => Object.entries(out(id)).some(([k, x]) => k !== 'block' && thingy(x));
+  const feeds = new Set(edgesOf(b).filter((e) => gives(e.to)).map((e) => e.from)), ends: Shown[] = [];
+  for (const n of nodesOf(b)) { if (feeds.has(n.id)) continue; const o = out(n.id), v = [o.thing, o.assembly, o.part, ...Object.entries(o).filter(([k]) => k !== 'block').map(([, x]) => x)].find(thingy); if (v) ends.push({ key: n.id, thing: v } as Shown); }
+  return ends;
+};
 $('fit3d').onclick = () => dock.fit();
 $('cut3d').onclick = () => { const a = dock.nextSection(); $('cut3d').textContent = a ? `Cut ${a}` : 'Cut'; };
 const enter = (on: boolean) => { $('dock').classList.toggle('big', on); $('enter3d').textContent = on ? '✕ Back' : '⤢ Enter'; window.setTimeout(() => dock.fit(), 60); };
@@ -147,7 +156,25 @@ async function variations(force = false): Promise<void> {
 }
 
 // ---- keeping them up to date --------------------------------------------------------------------------------------------
-wall.ran = () => { const title = wall.boardTitle(); dock.show(shown(), title); paste.refresh(); logRun(); metrics(); drawClock(); $('boardName').textContent = title; };
+// (the run's panels and the node board only once there is a board: no panel that shows nothing)
+let foldKept: boolean | null = null;
+try { const f = localStorage.getItem('nexus.dash.boardFold.v1'); if (f) foldKept = f === '1'; } catch { /* folded by what is on it */ }
+const has = () => nodesOf(wall.board()).length > 0;
+function fold(on: boolean): void { document.querySelector('main.pane')!.classList.toggle('fold', on); $('boardFold').textContent = on ? '▴ Show' : '▾ Fold'; if (!on) window.setTimeout(() => wall.fit(), 150); }
+$('boardFold').onclick = () => { const on = !document.querySelector('main.pane')!.classList.contains('fold'); foldKept = on; try { localStorage.setItem('nexus.dash.boardFold.v1', on ? '1' : '0'); } catch { /* this visit only */ } fold(on); };
+fold(foldKept ?? !has());
+wall.ran = () => { const title = wall.boardTitle(), any = has(); dock.show(shown(), title); paste.refresh(); logRun(); metrics(); drawClock();
+  $('boardName').textContent = any ? title : 'Node board'; $('app').classList.toggle('ran', any); if (foldKept === null) fold(!any); };
+
+// ---- the chat (the phone page's, vibe.ts, in a frame: vibe.html?embed): what it builds is this board ------------------
+const chat = $<HTMLIFrameElement>('chat');
+window.addEventListener('message', (e: MessageEvent<{ nexus?: string; board?: Board; live?: boolean }>) => {
+  if (e.source !== chat.contentWindow || e.origin !== location.origin || e.data?.nexus !== 'vibe.board' || !e.data.board) return;
+  wall.take(e.data.board, !!e.data.live);
+});
+// (a board the person opened or changed here is the one the chat builds on next)
+wall.saved = () => chat.contentWindow?.postMessage({ nexus: 'dash.board', board: wall.board() }, location.origin);
+chat.addEventListener('load', () => { try { chat.contentDocument?.getElementById('q')?.focus(); } catch { /* not reached */ } });
 wall.changed = () => { void variations(); };
 $('stripBtn').onclick = () => $('strip').classList.toggle('open');
 window.setInterval(metrics, 1000);

@@ -20,7 +20,7 @@ import { createHash } from 'node:crypto';
 const RUN_PINS: [string, string, string, string][] = [
   ['tests/evals/agent.eval.ts', '      const r = await agentBuild(req', 'console.log(`   near miss: ${m}`);', '883bb487a91e3abd'],
   ['tests/evals/one.eval.ts', '  const t0 = Date.now(), r = await agentBuild(EXPECTED.request', 'console.log(`near miss, ${nearMissLine(m)}`);', '08e2a1d87952e6e5'],
-  ['src/nexus/view/nodes.ts', '      const r = await res.json()', 'renderAll();', '98c38ebfaba4eed8'],
+  ['src/nexus/view/vibe.ts', '    const reader = res.body.getReader(), dec = new TextDecoder();', 'nearMissesView(done.nearMisses, esc)', '4517d915d93f7abd'],
 ];
 /** The relay's handler, its whole text pinned (the test "an open andon stops the line…" says why). */
 const RELAY_PIN = '2d25484b473c12ca';
@@ -448,7 +448,7 @@ describe('every domain, in one pass', () => {
     const escView = nearMissesView(run.nearMisses, (x) => `[${x}]`);
     for (const m of run.nearMisses) for (const f of [m.tool, m.kind, m.what, m.response]) expect(escView, 'each field escaped as the page escapes it').toContain(`[${f}]`);
     expect(nearMissesView(run.nearMisses.filter((m) => m.kind !== 'reckless'), (x) => x), 'and only then').toMatch(/^<details>/);
-    expect(readFileSync(join(root, 'src/nexus/view/nodes.ts'), 'utf8'), 'the page puts the run\'s near misses beside the answer').toContain('${nearMissesView(r.nearMisses, esc)}');
+    expect(readFileSync(join(root, 'src/nexus/view/vibe.ts'), 'utf8'), 'the page puts the run\'s near misses beside the answer (the chat, since 2026-11-07)').toContain('${nearMissesView(done.nearMisses, esc)}');
     // (a model's reply read by turnOf, as agentBuild reads every one: its answer every text block in order; its tool calls;
     // a refusal an error)
     expect(turnOf({ stop_reason: 'end_turn', content: [{ type: 'text', text: 'All ' }, { type: 'thinking' }, { type: 'text', text: 'done.' }] })).toEqual({ ends: true, answer: 'All done.' });
@@ -510,7 +510,7 @@ describe('every domain, in one pass', () => {
     for (const [f, a, b, pin] of RUN_PINS) expect(createHash('sha256').update(region(readFileSync(join(root, f), 'utf8'), a, b)).digest('hex').slice(0, 16), `${f}: its handling of a run's near misses changed: read it again and pin its new text`).toBe(pin);
     // (and what those lines call is agent.ts's own, nothing in its place: imported from it, named nowhere else (a local
     // stand-in for nearMissesView or nearMissLine, its pinned line kept, passed: the evaluator, 2026-11-01))
-    for (const [f, name, from, uses] of [['src/nexus/view/nodes.ts', 'nearMissesView', '../agent', 1], ['tests/evals/agent.eval.ts', 'nearMissLine', '../../src/nexus/agent', 1], ['tests/evals/one.eval.ts', 'nearMissLine', '../../src/nexus/agent', 1]] as const) {
+    for (const [f, name, from, uses] of [['src/nexus/view/vibe.ts', 'nearMissesView', '../agent', 1], ['tests/evals/agent.eval.ts', 'nearMissLine', '../../src/nexus/agent', 1], ['tests/evals/one.eval.ts', 'nearMissLine', '../../src/nexus/agent', 1]] as const) {
       const t = readFileSync(join(root, f), 'utf8');
       expect(new RegExp(`^import \\{[^}]*\\b${name}\\b[^}]*\\} from '${from.replace(/[./]/g, (c) => `\\${c}`)}';$`, 'm').test(t), `${f}: ${name} imported from agent.ts`).toBe(true);
       expect((t.match(new RegExp(`\\b${name}\\b`, 'g')) ?? []).length, `${f}: ${name} named only where it is imported and used`).toBe(1 + uses); }
@@ -521,9 +521,9 @@ describe('every domain, in one pass', () => {
     const vite = readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), relayAt = vite.indexOf('const relay = (): Plugin => {'), relayText = vite.slice(relayAt, vite.indexOf('\n};', relayAt) + 3), handler = relayText;
     expect(createHash('sha256').update(relayText).digest('hex').slice(0, 16), "the relay changed: read it again (agentBuild's run sent by relayBody, whole, from both its mounts) and pin its new text").toBe(RELAY_PIN);
     expect((relayText.match(/s\.middlewares\.use\(handle\(/g) ?? []).length, 'both servers mount it').toBe(2);
-    expect(readFileSync(join(root, 'src/nexus/view/nodes.ts'), 'utf8'), 'the side panel draws what the reply made').toContain('${askShown}');
+    expect(readFileSync(join(root, 'src/nexus/view/vibe.ts'), 'utf8'), 'the chat draws what the reply made (it took the side panel\'s place, 2026-11-07)').toContain('headOf((done.answer');
     expect(vite, 'the relay mounted').toMatch(/^\s*plugins: \[relay\(\)\],$/m);
-    expect(/req\.url !== '([^']+)'/.exec(handler)?.[1], 'it answers where the page asks').toBe(`/${/fetch\('\.\/([^']+)'/.exec(readFileSync(join(root, 'src/nexus/view/nodes.ts'), 'utf8'))?.[1]}`);
+    expect(/req\.url !== '([^']+)'/.exec(handler)?.[1], 'it answers where the page asks').toBe(`/${/fetch\('\.\/([^']+)'/.exec(readFileSync(join(root, 'src/nexus/view/vibe.ts'), 'utf8'))?.[1]}`); // (the chat asks now: it took the side panel's place, 2026-11-07)
     expect(readFileSync(join(root, 'vite.view.config.ts'), 'utf8'), 'the relay answers with relayBody').toMatch(/res\.end\(m\.relayBody\(r\)\)/);
     // (the two runners print each near miss by nearMissLine, its kind first (run here on the run's own), read exactly: a
     // runner that printed none, or printed them without their kind, passed before (the evaluator, 2026-11-01))

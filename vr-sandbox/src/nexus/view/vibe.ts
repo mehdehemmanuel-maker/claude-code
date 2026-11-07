@@ -26,7 +26,7 @@ import { starterBoards } from '../starters';
 import { boundsOfAll, isAssembly, isPart, massOfAll, placedCount } from '../assembly';
 import { LIBRARY, block, defaultsOf, portsOf, register, show, type BlockDef, type SettingDef } from '../blocks';
 import { DENSITY } from '../mass';
-import { TOOLS, boardBrief, composeBuild, gateOf, guideOf, isCompound, joinPlan, planOf, planRequest, runPlan, setGuideMd, toolsFor, type AgentBlock, type AgentPlan, type AgentRun, type ComposeRun, type ComposeStep, type PlanRan, type PlanRun } from '../agent';
+import { TOOLS, boardBrief, composeBuild, gateOf, guideOf, isCompound, joinPlan, nearMissesView, planOf, planRequest, runPlan, setGuideMd, toolsFor, type AgentBlock, type AgentPlan, type AgentRun, type ComposeRun, type ComposeStep, type PlanRan, type PlanRun } from '../agent';
 import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
 import { askClaude, inViewer, sendReport, whyNot, type Report } from './viewer';
 // (the guide bundled, for the page on claude.ai, which builds Assist's call itself: decision 0027)
@@ -35,12 +35,16 @@ import { YOURS, askName, keepBuild, mountParts, orchestration, orchestrationHtml
 import { registerSaved } from '../memory';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+/** The chat as a column of the dashboard (index.html holds it in a frame): no 3D view of its own (the dashboard's shows what
+ *  it builds), the sheet fills the frame, and the board goes both ways by message. */
+const EMBED = /[?&]embed\b/.test(location.search) && window.parent !== window;
+if (EMBED) document.documentElement.classList.add('embed');
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 /** An answer's light markdown (bold, code, line breaks) as html. */
 const md = (s: string) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\n/g, '<br>');
 
 // ---- kept where the dashboard keeps it (view/nodes.ts): the board, the blocks folded and saved, and this chat --------
-const KEY = 'nexus.nodeboard.v1', BLOCKS_KEY = 'nexus.nodeblocks.v1', CHAT_KEY = 'nexus.vibe.chat.v1', MODE_KEY = 'nexus.vibe.mode.v1', TOK_KEY = 'nexus.vibe.tokens.v1', CHECK_KEY = 'nexus.vibe.check.v1';
+const KEY = 'nexus.nodeboard.v1', CHOSEN_KEY = 'nexus.nodeboard.chosen.v1', BLOCKS_KEY = 'nexus.nodeblocks.v1', CHAT_KEY = 'nexus.vibe.chat.v1', MODE_KEY = 'nexus.vibe.mode.v1', TOK_KEY = 'nexus.vibe.tokens.v1', CHECK_KEY = 'nexus.vibe.check.v1';
 const store = { get(k: string): string | null { try { return localStorage.getItem(k); } catch { return null; } }, set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* a private window: kept for this visit only */ } } };
 const savedBlocks = (): AgentBlock[] => { try { return JSON.parse(store.get(BLOCKS_KEY) ?? '[]') as AgentBlock[]; } catch { return []; } };
 // (every block saved and every part remembered (decision 0028, memory.ts: the same store) put in the library as a block)
@@ -70,15 +74,19 @@ const insets = () => { const root = document.documentElement.style, over = Math.
 let board: Board = emptyBoard('Nothing yet'), engine = new Engine(board, env, SHARED), runs = 0;
 // (Move: the blocks behind what is shown, moving live: move3d.ts)
 dock.move.source = () => blocksShown(board, (id) => engine.state.get(id)?.out as Record<string, unknown> | undefined);
-try { const s = store.get(KEY); if (s) { const b = JSON.parse(s) as Board; if (b.nodes && b.edges) board = b; } } catch { /* start empty */ }
+// (as the dashboard: the board kept is opened only if the person chose it; a starter is never opened by default)
+try { const s = store.get(KEY); if (s) { const b = JSON.parse(s) as Board; if (b.nodes && b.edges && (store.get(CHOSEN_KEY) === '1' || !starterBoards().some(([t]) => t === b.title))) board = b; } } catch { /* start empty */ }
 /** The boards before each step (by hand, a plan built, a run taken, a board opened): Undo goes back one. */
 const history: Board[] = [];
 const step = async (b: Board): Promise<string> => { history.push(structuredClone(board)); if (history.length > 30) history.shift(); const said = await use(b); requestAnimationFrame(() => dock.fit()); return said; };
 
 /** The board run and what its "Show in space" nodes are given drawn; a later run started meanwhile wins. Says what is
  *  shown, short ("4 pieces, 70.33 g"), for a message to end with. */
-async function use(b: Board, keep = true): Promise<string> {
-  const mine = ++runs; board = b; engine = new Engine(b, env, SHARED);
+async function use(b: Board, keep = true, tell = true): Promise<string> {
+  stale = false; const mine = ++runs; board = b; engine = new Engine(b, env, SHARED);
+  // (the chat as the dashboard's column (vibe.html?embed): what it builds is the board there too, drawn on its node board
+  // and in its 3D view; `live` while it is still being built)
+  if (EMBED && tell) window.parent.postMessage({ nexus: 'vibe.board', board: b, live: !keep }, location.origin);
   const t0 = performance.now(); let failed = 0;
   try { const r = await engine.run(); failed = r.failed; } catch (e) { say(`It could not run: ${(e as Error).message}`, true); }
   if (mine !== runs) return '';
@@ -107,7 +115,7 @@ async function use(b: Board, keep = true): Promise<string> {
   $('stat').innerHTML = things.length ? `<b>${pieces.toLocaleString()}</b> piece${pieces === 1 ? '' : 's'} · <b>${esc(show(mass, 'kg'))}</b>${sized ? ` · ${esc(sized)}` : ''} · ${nodes}${bad}`
     : ns ? `${nodes}, nothing shown yet${bad}` : '';
   $('stat').title = things.length ? `${said}; ${nodes}; ran in ${((performance.now() - t0) / 1000).toFixed(1)} s` : '';
-  if (keep) store.set(KEY, JSON.stringify(b));
+  if (keep) { store.set(KEY, JSON.stringify(b)); if (tell) store.set(CHOSEN_KEY, '1'); }
   if ($('board').classList.contains('on')) listNodes();
   ($('undo') as HTMLButtonElement).disabled = !history.length;
   if (mode === 'hand') { drawHand(); const none = !endsOf().length; for (const c of document.querySelectorAll('.chip.step')) c.classList.toggle('off', none); }
@@ -212,14 +220,17 @@ $('tok').onclick = () => { if (!total.runs || !confirm('Set the token count back
 type Mode = 'hand' | 'assist' | 'auto';
 let mode: Mode = (['hand', 'assist', 'auto'] as const).find((m) => m === store.get(MODE_KEY)) ?? 'auto';
 const checkBox = $<HTMLInputElement>('check'); checkBox.checked = store.get(CHECK_KEY) === '1'; checkBox.onchange = () => store.set(CHECK_KEY, checkBox.checked ? '1' : '0');
+/** A board the dashboard sent, not yet run here (EMBED). */
+let stale = false;
 function setMode(m: Mode): void {
+  if (m === 'hand' && stale) { stale = false; void use(board, false, false); }
   mode = m; store.set(MODE_KEY, m);
   for (const b of document.querySelectorAll<HTMLButtonElement>('#modes .seg button')) b.classList.toggle('on', b.dataset.mode === m);
   $('checkL').style.display = m === 'auto' ? '' : 'none';
   $('ask').style.display = m === 'hand' ? 'none' : '';
   $('hand').classList.toggle('on', m === 'hand'); if (m === 'hand') drawHand();
   $('plan').classList.toggle('on', m === 'assist' && !!plan);
-  $<HTMLTextAreaElement>('q').placeholder = m === 'assist' ? 'Say it: one call writes a plan' : 'Describe what to build…';
+  $<HTMLTextAreaElement>('q').placeholder = m === 'assist' ? 'Say it: one call writes a plan' : EMBED ? 'Say what to build' : 'Describe what to build…';
   drawChips();
 }
 for (const b of document.querySelectorAll<HTMLButtonElement>('#modes .seg button')) b.onclick = () => setMode(b.dataset.mode as Mode);
@@ -529,6 +540,7 @@ const KEEP_SAYS = 'Keep this build: the board open folded into one part, named b
 $('msgs').addEventListener('click', (e) => { if ((e.target as HTMLElement).closest('[data-keep]')) void keepShown(); });
 let busy = false;
 async function ask(q: string): Promise<void> {
+  if (stale) { stale = false; await use(board, false, false); }
   if (/^\s*@?dev\s*[:,]/i.test(q)) return toDev(q.trim());
   if (q.trim() && !busy) lastAsked = q.trim();
   // (Assist keeps its one call for a small request; one that names two or more things is built from its parts)
@@ -567,7 +579,8 @@ async function ask(q: string): Promise<void> {
     // (on a phone, the answer's first paragraph that says what was made; a hedge before it kept in sight under it; the rest
     // a press away)
     const { head, hedges, rest } = headOf((done.answer || done.stopped || '(no answer: it stopped)').trim());
-    live.html = `${md(head)}${hedges.length ? `<div class="note">${md(hedges.join(' '))}</div>` : ''}${rest ? `<details><summary>More</summary>${md(rest)}</details>` : ''}${done.made?.length ? `<br><b>Saved as a node of its own:</b> ${done.made.map((x) => esc(x.name)).join(', ')}` : ''}<details><summary>${n} step${n === 1 ? '' : 's'} · ${secs} s${done.checked ? ` · checked: ${esc(done.checked.trim().split('\n').pop()?.slice(0, 40) ?? '')}` : ''}</summary>${done.steps.map((s, i) => `${i + 1}. ${esc(s.tool)}: ${esc(s.result.slice(0, 140))}`).join('<br>')}</details>${tokLine(done.tokens)}`;
+    // (the run's near misses beside its answer, as the dashboard's Ask Claude showed them before the chat took its place)
+    live.html = `${md(head)}${hedges.length ? `<div class="note">${md(hedges.join(' '))}</div>` : ''}${nearMissesView(done.nearMisses, esc)}${rest ? `<details><summary>More</summary>${md(rest)}</details>` : ''}${done.made?.length ? `<br><b>Saved as a node of its own:</b> ${done.made.map((x) => esc(x.name)).join(', ')}` : ''}<details><summary>${n} step${n === 1 ? '' : 's'} · ${secs} s${done.checked ? ` · checked: ${esc(done.checked.trim().split('\n').pop()?.slice(0, 40) ?? '')}` : ''}</summary>${done.steps.map((s, i) => `${i + 1}. ${esc(s.tool)}: ${esc(s.result.slice(0, 140))}`).join('<br>')}</details>${tokLine(done.tokens)}`;
     if (g.take) { history.push(structuredClone(was)); await use(done.board); } else { live.bad = true; live.html += '<br>The board was not taken: the kernel refused one of its certificates as wrong, so the board is as it was.'; await use(was); }
   } catch (e) { live.bad = true; live.html = md(`Could not: ${(e as Error).message}${lastBoard ? '\n\nWhat it had built when it stopped is shown and kept.' : ''}`); if (lastBoard) { history.push(structuredClone(was)); await use(lastBoard); } }
   finally { clearInterval(tick); busy = false; ($('go') as HTMLButtonElement).disabled = false; keepChat(); drawChat(); }
@@ -608,7 +621,20 @@ function drawChips(): void {
 }
 
 drawChat(); drawTok(); setMode(mode);
-void use(board);
+void use(board, false, false);
+// (in the dashboard: a board the person opened or changed there is the one the chat builds on; the input ready to type in)
+if (EMBED) {
+  window.addEventListener('message', (e: MessageEvent<{ nexus?: string; board?: Board }>) => { if (e.source !== window.parent || e.origin !== location.origin || e.data?.nexus !== 'dash.board' || !e.data.board) return;
+    const b = e.data.board, other = (b.title ?? '') !== (board.title ?? '') && nodesOf(b).length > 0;
+    history.push(structuredClone(board)); if (history.length > 30) history.shift();
+    // (not run here at once: the frame shares the dashboard's thread, which has just run it, and a second run of a big
+    // board froze the page as long again (the gauntlet's 7 s, seen as a black 3D view); run when the chat needs it: by
+    // hand (its ends), or before the next request)
+    if (mode === 'hand') void use(b, false, false); else { runs++; board = b; engine = new Engine(b, env, SHARED); stale = true; }
+    // (a board opened there is said here once, so the chat is not blank beside it; a change to it is not)
+    if (other) say(`Opened on the board: **${b.title ?? 'a board'}**. Say what to change, or what to build next.`); });
+  $<HTMLTextAreaElement>('q').placeholder = 'Say what to build'; window.setTimeout(() => $('q').focus(), 50);
+}
 // (the parts browser on the '+': every piece by trade, category and size; a size tapped is the by-hand step's piece, set to
 // it, joined to what is there as the form says, or built at once on an empty board; starting again is in it)
 const parts = mountParts({ trigger: $('fresh'), keepAs: 'Start again', add: (id, set) => { handPiece = id; for (const [k, v] of Object.entries(set)) handVals.set(`${id}.${k}`, String(v)); setMode('hand'); $('sheet').classList.remove('low'); if (!endsOf().length) void handAdd(); }, said: (t, bad) => say(t, bad) });
