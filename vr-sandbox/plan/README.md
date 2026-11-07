@@ -17,6 +17,9 @@ The phases' state is in the table below (rewritten 2026-11-06; it had said every
 | `DEFECTS.md` | faults found in the code, each checked there (file and line), its state and the task that fixes it | when a fault is found or fixed |
 | `FIX-PLAN.md` | the faults a rough pass's builders met, grouped by the rule under them, and the fix for each root in order (decision 0029); the user reviews it before any root is fixed | at the end of each rough pass |
 | `CRITIQUE.md` | a panel's hard critique of the plan and the way of working, time first (2026-11-06); what to stop doing | when a critique is asked for |
+| `CRITIQUE-2.md` | the second hard critique (2026-11-07): code, context and process measured; the context tiers and the wave loop to run | before planning a wave |
+| `DIRECTIVE-2026-11-07.md` | the user's directive for a universal, functional CAD library, word for word; `AUDIT.md` is its audit and the work it starts | never: it is the user's |
+| `AUDIT.md` | what exists, traced by running it: the ten acceptance tests' status, duplicates, the component contract, the work packages | after each audit |
 | `README.md` (this file) | the vision, the advantage, the phases and their state, how to work | each phase's state, when it changes |
 | `CONSTITUTION.md` | the rules every change keeps, each with the check that enforces it (or marked unenforced) | a rule added or changed only by a decision record |
 | `decisions/` | one record for each choice made: the options, the choice, the assumption under it, when to test it again | a new record; an old one is superseded, never edited away |

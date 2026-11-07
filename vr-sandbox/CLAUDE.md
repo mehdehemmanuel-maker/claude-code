@@ -229,13 +229,13 @@ Say the gate's answer out loud in the round's notes when it changes what gets do
   passed); ask the evaluator (`plan/specs/00-structure/evaluator.md`) for a verdict; then rewrite `PROGRESS.md`.
 - Gate: `npm run gate` (`scripts/gate.mjs`): the type check and the one test, then a stamp of exactly what passed (the push
   hook reads it), `tests/nexus/domains.test.ts` (every domain's nodes, their own
-  tests, one quick board per field, the reach check), under a minute; CI runs the same. `UPDATE_DOCS=1 npx vitest run`
+  tests, one quick board per field, the reach check), about four minutes (217 to 236 s measured 2026-11-07); CI runs the same. `UPDATE_DOCS=1 npx vitest run`
   writes the generated docs and the nodes' dates (twice where nodes' code changed). Nodes built before the update are
   marked as such: the queue to re-check. Build the viewer: `npx vite build --config vite.view.config.ts --logLevel error`.
 - Probe tests go in `tests/nexus/zz_probe_*.test.ts` and are deleted before committing. Run them with `npm run probe --
   <file>` (stopped at two minutes). Where places are still written by hand, builder by builder: `node scripts/by-hand.mjs`.
-  While working, the gate on the fields touched: `npm run gate:field -- Mechanical` (4 s
-  for one field, against 46 s whole); the docs once with `npm run docs`; the whole gate before pushing.
+  While working, the gate on the fields touched: `npm run gate:field -- Mechanical` (seconds
+  for one field, against about four minutes whole); the docs once with `npm run docs`; the whole gate before pushing.
 - Node's built-in fetch reaches the web here only with `NODE_USE_ENV_PROXY=1` (the container's proxy; set in the
   scripts above).
 - Never put API keys in the repo or in client code.
