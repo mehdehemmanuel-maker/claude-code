@@ -28,10 +28,12 @@ export const either = (says: string, ...any: Kind[]): Kind => ({ says, any });
 const kindOf = (k: Asked): Kind => (k instanceof RegExp ? { says: String(k), ids: k, pieces: k } : k);
 /** Whether a board that uses these block ids (and these at the sizes chosen on them: a bar of a section at "steel IPE
  *  100" is an I-beam) and makes pieces of these names holds a part of the kind. */
-export function holds(k: Asked, ids: readonly string[], names: readonly string[], sized: readonly (readonly [string, string])[] = []): boolean {
+export function holds(k: Asked, ids: readonly string[], names: readonly string[], sized: readonly (readonly [string, string])[] = [], said: readonly string[] = []): boolean {
   const q = kindOf(k);
-  if (q.any?.some((x) => holds(x, ids, names, sized))) return true;
-  if (q.pieces && names.some((n) => q.pieces!.test(n))) return true;
+  if (q.any?.some((x) => holds(x, ids, names, sized, said))) return true;
+  // (only a kind that reads by name reads the pieces' names, and the operations' names and the aisles beside them (decision
+  // 0029, root 7): a chair's legs named on room.ring as "chair legs" count; the forty single builds' kinds have no `pieces`)
+  if (q.pieces && [...names, ...said].some((n) => q.pieces!.test(n))) return true;
   const family = (id: string, size = '') => { const d = block(id), a = aisleOf(d); return !!d && !!a && !!q.aisle?.test(a) && (!q.named || q.named.test(`${d.name}${size ? ` ${size}` : ''}`)); };
   return ids.some((id) => q.ids?.test(id) || family(id)) || sized.some(([id, size]) => family(id, size));
 }
@@ -41,6 +43,14 @@ export function sizedIn(b: Board | undefined, seen = new Set<Board>()): [string,
   return Object.values(b.nodes ?? {}).flatMap((n): [string, string][] => { if (n.deleted) return [];
     const here: [string, string][] = n.block && n.set?.size !== undefined ? [[n.block, String(n.set.size)]] : [];
     return [...here, ...sizedIn(n.inner ?? (n.block ? block(n.block)?.graph : undefined), seen)]; });
+}
+/** The names a build gives its operations (a node's `name` setting or label) and the aisles of the blocks it uses: what a
+ *  kind read by name also reads (the pieces' names are not the only place a chair's legs are called legs). */
+export function saidIn(b: Board | undefined, seen = new Set<Board>()): string[] {
+  if (!b || seen.has(b)) return []; seen.add(b);
+  return Object.values(b.nodes ?? {}).flatMap((n): string[] => { if (n.deleted) return [];
+    const d = n.block ? block(n.block) : undefined, own = [n.label, typeof n.set?.name === 'string' ? n.set.name : undefined, aisleOf(d)].filter((x): x is string => typeof x === 'string' && x.length > 0);
+    return [...own, ...saidIn(n.inner ?? d?.graph, seen)]; });
 }
 /** What a kind is called in a reason. */
 export const saysOf = (k: Asked): string => (k instanceof RegExp ? String(k) : k.says);
@@ -128,7 +138,7 @@ export function score(board: Board, e: Engine, w: Want): string | null {
   const blocks = ns.map((n) => e.state.get(n.id)?.out?.block as RoomLike | undefined).filter((b): b is RoomLike => !!b?.pieces);
   if (!blocks.length) return 'no block made';
   const big = blocks.reduce((a, b) => (b.pieces.length > a.pieces.length ? b : a)), g = groups(big);
-  const ids = usedIn(board), names = big.pieces.map((p) => p.name), sized = sizedIn(board), miss = w.uses.filter((u) => !holds(u, ids, names, sized));
+  const ids = usedIn(board), names = big.pieces.map((p) => p.name), sized = sizedIn(board), said = saidIn(board), miss = w.uses.filter((u) => !holds(u, ids, names, sized, said));
   if (miss.length) return `no ${miss.map(saysOf).join(', ')} on the board (it used ${[...new Set([...ids, ...names])].join(', ').slice(0, 160)})`;
   if (big.pieces.length < w.pieces) return `its build has ${big.pieces.length} pieces, fewer than ${w.pieces}`;
   return g === 1 ? null : `its build falls in ${g} groups, not one thing`;

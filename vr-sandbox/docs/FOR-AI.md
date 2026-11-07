@@ -63,6 +63,7 @@ that operation's setting. A refusal (`no room …: needs …, gives …`) is an 
 A piece made turned (a ball or needle valve, laid along its flow) is only ever a host: pass the pipe through its line.
 Never use `place`, `array`, `mirror`, `mate`, `joint`, `imprint` or `place.solve` for a new build: they set places by number.
 Wire a piece's or an operation's `block` into the next operation; `thing` goes only to `space.show`, `measure` and `assert`.
+A block with two block outputs (a motor's `can` and `motor`) says on its card which carries the shaft line (`lines:`): a line is read on that output. Rewiring `space.show`, `measure` or `assert` is always allowed in a change.
 A wire that does not fit is refused with the fix, and so is a second wire into a single input (`*` on a card: takes
 many) or an `add` by a name already there; a line `x waiting:` fails too. The cards list what each piece `offers`
 (`<size> shank/axis`): name that line or room in the next operation. Start from the nearest worked plan after the cards.

@@ -1,7 +1,8 @@
 // Where a place is still written by hand (decision 0021): nothing checks for overlap, so what is not yet placed by the
 // operations that cannot write one is counted instead, builder by builder. A place written by hand is a property `at`
-// or `rot` in an object literal, read from the syntax tree of each file under src/nexus (oxc's parser, as the bundler
-// rolldown carries it; the views' own panels and cameras, src/nexus/view, are not builds and are not counted, nor
+// or `rot` in an object literal handed to a room operation or written as a Part (root 8: a data row keyed `at` is not
+// one), read from the syntax tree of each file under src/nexus (oxc's parser, as the bundler rolldown carries it; the
+// views' own panels and cameras, src/nexus/view, are not builds and are not counted, nor
 // src/nexus/room.ts, the operations themselves, where every place is what an operation gives). Each count
 // may only fall: a builder moved onto the operations counts 0 (scripts/by-hand.json holds the counts it may not rise
 // above).
@@ -25,13 +26,26 @@ export function byHand() {
   for (const p of files(join(root, 'src/nexus'))) {
     const { program, errors } = parseSync(p, readFileSync(p, 'utf8'), { lang: 'ts' }); let n = 0;
     if (errors.length) throw new Error(`${relative(root, p)}: ${errors[0].message}`);
-    const walk = (node, parent) => {
+    // (root 8, decision 0029: a place is an `at` or `rot` on an object handed to a room operation (any name imported from
+    // room.ts, inside its call's arguments) or on a Part (an object named or copied from one, `name` or a spread, or with a
+    // Part's own keys, `shape`, `parts`, `item` or `cuts`; one in a `parts` list; one written `as Part`, `satisfies Part`
+    // or into a `Part`); a data row keyed `at` in a table (a stop `{ at: 50, axis }`) is not a place)
+    const roomNames = new Set(program.body.filter((s) => s.type === 'ImportDeclaration' && /(^|\/)room$/.test(s.source.value)).flatMap((s) => s.specifiers.map((x) => x.local.name)));
+    const keyOf = (q) => (q.type === 'Property' && !q.computed && q.key?.type === 'Identifier' ? q.key.name : undefined);
+    const typed = (t) => t?.type === 'TSTypeReference' && t.typeName?.type === 'Identifier' && t.typeName.name === 'Part';
+    const partLike = (o, up) => { if (o.properties.some((q) => q.type === 'SpreadElement' || ['name', 'shape', 'parts', 'item', 'cuts'].includes(keyOf(q)))) return true;
+      const [a, b] = up; if (a?.type === 'ArrayExpression' && keyOf(b ?? {}) === 'parts') return true;
+      if ((a?.type === 'TSAsExpression' || a?.type === 'TSSatisfiesExpression') && typed(a.typeAnnotation)) return true;
+      return a?.type === 'VariableDeclarator' && typed(a.id?.typeAnnotation?.typeAnnotation); };
+    const inRoomCall = (o, up) => { let c = o; for (const a of up) { if (a.type === 'CallExpression' && a.arguments.includes(c) && a.callee?.type === 'Identifier' && roomNames.has(a.callee.name)) return true; c = a; } return false; };
+    const walk = (node, up) => {
       if (!node || typeof node !== 'object') return;
-      if (Array.isArray(node)) { for (const x of node) walk(x, parent); return; }
-      if (node.type === 'Property' && parent?.type === 'ObjectExpression' && !node.computed && node.key?.type === 'Identifier' && (node.key.name === 'at' || node.key.name === 'rot')) n++;
-      for (const k in node) if (k !== 'parent' && node[k] && typeof node[k] === 'object') walk(node[k], node);
+      if (Array.isArray(node)) { for (const x of node) walk(x, up); return; }
+      if (node.type === 'ObjectExpression') { const k = node.properties.filter((q) => keyOf(q) === 'at' || keyOf(q) === 'rot').length; if (k && (partLike(node, up) || inRoomCall(node, up))) n += k; }
+      const next = [node, ...up];
+      for (const k in node) if (k !== 'parent' && node[k] && typeof node[k] === 'object') walk(node[k], next);
     };
-    walk(program, null);
+    walk(program, []);
     if (n) out[relative(root, p)] = n;
   }
   return Object.fromEntries(Object.entries(out).sort((a, b) => b[1] - a[1]));
