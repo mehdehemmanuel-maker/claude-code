@@ -540,3 +540,10 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
 - 2026-11-07: "Fix the ui make it better also there's no chat interface it just shows a battery that should not be a
   thing unless I manually navigate to find the battery or something" (the app opens on an empty space with the chat
   to Claude front and centre; the battery board (or any starter) only when the person goes to it; the UI better)
+- 2026-11-07: "UNIVERSAL CAD LIBRARY — COMPLETE FUNCTIONAL IMPLEMENTATION DIRECTIVE" (word for word in
+  `plan/DIRECTIVE-2026-11-07.md`): audit what exists by tracing execution, not by files; one component contract that
+  assemblies share, so an assembly is a component; a geometry engine with real solid features; parametric generators;
+  a materials engine with sourced values only; typed ports that affect behaviour; a constraint and assembly engine in
+  real 3D space; one shared physics framework; the AI able to search, decompose, generate, assemble, check and save;
+  a library UI where every control does what it says; ten acceptance tests that must actually work; nothing claimed
+  that is not; build rough whole first, then integrate, test, fix, repeat, report.

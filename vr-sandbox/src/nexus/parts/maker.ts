@@ -67,12 +67,19 @@ export function build<R>(f: PartFamily<R>, size: string, set: Record<string, unk
   return f.recipe(row, size, set);
 }
 /** A family as one piece node: a size choice listing every row, its other settings, its card. */
+/** What a family's source is, read from its words (the audit, 2026-11-07: every family was stamped "standard", 436 of them
+ *  wrongly): one that names a standard body is a standard (its text says where it is only typical); one that says it is
+ *  typical or recalled and names none is a rule of thumb; else a maker's table. */
+export function sourceKindOf(cite: string): 'standard' | 'maker' | 'rule of thumb' {
+  if (/\b(ISO|DIN|EN|ANSI|ASME|IEC|BS|JIS|SAE|ASTM|NEMA|IEEE|UL|API|AWS|NFPA|IPC|JEDEC|ETSI|ITU|BIPM|AISC|ACI|NDS|AS|CSA)\b/.test(cite)) return 'standard';
+  return /typical|recalled|rule of thumb/i.test(cite) ? 'rule of thumb' : 'maker';
+}
 export function familyNode<R>(f: PartFamily<R>): BlockDef {
   PART_FAMILIES.set(f.id, f as AnyFamily);
   const settings: SettingDef[] = [{ key: 'size', label: 'Size', type: 'choice', default: f.size, choices: Object.keys(f.rows) }, ...(f.settings ?? [])];
   const defaults = Object.fromEntries(settings.map((s) => [s.key, s.default]));
   return { id: f.id, name: f.name, version: 1, by: 'built in', pure: true, kind: 'generator', ability: 'generate', domains: f.domains, ...(f.aisle ? { aisle: f.aisle } : {}), says: cardOf(f as AnyFamily), spec: { gloss: f.gloss, ...ROOM_SPEC } as Spec,
-    settings, ports: { inputs: [], outputs: PIECE_OUT }, sources: [{ cite: f.source, kind: 'standard' } as NonNullable<BlockDef['sources']>[number]],
+    settings, ports: { inputs: [], outputs: PIECE_OUT }, sources: [{ cite: f.source, kind: sourceKindOf(f.source) } as NonNullable<BlockDef['sources']>[number]],
     run: (_i, c) => { const set = { ...defaults, ...c.set }; return pieceOut(build(f, String(set.size), set), f.envelope); }, tests: f.tests };
 }
 
