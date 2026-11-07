@@ -537,3 +537,6 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   it there never a need for a digital entity to be taking hours on a task unless it's populating something like a the
   library" (merge to main and go; speed above all: faster ways of working and of prompting the builders; no task
   takes hours unless it is population)
+- 2026-11-07: "Fix the ui make it better also there's no chat interface it just shows a battery that should not be a
+  thing unless I manually navigate to find the battery or something" (the app opens on an empty space with the chat
+  to Claude front and centre; the battery board (or any starter) only when the person goes to it; the UI better)
