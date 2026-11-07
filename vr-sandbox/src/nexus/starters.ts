@@ -353,7 +353,7 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
   }],
   ['Physics: a steel ball let go into a tower of wooden blocks', () => {
     // 24 oak blocks 100 mm a side, two by two and six high, every one stacked by the operations; a 120 mm steel ball beside
-    // the tower on the ground (a clear fit, 1 mm off it), shoved at it for 0.1 s with 300 N. Let it go runs Jolt once on
+    // the tower on the ground (laid apart, 1 mm off it: the fit 'apart'), shoved at it for 0.1 s with 300 N. Let it go runs Jolt once on
     // the room's block (each piece a body, by its name; its mass from oak's density, friction and bounce from the
     // materials table); press ▶ under the 3D view to watch it hit
     const b = emptyBoard('A ball let go into a tower');
@@ -363,7 +363,7 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     put('layer', 'room.stack', { name: 'layer', axis: 'x', fit: 'touch' }, 'A layer, two by two'); for (let k = 0; k < 2; k++) wire(b, 'pair', 'block', 'layer', 'blocks');
     put('tower', 'room.stack', { name: 'tower', axis: 'y', fit: 'touch' }, 'Tower, six layers high'); for (let k = 0; k < 6; k++) wire(b, 'layer', 'block', 'tower', 'blocks');
     put('ball', 'room.make', { name: 'ball', shape: 'sphere', mat: 'steel-low', a: 60 }, 'A steel ball, 120 mm');
-    put('scene', 'room.stack', { name: 'scene', axis: 'x', fit: 'clear', level: 'on the ground', order: 'ball, tower' }, 'The ball beside the tower, both on the ground'); wire(b, 'ball', 'block', 'scene', 'blocks'); wire(b, 'tower', 'block', 'scene', 'blocks');
+    put('scene', 'room.stack', { name: 'scene', axis: 'x', fit: 'apart', level: 'on the ground', order: 'ball, tower' }, 'The ball beside the tower, both on the ground'); wire(b, 'ball', 'block', 'scene', 'blocks'); wire(b, 'tower', 'block', 'scene', 'blocks');
     put('shove', 'push', { name: 'ball', fx: 300, seconds: 0.1 }, 'Shove the ball');
     put('clock', 'time', {});
     put('go', 'letgo', { seconds: 8 }); wire(b, 'scene', 'block', 'go', 'block'); wire(b, 'shove', 'push', 'go', 'push'); wire(b, 'clock', 't', 'go', 't');

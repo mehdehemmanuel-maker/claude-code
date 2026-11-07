@@ -107,7 +107,7 @@ export interface JointRef { readonly name: string; readonly slide?: number; read
 export interface Piece { readonly name: string; readonly mat: string; readonly color?: number; readonly solid: Solid; readonly joint?: JointRef; readonly axis?: readonly [number, number]; readonly bought?: true; readonly tapped?: true; readonly lines: readonly Line[] }
 export interface Face {
   readonly a: number; readonly b: number; readonly kind: 'contact' | 'gap'; readonly patch: 'area' | 'line'; readonly area: number; readonly length?: number;
-  readonly at: P3; readonly normal: P3; readonly gap: number; readonly medium?: string; readonly gate?: string; readonly interference?: { readonly um: number; readonly pressure?: number; readonly src: string }; readonly by: string;
+  readonly at: P3; readonly normal: P3; readonly gap: number; /** the fit that left the gap, where an operation sized it (root 6) */ readonly fit?: Fit; readonly medium?: string; readonly gate?: string; readonly interference?: { readonly um: number; readonly pressure?: number; readonly src: string }; readonly by: string;
 }
 export interface RoomOf { readonly name: string; readonly c: P3; readonly r: number; readonly h: number; readonly open: boolean; /** a box-shaped room's width (x) and depth (z); r then its half-diagonal */ readonly size?: readonly [number, number] }
 
@@ -126,14 +126,45 @@ export class Joint implements JointRef {
 }
 export const joint = Joint.make;
 
-/** Fits by name, never a signed number: the gap each leaves, m (typical values), and for a transition or interference
- *  fit the most interference, drawn at basic size and carried on the face as a pressure. */
+/** Fits by name, never a signed number: the gap each leaves, m (typical values, one for every size: only where an
+ *  operation passes no size; root 6: the operations that do take it by the size from FIT_BANDS below), and for a
+ *  transition or interference fit the most interference, drawn at basic size and carried on the face as a pressure. */
 export const FITS = {
   touch: { gap: 0 }, tight: { gap: 0 }, slide: { gap: 0.00025 }, clear: { gap: 0.001 },
+  // (apart: not a running fit but things laid apart, 1 mm at every size (typical): a ball set beside what it will be
+  // shoved into, with room to gather speed; root 6 sized clear to H9/d9, 60 µm at 120 mm, and the ball started touching)
+  apart: { gap: 0.001 },
   'H7/m6': { gap: 0, tightUm: 12, src: 'ISO 286-2 m6 over 3 to 6 mm +4/+12 µm on H7 0/+12 µm, as interfaces.ts holds them (DEVIATION, IT_TABLE)' },
 } as const;
 export type Fit = keyof typeof FITS;
-const gapOf = (f: Fit): number => FITS[f].gap;
+/** A fit's clearance by the size it is applied to (root 6, decision 0029: before, one gap for every size, so a Ø100 axle
+ *  and a Ø8 one took the same 1 mm). ISO 286-1:2010's size steps, mm (over the step before, up to and including this),
+ *  and for each the least clearance on the diameter, µm, of the hole-basis fit the name stands for: clear H9/d9 (free
+ *  running), slide H7/g6 (sliding), tight H7/h6 (locational clearance). With H's lower deviation 0 that least clearance is
+ *  the shaft's fundamental deviation es (d's, g's; h's is 0, so tight is drawn touching at every size, as before; its most,
+ *  IT7 + IT6, is not drawn). To 500 mm: ISO 286-1:2010's fundamental deviations of d and g (its Table 3, as ISO 286-2
+ *  tabulates them), recalled this round, not read against the table again; they agree with what interfaces.ts holds (G
+ *  over 3 to 6 mm, +4 µm, the g's mirror). Over 500 to 3150 mm: recalled with less confidence, so typical; past 3150 mm
+ *  ISO 286 stops and the last step's is held, typical. The gap drawn is half the least clearance: the space each side
+ *  between the hole at its least and the shaft at its most (maximum material), so pieces within their tolerances never
+ *  meet. A fit on a flat (stack, onto) takes the band of the narrower width across the face of the smaller piece. */
+const FIT_STEPS = [3, 6, 10, 18, 30, 50, 80, 120, 180, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150] as const;
+export const FIT_BANDS: Readonly<Record<'clear' | 'slide' | 'tight', { readonly cls: string; readonly leastUm: readonly number[] }>> = {
+  clear: { cls: 'H9/d9', leastUm: [20, 30, 40, 50, 65, 80, 100, 120, 145, 170, 190, 210, 230, 260, 290, 320, 350, 390, 430, 480, 520] },
+  slide: { cls: 'H7/g6', leastUm: [2, 4, 5, 6, 7, 9, 10, 12, 14, 15, 17, 18, 20, 22, 24, 26, 28, 30, 32, 34, 38] },
+  tight: { cls: 'H7/h6', leastUm: FIT_STEPS.map(() => 0) },
+};
+/** The gap (m) a fit leaves at a size (m: a diameter, or a flat's width); with no size, FITS' one typical value (the
+ *  operations that do not pass a size yet: mesh, rack, belt, between, along, key). */
+const gapOf = (f: Fit, d?: number): number => {
+  const band = (FIT_BANDS as Record<string, { leastUm: readonly number[] } | undefined>)[f];
+  if (d === undefined || !band) return FITS[f].gap;
+  const k = FIT_STEPS.findIndex((x) => d * 1000 <= x + 1e-9);
+  return (band.leastUm[k < 0 ? FIT_STEPS.length - 1 : k]! * 1e-6) / 2;
+};
+export const fitGap = gapOf;
+/** A piece's size across a flat laid normal to `axis`: the narrower width of its bound across it. */
+const widthAcross = (p: Piece, axis: Axis): number => { const B = boundOf(p); return Math.min(...([0, 1, 2] as const).filter((k) => k !== axis).map((k) => B[1][k]! - B[0][k]!)); };
 // (for a pressure from an interference: E and ν, typical values, labelled so)
 const ELASTIC: Record<string, { E: number; nu: number }> = { 'steel-low': { E: 200e9, nu: 0.29 }, 'steel-alloy': { E: 205e9, nu: 0.29 }, copper: { E: 117e9, nu: 0.34 } };
 const MEDIUM = 'air'; // the surroundings' medium where nothing else is said (the default record)
@@ -407,12 +438,13 @@ function linePatch(p: Piece, q: Piece, axis: Axis, c: number, gap: number, tp: n
   return none;
 }
 const unit = (axis: Axis): V3 => { const n: V3 = [0, 0, 0]; n[axis] = 1; return n; };
-/** Faces between the pieces just below and just above a plane an operation laid them across. */
-function planeFaces(ps: Piece[], low: number[], high: number[], axis: Axis, by: string, fit?: Fit): Face[] {
-  const out: Face[] = [], g = fit ? gapOf(fit) : 0;
+/** Faces between the pieces just below and just above a plane an operation laid them across, across the gap its fit
+ *  left there (sized by the stack: root 6). */
+function planeFaces(ps: Piece[], low: number[], high: number[], axis: Axis, by: string, g = 0, fit?: Fit): Face[] {
+  const out: Face[] = [];
   for (const a of low) for (const b of high) {
     const p = ps[a]!, q = ps[b]!, top = primBox(p.solid.base)[1][axis], bot = primBox(q.solid.base)[0][axis], d = bot - top;
-    const write = (r: { area: number; length: number; at: V3 }, kind: 'contact' | 'gap', gap: number, gate?: string) => { if (r.area > 0 || r.length > 0) out.push({ a, b, kind, patch: r.area > 0 ? 'area' : 'line', area: r.area, ...(r.area > 0 ? {} : { length: r.length }), at: r.at, normal: unit(axis), gap, ...(kind === 'gap' || gate ? { medium: MEDIUM } : {}), ...(gate ? { gate } : {}), by }); };
+    const write = (r: { area: number; length: number; at: V3 }, kind: 'contact' | 'gap', gap: number, gate?: string) => { if (r.area > 0 || r.length > 0) out.push({ a, b, kind, patch: r.area > 0 ? 'area' : 'line', area: r.area, ...(r.area > 0 ? {} : { length: r.length }), at: r.at, normal: unit(axis), gap, ...(kind === 'gap' && fit ? { fit } : {}), ...(kind === 'gap' || gate ? { medium: MEDIUM } : {}), ...(gate ? { gate } : {}), by }); };
     if (Math.abs(d) < 1e-9) { write(planePatch(p, q, axis, top, 0), 'contact', 0); continue; }
     if (g > 0 && Math.abs(d - g) < 1e-9) { write(planePatch(p, q, axis, top, g), 'gap', g); continue; }
     // (a slide that closes the gap at the end of its travel: a gated face)
@@ -773,7 +805,7 @@ export class Block {
       // (a line gives the coordinates it has (x and z along y; all three turned); the rest by the end asked: decision 0029)
       const onLine = (k: Axis): number | undefined => (!l0 ? undefined : k === 0 ? l0.x : k === 2 ? l0.z : alongY(l0) ? undefined : l0.y!);
       const across = [0, 1, 2].map((k) => onLine(k as Axis) ?? (endAt(k as Axis) === 'lo' ? it.b.lo[k]! : endAt(k as Axis) === 'hi' ? it.b.hi[k]! : mid[k]!)), d0 = [0, 1, 2].map((k) => (k === axis ? 0 : level && k === 1 && axis !== 1 ? -it.b.lo[1] : -across[k]!)) as V3;
-      let s = Block.#shift(it.b, d0), touched: { a: number; q: number; c: number; at: [number, number]; spread: number } | undefined;
+      let s = Block.#shift(it.b, d0), touched: { a: number; q: number; c: number; at: [number, number]; spread: number } | undefined, g = 0;
       if (i > 0) {
         // (it comes to rest on what is in its path: the pieces before it whose bounds overlap its own across the stack's
         // axis (a bolt's head on its own hole's plate, not on another joint's head beside it); none in its path, on all)
@@ -788,7 +820,10 @@ export class Block {
         // between the mover's lowest material and the host's highest closes, so a turned, round or slanted piece comes down to
         // what it touches, not to its box; the bound rest only where no column has both materials. A cast within a micron
         // of a bound's rest is snapped to it, so a flat pair's faces are found exactly)
-        const g = gapOf(it.fit ?? 'touch'), cast = firstContact(A, B, axis), cands = pairs.length ? pairs : [byBound];
+        // (root 6: the fit's gap at the size across the face of the smaller of the pair that first touch; with none, of the
+        // narrower of the two blocks)
+        const cast = firstContact(A, B, axis), cands = pairs.length ? pairs : [byBound];
+        g = gapOf(it.fit ?? 'touch', cast ? Math.min(widthAcross(A[cast.p]!, axis), widthAcross(B[cast.q]!, axis)) : Math.min(...[A, B].map((ps) => Math.min(...other.map((k) => Math.max(...ps.map((p) => boundOf(p)[1][k]!)) - Math.min(...ps.map((p) => boundOf(p)[0][k]!)))))));
         const snap = cast ? cands.filter((c) => Math.abs(c - cast.d) < 1e-6).sort((x, y) => Math.abs(x - cast.d) - Math.abs(y - cast.d))[0] : undefined;
         d[axis] = (cast ? snap ?? cast.d : byBound) + g;
         if (cast) touched = { a: pieces.indexOf(A[cast.p]!), q: cast.q, c: cast.c, at: cast.at, spread: cast.spread };
@@ -797,7 +832,7 @@ export class Block {
         // comes down into the section's outline, resting where its circle first meets the outline from above (so it is above
         // every point of it), and touches along a line on each edge or corner it rests on; refused by name where, seated so,
         // it would meet another piece)
-        if (axis === 1 && s.pieces.length === 1 && !s.pieces[0]!.joint) { const rod = s.pieces[0]!.solid.base, g = gapOf(it.fit ?? 'touch');
+        if (axis === 1 && s.pieces.length === 1 && !s.pieces[0]!.joint) { const rod = s.pieces[0]!.solid.base;
           const seats = prev.map((k) => ({ k, seat: seatOn(rod, pieces[k]!.solid.base) })).filter((x): x is { k: number; seat: Seat } => !!x.seat);
           // (root 1: the column cast has already brought it down to the seat, within its tolerance; the seat's own height is
           // exact, so it is taken where it is lower, and the seat's line faces are written whenever the rod sits in it)
@@ -808,19 +843,19 @@ export class Block {
             if (down > -1e-7) seated = seats.filter((x) => on.has(x.k)).map((x) => ({ k: x.k, seat: x.seat })); } }
       } else { const d: V3 = [0, 0, 0]; d[axis] = -it.b.lo[axis]!; s = Block.#shift(Block.#seal(it.b.name, s.pieces, s.faces, s.rooms), d); }
       const base = pieces.length; pieces.push(...s.pieces); faces.push(...s.faces.map((f) => ({ ...f, a: f.a + base, b: f.b + base })));
-      for (const { k, seat } of seated) { const g = gapOf(it.fit ?? 'touch'), rb = primBox(s.pieces[0]!.solid.base), sb = primBox(pieces[k]!.solid.base), z0 = Math.max(rb[0][2], sb[0][2]), z1 = Math.min(rb[1][2], sb[1][2]);
-        for (const t of seat.touch) faces.push({ a: k, b: base, kind: g > 0 ? 'gap' : 'contact', patch: 'line', area: 0, length: Math.max(0, z1 - z0), at: [t.at[0] + (t.n[0] * g) / 2, t.at[1] + (t.n[1] * g) / 2, (z0 + z1) / 2], normal: [t.n[0], t.n[1], 0], gap: g, ...(g > 0 ? { medium: MEDIUM } : {}), by: `${name}: ${s.pieces[0]!.name} seated in ${pieces[k]!.name}'s outline` }); }
+      for (const { k, seat } of seated) { const rb = primBox(s.pieces[0]!.solid.base), sb = primBox(pieces[k]!.solid.base), z0 = Math.max(rb[0][2], sb[0][2]), z1 = Math.min(rb[1][2], sb[1][2]);
+        for (const t of seat.touch) faces.push({ a: k, b: base, kind: g > 0 ? 'gap' : 'contact', patch: 'line', area: 0, length: Math.max(0, z1 - z0), at: [t.at[0] + (t.n[0] * g) / 2, t.at[1] + (t.n[1] * g) / 2, (z0 + z1) / 2], normal: [t.n[0], t.n[1], 0], gap: g, ...(g > 0 ? { fit: it.fit, medium: MEDIUM } : {}), by: `${name}: ${s.pieces[0]!.name} seated in ${pieces[k]!.name}'s outline` }); }
       seated = [];
       // (a room open upward in one block of a stack along y is closed by what comes after it)
       rooms.push(...s.rooms.map((r) => (axis === 1 && i < items.length - 1 ? { ...r, open: false } : r)));
       const here = s.pieces.map((_, j) => base + j);
-      if (i > 0) faces.push(...planeFaces(pieces, prev, here, axis, `${name}: stacked`, it.fit ?? 'touch'));
+      if (i > 0) faces.push(...planeFaces(pieces, prev, here, axis, `${name}: stacked`, g, it.fit));
       // (root 1: the pair of the column that closed first, where nothing above wrote a face for it (a slope on a wall's
       // corner, a sphere on a plate): the patch at that height, else a line at the column's point as long as the columns
       // that closed together spread)
-      if (touched && !faces.some((f) => f.a === touched!.a && f.b === base + touched!.q)) { const g = gapOf(it.fit ?? 'touch'), p = pieces[touched.a]!, q = pieces[base + touched.q]!, w = planePatch(p, q, axis, touched.c, g);
+      if (touched && !faces.some((f) => f.a === touched!.a && f.b === base + touched!.q)) { const p = pieces[touched.a]!, q = pieces[base + touched.q]!, w = planePatch(p, q, axis, touched.c, g);
         const r = w.area > 0 || w.length > 0 ? w : { area: 0, length: touched.spread, at: pt(axis, touched.c + g / 2, touched.at[0], touched.at[1]) };
-        faces.push({ a: touched.a, b: base + touched.q, kind: g > 0 ? 'gap' : 'contact', patch: r.area > 0 ? 'area' : 'line', area: r.area, ...(r.area > 0 ? {} : { length: r.length }), at: r.at, normal: unit(axis), gap: g, ...(g > 0 ? { medium: MEDIUM } : {}), by: `${name}: first contact` }); }
+        faces.push({ a: touched.a, b: base + touched.q, kind: g > 0 ? 'gap' : 'contact', patch: r.area > 0 ? 'area' : 'line', area: r.area, ...(r.area > 0 ? {} : { length: r.length }), at: r.at, normal: unit(axis), gap: g, ...(g > 0 ? { fit: it.fit, medium: MEDIUM } : {}), by: `${name}: first contact` }); }
       prev = [...prev, ...here];
     }
     return Block.#seal(name, pieces, faces, rooms);
@@ -831,7 +866,8 @@ export class Block {
    *  child along its axis kept open through its ends. Faces round the cavity. */
   static around(name: string, mat: string, child: Block, wall: number, ends: number, fit: Fit = 'clear', open = false): Block {
     Block.#is(child); sizes(name, [wall, ends]); if (!(fit in FITS)) throw new Error(`${name}: a fit by name`);
-    const g = gapOf(fit), cx = (child.lo[0] + child.hi[0]) / 2, cz = (child.lo[2] + child.hi[2]) / 2, rc = Math.max(...child.pieces.map((p) => reach(sweepOf(p), cx, cz))) + g;
+    // (root 6: the fit's gap at the diameter the child reaches round its axis)
+    const cx = (child.lo[0] + child.hi[0]) / 2, cz = (child.lo[2] + child.hi[2]) / 2, rc0 = Math.max(...child.pieces.map((p) => reach(sweepOf(p), cx, cz))), g = gapOf(fit, 2 * rc0), rc = rc0 + g;
     const y0 = child.lo[1] - g - ends, y1 = open ? child.hi[1] : child.hi[1] + g + ends, h = y1 - y0;
     // (a bore that runs through the child along its axis (a piezo ring's, a bearing's, a coil's) is kept open through the
     // host's ends, as a moulded sensor's bolt hole is: what every child piece leaves free round the axis, cut through both
@@ -844,23 +880,23 @@ export class Block {
     const pieces = [host, ...child.pieces], faces: Face[] = child.faces.map((f) => ({ ...f, a: f.a + 1, b: f.b + 1 })), kind = g > 0 ? 'gap' : 'contact';
     child.pieces.forEach((p, i) => {
       const w = roundFace(p, cx, cz, rc - g, child.lo[1], child.hi[1], true);
-      if (w.area > 0 || w.length > 0) faces.push({ a: 0, b: i + 1, kind, patch: w.area > 0 ? 'area' : 'line', area: w.area, ...(w.area > 0 ? {} : { length: w.length }), at: w.at, normal: [1, 0, 0], gap: g, ...(g > 0 ? { medium: MEDIUM } : {}), by: `${name}: round its cavity` });
+      if (w.area > 0 || w.length > 0) faces.push({ a: 0, b: i + 1, kind, patch: w.area > 0 ? 'area' : 'line', area: w.area, ...(w.area > 0 ? {} : { length: w.length }), at: w.at, normal: [1, 0, 0], gap: g, ...(g > 0 ? { fit, medium: MEDIUM } : {}), by: `${name}: round its cavity` });
     });
     // (its floor, and its lid where it is closed: as a plane each, the host on one side)
-    const floor = Block.#plane(pieces, 0, child.pieces.map((_, i) => i + 1), 1, y0 + ends, g, `${name}: its floor`, true);
-    const lid = open ? [] : Block.#plane(pieces, 0, child.pieces.map((_, i) => i + 1), 1, y1 - ends, g, `${name}: its lid`, false);
+    const floor = Block.#plane(pieces, 0, child.pieces.map((_, i) => i + 1), 1, y0 + ends, g, `${name}: its floor`, true, fit);
+    const lid = open ? [] : Block.#plane(pieces, 0, child.pieces.map((_, i) => i + 1), 1, y1 - ends, g, `${name}: its lid`, false, fit);
     return Block.#seal(name, pieces, [...faces, ...floor, ...lid], child.rooms.map((r) => ({ ...r, open: false })));
   }
   // (a host's own face on the plane y = c, against pieces beyond it (above it when up), across a gap g; a slide reaching
   // it at the end of its travel, a gated face)
-  static #plane(ps: Piece[], h: number, kids: number[], axis: Axis, c: number, g: number, by: string, up: boolean): Face[] {
+  static #plane(ps: Piece[], h: number, kids: number[], axis: Axis, c: number, g: number, by: string, up: boolean, fit?: Fit): Face[] {
     const out: Face[] = [];
     for (const k of kids) { const p = ps[k]!, B = primBox(p.solid.base), near = up ? B[0][1] - c : c - B[1][1];
       const sample = (t: number, gap: number) => { const bb = boundOf(p); let n = 0, su = 0, sv = 0; const du = (bb[1][0] - bb[0][0]) / N, dv = (bb[1][2] - bb[0][2]) / N;
         for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) { const u = bb[0][0] + (a + 0.5) * du, v = bb[0][2] + (b + 0.5) * dv, y = up ? c + gap + EPS : c - gap - EPS;
           if (inPiece(p, u, y, v, t) && inSolid(ps[h]!.solid, u, up ? c - EPS : c + EPS, v)) { n++; su += u; sv += v; } }
         return n ? { area: n * du * dv, at: [su / n, c + (up ? gap / 2 : -gap / 2), sv / n] as V3 } : null; };
-      if (Math.abs(near - g) < 1e-9) { const r = sample(0, g); if (r) out.push({ a: h, b: k, kind: g > 0 ? 'gap' : 'contact', patch: 'area', area: r.area, at: r.at, normal: [0, up ? 1 : -1, 0], gap: g, ...(g > 0 ? { medium: MEDIUM } : {}), by }); }
+      if (Math.abs(near - g) < 1e-9) { const r = sample(0, g); if (r) out.push({ a: h, b: k, kind: g > 0 ? 'gap' : 'contact', patch: 'area', area: r.area, at: r.at, normal: [0, up ? 1 : -1, 0], gap: g, ...(g > 0 ? { ...(fit ? { fit } : {}), medium: MEDIUM } : {}), by }); }
       else if (!up && p.joint?.slide && Math.abs(near - p.joint.slide - g) < 1e-9) { const r = sample(1, g); if (r) out.push({ a: h, b: k, kind: 'contact', patch: 'area', area: r.area, at: r.at, normal: [0, -1, 0], gap: p.joint.slide, medium: MEDIUM, gate: p.joint.name, by }); }
     }
     return out;
@@ -898,10 +934,12 @@ export class Block {
       if (d[1] < -1e-9) { const up = Block.#turned(passer, turnOf(0, 180), Block.#mid(passer), false); FLIPPED.add(up); if (MADE.has(passer)) MADE.set(up, MADE.get(passer)!);
         return Block.#inFrame(b, d, 'through', passer, (h) => Block.through(h, up, { ...on, from: on.from === 'lo' ? 'hi' : 'lo' }, fit)); }
       return Block.#inFrame(b, d, 'through', passer, (h) => Block.through(h, passer, on, fit)); }
-    const g = gapOf(fit), hb = primBox(o.p.solid.base), y0 = on.from === 'lo' ? hb[0][1] : hb[1][1];
+    const hb = primBox(o.p.solid.base), y0 = on.from === 'lo' ? hb[0][1] : hb[1][1];
     const ak = MADE.get(passer), ac = ak !== undefined ? passer.pieces[ak]!.solid.base.c : undefined;
     const pc = ac ? [ac[0], ac[2]] : [(passer.lo[0] + passer.hi[0]) / 2, (passer.lo[2] + passer.hi[2]) / 2], P = Block.#shift(passer, [o.l.x - pc[0]!, on.from === 'lo' ? y0 - passer.lo[1] : y0 - passer.hi[1], o.l.z - pc[1]!]);
-    const rq = P.pieces.map((q) => reach(sweepOf(q), o.l.x, o.l.z)), wide = rq.map((r) => r + g > o.l.slot + 1e-12);
+    // (root 6: the fit's gap at the passer's size on the line, its narrowest piece's there (a bolt's shank, not its head): a
+    // round piece's diameter, any other's narrower width across the line)
+    const rq = P.pieces.map((q) => reach(sweepOf(q), o.l.x, o.l.z)), g = gapOf(fit, Math.min(...P.pieces.map((q, k) => { const B = sweepOf(q); return roundish(B) && upright(B) ? 2 * rq[k]! : widthAcross(q, 1); }))), wide = rq.map((r) => r + g > o.l.slot + 1e-12);
     const pb = P.pieces.map(boundOf), all: [V3, V3] = [[0, 1, 2].map((k) => Math.min(...pb.map((x) => x[0][k]!))) as V3, [0, 1, 2].map((k) => Math.max(...pb.map((x) => x[1][k]!))) as V3];
     // (a box passer's cut is its whole box grown by the gap: a case's cavity and a section's outline are dropped, so the
     // cut holds the gap all round them too (a red team, 2026-11-05: a case kept its wall, a section no gap))
@@ -948,12 +986,15 @@ export class Block {
         if (bore && !between && !(w.area > 0 || w.length > 0)) { const sb = primBox(s.solid.base), lo = Math.max(sb[0][1], qb[0][1]), hi = Math.min(sb[1][1], qb[1][1]);
           if (hi > lo) faces.push({ a: j, b: Q, kind: 'gap', patch: 'area', area: 2 * Math.PI * (B as { r: number }).r * (hi - lo), at: [B.c[0], (lo + hi) / 2, B.c[2]], normal: [1, 0, 0], gap: bore, medium: MEDIUM, by: `${q.name} in the bore of ${s.name}` }); }
         // (or in a hole of the piece whose line it is, wider than it: across the clearance the hole leaves, its wall where the
-        // piece has material round it (an insert in an oversized hole, a pin in a clearance hole: decision 0026))
-        const op = o.l.opening, inHole = j === o.k && op !== undefined && !bore && !(w.area > 0 || w.length > 0) && roundish(B) && upright(B) && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-12 && op > B.r + g + 1e-12;
+        // piece has material round it (an insert in an oversized hole, a pin in a clearance hole: decision 0026); root 6: or in
+        // a hole of another piece it crosses, offered at the same point (a bolt's shank in each ply's clearance hole, which a
+        // constant gap of the clearance's size used to meet as its wall)
+        const own = j === o.k ? o.l : s.lines.find((l) => alongY(l) && l.opening !== undefined && Math.hypot(l.x - o.l.x, l.z - o.l.z) < 1e-12);
+        const op = own?.opening, inHole = !!own && op !== undefined && !bore && !(w.area > 0 || w.length > 0) && roundish(B) && upright(B) && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-12 && op > B.r + g + 1e-12;
         if (inHole) { const hw = roundFace(s, o.l.x, o.l.z, op, qb[0][1], qb[1][1], false);
           if (hw.area > 0) faces.push({ a: j, b: Q, kind: 'gap', patch: 'area', area: hw.area * (B as { r: number }).r / op, at: hw.at, normal: [1, 0, 0], gap: op - (B as { r: number }).r, medium: MEDIUM, by: `${q.name} in the hole of ${s.name}` }); }
         if (w.area > 0 || w.length > 0) { const it = pressureOf(fit, 2 * (!boxy(B) ? B.r : Math.min(B.size[0], B.size[2]) / 2), 2 * outsideNear(s.solid.base, B.c[0], B.c[2]), q.mat, s.mat);
-          faces.push({ a: j, b: Q, kind, patch: w.area > 0 ? 'area' : 'line', area: w.area, ...(w.area > 0 ? {} : { length: w.length }), at: w.at, normal: [1, 0, 0], gap: g, ...(g > 0 ? { medium: MEDIUM } : {}), ...(it ? { interference: it } : {}), by: `${q.name} through ${s.name}` }); }
+          faces.push({ a: j, b: Q, kind, patch: w.area > 0 ? 'area' : 'line', area: w.area, ...(w.area > 0 ? {} : { length: w.length }), at: w.at, normal: [1, 0, 0], gap: g, ...(g > 0 ? { fit, medium: MEDIUM } : {}), ...(it ? { interference: it } : {}), by: `${q.name} through ${s.name}` }); }
       });
       // (its ends against what lies beyond them: a head under its plies, a stud's end where a contact closes on it)
       const nearXZ = (j: number) => { const B = boundOf(pieces[j]!); return B[0][0] < qb[1][0] && qb[0][0] < B[1][0] && B[0][2] < qb[1][2] && qb[0][2] < B[1][2]; }, cand = pieces.map((_, j) => j).filter(nearXZ);
@@ -983,7 +1024,9 @@ export class Block {
     Block.#is(host); Block.#is(child); if (!(fit in FITS)) throw new Error(`into: a fit by name`);
     const nm = namedIn(host, port, 'room', 'into'); if (nm.port !== port) return noted(Block.into(host, nm.port, child, fit), nm.note);
     const r = host.rooms.find((x) => x.name === port); if (!r) throw new Error(`into: ${host.name} offers no room ${port} (it has ${host.rooms.map((x) => x.name).join(', ') || 'none'})`);
-    const g = gapOf(fit), cx = (child.lo[0] + child.hi[0]) / 2, cz = (child.lo[2] + child.hi[2]) / 2, rho = Math.max(...child.pieces.map((p) => reach(sweepOf(p), cx, cz))), tall = child.hi[1] - child.lo[1];
+    // (root 6: the fit's gap at the child's diameter round the room's axis, or in a box-shaped room its narrower width)
+    const cx = (child.lo[0] + child.hi[0]) / 2, cz = (child.lo[2] + child.hi[2]) / 2, rho = Math.max(...child.pieces.map((p) => reach(sweepOf(p), cx, cz))), tall = child.hi[1] - child.lo[1];
+    const g = gapOf(fit, r.size ? Math.min(child.hi[0] - child.lo[0], child.hi[2] - child.lo[2]) : 2 * rho);
     if (r.size) { const cw = child.hi[0] - child.lo[0] + 2 * g, cd = child.hi[2] - child.lo[2] + 2 * g;
       if (cw > r.size[0] + 1e-12 || cd > r.size[1] + 1e-12) throw new Error(`no room in ${port}: the ${child.name} needs ${(cw * 1000).toFixed(2)} × ${(cd * 1000).toFixed(2)} mm; it gives ${(r.size[0] * 1000).toFixed(2)} × ${(r.size[1] * 1000).toFixed(2)} mm`); }
     else if (rho + g > r.r + 1e-12) throw new Error(`no room in ${port}: the ${child.name} needs ${((rho + g) * 2000).toFixed(2)} mm across; it gives ${(r.r * 2000).toFixed(2)} mm`);
@@ -997,8 +1040,8 @@ export class Block {
     const rim = floor + r.h; if (r.open && chi[1] > rim + 1e-12) { const col: [V3, V3] = [[clo[0], rim, clo[2]], chi];
       const hit = host.pieces.find((p, i) => i !== holder && meets(boundOf(p), col)); if (hit) throw new Error(`no room in ${port}: the ${child.name} stands above its rim and would meet the ${hit.name}`); }
     C.pieces.forEach((p, i) => { const w = r.size ? { area: 0, length: 0, at: [0, 0, 0] as V3 } : roundFace(p, r.c[0], r.c[2], r.r - g, floor, floor + r.h, true);
-      if (w.area > 0 || w.length > 0) faces.push({ a: holder, b: n + i, kind: g > 0 ? 'gap' : 'contact', patch: w.area > 0 ? 'area' : 'line', area: w.area, ...(w.area > 0 ? {} : { length: w.length }), at: w.at, normal: [1, 0, 0], gap: g, ...(g > 0 ? { medium: MEDIUM } : {}), by: `${child.name} into ${port}` }); });
-    faces.push(...Block.#plane(pieces, holder, C.pieces.map((_, i) => n + i), 1, floor, g, `${child.name} on ${port}'s floor`, true));
+      if (w.area > 0 || w.length > 0) faces.push({ a: holder, b: n + i, kind: g > 0 ? 'gap' : 'contact', patch: w.area > 0 ? 'area' : 'line', area: w.area, ...(w.area > 0 ? {} : { length: w.length }), at: w.at, normal: [1, 0, 0], gap: g, ...(g > 0 ? { fit, medium: MEDIUM } : {}), by: `${child.name} into ${port}` }); });
+    faces.push(...Block.#plane(pieces, holder, C.pieces.map((_, i) => n + i), 1, floor, g, `${child.name} on ${port}'s floor`, true, fit));
     return Block.#seal(host.name, pieces, faces, host.rooms.filter((x) => x !== r).concat(C.rooms.map((x) => ({ ...x, open: x.open && r.open }))));
   }
   /** onto: into the space beyond a face of a block's bound, on a line it offers there (or its middle, or, `end` lo or
@@ -1041,7 +1084,8 @@ export class Block {
     if (!alongY(o.l)) return Block.#inFrame(host, o.l.dir!, 'over', sleeve, (h) => Block.over(h, port, sleeve, where, fit));
     // (root 3: a section laid as made has its axis where its outline's line runs, not at its bound's middle)
     const ap = MADE.has(sleeve) ? sleeve.pieces[MADE.get(sleeve)!]! : undefined, al = ap && boxy(ap.solid.base) ? ap.lines.find((l) => l.port.endsWith('/axis') && alongY(l)) : undefined, ac: P3 | undefined = al ? [al.x, 0, al.z] : ap?.solid.base.c;
-    const g = gapOf(fit), cx = ac ? ac[0] : (sleeve.lo[0] + sleeve.hi[0]) / 2, cz = ac ? ac[2] : (sleeve.lo[2] + sleeve.hi[2]) / 2, rs = reach(sweepOf(o.p), o.l.x, o.l.z);
+    // (root 6: the fit's gap at the diameter of what is on the line)
+    const rs = reach(sweepOf(o.p), o.l.x, o.l.z), g = gapOf(fit, 2 * rs), cx = ac ? ac[0] : (sleeve.lo[0] + sleeve.hi[0]) / 2, cz = ac ? ac[2] : (sleeve.lo[2] + sleeve.hi[2]) / 2;
     // (its bore: the least, over its pieces, of the room each leaves free round the sleeve's axis: one round about the axis
     // its own bore; one off it (a bearing's balls and cage between its rings) as far as its nearest side; one on the axis
     // with none, nothing; root 3: read from each solid with its cuts, so a section's hole polygon (a sprocket, a gear drawn
@@ -1096,7 +1140,7 @@ export class Block {
     S.pieces.forEach((q, i) => { const qb = primBox(q.solid.base), lo = Math.max(qb[0][1], sb[0][1]), hi = Math.min(qb[1][1], sb[1][1]);
       // (a face only for a piece round about the line: a bearing's inner ring on the shaft, not its balls beside it)
       // (root 3: and a section or a box round the line, its bore read from its solid: a sprocket, a gear, a plate)
-      const B = q.solid.base; if (hi > lo && ((roundish(B) && upright(B) && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-9) || (boxy(B) && !q.joint && roundAbout(q, o.l.x, o.l.z)))) faces.push({ a: o.k, b: n + i, kind: ge > 0 ? 'gap' : 'contact', patch: 'area', area: 2 * Math.PI * rs * (hi - lo), at: [o.l.x, (lo + hi) / 2, o.l.z], normal: [1, 0, 0], gap: ge, ...(ge > 0 ? { medium: MEDIUM } : {}), by: `${sleeve.name} over ${port}` }); });
+      const B = q.solid.base; if (hi > lo && ((roundish(B) && upright(B) && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-9) || (boxy(B) && !q.joint && roundAbout(q, o.l.x, o.l.z)))) faces.push({ a: o.k, b: n + i, kind: ge > 0 ? 'gap' : 'contact', patch: 'area', area: 2 * Math.PI * rs * (hi - lo), at: [o.l.x, (lo + hi) / 2, o.l.z], normal: [1, 0, 0], gap: ge, ...(ge > 0 ? { fit, medium: MEDIUM } : {}), by: `${sleeve.name} over ${port}` }); });
     return Block.#seal(host.name, [...host.pieces, ...S.pieces], faces, [...host.rooms]);
   }
   /** Two spur gears meshed (the user, 2026-11-06: a loose gear on a rod, a second meshing it): the gear block put beside
@@ -1205,6 +1249,9 @@ export class Block {
    *  the room the copies' solids leave round it (freeAbout). */
   static ring(name: string, b: Block, n: number, R: number, fit: Fit = 'clear', out = false): Block {
     Block.#is(b); sizes(name, [n, R]); if (!Number.isInteger(n) || n < 2) throw new Error(`${name}: a ring of two or more`); const g = gapOf(fit); if (!(g > 0)) throw new Error(`${name}: a ring's copies stand apart: a fit with a gap`);
+    // (root 6: a ring keeps FITS' one gap, not the band at its copy's size: ringClash reads the solids down sampled columns
+    // (root 1), and a gap of microns is finer than their spacing: sixteen blades whose roots overlap (by microns, worked by
+    // hand) were let in at the sized gap, the test's 'sixteen at 60 mm: no room')
     const cx = (b.lo[0] + b.hi[0]) / 2, cz = (b.lo[2] + b.hi[2]) / 2, half = R * Math.sin(Math.PI / n);
     const j = out ? b.pieces.find((p) => p.joint) : undefined; if (j) throw new Error(`${name}: the ${j.name} is on a joint (${j.joint!.name}): copies turned to face out are not made on a joint yet`);
     const pieces: Piece[] = [], faces: Face[] = [], M: P3 = [cx, (b.lo[1] + b.hi[1]) / 2, cz];

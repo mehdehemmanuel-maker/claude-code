@@ -3141,3 +3141,4 @@ fixing.
   carries a shaft line; the split call's assembly menu by domain, under 3,000 characters.
 - **Not done (relaunched):** root 6 (fits by size) and the contact sheet's blank pictures. Touched tests: 11 passed
   (`npx vitest run tests/nexus/domains.test.ts -t "rests on its first contact|ring copies|vehicle|things as blocks|..."`).
+- **Wave 10b** (three builders, 34 min): fits by size (root 6: ISO 286 bands, `npx vitest run tests/nexus/domains.test.ts -t "fits by size"`: a clear wheel on a Ø8 axle 20 µm a side, on a Ø100 axle 60 µm); the contact sheet's pictures real (71 of 78 assemblies; the 7 without one make no block alone); root 7 needed nothing more. A fit `apart` (1 mm, typical) for the steel-ball board, which the sized clear fit had left touching its tower.
