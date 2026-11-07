@@ -61,6 +61,7 @@
 // two pieces laid against a turned plane can both hold a point within about 1e-18 m of it (each rounded apart); a tilt
 // under 1e-12 in a direction cosine is taken as upright whatever the length.
 import type { Cut, Part, Shape } from './kits';
+import { stationAt, type Station } from './form';
 
 export type P3 = readonly [number, number, number];
 type V3 = [number, number, number];
@@ -91,7 +92,12 @@ export type Prim = Turned & (
   // above zero): a wheel, a knob, a stepped shaft, a cone or frustum. Its region exactly: the points whose distance from
   // its axis and height lie inside the outline (even-odd))
   | { readonly k: 'sphere'; readonly c: P3; readonly r: number; readonly h: number; readonly ri?: number }
-  | { readonly k: 'lathe'; readonly c: P3; readonly pts: readonly (readonly [number, number])[]; readonly r: number; readonly h: number; readonly ri?: number });
+  | { readonly k: 'lathe'; readonly c: P3; readonly pts: readonly (readonly [number, number])[]; readonly r: number; readonly h: number; readonly ri?: number }
+  // (a loft (decision 0029): a body through its stations along x (form.ts: each a half-width w, a bottom lo and a top hi
+  // about c, its bound's middle), size its box. Its region: at each x, the section eased between the stations either side,
+  // read as its rectangle (|z| within w, y between lo and hi): a superset of the superellipse drawn and weighed, exact where
+  // a station's n is large. Everything that measures room reads it as its box, as it reads a section)
+  | { readonly k: 'loft'; readonly c: P3; readonly st: readonly Station[]; readonly size: P3 });
 type Turned = { readonly frame?: M3 };
 /** A solid: its base less the union of what was taken out of it. */
 export interface Solid { readonly base: Prim; readonly minus: readonly Prim[] }
@@ -166,7 +172,9 @@ const local = (p: Prim, x: number, y: number, z: number): V3 => { const d: V3 = 
 const upright = (p: Prim): boolean => !p.frame || (Math.abs(p.frame[1]) < 1e-12 && Math.abs(p.frame[7]) < 1e-12);
 // (a line along +y as it is: its x and z are where it runs)
 const alongY = (l: Line): boolean => !l.dir || (Math.abs(l.dir[0]) < 1e-9 && Math.abs(l.dir[2]) < 1e-9 && l.dir[1] > 0);
-const roundish = (p: Prim): p is Extract<Prim, { r: number }> => p.k !== 'box' && p.k !== 'bend';
+const roundish = (p: Prim): p is Extract<Prim, { r: number }> => p.k !== 'box' && p.k !== 'bend' && p.k !== 'loft';
+// (a solid read by its box: a box, or a loft (its box the bound of its stations))
+const boxy = (p: Prim): p is Extract<Prim, { size: P3 }> => p.k === 'box' || p.k === 'loft';
 // (a round solid of one radius all along its height: its side is the cylinder of r (a sphere's and a turned profile's are not))
 const evenRound = (p: Prim): p is Extract<Prim, { r: number }> => roundish(p) && p.k !== 'sphere' && p.k !== 'lathe';
 /** What a round solid leaves free round its own axis (its bore), if anything. */
@@ -242,7 +250,7 @@ const MIDS = new WeakMap<object, V3>();
 /** Where a bend's bound's middle is from the centre it is bent round, in its own frame. */
 const bendMid = (p: { readonly R: number; readonly ro: number; readonly a: number }): V3 => { const was = MIDS.get(p); if (was) return was; const [lo, hi] = bendBox(p.R, p.ro, p.a), m: V3 = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, 0]; MIDS.set(p, m); return m; };
 /** Half a solid's own box (a superset of it), in its own frame. */
-const halfOf = (p: Prim): V3 => { if (p.k === 'box') return [p.size[0] / 2, p.size[1] / 2, p.size[2] / 2]; if (p.k === 'bend') { const [lo, hi] = bendBox(p.R, p.ro, p.a); return [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, p.ro]; } return [p.r, p.h / 2, p.r]; };
+const halfOf = (p: Prim): V3 => { if (boxy(p)) return [p.size[0] / 2, p.size[1] / 2, p.size[2] / 2]; if (p.k === 'bend') { const [lo, hi] = bendBox(p.R, p.ro, p.a); return [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, p.ro]; } return [p.r, p.h / 2, p.r]; };
 /** The box round a solid: a turned round one's exactly (its axis u: |u_k| h/2 + r √(1 − u_k²)), a turned box's or
  *  bend's the box round its own box turned (a superset). */
 export const primBox = (p: Prim): [V3, V3] => {
@@ -258,12 +266,12 @@ const shiftPrim = (p: Prim, d: P3): Prim => ({ ...p, c: add(p.c, d) }) as Prim;
  *  cavity and a section's outline dropped, so the gap holds all round them too), a solid turned profile its own outline, a
  *  bend its tube, any other round one the cylinder of its radius (its bore kept, less the gap). Decision 0029: hoisted
  *  out of Through so a member laid between two points, copies along a line and a key cut the same room. */
-const grownBy = (m: Prim, g: number): Prim => (m.k === 'box' ? { k: 'box', c: m.c, size: [m.size[0] + 2 * g, m.size[1], m.size[2] + 2 * g], ...(m.frame ? { frame: m.frame } : {}) } : m.k === 'bend' ? { ...m, ro: m.ro + g, ...(m.ri !== undefined ? { ri: Math.max(0, m.ri - g) } : {}) }
+const grownBy = (m: Prim, g: number): Prim => (boxy(m) ? { k: 'box', c: m.c, size: [m.size[0] + 2 * g, m.size[1], m.size[2] + 2 * g], ...(m.frame ? { frame: m.frame } : {}) } : m.k === 'bend' ? { ...m, ro: m.ro + g, ...(m.ri !== undefined ? { ri: Math.max(0, m.ri - g) } : {}) }
   : m.k === 'lathe' && m.ri === undefined ? { ...m, pts: m.pts.map((q) => [q[0] > 1e-12 ? q[0] + g : 0, q[1]] as const), r: m.r + g }
   : { k: 'cyl', c: m.c, r: m.r + g, h: m.h, ...((m.k === 'cyl' || m.k === 'coil' || m.k === 'hex') && m.ri !== undefined ? { ri: Math.max(0, m.ri - g) } : {}), ...(m.frame ? { frame: m.frame } : {}) });
 /** The area of a solid's section across its own axis (y): a rod's disc, a tube's ring, a box's footprint; a rough size for
  *  a face written by a member laid between two points or a copy let into what it crosses (decision 0029). */
-const sectionArea = (m: Prim): number => (m.k === 'box' ? m.size[0] * m.size[2] : m.k === 'bend' ? Math.PI * (m.ro * m.ro - (m.ri ?? 0) ** 2) : Math.PI * (m.r * m.r - (boreOf(m) ?? 0) ** 2));
+const sectionArea = (m: Prim): number => (boxy(m) ? m.size[0] * m.size[2] : m.k === 'bend' ? Math.PI * (m.ro * m.ro - (m.ri ?? 0) ** 2) : Math.PI * (m.r * m.r - (boreOf(m) ?? 0) ** 2));
 const inPrim = (p: Prim, x: number, y: number, z: number): boolean => {
   const [dx, dy, dz] = local(p, x, y, z);
   if (p.k === 'box') { if (!(Math.abs(dx) < p.size[0] / 2 && Math.abs(dy) < p.size[1] / 2 && Math.abs(dz) < p.size[2] / 2)) return false;
@@ -271,6 +279,8 @@ const inPrim = (p: Prim, x: number, y: number, z: number): boolean => {
     return !p.sect || inPolygon(dx, dy, p.sect); }
   if (p.k === 'bend') { const m = bendMid(p), u = dx + m[0], v = dy + m[1], phi = Math.atan2(v, u); if (!(phi > 0 && phi < p.a)) return false;
     const q = Math.hypot(Math.hypot(u, v) - p.R, dz); return q < p.ro && (p.ri === undefined || q > p.ri); }
+  // (a loft: its section where it is at x, eased between its stations (form.ts stationAt), read as its rectangle)
+  if (p.k === 'loft') { const s = stationAt({ st: p.st as Station[] }, dx); return !!s && Math.abs(dz - (s.z ?? 0)) < s.w && dy > s.lo && dy < s.hi; }
   const rho = Math.hypot(dx, dz); if (!(rho < p.r && Math.abs(dy) < p.h / 2)) return false;
   if (p.k === 'cyl') return p.ri === undefined || rho > p.ri;
   if (p.k === 'coil') return rho > p.ri;
@@ -300,9 +310,9 @@ const reach = (p: Prim, x: number, z: number): number => {
 const sweepOf = (p: Piece): Prim => {
   const b = p.solid.base, j = p.joint; if (!j) return b;
   if (b.frame || b.k === 'bend') throw new Error(`the ${p.name} is turned or bent and on a joint (${j.name}): not made yet`);
-  if (j.slide) return b.k === 'box' ? { k: 'box', c: [b.c[0], b.c[1] + j.slide / 2, b.c[2]], size: [b.size[0], b.size[1] + j.slide, b.size[2]] }
+  if (j.slide) return boxy(b) ? { k: 'box', c: [b.c[0], b.c[1] + j.slide / 2, b.c[2]], size: [b.size[0], b.size[1] + j.slide, b.size[2]] }
     : b.k === 'cyl' ? { ...b, c: [b.c[0], b.c[1] + j.slide / 2, b.c[2]], h: b.h + j.slide } : { k: 'cyl', c: [b.c[0], b.c[1] + j.slide / 2, b.c[2]], r: b.r, h: b.h + j.slide };
-  if (j?.turn) { const [ax, az] = p.axis!; if (b.k !== 'box' && Math.hypot(b.c[0] - ax, b.c[2] - az) < 1e-12) return b; return { k: 'cyl', c: [ax, b.c[1], az], r: reach(b, ax, az), h: b.k === 'box' ? b.size[1] : b.h }; }
+  if (j?.turn) { const [ax, az] = p.axis!; if (!boxy(b) && Math.hypot(b.c[0] - ax, b.c[2] - az) < 1e-12) return b; return { k: 'cyl', c: [ax, b.c[1], az], r: reach(b, ax, az), h: boxy(b) ? b.size[1] : b.h }; }
   return b;
 };
 export const boundOf = (p: Piece): [V3, V3] => primBox(sweepOf(p));
@@ -379,6 +389,134 @@ function planeFaces(ps: Piece[], low: number[], high: number[], axis: Axis, by: 
     if (axis === 1 && p.joint?.slide && !coMove(p, q) && Math.abs(d - p.joint.slide) < 1e-9) write(planePatch(p, q, axis, top + p.joint.slide, 0, 1), 'contact', p.joint.slide, p.joint.name);
   }
   return out;
+}
+
+// ---- root 1 (decision 0029, plan/FIX-PLAN.md): a block laid on another rests where their solids first touch ------------
+/** A piece's material against the other set: its sweep where it moves on its own against any of them, else its solid. */
+function materialOf(r: Piece, others: readonly Piece[]): { box: [V3, V3]; thin: number; inside: (x: number, y: number, z: number) => boolean } {
+  if (r.joint && others.some((o) => !coMove(r, o))) { const s = sweepOf(r); return { box: primBox(s), thin: thinnest(s), inside: (x, y, z) => inPrim(s, x, y, z) }; }
+  return { box: primBox(r.solid.base), thin: thinnest(r.solid.base), inside: (x, y, z) => inSolid(r.solid, x, y, z) };
+}
+/** Where a solid breaks along an axis (its prims' ends, a cup's ends, a case's floor, a turned profile's points), within
+ *  a box: the stretches between them are each sampled, so a thin floor or flange is not stepped over. */
+function breaksOf(r: Piece, axis: Axis, box: [V3, V3]): number[] {
+  const cuts = new Set([box[0][axis], box[1][axis]]);
+  for (const m of [r.solid.base, ...r.solid.minus]) { const b = primBox(m); cuts.add(b[0][axis]); cuts.add(b[1][axis]);
+    if (axis !== 1 || !upright(m)) continue;
+    if (m.k === 'cup') { cuts.add(b[0][1] + m.ends); cuts.add(b[1][1] - m.ends); }
+    if (m.k === 'box' && m.tray) cuts.add(b[0][1] + m.tray.floor);
+    if (m.k === 'lathe') for (const q of m.pts) cuts.add(m.c[1] + q[1]); }
+  return [...cuts].filter((y) => y >= box[0][axis] && y <= box[1][axis]).sort((a, b) => a - b);
+}
+/** The thinnest a solid's material can be down any column that passes through its body (not its silhouette's edge): a
+ *  box's least side, a tube's wall, a cup's wall or end, a sphere's or rod's diameter or its wall, a turned profile's
+ *  least radial or axial step, a coil's wire, a bend's wall. The column samples are laid closer than half of it, so
+ *  no stretch of material is stepped over (a pipe lying across the stack was, at its 0.7 mm wall, before this). */
+function thinnest(m: Prim): number {
+  if (m.k === 'box') { let t = Math.min(...m.size, ...(m.tray ? [m.tray.wall, m.tray.floor] : []));
+    // (a section's web and flanges: the least step of its outline in x or in y)
+    if (m.sect) for (let a = 0; a < m.sect.length; a++) { const p = m.sect[a]!, q = m.sect[(a + 1) % m.sect.length]!, dx = Math.abs(p[0] - q[0]), dy = Math.abs(p[1] - q[1]); if (dx > 1e-9) t = Math.min(t, dx); if (dy > 1e-9) t = Math.min(t, dy); }
+    return t; }
+  if (m.k === 'bend') return m.ri !== undefined ? m.ro - m.ri : 2 * m.ro;
+  if (m.k === 'cup') return Math.min(m.wall, m.ends);
+  if (m.k === 'coil') return m.d;
+  // (a loft: its thinnest station across or up, and the least step between stations along x)
+  if (m.k === 'loft') { let t = Math.min(...m.st.map((q) => Math.min(2 * q.w, q.hi - q.lo))); for (let a = 1; a < m.st.length; a++) { const dx = Math.abs(m.st[a]!.x - m.st[a - 1]!.x); if (dx > 1e-9) t = Math.min(t, dx); } return t; }
+  if (m.k === 'lathe') { const ys = m.pts.map((q) => q[1]), rs = m.pts.map((q) => q[0]); let t = Math.min(m.h, m.ri !== undefined ? m.r - m.ri : 2 * m.r);
+    for (let a = 0; a < m.pts.length; a++) { const b = (a + 1) % m.pts.length, dy = Math.abs(ys[a]! - ys[b]!), dr = Math.abs(rs[a]! - rs[b]!); if (dy > 1e-9) t = Math.min(t, dy); if (dr > 1e-9) t = Math.min(t, dr); } return t; }
+  const ri = boreOf(m); return Math.min(m.h, ri !== undefined ? m.r - ri : 2 * m.r);
+}
+/** The farthest coordinate along the axis (highest, or lowest) at which a piece has material down the column through
+ *  (u, v) across it: the stretches between its breaks sampled from that end inward (closer than half the solid's thinnest
+ *  material, `thin`), the first sample inside refined by bisection against the last outside to 1e-10 (the inside test is
+ *  a point test; nothing here has a surface). None where no sample is inside, or nothing of it could be past `past` (an
+ *  end already found on another piece). */
+function materialEnd(inside: (x: number, y: number, z: number) => boolean, breaks: number[], thin: number, axis: Axis, u: number, v: number, high: boolean, past: number): number | undefined {
+  const n = breaks.length - 1, test = (c: number) => { const o = pt(axis, c, u, v); return inside(o[0], o[1], o[2]); };
+  let miss = high ? breaks[n]! : breaks[0]!;
+  for (let s = 0; s < n; s++) {
+    const y0 = breaks[high ? n - 1 - s : s]!, y1 = breaks[high ? n - s : s + 1]!, L = y1 - y0; if (!(L > 0)) continue;
+    if (high ? y1 <= past : y0 >= past) return undefined;
+    const K = Math.min(512, Math.max(4, Math.ceil((2 * L) / thin)));
+    for (let k = 0; k < K; k++) { const c = high ? y1 - ((k + 0.5) * L) / K : y0 + ((k + 0.5) * L) / K;
+      if (!test(c)) { miss = c; continue; }
+      if (high ? miss <= past : miss >= past) return undefined;
+      let hit = c; while (Math.abs(miss - hit) > 1e-10) { const m = (miss + hit) / 2; if (test(m)) hit = m; else miss = m; } return hit; }
+  }
+  return undefined;
+}
+/** The rest of movers lowered along an axis onto hosts, as a column cast (the panel's minimal form of root 1): over the two
+ *  sets' footprints' overlap across the axis, on a grid of N × N columns, plus the overlap's edges (a slope on a corner)
+ *  and each piece's own middle and edges (a leg or a rib thinner than a column), the movers' lowest material and the
+ *  hosts' highest down each column; the move along the axis that closes the smallest column gap (`d`), refined round the
+ *  column that closes to under a micron; the host and mover of that column (indices into the sets), the host's height
+ *  there, the column's point across, and how far the columns that close together spread (a line's length). None where no
+ *  column has both materials: the bound rest then. */
+function firstContact(hosts: readonly Piece[], movers: readonly Piece[], axis: Axis): { d: number; p: number; q: number; c: number; at: [number, number]; spread: number } | undefined {
+  const [i, j] = other(axis), E = 1e-9;
+  const H = hosts.map((r, k) => { const m = materialOf(r, movers); return { k, ...m, breaks: breaksOf(r, axis, m.box) }; }).sort((a, b) => b.box[1][axis] - a.box[1][axis]);
+  const M = movers.map((r, k) => { const m = materialOf(r, hosts); return { k, ...m, breaks: breaksOf(r, axis, m.box) }; }).sort((a, b) => a.box[0][axis] - b.box[0][axis]);
+  const lo = [Math.max(Math.min(...H.map((h) => h.box[0][i])), Math.min(...M.map((m) => m.box[0][i]))), Math.max(Math.min(...H.map((h) => h.box[0][j])), Math.min(...M.map((m) => m.box[0][j])))];
+  const hi = [Math.min(Math.max(...H.map((h) => h.box[1][i])), Math.max(...M.map((m) => m.box[1][i]))), Math.min(Math.max(...H.map((h) => h.box[1][j])), Math.max(...M.map((m) => m.box[1][j])))];
+  if (!(lo[0]! + 2 * E < hi[0]! && lo[1]! + 2 * E < hi[1]!)) return undefined;
+  type Col = { g: number; p: number; q: number; c: number; u: number; v: number };
+  const covers = (b: [V3, V3], u: number, v: number) => b[0][i] < u && u < b[1][i] && b[0][j] < v && v < b[1][j];
+  let best: Col | undefined;
+  const col = (u: number, v: number): Col | undefined => {
+    // (a column whose boxes alone cannot close more than the best so far is not cast: so a flat pair, exact from its first
+    // column, costs one column, and a round one lying along an axis one, its own middle (those are cast first))
+    let ub = -Infinity, lb = Infinity; for (const h of H) if (covers(h.box, u, v)) ub = Math.max(ub, h.box[1][axis]); for (const m of M) if (covers(m.box, u, v)) lb = Math.min(lb, m.box[0][axis]);
+    if (ub === -Infinity || lb === Infinity || (best && ub - lb <= best.g + 1e-8)) return undefined;
+    let top = -Infinity, p = -1; for (const h of H) { if (!covers(h.box, u, v)) continue; const y = materialEnd(h.inside, h.breaks, h.thin, axis, u, v, true, top); if (y !== undefined && y > top) { top = y; p = h.k; } }
+    if (p < 0) return undefined;
+    let bot = Infinity, q = -1; for (const m of M) { if (!covers(m.box, u, v)) continue; const y = materialEnd(m.inside, m.breaks, m.thin, axis, u, v, false, bot); if (y !== undefined && y < bot) { bot = y; q = m.k; } }
+    return q < 0 ? undefined : { g: top - bot, p, q, c: top, u, v };
+  };
+  const du = (hi[0]! - lo[0]!) / N, dv = (hi[1]! - lo[1]!) / N, cols: [number, number][] = [];
+  const within = (u: number, v: number) => lo[0]! < u && u < hi[0]! && lo[1]! < v && v < hi[1]!;
+  // (each piece's own middle and edges first: a round one's lowest line, a tilted box's lowest edge, a leg, a rib)
+  for (const r of [...H, ...M]) { const b = r.box, cu = (b[0][i] + b[1][i]) / 2, cv = (b[0][j] + b[1][j]) / 2;
+    for (const c of [[cu, cv], [b[0][i] + E, cv], [b[1][i] - E, cv], [cu, b[0][j] + E], [cu, b[1][j] - E]] as [number, number][]) if (within(c[0], c[1])) cols.push(c); }
+  // (the overlap's edges: a slope on a face's corner; then the grid)
+  for (let a = 0; a < N; a++) { const u = lo[0]! + (a + 0.5) * du, v = lo[1]! + (a + 0.5) * dv; cols.push([u, lo[1]! + E], [u, hi[1]! - E], [lo[0]! + E, v], [hi[0]! - E, v]); }
+  cols.push([lo[0]! + E, lo[1]! + E], [lo[0]! + E, hi[1]! - E], [hi[0]! - E, lo[1]! + E], [hi[0]! - E, hi[1]! - E]);
+  for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) cols.push([lo[0]! + (a + 0.5) * du, lo[1]! + (b + 0.5) * dv]);
+  const all: Col[] = [];
+  for (const [u, v] of cols) { const r = col(u, v); if (!r) continue; all.push(r); if (!best || r.g > best.g) best = r; }
+  if (!best) return undefined;
+  // (refined round the column that closes: the cell round it sampled 8 × 8, the cell shrunk to a spacing, seven times)
+  let su = du, sv = dv;
+  for (let L = 0; L < 7; L++) { const bu = best.u, bv = best.v;
+    for (let a = 0; a < 8; a++) for (let b = 0; b < 8; b++) { const u = bu - su + ((a + 0.5) * su) / 4, v = bv - sv + ((b + 0.5) * sv) / 4; if (!within(u, v)) continue;
+      const r = col(u, v); if (!r) continue; all.push(r); if (r.g > best.g) best = r; }
+    su /= 4; sv /= 4; }
+  const on = all.filter((c) => c.g >= best!.g - 1e-7), us = on.map((c) => c.u), vs = on.map((c) => c.v);
+  const spread = Math.max(Math.max(...us) - Math.min(...us) + du, Math.max(...vs) - Math.min(...vs) + dv);
+  return { d: best.g, p: best.p, q: best.q, c: best.c, at: [best.u, best.v], spread };
+}
+/** Whether two pieces' solids share any room (root 1, the "would meet" of Over): none where their boxes do not meet;
+ *  else a column cast along y over the boxes' overlap (each box's middle and edges, the overlap's edges, the N × N grid):
+ *  down each column the span of each solid's material from its lowest to its highest, the two meeting where they share
+ *  a stretch longer than 1e-8 in any column. A span is the solid's hull down the column (a tube lying across y reads as
+ *  full between its walls: a superset); a feature thinner than a column that lies between columns is missed (rough). */
+function solidsMeet(a: Piece, b: Piece): boolean {
+  const A = materialOf(a, [b]), B = materialOf(b, [a]); if (!meets(A.box, B.box)) return false;
+  const axis: Axis = 1, [i, j] = other(axis), E = 1e-9, ba = breaksOf(a, axis, A.box), bb = breaksOf(b, axis, B.box);
+  const lo = [Math.max(A.box[0][i], B.box[0][i]), Math.max(A.box[0][j], B.box[0][j])], hi = [Math.min(A.box[1][i], B.box[1][i]), Math.min(A.box[1][j], B.box[1][j])];
+  if (!(lo[0]! + 2 * E < hi[0]! && lo[1]! + 2 * E < hi[1]!)) return false;
+  const within = (u: number, v: number) => lo[0]! < u && u < hi[0]! && lo[1]! < v && v < hi[1]!, du = (hi[0]! - lo[0]!) / N, dv = (hi[1]! - lo[1]!) / N, cols: [number, number][] = [];
+  for (const r of [A, B]) { const bx = r.box, cu = (bx[0][i] + bx[1][i]) / 2, cv = (bx[0][j] + bx[1][j]) / 2;
+    for (const c of [[cu, cv], [bx[0][i] + E, cv], [bx[1][i] - E, cv], [cu, bx[0][j] + E], [cu, bx[1][j] - E]] as [number, number][]) if (within(c[0], c[1])) cols.push(c); }
+  for (let a = 0; a < N; a++) { const u = lo[0]! + (a + 0.5) * du, v = lo[1]! + (a + 0.5) * dv; cols.push([u, lo[1]! + E], [u, hi[1]! - E], [lo[0]! + E, v], [hi[0]! - E, v]); }
+  cols.push([lo[0]! + E, lo[1]! + E], [lo[0]! + E, hi[1]! - E], [hi[0]! - E, lo[1]! + E], [hi[0]! - E, hi[1]! - E]);
+  for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) cols.push([lo[0]! + (a + 0.5) * du, lo[1]! + (b + 0.5) * dv]);
+  for (const [u, v] of cols) {
+    const al = materialEnd(A.inside, ba, A.thin, axis, u, v, false, Infinity); if (al === undefined) continue;
+    const bl = materialEnd(B.inside, bb, B.thin, axis, u, v, false, Infinity); if (bl === undefined) continue;
+    const ah = materialEnd(A.inside, ba, A.thin, axis, u, v, true, -Infinity) ?? al, bh = materialEnd(B.inside, bb, B.thin, axis, u, v, true, -Infinity) ?? bl;
+    if (Math.min(ah, bh) - Math.max(al, bl) > 1e-8) return true;
+  }
+  return false;
 }
 /** A piece's side against the round surface at radius R about a line along y (a hole's wall, a cavity's wall). */
 function roundFace(p: Piece, x: number, z: number, R: number, y0: number, y1: number, inward: boolean): { area: number; length: number; at: V3 } {
@@ -478,8 +616,21 @@ export class Block {
    *  pattern are its openings. */
   static made(name: string, mat: string, s0: Shape0, o: MadeOpts = {}): Block {
     // (a sphere, a cone and a turned profile made as their prims first; a cone is a turned profile of four points)
-    const s = s0 as Exclude<Shape0, { sphere: unknown } | { cone: unknown } | { lathe: unknown }>;
+    const s = s0 as Exclude<Shape0, { sphere: unknown } | { cone: unknown } | { lathe: unknown } | { loft: unknown }>;
     let turned: Prim | undefined;
+    // (a loft (decision 0029): its stations in order along x, each a half-width above zero and its top above its bottom;
+    // scaled along x to a length where one is asked (an assembly's length setting); its bound's middle at the origin)
+    if ('loft' in s0) {
+      const L = s0.loft, st = Array.isArray(L.st) ? [...L.st].sort((a, b) => a.x - b.x) : [];
+      if (st.length < 2 || !st.every((q) => [q.x, q.w, q.lo, q.hi, q.n ?? 2, q.wt ?? q.w, q.nt ?? 2, q.mid ?? q.lo, q.z ?? 0].every(Number.isFinite))) throw new Error(`${name}: a loft of two stations or more, each finite (x, w, lo, hi; n, wt, nt, mid, z where given)`);
+      st.forEach((q, i) => { if (!(q.w > 0 && (q.wt === undefined || q.wt > 0) && q.hi > q.lo)) throw new Error(`${name}: station ${i + 1}: a half-width above zero and its top above its bottom (w ${q.w}, lo ${q.lo}, hi ${q.hi})`);
+        if (i > 0 && !(q.x > st[i - 1]!.x)) throw new Error(`${name}: stations at distinct x (${st[i - 1]!.x} twice)`); });
+      const x0 = st[0]!.x, x1 = st[st.length - 1]!.x; if (L.L !== undefined) sizes(`${name} length`, [L.L]); const k = L.L !== undefined ? L.L / (x1 - x0) : 1;
+      const xs = st.map((q) => x0 + (q.x - x0) * k), lo = Math.min(...st.map((q) => q.lo)), hi = Math.max(...st.map((q) => q.hi));
+      const zlo = Math.min(...st.map((q) => (q.z ?? 0) - Math.max(q.w, q.wt ?? 0))), zhi = Math.max(...st.map((q) => (q.z ?? 0) + Math.max(q.w, q.wt ?? 0)));
+      const cx = (xs[0]! + xs[xs.length - 1]!) / 2, cy = (lo + hi) / 2, cz = (zlo + zhi) / 2, size: V3 = [xs[xs.length - 1]! - xs[0]!, hi - lo, zhi - zlo]; sizes(name, size);
+      turned = { k: 'loft', c: [0, 0, 0], st: st.map((q, i) => ({ ...q, x: xs[i]! - cx, lo: q.lo - cy, hi: q.hi - cy, ...(q.mid !== undefined ? { mid: q.mid - cy } : {}), z: (q.z ?? 0) - cz })), size };
+    }
     if ('sphere' in s0) { const [r, ri] = s0.sphere; sizes(name, ri === undefined ? [r] : [r, ri]); if (ri !== undefined && !(ri < r)) throw new Error(`${name}: a bore within its radius (${ri} ≥ ${r})`); turned = { k: 'sphere', c: [0, 0, 0], r, h: 2 * r, ...(ri !== undefined ? { ri } : {}) }; }
     if ('cone' in s0 || 'lathe' in s0) {
       let pts: [number, number][], bore: number | undefined;
@@ -532,12 +683,12 @@ export class Block {
       const pts: [number, number][] = pat.circle ? Array.from({ length: pat.circle.n }, (_, i) => { const a = (pat.circle!.phase ?? 0) + (2 * Math.PI * i) / pat.circle!.n; return [pat.circle!.r * Math.cos(a), pat.circle!.r * Math.sin(a)]; }) : (pat.points ?? []);
       if (pat.circle) sizes(`${name}/${pat.name}`, [pat.circle.n, pat.circle.r]); for (const q of pts) if (!q.every(Number.isFinite)) throw new Error(`${name}/${pat.name}: a point is finite`);
       if (pat.face === undefined) pts.forEach((q, i) => {
-        const edge = base.k === 'box' ? Math.min(base.size[0] / 2 - Math.abs(q[0]), base.size[2] / 2 - Math.abs(q[1])) : base.k === 'bend' ? 0 : base.r - Math.hypot(q[0], q[1]);
+        const edge = boxy(base) ? Math.min(base.size[0] / 2 - Math.abs(q[0]), base.size[2] / 2 - Math.abs(q[1])) : base.k === 'bend' ? 0 : base.r - Math.hypot(q[0], q[1]);
         const bore = base.k === 'cyl' && base.ri !== undefined ? Math.hypot(q[0], q[1]) - base.ri : Infinity;
         const near = Math.min(Infinity, ...pts.filter((_, k) => k !== i).map((w) => Math.hypot(w[0] - q[0], w[1] - q[1]) / 2)), slot = Math.min(edge, bore, near);
         if (!(slot > 0)) throw new Error(`${name}/${pat.name} ${i}: the pattern lies outside the piece (its slot ${(slot * 1000).toFixed(2)} mm)`);
         if (pat.hole !== undefined) { sizes(`${name}/${pat.name} hole`, [pat.hole]); if (!(pat.hole < slot)) throw new Error(`${name}/${pat.name}: a hole of ${pat.hole * 1000} mm needs a slot of more; it has ${(slot * 1000).toFixed(2)} mm`);
-          minus.push({ k: 'cyl', c: [q[0], 0, q[1]], r: pat.hole, h: (base.k === 'box' ? base.size[1] : base.k === 'bend' ? 0 : base.h) + 2e-9 }); }
+          minus.push({ k: 'cyl', c: [q[0], 0, q[1]], r: pat.hole, h: (boxy(base) ? base.size[1] : base.k === 'bend' ? 0 : base.h) + 2e-9 }); }
         lines.push({ port: `${name}/${pat.name}`, x: q[0], z: q[1], slot, ...(pat.hole !== undefined ? { opening: pat.hole } : {}) });
       });
       else { // (on a face: along that face's axis, into the piece from it)
@@ -592,7 +743,7 @@ export class Block {
       // (a line gives the coordinates it has (x and z along y; all three turned); the rest by the end asked: decision 0029)
       const onLine = (k: Axis): number | undefined => (!l0 ? undefined : k === 0 ? l0.x : k === 2 ? l0.z : alongY(l0) ? undefined : l0.y!);
       const across = [0, 1, 2].map((k) => onLine(k as Axis) ?? (endAt(k as Axis) === 'lo' ? it.b.lo[k]! : endAt(k as Axis) === 'hi' ? it.b.hi[k]! : mid[k]!)), d0 = [0, 1, 2].map((k) => (k === axis ? 0 : level && k === 1 && axis !== 1 ? -it.b.lo[1] : -across[k]!)) as V3;
-      let s = Block.#shift(it.b, d0);
+      let s = Block.#shift(it.b, d0), touched: { a: number; q: number; c: number; at: [number, number]; spread: number } | undefined;
       if (i > 0) {
         // (it comes to rest on what is in its path: the pieces before it whose bounds overlap its own across the stack's
         // axis (a bolt's head on its own hole's plate, not on another joint's head beside it); none in its path, on all)
@@ -602,9 +753,15 @@ export class Block {
         // (pair by pair, decision 0028: it moves until the first pair in each other's path meets, so a tank whose outlet
         // reaches over a trailer's side boards still comes down onto the bed; with none in its path, past all of them)
         const box = (r: Piece, o: Piece) => (coMove(r, o) ? primBox(r.solid.base) : boundOf(r)), pairs = inPath.length ? inPath.flatMap((p) => B.filter((q) => { const pb = box(p, q), qb = box(q, p); return other.every((k) => pb[0][k]! < qb[1][k]! - 1e-12 && qb[0][k]! < pb[1][k]! - 1e-12); }).map((q) => box(p, q)[1][axis]! - box(q, p)[0][axis]!)) : [];
-        if (pairs.length) d[axis] = Math.max(...pairs) + gapOf(it.fit ?? 'touch');
-        else { const top = Math.max(...A.map((p) => (B.some((q) => !coMove(p, q)) ? boundOf(p) : primBox(p.solid.base))[1][axis]));
-          const bot = Math.min(...B.map((q) => (A.some((p) => !coMove(p, q)) ? boundOf(q) : primBox(q.solid.base))[0][axis])); d[axis] = top + gapOf(it.fit ?? 'touch') - bot; }
+        const byBound = pairs.length ? Math.max(...pairs) : Math.max(...A.map((p) => (B.some((q) => !coMove(p, q)) ? boundOf(p) : primBox(p.solid.base))[1][axis])) - Math.min(...B.map((q) => (A.some((p) => !coMove(p, q)) ? boundOf(q) : primBox(q.solid.base))[0][axis]));
+        // (root 1, decision 0029: the rest is a column cast of the solids (firstContact), where the smallest gap down a column
+        // between the mover's lowest material and the host's highest closes, so a turned, round or slanted piece comes down to
+        // what it touches, not to its box; the bound rest only where no column has both materials. A cast within a micron
+        // of a bound's rest is snapped to it, so a flat pair's faces are found exactly)
+        const g = gapOf(it.fit ?? 'touch'), cast = firstContact(A, B, axis), cands = pairs.length ? pairs : [byBound];
+        const snap = cast ? cands.filter((c) => Math.abs(c - cast.d) < 1e-6).sort((x, y) => Math.abs(x - cast.d) - Math.abs(y - cast.d))[0] : undefined;
+        d[axis] = (cast ? snap ?? cast.d : byBound) + g;
+        if (cast) touched = { a: pieces.indexOf(A[cast.p]!), q: cast.q, c: cast.c, at: cast.at, spread: cast.spread };
         s = Block.#shift(Block.#seal(it.b.name, s.pieces, s.faces, s.rooms), d);
         // (decision 0029 (7): a round piece laid along z onto a section along z (an axle in a V block, a pipe on a saddle)
         // comes down into the section's outline, resting where its circle first meets the outline from above (so it is above
@@ -612,10 +769,13 @@ export class Block {
         // it would meet another piece)
         if (axis === 1 && s.pieces.length === 1 && !s.pieces[0]!.joint) { const rod = s.pieces[0]!.solid.base, g = gapOf(it.fit ?? 'touch');
           const seats = prev.map((k) => ({ k, seat: seatOn(rod, pieces[k]!.solid.base) })).filter((x): x is { k: number; seat: Seat } => !!x.seat);
-          if (seats.length) { const yc = Math.max(...seats.map((x) => x.seat.yc)) + g, down = rod.c[1] - yc;
-            if (down > 1e-12) { const t = Block.#shift(Block.#seal(it.b.name, s.pieces, s.faces, s.rooms), [0, -down, 0]), tb = boundOf(t.pieces[0]!), on = new Set(seats.filter((x) => x.seat.yc + g > yc - 1e-9).map((x) => x.k));
+          // (root 1: the column cast has already brought it down to the seat, within its tolerance; the seat's own height is
+          // exact, so it is taken where it is lower, and the seat's line faces are written whenever the rod sits in it)
+          if (seats.length) { const yc = Math.max(...seats.map((x) => x.seat.yc)) + g, down = rod.c[1] - yc, on = new Set(seats.filter((x) => x.seat.yc + g > yc - 1e-9).map((x) => x.k));
+            if (down > 1e-12) { const t = Block.#shift(Block.#seal(it.b.name, s.pieces, s.faces, s.rooms), [0, -down, 0]), tb = boundOf(t.pieces[0]!);
               const hit = prev.find((k) => !on.has(k) && meets(boundOf(pieces[k]!), tb)); if (hit !== undefined) throw new Error(`no room on ${name}: the ${s.pieces[0]!.name} seated in the ${pieces[[...on][0]!]!.name}'s outline would meet the ${pieces[hit]!.name}`);
-              s = t; seated = seats.filter((x) => on.has(x.k)).map((x) => ({ k: x.k, seat: x.seat })); } } }
+              s = t; }
+            if (down > -1e-7) seated = seats.filter((x) => on.has(x.k)).map((x) => ({ k: x.k, seat: x.seat })); } }
       } else { const d: V3 = [0, 0, 0]; d[axis] = -it.b.lo[axis]!; s = Block.#shift(Block.#seal(it.b.name, s.pieces, s.faces, s.rooms), d); }
       const base = pieces.length; pieces.push(...s.pieces); faces.push(...s.faces.map((f) => ({ ...f, a: f.a + base, b: f.b + base })));
       for (const { k, seat } of seated) { const g = gapOf(it.fit ?? 'touch'), rb = primBox(s.pieces[0]!.solid.base), sb = primBox(pieces[k]!.solid.base), z0 = Math.max(rb[0][2], sb[0][2]), z1 = Math.min(rb[1][2], sb[1][2]);
@@ -625,6 +785,12 @@ export class Block {
       rooms.push(...s.rooms.map((r) => (axis === 1 && i < items.length - 1 ? { ...r, open: false } : r)));
       const here = s.pieces.map((_, j) => base + j);
       if (i > 0) faces.push(...planeFaces(pieces, prev, here, axis, `${name}: stacked`, it.fit ?? 'touch'));
+      // (root 1: the pair of the column that closed first, where nothing above wrote a face for it (a slope on a wall's
+      // corner, a sphere on a plate): the patch at that height, else a line at the column's point as long as the columns
+      // that closed together spread)
+      if (touched && !faces.some((f) => f.a === touched!.a && f.b === base + touched!.q)) { const g = gapOf(it.fit ?? 'touch'), p = pieces[touched.a]!, q = pieces[base + touched.q]!, w = planePatch(p, q, axis, touched.c, g);
+        const r = w.area > 0 || w.length > 0 ? w : { area: 0, length: touched.spread, at: pt(axis, touched.c + g / 2, touched.at[0], touched.at[1]) };
+        faces.push({ a: touched.a, b: base + touched.q, kind: g > 0 ? 'gap' : 'contact', patch: r.area > 0 ? 'area' : 'line', area: r.area, ...(r.area > 0 ? {} : { length: r.length }), at: r.at, normal: unit(axis), gap: g, ...(g > 0 ? { medium: MEDIUM } : {}), by: `${name}: first contact` }); }
       prev = [...prev, ...here];
     }
     return Block.#seal(name, pieces, faces, rooms);
@@ -715,7 +881,7 @@ export class Block {
       if (coMove(q, s) || (!q.joint && !s.joint)) return q.solid.base;
       if (q.joint && s.joint) throw new Error(`through: the ${q.name} and the ${s.name} move on two joints (${q.joint.name}, ${s.joint.name}): refused`);
       const m = (q.joint ?? s.joint)!, mover = q.joint ? q : s;
-      if (m.turn) { if (!onLine(mover.axis!)) throw new Error(`through: the ${mover.name} turns about another line than ${on.port}: refused`); const B = q.solid.base; if (B.k === 'bend') throw new Error(`through: the ${q.name} is bent and on a joint: not made yet`); return B.k !== 'box' && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-12 ? B : { k: 'cyl', c: [o.l.x, B.c[1], o.l.z], r: reach(B, o.l.x, o.l.z), h: B.k === 'box' ? B.size[1] : B.h }; }
+      if (m.turn) { if (!onLine(mover.axis!)) throw new Error(`through: the ${mover.name} turns about another line than ${on.port}: refused`); const B = q.solid.base; if (B.k === 'bend') throw new Error(`through: the ${q.name} is bent and on a joint: not made yet`); return !boxy(B) && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-12 ? B : { k: 'cyl', c: [o.l.x, B.c[1], o.l.z], r: reach(B, o.l.x, o.l.z), h: boxy(B) ? B.size[1] : B.h }; }
       // (a slide along the line: the passer's room swept along it, up when the passer slides, down when the host does)
       return q.joint ? sweepOf(q) : (() => { const sw = sweepOf({ ...q, joint: m }), dy = -m.slide!; return shiftPrim(sw, [0, dy, 0]); })();
     };
@@ -735,9 +901,9 @@ export class Block {
       pieces.forEach((s, j) => {
         if (!meets(boundOf(s), [[qb[0][0] - g - 1e-9, qb[0][1], qb[0][2] - g - 1e-9], [qb[1][0] + g + 1e-9, qb[1][1], qb[1][2] + g + 1e-9]])) return;
         // (its side against the hole's wall, where the solid it crosses has material round it)
-        const B = q.solid.base; if (B.k === 'bend') return; const w = B.k !== 'box' ? roundFace(s, B.c[0], B.c[2], B.r + g, qb[0][1], qb[1][1], false) : boxSide(s, q, g);
+        const B = q.solid.base; if (B.k === 'bend') return; const w = !boxy(B) ? roundFace(s, B.c[0], B.c[2], B.r + g, qb[0][1], qb[1][1], false) : boxSide(s, q, g);
         // (or, through a bore it already has, across the gap the bore leaves)
-        const SB = s.solid.base, bore = SB.k === 'cyl' && upright(SB) && SB.ri !== undefined && B.k !== 'box' && Math.hypot(SB.c[0] - B.c[0], SB.c[2] - B.c[2]) < 1e-12 && SB.ri > B.r + g ? SB.ri - B.r : 0;
+        const SB = s.solid.base, bore = SB.k === 'cyl' && upright(SB) && SB.ri !== undefined && !boxy(B) && Math.hypot(SB.c[0] - B.c[0], SB.c[2] - B.c[2]) < 1e-12 && SB.ri > B.r + g ? SB.ri - B.r : 0;
         // (only where nothing else stands in that bore between them)
         const between = bore > 0 && pieces.some((t, m) => m !== j && meets(boundOf(t), primBox({ k: 'cyl', c: B.c, r: (SB as { ri: number }).ri, h: (B as { h: number }).h })));
         if (bore && !between && !(w.area > 0 || w.length > 0)) { const sb = primBox(s.solid.base), lo = Math.max(sb[0][1], qb[0][1]), hi = Math.min(sb[1][1], qb[1][1]);
@@ -747,7 +913,7 @@ export class Block {
         const op = o.l.opening, inHole = j === o.k && op !== undefined && !bore && !(w.area > 0 || w.length > 0) && roundish(B) && upright(B) && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-12 && op > B.r + g + 1e-12;
         if (inHole) { const hw = roundFace(s, o.l.x, o.l.z, op, qb[0][1], qb[1][1], false);
           if (hw.area > 0) faces.push({ a: j, b: Q, kind: 'gap', patch: 'area', area: hw.area * (B as { r: number }).r / op, at: hw.at, normal: [1, 0, 0], gap: op - (B as { r: number }).r, medium: MEDIUM, by: `${q.name} in the hole of ${s.name}` }); }
-        if (w.area > 0 || w.length > 0) { const it = pressureOf(fit, 2 * (B.k !== 'box' ? B.r : Math.min(B.size[0], B.size[2]) / 2), 2 * outsideNear(s.solid.base, B.c[0], B.c[2]), q.mat, s.mat);
+        if (w.area > 0 || w.length > 0) { const it = pressureOf(fit, 2 * (!boxy(B) ? B.r : Math.min(B.size[0], B.size[2]) / 2), 2 * outsideNear(s.solid.base, B.c[0], B.c[2]), q.mat, s.mat);
           faces.push({ a: j, b: Q, kind, patch: w.area > 0 ? 'area' : 'line', area: w.area, ...(w.area > 0 ? {} : { length: w.length }), at: w.at, normal: [1, 0, 0], gap: g, ...(g > 0 ? { medium: MEDIUM } : {}), ...(it ? { interference: it } : {}), by: `${q.name} through ${s.name}` }); }
       });
       // (its ends against what lies beyond them: a head under its plies, a stud's end where a contact closes on it)
@@ -832,7 +998,7 @@ export class Block {
     // (decision 0029 (6): a piece of the sleeve on its axis with no bore (a hub drawn solid, an end bell) is bored to what is
     // on the line with the fit's gap, said as a note; a bought one, or one that is not round, is refused with the way named)
     if (sleeve.pieces.some((_, i) => !(free[i]! > 1e-12))) { const bore = rs + g, bored: string[] = [];
-      const pieces = sleeve.pieces.map((q, i): Piece => { if (free[i]! > 1e-12) return q; const B = q.solid.base, across = B.k === 'hex' ? B.af / 2 : B.k === 'box' || B.k === 'bend' ? 0 : B.r;
+      const pieces = sleeve.pieces.map((q, i): Piece => { if (free[i]! > 1e-12) return q; const B = q.solid.base, across = B.k === 'hex' ? B.af / 2 : boxy(B) || B.k === 'bend' ? 0 : B.r;
         if (q.bought) throw new Error(`over: the ${q.name} is bought and has no bore to slide on with: pass the ${o.p.name} through its own axis by room.through, or a sleeve with a bore`);
         if (!(B.k === 'cyl' || B.k === 'hex' || B.k === 'sphere' || B.k === 'lathe')) throw new Error(`over: the ${q.name} (a ${B.k}) has no bore to slide on with: make it round with a bore (room.make tube, or a lathe with a bore), or pass the ${o.p.name} through it by room.through`);
         if (!(bore < across - 1e-12)) throw new Error(`no room over ${port}: the ${q.name} is ${(across * 2000).toFixed(2)} mm across, no wider than the ${o.p.name} and the fit (${(bore * 2000).toFixed(2)} mm): it cannot be bored to it`);
@@ -848,10 +1014,11 @@ export class Block {
       if (d + H > sb[1][1] - sb[0][1] + 1e-12) throw new Error(`no room over ${port}: the ${sleeve.name} ${(d * 1000).toFixed(2)} mm from its ${where.from} end needs ${((d + H) * 1000).toFixed(2)} mm of it; the ${o.p.name} is ${((sb[1][1] - sb[0][1]) * 1000).toFixed(2)} mm long`); }
     const y0 = end === 'lo' ? sb[0][1] + d : end === 'hi' ? sb[1][1] - H - d : (sb[0][1] + sb[1][1]) / 2 - H / 2;
     // (a round piece on the same line that fits within the bore with the gap (the shaft a core sits on) passes inside it;
-    // any other piece of the host is tried by its bound against the sleeve's)
+    // any other piece of the host is tried by its solid against the sleeve's (root 1, decision 0029: a rim over a ring
+    // of spokes its bore clears, a wheel between a fork's legs; before, by their bounds, both were refused))
     const inBore = (q: Piece) => { const qs = sweepOf(q); return roundish(qs) && upright(qs) && !q.joint && Math.hypot(qs.c[0] - o.l.x, qs.c[2] - o.l.z) < 1e-12 && qs.r + ge <= bore + 1e-12; };
     const others = host.pieces.filter((q) => q !== o.p && !inBore(q));
-    const at = (y: number) => Block.#shift(sleeve, [o.l.x - cx, y - sleeve.lo[1], o.l.z - cz]), hitOf = (S: { pieces: Piece[] }) => { for (const q of others) { const qb = boundOf(q); if (S.pieces.some((x) => meets(qb, boundOf(x)))) return q; } return undefined; };
+    const at = (y: number) => Block.#shift(sleeve, [o.l.x - cx, y - sleeve.lo[1], o.l.z - cz]), hitOf = (S: { pieces: Piece[] }) => { for (const q of others) if (S.pieces.some((x) => solidsMeet(q, x))) return q; return undefined; };
     let S = at(y0), hit = hitOf(S);
     // (where that is in the way (a washer already slid on, the can a motor's shaft comes out of), slid along the line to the
     // nearest stretch that is free: on past what was slid on before it, each after the last, or out past the line's free
@@ -1186,7 +1353,10 @@ export type RunSeg = RunTube & ({ readonly straight: number; readonly sleeves?: 
  *  degrees, bore?]. */
 export type Shape0 = { box: [number, number, number] } | { cyl: [number, number] } | { tube: [number, number, number] } | { cup: [number, number, number, number] } | { hex: [number, number] | [number, number, number] } | { dome: [number] }
   | { coil: [number, number, number, number] | [number, number, number, number, number] } | { case: [number, number, number, number, number] } | { section: { pts: [number, number][]; L: number } } | { bend: [number, number, number] | [number, number, number, number] }
-  | { sphere: [number] | [number, number] } | { cone: [number, number, number] | [number, number, number, number] } | { lathe: { pts: [number, number][]; bore?: number } };
+  | { sphere: [number] | [number, number] } | { cone: [number, number, number] | [number, number, number, number] } | { lathe: { pts: [number, number][]; bore?: number } }
+  // (a loft through its stations along x (form.ts: x, half-width w, bottom lo, top hi; n, wt, nt, mid, z as there), scaled
+  // along x to L where L is given)
+  | { loft: { st: Station[]; L?: number } };
 /** A face of a piece's own box a pattern goes into. */
 export type FaceName = '+x' | '-x' | '+y' | '-y' | '+z' | '-z';
 /** Where across a stack its blocks meet: centred, or flush at their low or high ends; one word for both axes across, or
@@ -1245,7 +1415,7 @@ function seatOn(rod: Prim, sect: Prim): Seat | undefined {
   return { yc: yc + sect.c[1], touch };
 }
 // (the least distance from a line along y to a prim's outside)
-const outsideNear = (b: Prim, x: number, z: number): number => b.k === 'bend' || b.frame ? 0 : b.k === 'box' ? Math.min(b.size[0] / 2 - Math.abs(x - b.c[0]), b.size[2] / 2 - Math.abs(z - b.c[2])) : b.r - Math.hypot(x - b.c[0], z - b.c[2]);
+const outsideNear = (b: Prim, x: number, z: number): number => b.k === 'bend' || b.frame ? 0 : boxy(b) ? Math.min(b.size[0] / 2 - Math.abs(x - b.c[0]), b.size[2] / 2 - Math.abs(z - b.c[2])) : b.r - Math.hypot(x - b.c[0], z - b.c[2]);
 // (a box passer's four sides against the solid it crosses, offset by the gap)
 function boxSide(s: Piece, q: Piece, g: number): { area: number; length: number; at: V3 } {
   const B = q.solid.base as Extract<Prim, { k: 'box' }>, sb = primBox(s.solid.base), qb = primBox(B), y0 = Math.max(sb[0][1], qb[0][1]), y1 = Math.min(sb[1][1], qb[1][1]); if (!(y0 < y1)) return { area: 0, length: 0, at: [0, 0, 0] };
@@ -1332,8 +1502,8 @@ export function partOfBlock(b: Block): Part {
     const look = { mat: p.mat, ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}) };
     if ((B.k === 'cyl' || B.k === 'hex') && B.ri !== undefined) cuts.push({ r: B.ri, depth: B.h, at: [0, B.h / 2, 0], dir: [0, -1, 0] });
     for (const m of p.solid.minus) {
-      if (m.k === 'bend' || missesBase(B, m)) continue; const h = m.k === 'box' ? m.size[1] : m.h, mf = m.frame ?? I3, at = own(sub(add(m.c, mv(mf, [0, h / 2, 0])), origin)), dir = own(mv(mf, [0, -1, 0]));
-      if (m.k === 'box') { const [w, , d] = m.size; cuts.push({ r: Math.hypot(w, d) / 2, depth: h, at, dir, u: own(mv(mf, [1, 0, 0])), sect: [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]] }); continue; }
+      if (m.k === 'bend' || missesBase(B, m)) continue; const h = boxy(m) ? m.size[1] : m.h, mf = m.frame ?? I3, at = own(sub(add(m.c, mv(mf, [0, h / 2, 0])), origin)), dir = own(mv(mf, [0, -1, 0]));
+      if (boxy(m)) { const [w, , d] = m.size; cuts.push({ r: Math.hypot(w, d) / 2, depth: h, at, dir, u: own(mv(mf, [1, 0, 0])), sect: [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]] }); continue; }
       // (a counterbored or countersunk hole: a turned cut, its profile from its face down, its own +y out of the face)
       if (m.k === 'lathe') { const rim = m.pts.filter((q) => q[0] > 1e-12), prof = (rim[0]![1] < rim[rim.length - 1]![1] ? [...rim].reverse() : rim).map((q) => [q[0], h / 2 - q[1]] as [number, number]);
         cuts.push({ r: Math.min(...prof.map((q) => q[0])), depth: h, at, dir, prof }); continue; }
@@ -1366,7 +1536,7 @@ export function partOfBlock(b: Block): Part {
     // (a bend with a bore: its tube along its arc with its wall, so it is drawn and weighed hollow (it was drawn solid: 412.0 g
     // where the same straight is 64.7 g, the research of 2026-11-05))
     const arc = (bd: Extract<Prim, { k: 'bend' }>): [number, number, number][] => { const n = Math.max(4, Math.ceil(bd.a / (Math.PI / 24))); return Array.from({ length: n + 1 }, (_, k) => [bd.R * Math.cos((k / n) * bd.a), bd.R * Math.sin((k / n) * bd.a), 0] as [number, number, number]); };
-    const shape: Shape = B.k === 'box' ? (B.sect ? { prism: { pts: B.sect.map(([x, y]) => [x, y] as [number, number]), L: B.size[2] } } : { box: [B.size[0], B.size[1], B.size[2]] }) : B.k === 'cyl' || B.k === 'hex' ? { cyl: [B.r, B.h] } : B.k === 'dome' ? { lathe: domeProfile(B.r) }
+    const shape: Shape = B.k === 'loft' ? { loft: { st: B.st.map((q) => ({ ...q })) } } : B.k === 'box' ? (B.sect ? { prism: { pts: B.sect.map(([x, y]) => [x, y] as [number, number]), L: B.size[2] } } : { box: [B.size[0], B.size[1], B.size[2]] }) : B.k === 'cyl' || B.k === 'hex' ? { cyl: [B.r, B.h] } : B.k === 'dome' ? { lathe: domeProfile(B.r) }
       : B.k === 'sphere' ? (B.ri === undefined ? { sphere: B.r } : { lathe: closedLathe(clipOut(sphereProfile(B.r), B.ri)) }) : B.k === 'lathe' ? { lathe: closedLathe(B.pts) }
       : B.k === 'coil' ? { tube: { r: B.d / 2, pts: helix(B.R, B.turns, B.pitch, B.h - B.d) } } : B.k === 'bend' ? (B.ri !== undefined ? { tube: { r: B.ro, pts: arc(B), wall: B.ro - B.ri, bend: B.R } } : { torus: [B.R, B.ro, B.a] }) : { lathe: cupProfile(B) };
     return { name: p.name, item: p.name, shape, at: origin, ...turned, mat: p.mat, ...(B.k === 'hex' ? { facets: 6 } : {}), ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}), ...(cuts.length ? { cuts } : {}), ...(cores.length ? { parts: cores } : {}) };

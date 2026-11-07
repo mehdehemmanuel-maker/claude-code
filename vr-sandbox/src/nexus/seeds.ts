@@ -18,6 +18,7 @@ import './assemblies/machines';
 import './assemblies/things';
 import './assemblies/everyday';
 import './assemblies/vehicles';
+import './assemblies/robots2';
 
 /** A board being built, a node at a time, and saved as a seed. */
 class Seed {
