@@ -148,6 +148,10 @@ export async function findLines(q: string, most = 10): Promise<string> {
   const asked = new Map<string, string>(), catalogued: BlockDef[] = [];
   for (const h of findParts(q, 12)) { if (!h.full || catalogued.length >= 3) continue; const d = block(h.id); if (!d || seen.has(h.id) || !buildsInSpace(d) || OLD_BUILD.test(h.id)) continue; seen.add(h.id); catalogued.push(d); if (h.size) asked.set(h.id, h.size); }
   builders.push(...catalogued); const ahead = saved.length + catalogued.length;
+  // (a trade's or an aisle's word ("Garden", "Hinges"): its families, by id, one line, so the cards need not list them)
+  const { aisleOf: aisleOfD } = await import('./parts/aisles'), byAisle = new Map<string, string[]>();
+  for (const d of LIBRARY.values()) { if (!d.id.startsWith('piece.')) continue; const a = (aisleOfD(d) ?? '').toLowerCase(); if (a && words.some((w) => new RegExp(`\\b${w}`).test(a))) byAisle.set(aisleOfD(d)!, [...(byAisle.get(aisleOfD(d)!) ?? []), d.id]); }
+  const aisleLines = [...byAisle].slice(0, 6).map(([a, ids]) => `${a}: ${ids.slice(0, 24).join(' ')}${ids.length > 24 ? ` … ${ids.length - 24} more` : ''}`);
   for (const f of found) {
     if (f.board) { if (boards.length < 2) boards.push(`board "${f.board.slice(0, 80)}"`); continue; }
     const id = f.add?.block ?? f.id, d = block(id);
@@ -166,7 +170,7 @@ export async function findLines(q: string, most = 10): Promise<string> {
     return `${d.id}: ${d.name.slice(0, 40)}${d.by === 'you' ? ' (yours)' : ''} | in ${ps.inputs.map((p) => `${p.name}${p.many ? '*' : ''}`).join(',') || '-'}${outs === ROOM_GIVES ? '' : ` | out ${outs}`}${sets ? ` | set ${sets}` : ''}${offers.length ? ` | offers ${offers.join(', ')}` : ''}${eg ? ` | e.g. board "${eg}"` : ''}`; };
   const top = await Promise.all(builders.slice(0, Math.max(1, most - 4)).map(lineOf));
   const lines = [...top, ...boards, ...rest, ...old].slice(0, most);
-  return lines.length ? `${top.length ? `(what builds first; each gives ${ROOM_GIVES} unless out says; card one for its choices)\n` : ''}${lines.join('\n')}` : 'nothing matches';
+  return lines.length || aisleLines.length ? `${top.length ? `(what builds first; each gives ${ROOM_GIVES} unless out says; card one for its choices)\n` : ''}${[...lines, ...aisleLines].join('\n')}` : 'nothing matches';
 }
 
 /** The agent's tools, each answering in as few words as will do (docs/FOR-AI.md says how they are used). */
@@ -563,14 +567,12 @@ export function piecesCard(): string {
   const trades = new Map<string, [string, string[]][]>();
   for (const [a, xs] of [...aisles].sort(([a], [b]) => a.localeCompare(b))) { const [t, c] = splitAisle(a); trades.set(t, [...(trades.get(t) ?? []), [c, xs]]); }
   const order = [...trades].sort(([a], [b]) => tradeRank(a) - tradeRank(b) || a.localeCompare(b));
-  const head = `## The cards you need most (as \`card\` gives them; each piece and operation gives ${ROOM_GIVES} unless an arrow says; block into the next operation, thing only to show, measure, assert; * takes many wires; offers: its lines and rooms, <key> a setting's value)\n${[...named].map(([l, n]) => `${n}=[${l}]`).join(' ')}\n${ids.filter(full).map((id) => line(block(id)!)).join('\n')}\n## The other pieces by aisle, piece.<id> (\`card\` one for its settings and offers; \`find\` any by what it is or its size: "M8 nut", "608 bearing", "2x4"; an aisle with a count only: find in it)\n`;
-  const listed = new Set<string>(), text = (byTrade: boolean) => order.map(([t, cs]) => byTrade ? `${t}: ${cs.reduce((n, [, xs]) => n + xs.length, 0)} in ${cs.length} aisles (${cs.map(([c]) => c).join(', ')})` : `${t} | ${cs.map(([c, xs]) => listed.has(`${t}/${c}`) ? `${c}: ${xs.join(' ')}` : `${c} ${xs.length}`).join(' | ')}`).join('\n');
-  if (head.length + text(false).length > CARDS_ROOM) return head + text(true);
-  for (const [t, cs] of order) for (const [c] of cs) { listed.add(`${t}/${c}`); if (head.length + text(false).length > CARDS_ROOM) listed.delete(`${t}/${c}`); }
-  return head + text(false);
+  const head = `## The cards you need most (as \`card\` gives them; each piece and operation gives ${ROOM_GIVES} unless an arrow says; block into the next operation, thing only to show, measure, assert; * takes many wires; offers: its lines and rooms, <key> a setting's value)\n${[...named].map(([l, n]) => `${n}=[${l}]`).join(' ')}\n${ids.filter(full).map((id) => line(block(id)!)).join('\n')}\n## The other pieces, by trade (\`find\` any by what it is, its size, its aisle or its trade: "M8 nut", "608 bearing", "2x4", "Garden"; then \`card\` one for its settings and offers)\n`;
+  // (decision 0029, after the panel's critique: the cached head names each trade once (its families, its aisles); the
+  // aisles and the ids are found by `find` (a trade's or an aisle's word lists its families), never listed here, so the
+  // head stays short however many parts there are)
+  return head + order.map(([t, cs]) => `${t}: ${cs.reduce((n, [, xs]) => n + xs.length, 0)} in ${cs.length} aisle${cs.length === 1 ? '' : 's'}`).join('\n');
 }
-/** How long the cards may grow: the guide's cards, cached with it and sent every call (the test holds them under 7,000). */
-const CARDS_ROOM = 6500;
 
 /** The board as the model is told it, short: a line a node (its name, its block, the settings that are not the block's
  *  own, each value cut to 60 characters), then every wire: never cut (decision 0026: the quadcopter's and the robot

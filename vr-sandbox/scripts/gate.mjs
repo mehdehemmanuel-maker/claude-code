@@ -23,7 +23,8 @@ if (loop.reset) state[task] = { fails: 0, note };
 if (existsSync(STAMP)) rmSync(STAMP);
 const before = workingTree(repo, prefix);
 // (each step stopped at two minutes (C13): a run past it is a failure, counted by the loop breaker)
-const run = (cmd, args) => { const r = spawnSync(cmd, args, { cwd: project, stdio: 'inherit', timeout: 120_000, killSignal: 'SIGKILL' }); if (r.error?.code === 'ETIMEDOUT' || r.signal) console.error(`\n${cmd} ${args.join(' ')} stopped at two minutes\n`); return r.status === 0; };
+// (the one test took 132 s with 556 part families on a busy machine, 2026-11-07: its step gets five minutes, the type check two)
+const run = (cmd, args) => { const limit = cmd === 'npx' && args[0] === 'vitest' ? 300_000 : 120_000, r = spawnSync(cmd, args, { cwd: project, stdio: 'inherit', timeout: limit, killSignal: 'SIGKILL' }); if (r.error?.code === 'ETIMEDOUT' || r.signal) console.error(`\n${cmd} ${args.join(' ')} stopped at ${limit / 60_000} minutes\n`); return r.status === 0; };
 const passed = run('npx', ['tsc', '--noEmit', '-p', '.']) && run('npx', ['vitest', 'run']);
 const s = state[task] ?? { fails: 0, note };
 if (!passed) {

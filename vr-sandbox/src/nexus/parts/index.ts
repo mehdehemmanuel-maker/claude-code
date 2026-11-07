@@ -202,3 +202,6 @@ import { FIXINGS_NODES } from './fixings'; PIECE_NODES.push(...FIXINGS_NODES); /
 import { STRUCTURE_NODES } from './structure'; PIECE_NODES.push(...STRUCTURE_NODES); // structure and building: EN 755 aluminium, EN 10255 tube, UPE, HEM, IPN, purlins, timber, paving, drainage (decision 0026)
 import { FLUID_NODES } from './fluid'; PIECE_NODES.push(...FLUID_NODES); // pneumatics, hydraulics and plumbing (decision 0026)
 import { INSTALL_NODES } from './install'; PIECE_NODES.push(...INSTALL_NODES); // enclosures and electrical installation (decision 0026, 2026-11-06)
+import { HOME_NODES } from './home'; PIECE_NODES.push(...HOME_NODES); // tools, garden, kitchen, household, sports and toys (decision 0029, 2026-11-06)
+import { VEHICLE_NODES } from './vehicle'; PIECE_NODES.push(...VEHICLE_NODES); // vehicle and bicycle parts: wheels, tyres, brakes, suspension, steering, drivetrain (decision 0029, 2026-11-06)
+import { MACHINE_NODES } from './machine'; PIECE_NODES.push(...MACHINE_NODES); // aerospace, marine, machine tools, HVAC, electrical power (decision 0029, rough)

@@ -102,8 +102,14 @@ function robotArm(): void {
   s.n('piece.servo', { size: 'SG90' }, 'A joint servo', 'pitch');
   s.op('stoodp', 'room.turn', { axis: 'z', degrees: -90 }, 'Stood on its end, its spline out of its side', { block: 'pitch' });
   s.op('pitchh', 'room.over', { line: 'spline/axis', where: 'hi', fit: 'clear' }, 'Its horn over the spline: a pitch joint', { host: 'stoodp', sleeve: 'horn' });
+  // (decision 0029: the link is centred on the servo's upper tab hole, so its foot stands just above the servo's foot (0.15 mm,
+  // typical of a bracket's clearance) and touches nothing below: the servo's foot alone stands on what is under it, and the
+  // link's top plate alone carries the next servo; before, the link's foot was flush with the servo's and the joint read as
+  // locked to the plate below)
   s.n('room.make', { name: 'arm link', shape: 'box', mat: 'al-6061', a: 6, b: 60, c: 24 }, 'A link (aluminium bar), 24 × 6 mm (typical)', 'link');
-  s.op('module', 'room.onto', { face: '+x', fit: 'touch', end: 'lo' }, 'The link against the horn, rising from the servo\'s foot', { host: 'pitchh', child: 'link' });
+  s.op('linked', 'room.stack', { name: 'arm joint', axis: 'x', fit: 'touch', align: 'SG90 tabs/holes', order: 'pitchh, link' }, 'The link against the horn, centred on the upper tab hole, rising past the servo\'s top', { blocks: ['pitchh', 'link'] });
+  s.n('room.make', { name: 'link top plate', shape: 'box', mat: 'al-6061', a: 32, b: 3, c: 24 }, 'The link\'s top plate (aluminium), back over the servo: the next servo stands on it', 'ltop');
+  s.op('module', 'room.onto', { face: '+y', fit: 'touch', end: 'hi' }, 'The top plate on the link, flush with its outer face', { host: 'linked', child: 'ltop' });
   // (the chains: shoulder and elbow; a wrist pitch; a wrist roll)
   s.op('c3', 'room.stack', { name: 'robot arm', axis: 'y', fit: 'touch' }, 'Shoulder and elbow on the turntable', { blocks: ['lower', 'module', 'module'] });
   s.op('c4', 'room.stack', { name: 'robot arm', axis: 'y', fit: 'touch' }, 'And a wrist pitch', { blocks: ['c3', 'module'] });
