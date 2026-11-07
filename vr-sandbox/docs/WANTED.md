@@ -533,3 +533,7 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   engineering route kept (A); faster: no testing of each thing as it is built, no fixing one outcome at a time; the
   library and the abilities populated roughly, the whole app, then one review at the end that finds the same faults in
   one place and a fix plan by their roots)
+- 2026-11-07: "Merge and go I want it fast find ways to work faster and prompt better for speed there always tricks too
+  it there never a need for a digital entity to be taking hours on a task unless it's populating something like a the
+  library" (merge to main and go; speed above all: faster ways of working and of prompting the builders; no task
+  takes hours unless it is population)

@@ -3059,3 +3059,31 @@ Measured with real calls, each request once a run:
 
 No report has come in from the page: the store's `reports` and `parts` collections are both empty (read with
 ArtifactData).
+
+## 2026-11-06: decision 0029, the rough pass (six of nine builders; three stopped by the usage limit, run again later)
+
+Built rough, each thing once, no pictures, no blind checks, no evaluations with real calls (the user: "stop testing
+everything ... do the whole app roughly"). Every builder listed the faults it met instead of fixing them; the review
+of those faults by their roots is `plan/FIX-PLAN.md` (eight roots under 37 faults), for the user to review before any
+fixing.
+- **Counted** on the merged tree (a probe, deleted: `npx vitest run` of a test printing the library's ids by prefix):
+  1,186 blocks; 556 piece families, from 373; 60 assemblies, from 44; 17 room operations, from 14. Places written by
+  hand unchanged at 564 (`node scripts/by-hand.mjs`).
+- **Operations** (room.ts): a member between two named points (room.between), onto a face with a tilt, copies along a
+  line (room.along), the same block twice in a stack, through with `which` where several pieces offer the line, over
+  boring a hub with no bore, a round piece seated in a section, a key (room.key), two hinges on one line.
+- **Movement** (sim.ts, parts/motion.ts): the servo chains of the arm and the legs read as joints, a screw joint (the
+  lead screw drives its nut, velocity-level only), the MGN carriage sliding, the turbine on a bearing; two items cut.
+- **Parts:** 71 tool, garden, kitchen, household, sports and toy families (parts/home.ts); 52 vehicle and bicycle
+  families (parts/vehicle.ts; one cut); 60 aerospace, marine, machine-tool, HVAC and electrical-power families
+  (parts/machine.ts; one cut). Two ids were defined twice across files (mirror, radiator); the vehicle ones renamed at
+  the merge.
+- **Assemblies:** 16 vehicles and machines (assemblies/vehicles.ts: bicycle, helicopter, excavator, forklift, train,
+  3D printer, drill press, ceiling fan, lathe, mower, scooter, motorcycle, tractor, bus, van, robot dog); six of them are
+  in several groups by faces though every piece touches (fault 36, root 1 of the plan).
+- **Not run:** the home assemblies, the robot assemblies and the AI's menus at scale: the account's 5-hour usage limit
+  stopped them twice; started again when it reset. The cards sent with the AI's guide passed their 7,000-character test
+  limit with the new families (the line-a-trade tier had no budget; given one, it still needs the menus work), so the
+  gate has not passed on this tree yet and nothing of it is pushed until it does.
+- **Honest limits:** nothing here was looked at; sizes are typical and say so; the only check on each thing is that it
+  builds once with every node ok.

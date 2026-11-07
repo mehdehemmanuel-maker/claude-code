@@ -58,7 +58,7 @@ import { builtOf } from '../../src/nexus/evidence';
 import { parseUnit } from '../../src/ganglia/units';
 import { run } from '../../src/nexus/view/code-worker';
 import { builtPieces, stockProblems } from '../../src/nexus/stock';
-import { turn as roomTurn, insideOf, boundOf as roomBound, endsOf, stack as roomStack, made as roomMade, over as roomOver, through as roomThrough, into as roomInto, partOfBlock, branch as roomBranch, run as roomRun, type Block as RoomBlock } from '../../src/nexus/room';
+import { turn as roomTurn, insideOf, boundOf as roomBound, endsOf, stack as roomStack, made as roomMade, over as roomOver, through as roomThrough, into as roomInto, partOfBlock, branch as roomBranch, run as roomRun, onto as roomOnto, between as roomBetween, along as roomAlong, key as roomKey, noteOf as roomNoteOf, type Block as RoomBlock } from '../../src/nexus/room';
 import { boltedJoint as cpBolted, plate as cpPlate, pipe as cpPipe, coupling as cpCoupling, pipeRun, roundCase as cpRoundCase, section as cpSection, tee as cpTee } from '../../src/nexus/common';
 import { ring as roomRing } from '../../src/nexus/room';
 import { gear as cpGear } from '../../src/nexus/common';
@@ -149,12 +149,12 @@ describe('every domain, in one pass', () => {
     expect([shaft.r.failing, shaft.out('on').note], 'the stepper\'s shaft, not its pilot').toEqual([[], "over took 'NEMA 17 shaft/axis' for 'shaft/axis' (the one axis line it offers whose name shares a word with it)"]);
     const fan = await ran({ fan: { b: 'piece.fan', s: { size: '80×25' } }, pin: { b: 'room.make', s: { name: 'pin', shape: 'rod', a: 1.5, b: 40 } }, th: { b: 'room.through', s: { line: 'fan/holes' } } }, ['fan.block>th.host', 'pin.block>th.passer']);
     expect([fan.r.failing, fan.out('th').note], 'the fan\'s frame\'s holes').toEqual([[], "through took '80×25 fan frame/holes' for 'fan/holes' (the one holes line it offers whose name shares a word with it)"]);
-    // (two flanges of one name stacked: a bolt goes down the top one's hole, said; Through a line says how to name them apart)
+    // (two flanges of one name stacked: a bolt goes down the top one's hole, said; Through a line takes the lowest and says which (decision 0029))
     const fl = { bot: { b: 'piece.flange', s: { size: 'DN50', type: 'PN6' } }, gas: { b: 'piece.flangegasket' }, top: { b: 'piece.flange', s: { size: 'DN50', type: 'PN6' } }, st: { b: 'room.stack', s: { order: 'bot,gas,top' } } }, fw = ['bot.block>st.blocks', 'gas.block>st.blocks', 'top.block>st.blocks'];
     const flanged = await ran({ ...fl, j: { b: 'mate.bolted', s: { line: 'DN50 PN6 plate flange/holes', size: 'M12' } } }, [...fw, 'st.block>j.held']);
     expect([flanged.r.failing, flanged.out('j').note], 'the bolt down the top flange').toEqual([[], "bolted joint: 2 pieces offer DN50 PN6 plate flange/holes: down the top one's (the DN50 PN6 plate flange, piece 3), through all under it"]);
     const apart = await ran({ ...fl, pin: { b: 'room.make', s: { name: 'pin', shape: 'rod', a: 5, b: 60 } }, th: { b: 'room.through', s: { line: 'DN50 PN6 plate flange/holes' } } }, [...fw, 'st.block>th.host', 'pin.block>th.passer']);
-    expect(apart.r.failing[0], 'how to name them apart').toBe("th failed: through: 2 pieces offer DN50 PN6 plate flange/holes: bolt them by mate.bolted (down the top one's hole), or tell them apart where they are made (a piece made by room.make or piece.plate takes a name; a piece of a table is named by its size)");
+    expect(apart.r.failing, 'the pin down the lowest flange').toEqual([]); expect(apart.out('th').note, 'which one, said').toMatch(/^through: 2 pieces offer DN50 PN6 plate flange\/holes; took the DN50 PN6 plate flange \(piece \d+, the lowest along it\)/);
     // (two or more that fit: refused, just them listed, never a pick)
     const two = await ran({ pb1: { b: 'piece.pillowblock' }, pu: { b: 'piece.pulley' }, pb2: { b: 'piece.pillowblock' }, st: { b: 'room.stack', s: { axis: 'x', order: 'pb1,pu,pb2' } }, sh: { b: 'piece.shaft', s: { size: '8' } }, th: { b: 'room.through', s: { line: 'shaft/axis' } } }, ['pb1.block>st.blocks', 'pu.block>st.blocks', 'pb2.block>st.blocks', 'st.block>th.host', 'sh.block>th.passer']);
     expect(two.r.failing[0], 'every axis it offers, named').toMatch(/^th failed: through: no line 'shaft\/axis'; name one: 'GT2 20T pulley flange\/axis' or 'GT2 20T pulley hub\/axis' or /);
@@ -1483,6 +1483,24 @@ describe('every domain, in one pass', () => {
   // as the model writes it (prose, a fence, the JSON) and run by runPlan as the page runs it; what is wrong in a reply said,
   // never guessed; by hand, a piece joined by an operation the room offers, step on step; asked again, only what failed;
   // and the cards and the board's listing sent with the guide, short)
+  // (decision 0029, the rough round: vehicles and machines as blocks (assemblies/vehicles.ts): a bicycle, a helicopter, an
+  // excavator, a forklift, a train, a 3D printer, a drill press, a ceiling fan, a lathe, a lawnmower, a scooter, a
+  // motorcycle, a tractor, a bus, a van, a robot dog. Each built once at its defaults, every node ok; its pieces one group
+  // by faces where that holds (ten of them); the six where it does not are left as faults for the review, not loosened:
+  // a wheel in a stack along z joins the frame by no face (the bicycle, the motorcycle), a turned blade's root under a
+  // hub writes no face (the helicopter: things.ts's turbine has hub plates both sides), a pin's foot plate against a
+  // body's front none (the excavator), a wagon's box body on its chassis none while the engine's hood joins (the train),
+  // a handle bracket against an engine box none (the lawnmower))
+  it('vehicles as blocks: a bicycle, a helicopter, an excavator, a forklift, a train, a printer, a drill press, a fan, a lathe, a mower, a scooter, a motorcycle, a tractor, a bus, a van, a robot dog: one build each, every node ok, one group where that holds', async () => {
+    const built = async (id: string) => { const b = emptyBoard(id); placeBlock(b, id, 0, 0, {}, 'x'); const e = new Engine(b, env, new Memo()); await e.run();
+      expect([...e.state].filter(([, s]) => s.status !== 'ok').map(([n, s]) => `${n}: ${s.error}`), `${id}: every node runs`).toEqual([]); return e.state.get('x')!.out!.block as RoomBlock; };
+    const groups = (b: RoomBlock) => { const up = b.pieces.map((_, i) => i), top = (i: number): number => (up[i] === i ? i : (up[i] = top(up[i]!))); for (const f of b.faces) up[top(f.a)] = top(f.b); return new Set(b.pieces.map((_, i) => top(i))).size; };
+    const oneGroup = new Set(['seed.forklift', 'seed.printer-3d', 'seed.drill-press', 'seed.ceiling-fan', 'seed.lathe', 'seed.scooter', 'seed.tractor', 'seed.bus', 'seed.van', 'seed.robot-dog']);
+    for (const id of ['seed.bicycle', 'seed.helicopter', 'seed.excavator', 'seed.forklift', 'seed.train', 'seed.printer-3d', 'seed.drill-press', 'seed.ceiling-fan', 'seed.lathe', 'seed.lawnmower', 'seed.scooter', 'seed.motorcycle', 'seed.tractor', 'seed.bus', 'seed.van', 'seed.robot-dog']) {
+      const b = await built(id); expect(b.pieces.length, `${id}: pieces`).toBeGreaterThan(5);
+      if (oneGroup.has(id)) expect(groups(b), `${id}: one group of pieces`).toBe(1);
+    }
+  }, 40_000);
   // (decision 0028: the things the compound requests failed for want of (assemblies/things.ts): a wind turbine, a boat, a
   // camera, a tripod, a leg, a quadruped and a hexapod on it, a winch, a centrifugal pump, a truck. Each placed at two
   // settings gives two builds, every node ok, its pieces one group, no point in two pieces, the counts a person reads it by;
@@ -1599,10 +1617,12 @@ describe('every domain, in one pass', () => {
     for (const id of [...LIBRARY.keys()].filter((k) => /^(piece|room)\./.test(k))) {
       if (new RegExp(`^${rx(id)}\\b`, 'm').test(cards)) continue;
       const d = LIBRARY.get(id)!, [trade, aisle] = splitAisle(aisleOf(d) ?? 'none / none');
-      expect(rest, `the cards say ${id}'s aisle`).toMatch(new RegExp(`^${rx(trade)}\\b[^\\n]*${rx(aisle)}`, 'm'));
+      // (decision 0029: the cards name the trade; the aisle and the id come by `find` (a trade's or an aisle's word), checked below)
+      expect(rest, `the cards say ${id}'s trade`).toMatch(new RegExp(`^${rx(trade)}\\b`, 'm')); void aisle;
       expect(await findL(d.name), `find "${d.name}" brings ${id}`).toMatch(new RegExp(`^${rx(id)}: `, 'm'));
       expect(namedC(d, d.name).startsWith(`${id}: `), `${id}: its named card`).toBe(true);
     }
+    expect(await findL('Garden'), 'find by a trade\'s word lists its families').toMatch(/^Garden \/ [^\n]*piece\./m);
     console.log(`the cards sent with the guide: ${cards.length} characters; the guide ${readFileSync(join(root, 'docs/FOR-AI.md'), 'utf8').length}`);
     // (7,000, not 6,000 (decision 0026): the cards now say what each piece offers (the line or room an operation names) and
     // carry mate.lid and mate.plate, which the wiring needs; the lists said by many cards are said once to pay for it)
@@ -1919,6 +1939,54 @@ describe('every domain, in one pass', () => {
     const drawn = [e[0], e[4], e[8], e[1], e[5], e[9], e[2], e[6], e[10]];
     expect(Math.max(...drawn.map((x, i) => Math.abs(x! - f[i]!))), 'drawn as its frame').toBeLessThan(1e-12);
   });
+  it('decision 0029 ops: a member between two points, a tilted block on a face, copies along a line, a block stacked twice, through the lowest of two, over a solid hub bored, an axle seated in a V block, a keyed hub, two hinges on one line', async () => {
+    // (rough, decision 0029: each rule built once at one setting; every node ok; nothing shared where sampled)
+    const ran = async (nodes: Record<string, { b: string; s?: Record<string, unknown> }>, wires: string[]) => { const b = emptyBoard('asked'); for (const [id, n] of Object.entries(nodes)) placeBlock(b, n.b, 0, 0, n.s ?? {}, id);
+      for (const w of wires) { const [f, t] = w.split('>') as [string, string], [fn, fo] = f.split('.') as [string, string], [tn, ti] = t.split('.') as [string, string]; wire(b, fn, fo, tn, ti); }
+      const e = new Engine(b); await e.run(); return { r: { failing: [...e.state].filter(([, s]) => s.status !== 'ok').map(([id, s]) => `${id}: ${s.error}`) }, out: (id: string) => (e.state.get(id)?.out ?? {}) as Record<string, unknown> }; };
+    const shared = (b: RoomBlock, n = 20) => { let s = 0; for (const p of b.pieces) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) for (let k = 0; k < n; k++) {
+      const q = [i, j, k].map((t, a) => b.lo[a]! + ((t + 0.5) / n) * (b.hi[a]! - b.lo[a]!)) as [number, number, number]; if (insideOf(p, ...q) && b.pieces.some((r) => r !== p && insideOf(r, ...q))) s++; } return s; };
+    // (1) a brace from a hole in one post to a hole in the other, cut through the beam it crosses
+    const bay = roomStack('bay', 0, [{ b: roomMade('left post', 'steel-low', { box: [0.02, 0.3, 0.02] }, { pattern: { name: 'holes', points: [[0, -0.1]], hole: 0.004, face: '+z' } }) }, { b: roomMade('beam', 'steel-low', { box: [0.3, 0.02, 0.02] }) }, { b: roomMade('right post', 'steel-low', { box: [0.02, 0.3, 0.02] }, { pattern: { name: 'holes', points: [[0, 0.1]], hole: 0.004, face: '+z' } }) }]);
+    const brace = roomBetween(bay, { port: 'left post/holes' }, { port: 'right post/holes' }, roomMade('brace', 'steel-low', { cyl: [0.004, 0.36] }), 'tight');
+    expect([brace.pieces.length, brace.faces.filter((f) => f.by.startsWith('brace from')).length, shared(brace)], 'the brace laid, cut from all three, nothing shared').toEqual([4, 3, 0]);
+    expect(brace.pieces[3]!.solid.base.c.map((v) => +v.toFixed(6)), 'its middle between the holes').toEqual([0.17, 0, 0]);
+    // (2) a roof panel tilted 30° about x on a wall's top: one line face along its lowest edge
+    const roof = roomOnto(roomMade('wall', 'brick', { box: [0.3, 0.2, 0.3] }), '+y', roomMade('roof', 'steel-low', { box: [0.3, 0.004, 0.2] }), 'touch', undefined, 'mid', { about: 0, degrees: 30 });
+    expect(roof.faces.map((f) => [f.patch, +f.length!.toFixed(6)]), 'a line face the panel\'s length').toEqual([['line', 0.3]]);
+    // (3) three treads up a stringer turned 35° about z, from its low hole to its high one, housed in it
+    const stringer = roomTurn(roomMade('stringer', 'spruce', { box: [0.04, 1, 0.2] }, { pattern: { name: 'holes', points: [[-0.4, 0], [0.4, 0]], face: '+x' } }), 2, -35);
+    const treads = roomAlong(stringer, { port: 'stringer/holes', i: 0 }, { port: 'stringer/holes', i: 1 }, roomMade('tread', 'spruce', { box: [0.25, 0.03, 0.15] }), 3, 'tight', 'on');
+    expect([treads.pieces.length, treads.faces.length, shared(treads)], 'three treads, each let into the stringer').toEqual([4, 3, 0]);
+    expect(treads.pieces[2]!.solid.base.c.map((v) => +v.toFixed(6)), 'the middle one at the stringer\'s middle').toEqual([0, 0, 0]);
+    // (4) the same block twice in a stack's order, by the blocks' own names
+    const rail = roomMade('rail', 'steel-low', { box: [0.02, 0.02, 0.2] }), post = roomMade('post', 'steel-low', { box: [0.02, 0.1, 0.02] });
+    const fence = await ran({ r: { b: 'room.make', s: { name: 'rail', shape: 'box', a: 20, b: 20, c: 200 } }, p: { b: 'room.make', s: { name: 'post', shape: 'box', a: 20, b: 100, c: 20 } }, st: { b: 'room.stack', s: { axis: 'x', order: 'rail, post, rail' } } }, ['r.block>st.blocks', 'p.block>st.blocks']);
+    expect([fence.r.failing, (fence.out('st').block as RoomBlock).pieces.map((p) => p.name)], 'rail, post, rail').toEqual([[], ['rail', 'post', 'rail']]);
+    expect(roomStack('fence', 0, [{ b: rail }, { b: post }, { b: rail }]).pieces.length + roomOnto(rail, '+y', rail).pieces.length, 'twice by the operation itself').toBe(5);
+    // (5) a pin through two plates of one name: down the lowest, said
+    const two = roomStack('two', 1, [{ b: roomMade('plate', 'steel-low', { box: [0.1, 0.01, 0.1] }, { pattern: { name: 'holes', points: [[0, 0]], hole: 0.005 } }) }, { b: roomMade('plate', 'steel-low', { box: [0.1, 0.01, 0.1] }, { pattern: { name: 'holes', points: [[0, 0]], hole: 0.005 } }) }]);
+    const pinned = roomThrough(two, roomMade('pin', 'steel-alloy', { cyl: [0.004, 0.05] }), { port: 'plate/holes', from: 'lo' }, 'clear');
+    expect([pinned.pieces.length, roomNoteOf(pinned), shared(pinned)]).toEqual([3, 'through: 2 pieces offer plate/holes; took the plate (piece 1, the lowest along it)', 0]);
+    // (6) an end bell with no bore slid over a shaft: bored to it, said; a plate refused with the way named
+    const shaft = roomMade('shaft', 'steel-alloy', { cyl: [0.005, 0.1] }), belled = roomOver(shaft, 'shaft/axis', roomMade('end bell', 'nylon', { cyl: [0.009, 0.003] }), 'lo', 'slide');
+    expect([belled.pieces.length, roomNoteOf(belled), (belled.pieces[1]!.solid.base as { ri?: number }).ri]).toEqual([2, 'over bored the end bell to the shaft (Ø10.50 mm, the slide fit): it had no bore', 0.00525]);
+    expect(() => roomOver(shaft, 'shaft/axis', roomMade('plate', 'steel-low', { box: [0.03, 0.003, 0.03] }), 'hi', 'slide')).toThrow(/has no bore to slide on with: make it round/);
+    // (7) an axle laid along z onto a V block: seated in the V, a line face on each flank
+    const vee = roomMade('V block', 'steel-low', { section: { pts: [[-0.03, 0], [0.03, 0], [0.03, 0.03], [0.012, 0.03], [0, 0.018], [-0.012, 0.03], [-0.03, 0.03]], L: 0.05 } });
+    const seated = roomOnto(vee, '+y', roomTurn(roomMade('axle', 'steel-alloy', { cyl: [0.01, 0.1] }), 0, 90));
+    expect([+seated.pieces[1]!.solid.base.c[1].toFixed(6), seated.faces.map((f) => f.patch), shared(seated, 32)], 'its centre 10√2 above the V\'s bottom, two line faces').toEqual([+(0.018 + 0.01 * Math.SQRT2).toFixed(6), ['line', 'line'], 0]);
+    // (8) a key in a shaft and the hub slid over it
+    const hubbed = roomOver(roomMade('shaft', 'steel-alloy', { cyl: [0.01, 0.1] }), 'shaft/axis', roomMade('hub', 'steel-low', { tube: [0.0103, 0.025, 0.03] }), 'mid', 'slide');
+    const keyed = roomKey(hubbed, 'shaft/axis', roomMade('6 × 6 key', 'steel-low', { box: [0.006, 0.006, 0.02] }));
+    expect([keyed.pieces.map((p) => p.name), keyed.faces.filter((f) => f.by === '6 × 6 key keys hub to shaft').length, shared(keyed, 32)]).toEqual([['shaft', 'hub', '6 × 6 key'], 2, 0]);
+    // (9) two hinges on one door leaf at its top and its bottom, the second on the first's pin line (end "lo", align on the pin)
+    const hinge = roomOnto(roomMade('pin', 'steel-low', { cyl: [0.003, 0.1] }), '+x', roomMade('hinge leaf', 'steel-low', { box: [0.0025, 0.1, 0.035] }), 'touch', undefined, 'hi');
+    const door = roomOnto(roomOnto(roomMade('leaf', 'mdf', { box: [0.762, 1.981, 0.035] }), '-x', hinge, 'touch', undefined, 'hi'), '-x', hinge, 'touch', 'pin/axis', 'lo');
+    const pins = door.pieces.filter((p) => p.name === 'pin').map((p) => p.solid.base.c.map((v) => +v.toFixed(9)));
+    expect(pins, 'both pins at one x and z, one at each end').toEqual([[0.003, 0.05, 0], [0.003, 1.931, 0]]);
+    for (const id of ['room.between', 'room.along', 'room.key']) expect((await testBlock(LIBRARY.get(id)!)).fails, id).toEqual([]);
+  });
   it('a turned block keeps every pair of its pieces apart at every angle; a run\'s segments meet end to end', async () => {
     const sample = (b: RoomBlock, n: number) => { let shared = 0, outOwn = 0, outBlock = 0, inside = 0;
       for (const p of b.pieces) { const [lo, hi] = roomBound(p), g = [0, 1, 2].map((k) => (hi[k]! - lo[k]!) * 0.15);
@@ -2153,6 +2221,16 @@ describe('every domain, in one pass', () => {
     const re = reapplyImprints({ ...KH.part, parts: [{ ...KH.part.parts![0]!, shape: ring(0.03).parts![0]!.shape }] }), c2 = re.part.parts![0]!.cuts![0]!, xs = c2.sect!.map((p) => p[0]);
     expect([re.kept, +((Math.max(...xs) - Math.min(...xs)) / mm).toFixed(3), +(c2.at[1] / mm).toFixed(6), H.part.parts![0]!.imprints![0]!.limits!.map((l) => l.on)], 'kept through 50.02 mm; the limits on the record').toEqual([['parallel key'], 50.02, 5, ['D', 'Da', 'ra']]);
   }, 180_000);
+  // (decision 0029, the user 2026-11-06: "stop testing everything and just populate the library ... do the whole app
+  // roughly": vehicle and bicycle parts, table-driven families in parts/vehicle.ts, every table typical or recalled; each
+  // built once at its default size, and each node's own tests run once)
+  it('vehicle and bicycle parts: every family builds at its default size and its node tests pass', async () => {
+    const { VEHICLE, VEHICLE_NODES } = await import('../../src/nexus/parts/vehicle'), { build } = await import('../../src/nexus/parts/maker');
+    const bad: string[] = [];
+    for (const f of VEHICLE) { const set = Object.fromEntries((f.settings ?? []).map((s) => [s.key, s.default])); try { if (!(build(f, f.size, set).pieces.length > 0)) bad.push(`${f.id}: no pieces`); } catch (e) { bad.push(`${f.id}: ${(e as Error).message}`); } }
+    for (const n of VEHICLE_NODES) { const r = await testBlock(n); if (!r.ok) bad.push(`${n.id}: ${r.fails.join('; ')}`); }
+    expect(bad, bad.join('\n')).toEqual([]); expect(VEHICLE.length, 'families made').toBeGreaterThanOrEqual(40);
+  }, 40_000);
   // (decision 0026, the user 2026-11-06: the library organised so a person and the AI find any part fast. Every piece has
   // an aisle, a trade and a category (its own, else parts/aisles.ts's); the catalogue (navigate.ts) is trade, category,
   // family, size, and finds a part by its size words in the first three, the library's search and the AI's find ranked by
@@ -2587,6 +2665,56 @@ describe('every domain, in one pass', () => {
       expect([one.wide, one.results.slice(1).every((r) => r instanceof Error && /no block/.test(r.message))], 'only the outer carried: the workers find no inner block').toEqual([true, true]);
     } finally { for (const t of ['a', 'b']) { LIBRARY.delete(`zz.twice-${t}`); LIBRARY.delete(`zz.twice-and-one-${t}`); } }
   }, 120_000);
+  // (decision 0029, movement's known roots, rough: a touch on a joint's own axis end joined last and only where it does not
+  // lock the joint, so a servo's spline joins its case and gives way to its horn's link; the link's foot clear of what the
+  // servo stands on; a lead screw in its tapped nut a screw joint; an MGN carriage's skirts proud of its rail; a turbine's
+  // nacelle on a slewing bearing; held servos on a spring of their own stiffness, never asleep)
+  it('movement 3 (decision 0029): the leg, the arm and the quadruped each joint its own body, the MGN carriage sliding on its rail, a nut screwing its lead a turn, the turbine yawing on its bearing, a wheel over each motor\'s shaft, the arm turned at 1 rad/s with its shoulder held', async () => {
+    const { LiveMotion, motionOf } = await import('../../src/nexus/sim'), J = (await (await import('jolt-physics/wasm-compat')).default()) as never;
+    const built = async (id: string, set: Record<string, unknown>, out = 'block') => { const b = emptyBoard(id); placeBlock(b, id, 0, 0, set, 'x'); const e = new Engine(b, env, new Memo()); await e.run();
+      expect([...e.state].filter(([, s]) => s.status !== 'ok').map(([n, s]) => `${n}: ${s.error}`), `${id}: every node ok`).toEqual([]); return e.state.get('x')!.out![out] as RoomBlock; };
+    const has = (b: RoomBlock, m: ReturnType<typeof motionOf>, k: number, re: RegExp) => m.bodies[k]!.pieces.some((i) => re.test(b.pieces[i]!.name));
+    // (a chain: each joint a servo's, its shaft's body the one before it; the base, hip or foot the one frozen)
+    const chain = (id: string, b: RoomBlock, m: ReturnType<typeof motionOf>, bodies: number, root: RegExp) => {
+      expect(m.bodies.length, `${id}: ${m.says}`).toBe(bodies); expect(m.joints.every((j) => j.motor?.kind === 'servo' && j.turns && !j.slide), `${id}: every joint a servo's turn: ${m.says}`).toBe(true);
+      expect(m.bodies.filter((x) => x.frozen).map((k) => has(b, m, m.bodies.indexOf(k), root)), `${id}: the one frozen body holds ${root}`).toEqual([true]);
+      expect(m.bodies.filter((x) => x.pieces.some((i) => /spline$/.test(b.pieces[i]!.name)) && !x.pieces.some((i) => /case above$/.test(b.pieces[i]!.name))).length, `${id}: every spline in its case's body`).toBe(0); };
+    const leg = await built('seed.leg', { joints: '2' }), ml = motionOf(leg); chain('leg', leg, ml, 3, /rubber foot/); expect(ml.joints.length).toBe(2);
+    const arm = await built('seed.robot-arm', { joints: '3' }), ma = motionOf(arm); chain('arm', arm, ma, 5, /arm base mount/); expect(ma.joints.length).toBe(4);
+    const quad = await built('seed.quadruped', {}), mq = motionOf(quad); chain('quadruped', quad, mq, 9, /rubber foot/); expect(mq.joints.length).toBe(8);
+    const yaw = ma.joints.find((j) => has(arm, ma, j.a, /turntable/))!; expect([yaw.dir, has(arm, ma, yaw.b, /arm base mount/)]).toEqual([[0, 1, 0], true]);
+    const shoulder = ma.joints.find((j) => has(arm, ma, j.a, /arm link/) && j.b === yaw.a)!; expect(shoulder.dir.map(Math.abs)).toEqual([1, 0, 0]);
+    // (the arm turned at 1 rad/s for two seconds: it turns (not stalled asleep at half a second), its held joints stay put)
+    const la = new LiveMotion(J, arm); la.spin(yaw.a, 1); la.step(2); expect(la.angle(yaw.a)).toBeGreaterThan(1.9); expect(la.angle(yaw.a)).toBeLessThan(2.1);
+    for (const j of ma.joints) if (j !== yaw) expect(Math.abs(la.angle(j.a)), `${ma.bodies[j.a]!.name} held while the arm turns`).toBeLessThan(0.02);
+    la.destroy();
+    // (the MGN carriage: one joint, a slide along the rail (z), no turn, within the rail's ends; pulled, it slides)
+    const mgn = await built('piece.mgn', {}), mm = motionOf(mgn), carriage = mm.bodies.findIndex((x) => !x.frozen);
+    expect(mm.joints.map((j) => [j.turns, j.slide, has(mgn, mm, j.b, /^MGN12 rail$/), j.dir.map(Math.abs)])).toEqual([[false, true, true, [0, 0, 1]]]);
+    expect(mm.joints[0]!.range!.map((v) => +(v * 1000).toFixed(1))).toEqual([-127.3, 127.3]);
+    const lm = new LiveMotion(J, mgn); for (let k = 0; k < 120; k++) { lm.pull(carriage, [0, 0, 0.2], lm.pointOf(carriage, [0, 0.01, 0])); lm.step(1 / 240); } expect(lm.slid(carriage)).toBeGreaterThan(0.005); lm.destroy();
+    // (a T8 lead-8 nut over its screw by its thread: a screw joint, 8 mm a turn; torqued (and back-driven by gravity, the
+    // screw upright), it moves lead / 2π along for each radian, within 3 %)
+    const sb = emptyBoard('screw'); placeBlock(sb, 'piece.leadscrew', 0, 0, { size: 'T8 lead 8', length: 100 }, 'ls'); placeBlock(sb, 'piece.leadnut', 0, 0, { size: 'T8' }, 'nut'); placeBlock(sb, 'room.over', 0, 0, { line: 'T8 lead 8 lead screw/axis', where: 'mid', fit: 'touch' }, 'x');
+    wire(sb, 'ls', 'block', 'x', 'host'); wire(sb, 'nut', 'block', 'x', 'sleeve'); const es = new Engine(sb, env, new Memo()); await es.run(); expect(es.state.get('x')!.status).toBe('ok');
+    const screw = es.state.get('x')!.out!.block as RoomBlock, ms = motionOf(screw), nut = ms.bodies.findIndex((x) => !x.frozen);
+    expect(ms.joints.map((j) => [j.screw, j.turns, j.slide])).toEqual([[0.008, true, true]]);
+    const ls = new LiveMotion(J, screw); for (let k = 0; k < 48; k++) { ls.torque(nut, 1e-5); ls.step(1 / 240); }
+    expect(Math.abs(ls.slid(nut))).toBeGreaterThan(0.002); expect(Math.abs(ls.slid(nut))).toBeLessThan(0.04);
+    expect(ls.slid(nut) / ls.angle(nut)).toBeGreaterThan((0.008 / (2 * Math.PI)) * 0.97); expect(ls.slid(nut) / ls.angle(nut)).toBeLessThan((0.008 / (2 * Math.PI)) * 1.03); ls.destroy();
+    // (the turbine: the nacelle's body (with the bearing and the rotor shaft) yaws on the mast's about y by the fit alone,
+    // nothing giving way for it; the rotor turns on it)
+    const wt = await built('seed.wind-turbine', {}), mw = motionOf(wt), nac = mw.bodies.findIndex((x) => x.pieces.some((i) => wt.pieces[i]!.name === 'nacelle'));
+    expect(mw.bodies[nac]!.pieces.map((i) => wt.pieces[i]!.name).sort()).toEqual(['nacelle', 'slewing bearing', 'yaw ring', 'Ø20 shaft'].sort());
+    expect(mw.joints.map((j) => [j.a === nac, j.b === nac, j.dir])).toEqual(expect.arrayContaining([[true, false, [0, 1, 0]], [false, true, [1, 0, 0]]])); expect(mw.says).not.toMatch(/nacelle touching/);
+    // (a wheel over shaft/axis on each motor: the wheel its own body turning on the motor's shaft)
+    for (const [id, set, out] of [['seed.motor-dc', {}, 'motor'], ['piece.dcmotor', { size: '130' }, 'block'], ['piece.gearmotor', { size: 'N20' }, 'block']] as [string, Record<string, unknown>, string][]) {
+      const b = emptyBoard(id); placeBlock(b, id, 0, 0, set, 'm'); placeBlock(b, 'piece.wheel', 0, 0, { size: '40' }, 'w'); placeBlock(b, 'room.over', 0, 0, { line: 'shaft/axis', where: 'hi', fit: 'clear' }, 'x');
+      wire(b, 'm', out, 'x', 'host'); wire(b, 'w', 'block', 'x', 'sleeve'); const e = new Engine(b, env, new Memo()); await e.run(); expect(e.state.get('x')!.status, `${id}: ${e.state.get('x')!.error ?? ''}`).toBe('ok');
+      const blk = e.state.get('x')!.out!.block as RoomBlock, m = motionOf(blk), wheel = m.bodies.findIndex((x) => x.pieces.some((i) => /wheel hub/.test(blk.pieces[i]!.name)));
+      expect(m.bodies[wheel]!.pieces.length, `${id}: the wheel (hub and tyre) its own body: ${m.says}`).toBe(2); expect(m.joints.some((j) => j.a === wheel && j.turns && has(blk, m, j.b, /shaft$/)), `${id}: the wheel turns on the shaft`).toBe(true);
+    }
+  }, 40_000);
   it('movement 2 (decision 0028): a rack moved by its pinion its pitch radius a radian, belted pulleys by their teeth, a motor at its speed, a servo held under gravity', async () => {
     const { LiveMotion, motionOf } = await import('../../src/nexus/sim'), J = (await (await import('jolt-physics/wasm-compat')).default()) as never;
     const boardOf = async (re: RegExp, out: string) => { const [, make] = starterBoards().find(([t]) => re.test(t))!, e = new Engine(make()); await e.run(); return e.state.get(out)?.out?.block as RoomBlock; };
@@ -2812,6 +2940,21 @@ describe('every domain, in one pass', () => {
       expect(bad).toEqual([]);
     }, 60_000);
   }
+  // (decision 0029, the user 2026-11-06 "populate the library": tools, garden, kitchen, household, sports and toy parts
+  // (src/nexus/parts/home.ts), each family built ONCE at its default size and checked against its row; a hammer's handle
+  // put up through its head's eye, by the operations)
+  it('home parts: tools, garden, kitchen, household, sports and toys, each family built once and held to its row', async () => {
+    const { HOME_FAMILIES } = await import('../../src/nexus/parts/home');
+    const { checkRow, build, PART_FAMILIES } = await import('../../src/nexus/parts/maker');
+    const R = await import('../../src/nexus/room');
+    const bad: string[] = []; let rows = 0;
+    for (const f of HOME_FAMILIES) { rows += Object.keys(f.rows).length; try { const r = checkRow(f.id, f.size); if (!r.ok) bad.push(r.says); } catch (e) { bad.push(`${f.id} ${f.size}: ${(e as Error).message}`); } }
+    expect(bad).toEqual([]); expect(HOME_FAMILIES.length, 'families').toBeGreaterThanOrEqual(40); expect(rows, 'sized parts').toBeGreaterThanOrEqual(300);
+    expect(HOME_FAMILIES.every((f) => /^(Tools|Garden|Kitchen|Household|Sports|Toys) \/ /.test(f.aisle ?? '')), 'each in its aisle').toBe(true);
+    const fam = (id: string) => PART_FAMILIES.get(id)!;
+    const hammer = R.through(build(fam('piece.hammerhead'), '16 oz'), build(fam('piece.hammerhandle'), '330'), { port: '16 oz hammer head/eye', from: 'lo' }, 'tight');
+    expect(hammer.pieces.length, 'a head and its handle').toBe(2);
+  }, 40_000);
   // (decision 0026: the space's new solids, holes on any face, copies turned to face out and the drawing fixed. Each new
   // solid sampled after every operation that takes it, as the turned blocks above are: no point inside two pieces, none
   // outside its own bound or its block's)
@@ -2951,6 +3094,15 @@ describe('every domain, in one pass', () => {
       expect(Math.abs(Number(out('therm').hottest) - 35.34), 'the block 5 W warm: within 0.05 °C of the old board').toBeLessThan(0.05);
       expect([hexOf(drawn.get('copper rod')?.color), hexOf(drawn.get('aluminium rod')?.color), hexOf(drawn.get('steel block')?.color), drawn.get('steel block')?.finish], 'drawn in its old colours, machined').toEqual(['#b87333', '#b0b8c0', '#6d7278', 'machined']); }
   }, 120_000);
+  // (decision 0029, rough: aerospace, marine, machine-tool, HVAC and electrical-power families (src/nexus/parts/machine.ts),
+  // each built once at its first size and held to its row where the row gives one)
+  it('machine trades: every aerospace, marine, machine-tool, HVAC and power family builds once at one size, as its row says', async () => {
+    const { MACHINE } = await import('../../src/nexus/parts/machine');
+    const { checkRow } = await import('../../src/nexus/parts/maker');
+    const bad: string[] = []; let n = 0;
+    for (const f of MACHINE) { try { const r = checkRow(f.id, f.size); n++; if (!r.ok) bad.push(r.says); } catch (e) { bad.push(`${f.id}: ${(e as Error).message}`); } }
+    expect(bad).toEqual([]); expect(n, 'families built').toBe(MACHINE.length); expect(MACHINE.length).toBeGreaterThanOrEqual(40);
+  }, 40_000);
   it('ring copies turned to face out stay apart; a bend drawn hollow weighs what its tube does; a ring cut drawn with its core', () => {
     const blade = roomMade('blade', 'abs', { box: [0.06, 0.004, 0.012] }), fan = roomRing('fan', blade, 5, 0.06, 'clear', true);
     expect(sampleRoom(fan, 12), 'five blades turned out').toEqual(APART);

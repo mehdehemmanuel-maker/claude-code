@@ -76,8 +76,12 @@ function windTurbine(): void {
   s.op('spun', 'room.over', { line: 'Ø20 shaft/axis', where: 'hi', fit: 'clear' }, 'The rotor over its shaft: it turns', { host: 'shaft', sleeve: 'rrotor' });
   s.op('rx', 'room.turn', { axis: 'z', degrees: -90 }, 'Laid along x, the rotor in front', { block: 'spun' });
   s.n('room.make', { name: 'yaw ring', shape: 'tube', mat: 'steel-low', a: 58.2, b: 80, c: 40 }, 'The yaw ring, bored for the mast', 'yaw');
+  // (decision 0029: a slewing bearing between the yaw ring and the nacelle (a ring, Ø160 × 20, typical, drawn as one piece):
+  // the mast's top ends at the yaw ring's top, inside the bearing's bore, so the nacelle rests on the bearing and never on
+  // the mast's tip, and the yaw is a joint by the fit alone)
+  s.n('room.make', { name: 'slewing bearing', shape: 'tube', mat: 'steel-low', a: 58.2, b: 80, c: 20 }, 'The slewing bearing (typical), the mast\'s top inside its bore', 'slew');
   s.n('room.make', { name: 'nacelle', shape: 'box', mat: 'fibreglass', a: 700, b: 300, c: 300 }, 'The nacelle (glass fibre), 700 × 300 × 300 (typical)', 'nac');
-  s.op('nu', 'room.stack', { name: 'wind turbine', axis: 'y', fit: 'touch', order: 'yaw, nac' }, 'The nacelle on its yaw ring', { blocks: ['yaw', 'nac'] });
+  s.op('nu', 'room.stack', { name: 'wind turbine', axis: 'y', fit: 'touch', order: 'yaw, slew, nac' }, 'The nacelle on its slewing bearing on its yaw ring', { blocks: ['yaw', 'slew', 'nac'] });
   s.op('head', 'room.onto', { face: '+x', fit: 'touch' }, 'The rotor\'s shaft against the nacelle\'s front', { host: 'nu', child: 'rx' });
   s.n('piece.hollowsection', { size: 'CHS 114.3x3.6', length: 6000 }, 'The mast, CHS 114.3 × 3.6', 'mast');
   s.op('up', 'room.through', { line: 'yaw ring/axis', which: 0, from: 'above', fit: 'clear' }, 'The mast up through the yaw ring: it yaws', { host: 'head', passer: 'mast' });
@@ -192,8 +196,13 @@ function leg(): void {
   s.n('piece.servo', { size: 'SG90' }, 'A joint servo', 'pitch');
   s.op('stood', 'room.turn', { axis: 'z', degrees: -90 }, 'Stood on its end, its spline out of its side', { block: 'pitch' });
   s.op('pitchh', 'room.over', { line: 'spline/axis', where: 'hi', fit: 'clear' }, 'Its horn over the spline: a pitch joint', { host: 'stood', sleeve: 'horn' });
+  // (decision 0029: as the robot arm's module: the link centred on the servo's upper tab hole, its foot 0.15 mm above the
+  // servo's (typical of a bracket's clearance), a top plate back over the servo for the next one to stand on; before, the
+  // link met what was below and the joint read as locked)
   s.n('room.make', { name: 'leg link', shape: 'box', mat: 'al-6061', a: 6, b: 50, c: 24 }, 'A link (aluminium bar), 24 × 6 mm', 'link');
-  s.op('module', 'room.onto', { face: '+x', fit: 'touch' }, 'The link on the horn, past the servo\'s foot and top (only the link meets what is below and above: the joint is free)', { host: 'pitchh', child: 'link' });
+  s.op('linked', 'room.stack', { name: 'leg joint', axis: 'x', fit: 'touch', align: 'SG90 tabs/holes', order: 'pitchh, link' }, 'The link on the horn, centred on the upper tab hole, rising past the servo\'s top', { blocks: ['pitchh', 'link'] });
+  s.n('room.make', { name: 'link top plate', shape: 'box', mat: 'al-6061', a: 32, b: 3, c: 24 }, 'The link\'s top plate, back over the servo: the next servo stands on it', 'ltop');
+  s.op('module', 'room.onto', { face: '+y', fit: 'touch', end: 'hi' }, 'The top plate on the link, flush with its outer face', { host: 'linked', child: 'ltop' });
   s.op('c2', 'room.stack', { name: 'leg', axis: 'y', fit: 'touch' }, 'Hip and knee on the hip plate', { blocks: ['hip', 'module', 'module'] });
   s.op('c3', 'room.stack', { name: 'leg', axis: 'y', fit: 'touch' }, 'Hip yaw, hip and knee', { blocks: ['lower', 'module', 'module'] });
   s.n('room.make', { name: 'foot pad', shape: 'box', mat: 'al-6061', a: 30, b: 3, c: 30 }, 'The foot pad', 'pad');
