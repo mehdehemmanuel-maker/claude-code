@@ -4,7 +4,7 @@
 // (geometry is exact solids) and, after it, STEP. What cannot be made yet is counted and said, never drawn as a mesh and
 // called a solid. The road map's item 6.
 import type { Part, Shape, V3 } from './kits';
-import { cutFrame, sectionPoint, tubeLegs } from './form';
+import { cutFrame, loftSections, sectionRing, tubeLegs, type Station } from './form';
 import { massOf, densityKg } from './mass';
 import { register, type BlockDef, type PortDef, type Type } from './blocks';
 import { Block, partOfBlock } from './room';
@@ -62,8 +62,9 @@ function faceted(r: Replicad, prof: [number, number][], n: number): Solid {
   // (its ends on the axis are capped flat: a lathe's profile runs out to its axis at each end)
   return r.loft(mid.map(([a, y]) => ring(a, y)), { ruled: true });
 }
-/** A loft's station as a closed polygon at its x (its section's own points, 64 round). */
-const stationWire = (r: Replicad, s: Parameters<typeof sectionPoint>[0]) => r.assembleWire((() => { const k = 64, p = Array.from({ length: k }, (_, i) => { const [y, z] = sectionPoint(s, (2 * Math.PI * i) / k); return [s.x, y, z + (s.z ?? 0)] as V3; }); return p.map((a, i) => r.makeLine(a, p[(i + 1) % k]!)); })());
+/** A loft's section as a closed polygon at its x: its ring's points (form.ts sectionRing, LOFT_RING round), as its mass
+ *  and its drawing take them. */
+const stationWire = (r: Replicad, s: Station) => r.assembleWire((() => { const p = sectionRing(s).map(([y, z]) => [s.x, y, z] as V3); return p.map((a, i) => r.makeLine(a, p[(i + 1) % p.length]!)); })());
 /** A tube's run as its straights and true arcs, a circle swept along it (its bore swept and taken out, where it has a wall). */
 function swept(r: Replicad, t: Extract<Shape, { tube: unknown }>['tube']): Solid {
   const legs = tubeLegs(t); if (!legs.length) throw new Error('a tube with no length');
@@ -100,7 +101,9 @@ export function solidOfShape(r: Replicad, s: Shape, facets?: number): Solid {
     // along the cut, and the kernel's check calls the face, and the solid, not valid)
     const [outer, ...inner] = loopsOf(s.prism.pts);
     return [...inner, ...(s.prism.holes ?? []).map(dedupe)].reduce((b: Solid, h) => b.cut(bar(h, s.prism.L * 1.02)), bar(outer!, s.prism.L)); }
-  if ('loft' in s) { const st = [...s.loft.st].sort((a, b) => a.x - b.x).filter((x) => x.w > 1e-5 && x.hi - x.lo > 1e-5); if (st.length < 2) throw new Error('a loft of fewer than two sections'); return r.loft(st.map((x) => stationWire(r, x)), { ruled: true }); }
+  // (one loft (AUDIT 4B): its sections as form.ts loftSections gives them, each joined straight to the next, as loftVolume
+  // weighs them and kit3d.ts draws them)
+  if ('loft' in s) { const st = loftSections(s.loft); if (st.length < 2) throw new Error('a loft of fewer than two sections'); return r.loft(st.map((x) => stationWire(r, x)), { ruled: true }); }
   if ('tube' in s) return swept(r, s.tube);
   if ('surf' in s) throw new Error('a freeform skin (its NURBS surface thickened: not built yet)');
   throw new Error(`a ${Object.keys(s)[0]} (not a solid)`);

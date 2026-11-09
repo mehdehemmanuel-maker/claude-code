@@ -99,7 +99,9 @@ export function coupling(size: string): Block { const p = pipeOf(size), ri = mm(
 /** Socket elbows for copper pipe after EN 1254-1 (capillary, end feed), 90° and 45°, by the EN 1057 sizes: each socket's
  *  depth (how far the pipe goes in, mm), its wall (mm) and the body's bend radius to its middle line (mm). Typical of
  *  makers' tables, not read from the standard (not public here): labelled typical. Each socket's bore is the pipe's
- *  outside and a sliding fit (0.25 mm, as the coupling's); the body's bore is the pipe's, so a pipe's end stops on it. */
+ *  outside and the slide fit's gap at that size (ISO 286 H7/g6's least clearance halved, derived by fitGap), as the
+ *  coupling's; the body's bore is the pipe's, so a pipe's end stops on it. (Wave 13: before, a 0.25 mm gap, typical,
+ *  which over writes no face for at the slide fit: a socket stood 250 µm off its pipe, as the coupling did.) */
 export const ELBOWS = {
   'copper 15×0.7': { socket: 11, wall: 1, R: 10, status: 'typical' }, 'copper 22×0.9': { socket: 15, wall: 1.2, R: 14, status: 'typical' }, 'copper 28×0.9': { socket: 18, wall: 1.2, R: 18, status: 'typical' },
 } as const;
@@ -107,10 +109,9 @@ export type ElbowSize = keyof typeof ELBOWS;
 /** A bent length of pipe's usual bend radius to its middle line: 3.5 × its outside diameter (an estimate, of a bending
  *  machine's former for copper; a tighter one is set by hand, never at or under the tube's own radius). */
 export const bendRadius = (size: string): number => mm(3.5 * pipeOf(size).od);
-const SOCKET_FIT = 0.00025;
 const elbowOf = (size: string) => { const e = ELBOWS[size as ElbowSize]; if (!e) throw new Error(`no elbow for ${size} (${Object.keys(ELBOWS).join(', ')})`); return e; };
 // (an elbow's three solids: a socket, its bent body, a socket; the sockets' bore and outside)
-const elbowRings = (size: string) => { const p = pipeOf(size), e = elbowOf(size), ri = mm(p.od / 2) + SOCKET_FIT; return { ri, ro: ri + mm(e.wall), depth: mm(e.socket), R: mm(e.R), bore: mm(p.od / 2 - p.wall) }; };
+const elbowRings = (size: string) => { const p = pipeOf(size), e = elbowOf(size), ri = mm(p.od / 2) + fitGap('slide', mm(p.od)); return { ri, ro: ri + mm(e.wall), depth: mm(e.socket), R: mm(e.R), bore: mm(p.od / 2 - p.wall) }; };
 /** A socket elbow on its own (EN 1254-1, typical sizes): a socket, its body bent through 90° or 45°, a socket; laid as
  *  a run, so nothing is placed by a number. */
 export function elbow(size: string, angle: 90 | 45 = 90): Block {

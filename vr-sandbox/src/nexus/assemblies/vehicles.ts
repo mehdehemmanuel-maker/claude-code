@@ -10,35 +10,8 @@
 // rectangle of tubes, no chain, no cables. The Asm class is things.ts's, copied (one owner a file; not imported).
 // Loaded by one import in seeds.ts, after everyday.ts (the robot dog reuses seed.quadruped).
 
-import { register, type BlockDef, type Type } from '../blocks';
-import { Engine, emptyBoard, groupBlock, placeBlock, wire } from '../dataflow';
-import type { Board } from '../boards';
-
-/** A board being built a node at a time, saved as a library block (as things.ts's assemblies are). */
-class Asm {
-  readonly b: Board; private k = 0;
-  constructor(title: string) { this.b = emptyBoard(title); }
-  n(blockId: string, set: Record<string, unknown>, label: string, id = `n${this.k++}`): string { placeBlock(this.b, blockId, 0, 0, set, id); this.b.nodes[id]!.label = label; return id; }
-  /** An input: bound to inner settings (`into`, "node.setting; …") or, with none, a value wired on. */
-  input(name: string, type: Type, def: unknown, says: string, choices: string[] = [], into = ''): string { return this.n('group.in', { name, type, unit: '', default: String(def), choices: choices.join('|'), says, ...(into ? { into } : {}) }, `in: ${name}`, `in_${name}`); }
-  output(name: string, type: Type, from: string, port: string): void { const id = this.n('group.out', { name, type, unit: '' }, `out: ${name}`, `out_${name}`); this.w(from, port, id, 'value'); }
-  w(from: string, out: string, to: string, inp: string): void { wire(this.b, from, out, to, inp); }
-  /** An operation on blocks wired in: [node, port] each into its input. */
-  op(id: string, blockId: string, set: Record<string, unknown>, label: string, ins: Record<string, string | string[]>): string {
-    this.n(blockId, set, label, id);
-    for (const [inp, from] of Object.entries(ins)) for (const f of Array.isArray(from) ? from : [from]) { const [nd, port] = f.includes('.') ? f.split('.') as [string, string] : [f, 'block']; this.w(nd, port, id, inp); }
-    return id;
-  }
-  outs(from: string): void { this.output('block', 'block', from, 'block'); this.output('thing', 'assembly', from, 'thing'); this.output('pieces', 'integer', from, 'pieces'); this.output('offers', 'list<text>' as Type, from, 'offers'); this.output('says', 'text', from, 'says'); }
-  save(id: string, name: string, says: string, gloss: string, domains = ['mechanical', 'vehicles']): BlockDef {
-    layOut(this.b); const d = groupBlock(this.b, { id, name, says, domains, by: 'built in', spec: { gloss, discipline: 'mechanical.design.cad', role: 'geometry operation', codes: [{ scheme: 'MSC2020', code: '68U07', label: 'Computer science aspects of computer-aided design' }] } }); register(d); return d;
-  }
-}
-function layOut(b: Board): void {
-  const e = new Engine(b), col = new Map<string, number>(), rows = new Map<number, number>();
-  for (const id of e.sequence) col.set(id, Math.max(0, ...e.wiresInto(id).map((w) => (col.get(w.from) ?? 0) + 1)));
-  for (const id of e.sequence) { const c = col.get(id)!, r = rows.get(c) ?? 0; rows.set(c, r + 1); b.nodes[id]!.x = c * 330; b.nodes[id]!.y = r * 200; }
-}
+import { fitGap } from '../room';
+import { Asm, FULL } from './board';
 
 // ---- helpers used by several ------------------------------------------------------------------------------------------
 /** A road wheel: a rim (a disc drawn with no bore: the axle it goes over bores it to its fit, root 6) and its tyre over
@@ -55,17 +28,22 @@ function axleWithWheels(s: Asm, k: string, axle: string, r: number, length: numb
   s.op(`${k}_2`, 'room.over', { line: `${axle}/axis`, where: 'hi', fit: 'clear' }, 'And the other', { host: `${k}_1`, sleeve: wheel });
   return s.op(k, 'room.turn', { axis: 'z', degrees: 90 }, 'Laid across', { block: `${k}_2` });
 }
-/** A rotor of n blades about y, centred on its own axis (things.ts's rotor, with n): its hub a tube bored for a shaft (by
- *  hand, the old 1 mm clear gap over its shaft's radius: over refuses to bore a hub drawn with no bore when its sleeve
- *  holds turned pieces, the pitched blades; root 6's fault). */
-function rotor(s: Asm, q: string, o: { name: string; mat: string; n: number; rin: number; blade: [number, number, number]; pitch: number; hub: [number, number, number] }): string {
-  const [Lb, tb, ch] = o.blade, Lr = Math.round(Lb / 8), R = o.rin + (Lr + Lb) / 2;
+/** A rotor of n blades about y, centred on its own axis (things.ts's rotor, with n), to go over a shaft of radius `shaft`
+ *  (mm) at the clear fit: its hub a tube (outside radius and height, `hub`) whose bore is the shaft's radius and the
+ *  clear fit's gap at the shaft's diameter (room.ts fitGap, ISO 286 H9/d9's least clearance halved), derived, so over
+ *  writes the joint it turns on (over refuses to bore a hub drawn with no bore when its sleeve holds turned pieces, the
+ *  pitched blades: root 6); each blade's root from that bore outward, derived, so the hub stacked on the ring rests on
+ *  every root and holds them. (Wave 13: before, the bore was drawn by hand 1 mm over the shaft's radius, which over writes
+ *  no face for at the clear fit, and the roots began past the hub's outside (the main rotor's at 200 mm, its hub's
+ *  outside at 120 mm): hub and blades were each a thing of their own, six groups in all.) */
+function rotor(s: Asm, q: string, o: { name: string; mat: string; n: number; shaft: number; blade: [number, number, number]; pitch: number; hub: [number, number] }): string {
+  const bore = o.shaft + fitGap('clear', (2 * o.shaft) / 1000) * 1000, [Lb, tb, ch] = o.blade, Lr = Math.round(Lb / 8), R = bore + (Lr + Lb) / 2;
   s.n('room.make', { name: `${o.name} blade root`, shape: 'box', mat: o.mat, a: Lr, b: ch / 3, c: ch }, 'A blade\'s root (upright, the hub on it)', `${q}root`);
   s.n('room.make', { name: `${o.name} blade`, shape: 'box', mat: o.mat, a: Lb, b: tb, c: ch }, `A blade, ${Lb} mm long, ${ch} mm chord`, `${q}blade`);
   s.op(`${q}pitched`, 'room.turn', { axis: 'x', degrees: o.pitch }, `Turned ${o.pitch}° about its length: its pitch`, { block: `${q}blade` });
   s.op(`${q}one`, 'room.stack', { name: `${o.name} blade`, axis: 'x', fit: 'touch', order: `${q}root, ${q}pitched` }, 'The blade on its root', { blocks: [`${q}root`, `${q}pitched`] });
   s.op(`${q}ring`, 'room.ring', { name: `${o.name} blades`, n: o.n, R, fit: 'clear', out: 'yes' }, `${o.n} of them, turned to face out`, { block: `${q}one` });
-  s.n('room.make', { name: `${o.name} hub`, shape: 'tube', mat: 'al-6061', a: o.hub[0], b: o.hub[1], c: o.hub[2] }, 'The hub, bored for its shaft', `${q}hub`);
+  s.n('room.make', { name: `${o.name} hub`, shape: 'tube', mat: 'al-6061', a: bore, b: o.hub[0], c: o.hub[1] }, 'The hub, bored for its shaft at the clear fit', `${q}hub`);
   return s.op(`${q}rotor`, 'room.stack', { name: `${o.name} rotor`, axis: 'y', fit: 'touch', align: `${o.name} blades/axis`, order: `${q}ring, ${q}hub` }, 'The hub on the blades\' roots, on the ring\'s axis', { blocks: [`${q}ring`, `${q}hub`] });
 }
 /** A disc wheel turned in one piece (hub, web, rim: its spokes not drawn, rough; drawn with no bore: the axle it goes
@@ -101,7 +79,7 @@ function bicycle(): void {
   // drawn), a rectangle frame of Ø28.6 tubes (its diamond's slopes not drawn), a seat post and saddle on the seat tube, a
   // stem and 580 mm bar on the head tube, a crank spindle in a bottom bracket shell under the seat tube with a 42T chainring
   // and one crank bar with a pedal; a 18T sprocket on the rear axle; its chain, brakes and fork not drawn)
-  const s = new Asm('A bicycle');
+  const s = new Asm('A bicycle', FULL, ['mechanical', 'vehicles']);
   s.input('seat', 'number', 480, 'the seat tube\'s length, mm', [], 'fst.b');
   s.input('top', 'number', 560, 'the top tube\'s length, mm', [], 'ftt0.b');
   discWheel(s, 'wh', 'bicycle wheel', 16, 90, 311, 22, 334, 32);
@@ -142,9 +120,10 @@ function bicycle(): void {
 // ---- a helicopter ----------------------------------------------------------------------------------------------------------
 function helicopter(): void {
   // (a light two-seat helicopter, sizes typical of the R22 class (recalled): a cabin 1.3 m wide, 1.4 m tall, 2.6 m long,
-  // a Ø60 mast with a two-bladed main rotor over it (Ø7.6 m, blades 3.6 m, clear: it turns), a Ø160 tail boom 3 m long out
+  // a Ø60 mast with a two-bladed main rotor over it (blades 3.6 m on 450 mm roots from the hub's bore, so Ø8.16 m across
+  // its tips, derived and measured; the R22's own is about Ø7.7 m, recalled: rough; clear: it turns), a Ø160 tail boom 3 m long out
   // of its back with a two-bladed tail rotor on a stub shaft off its end (it turns), two Ø40 skids on a cross tube)
-  const s = new Asm('A helicopter');
+  const s = new Asm('A helicopter', FULL, ['mechanical', 'vehicles']);
   s.input('boom', 'number', 3000, 'the tail boom\'s length, mm', [], 'boom0.c');
   s.input('blade', 'number', 3600, 'a main rotor blade\'s length, mm', [], 'mblade.a');
   s.n('room.make', { name: 'skid', shape: 'tube', mat: 'al-6061', a: 17, b: 20, c: 2200 }, 'A skid, Ø40 tube', 'skid0');
@@ -155,15 +134,17 @@ function helicopter(): void {
   s.op('body', 'room.onto', { face: '+y', fit: 'touch' }, 'The cabin on its landing gear', { host: 'gear', child: 'cab' });
   s.n('room.make', { name: 'mast', shape: 'rod', mat: 'steel-alloy', a: 30, b: 500 }, 'The main rotor mast, Ø60', 'mast');
   s.op('masted', 'room.onto', { face: '+y', fit: 'touch' }, 'The mast up out of the cabin\'s roof', { host: 'body', child: 'mast' });
-  rotor(s, 'm', { name: 'main', mat: 'al-6061', n: 2, rin: 200, blade: [3600, 30, 180], pitch: 6, hub: [31, 120, 100] });
+  rotor(s, 'm', { name: 'main', mat: 'al-6061', n: 2, shaft: 30, blade: [3600, 30, 180], pitch: 6, hub: [120, 100] });
   s.op('spun', 'room.over', { line: 'mast/axis', where: 'hi', fit: 'clear' }, 'The main rotor over the mast: it turns', { host: 'masted', sleeve: 'mrotor' });
   s.n('room.make', { name: 'tail boom', shape: 'box', mat: 'al-6061', a: 160, b: 160, c: 3000 }, 'The tail boom (a box section: rough)', 'boom0');
-  s.op('boom', 'room.turn', { axis: 'x', degrees: 90 }, 'Laid aft', { block: 'boom0' });
   s.n('room.make', { name: 'tail rotor shaft', shape: 'rod', mat: 'steel-alloy', a: 12, b: 220 }, 'The tail rotor\'s stub shaft, Ø24', 'ts0');
-  rotor(s, 't', { name: 'tail', mat: 'al-6061', n: 2, rin: 60, blade: [500, 12, 90], pitch: 10, hub: [13, 40, 50] });
+  rotor(s, 't', { name: 'tail', mat: 'al-6061', n: 2, shaft: 12, blade: [500, 12, 90], pitch: 10, hub: [40, 50] });
   s.op('ts1', 'room.over', { line: 'tail rotor shaft/axis', where: 'hi', fit: 'clear' }, 'The tail rotor over its shaft: it turns', { host: 'ts0', sleeve: 'trotor' });
-  s.op('ts', 'room.turn', { axis: 'z', degrees: 90 }, 'Laid across', { block: 'ts1' });
-  s.op('tailed', 'room.onto', { face: '+x', fit: 'touch', end: 'hi' }, 'The stub shaft and its rotor off the boom\'s end', { host: 'boom', child: 'ts' });
+  // (wave 13: the boom drawn along z is laid aft as made; before, it was turned 90° about x, so it stood 3 m upright behind
+  // the cabin; and the shaft turned −90° about z, so its rotor end points out from the boom, not against it: before, the
+  // tail hub lay on the boom's side by a contact face, held from turning)
+  s.op('ts', 'room.turn', { axis: 'z', degrees: -90 }, 'Laid across, its rotor end outward', { block: 'ts1' });
+  s.op('tailed', 'room.onto', { face: '+x', fit: 'touch', end: 'mid,hi' }, 'The stub shaft and its rotor off the boom\'s side at its aft end', { host: 'boom0', child: 'ts' });
   s.op('heli', 'room.onto', { face: '+z', fit: 'touch' }, 'The boom out of the cabin\'s back', { host: 'spun', child: 'tailed' });
   s.outs('heli');
   s.save('seed.helicopter', 'Helicopter', 'A light helicopter (sizes typical of the two-seat class, rough): two Ø40 skids on a cross tube, a cabin (a box), a Ø60 mast with a two-bladed main rotor over it (it turns), a box tail boom out of the back with a two-bladed tail rotor on a stub shaft off its end (it turns). Settings: boom (its length) and blade (a main blade\'s length), mm. It offers mast/axis and tail rotor shaft/axis',
@@ -175,7 +156,7 @@ function excavator(): void {
   // (a mini excavator, sizes typical of the 3 t class (recalled): two tracks drawn as boxes 400 wide, 2400 long, an
   // undercarriage across them, a slewing post with the body's ring over it (clear: it slews), a cab on the body, and an arm
   // of boom, stick and bucket, each on a Ø50 pin with a clear fit (each swings), the arm laid out level off the body's front)
-  const s = new Asm('An excavator');
+  const s = new Asm('An excavator', FULL, ['mechanical', 'vehicles']);
   s.input('boom', 'number', 2400, 'the boom\'s length, mm', [], 'boom.a');
   s.input('stick', 'number', 1600, 'the stick\'s length, mm', [], 'stick.a');
   s.n('room.make', { name: 'track', shape: 'box', mat: 'rubber', a: 400, b: 500, c: 2400 }, 'A track (a box, rough)', 'track');
@@ -220,7 +201,7 @@ function excavator(): void {
 function forklift(): void {
   // (a counterbalance forklift, sizes typical of the 2.5 t class (recalled): a body 1100 wide, 2300 long between four
   // Ø500 wheels on two axles (they turn), a mast of two uprights 2500 tall, a carriage plate across them and two forks)
-  const s = new Asm('A forklift');
+  const s = new Asm('A forklift', FULL, ['mechanical', 'vehicles']);
   s.input('lift', 'number', 2500, 'the mast\'s height, mm', [], 'up.b');
   s.input('fork', 'number', 1100, 'the forks\' blade length, mm', [], 'fk.a');
   roadWheel(s, 'wh', 'forklift wheel', 150, 250, 180);
@@ -250,7 +231,7 @@ function train(): void {
   // (a small diesel shunter and two open wagons, sizes typical of narrow-gauge industrial stock (recalled): Ø700 steel
   // wheels over Ø100 axles (they turn), two axles a chassis, the engine's hood and cab on its chassis, each wagon a tray,
   // coupled by Ø40 bars between the ends)
-  const s = new Asm('A train');
+  const s = new Asm('A train', FULL, ['mechanical', 'vehicles']);
   s.input('wagon', 'number', 5000, 'a wagon\'s length, mm', [], 'wb.a; wsp.c');
   s.input('engine', 'number', 6000, 'the engine\'s length, mm', [], 'eh.c; esp.c');
   s.n('room.make', { name: 'train wheel', shape: 'rod', mat: 'steel-low', a: 350, b: 120 }, 'A wheel, Ø700 steel (drawn with no bore: its axle bores it to the clear fit)', 'tw');
@@ -279,7 +260,7 @@ function printer3d(): void {
   // on the ground, a 220 × 220 bed plate on its carriage... drawn here as: the X axis laid across the top of the Y axis, the
   // bed plate on top, the hotend envelope on the bed (rough: its true carriage not drawn); a frame side of three 2020
   // extrusions (a Π) either side, the whole on a plywood base)
-  const s = new Asm('A 3D printer');
+  const s = new Asm('A 3D printer', FULL, ['mechanical', 'vehicles']);
   const tv = s.input('travel', 'number', 220, 'the X and Y axes\' travel, mm');
   s.input('height', 'number', 400, 'the frame uprights\' height, mm', [], 'up.length');
   s.n('seed.linear-axis', { travel: 220, stepper: '17' }, 'The Y axis', 'ay'); s.w(tv, 'value', 'ay', 'travel');
@@ -311,7 +292,7 @@ function drillPress(): void {
   // (a bench drill press, sizes typical (recalled): a Ø70 column up through the head's hole (the head on its top), a
   // Ø20 spindle hanging under the head's front with a chuck on its end, a round table turned in one with its collar over
   // the column (clear: it moves), a base plate under all)
-  const s = new Asm('A drill press');
+  const s = new Asm('A drill press', FULL, ['mechanical', 'vehicles']);
   s.input('column', 'number', 900, 'the column\'s length, mm', [], 'col.b');
   s.input('spindle', 'number', 300, 'the spindle\'s length, mm', [], 'spd.b');
   s.n('room.make', { name: 'drill head', shape: 'box', mat: 'iron-cast', a: 250, b: 250, c: 400, face: '+y', points: '0,150', hole: 36 }, 'The head, its column hole near its back', 'head');
@@ -334,7 +315,7 @@ function drillPress(): void {
 function ceilingFan(): void {
   // (a 52 in ceiling fan, sizes typical (recalled): four blades 560 long, 110 wide, pitched 12°, a ring turned out under a
   // Ø180 motor can (its axis offered), the downrod up through the can (clear: the fan turns on it) and a canopy on top)
-  const s = new Asm('A ceiling fan');
+  const s = new Asm('A ceiling fan', FULL, ['mechanical', 'vehicles']);
   s.input('blade', 'number', 560, 'a blade\'s length, mm', [], 'blade.a');
   s.input('downrod', 'number', 300, 'the downrod\'s length, mm', [], 'rod.b');
   s.n('room.make', { name: 'fan blade', shape: 'box', mat: 'wood', a: 560, b: 4, c: 110 }, 'A blade', 'blade');
@@ -357,7 +338,7 @@ function ceilingFan(): void {
 function lathe(): void {
   // (a bench lathe, sizes typical of a 7 × 14 (recalled): a bed, a headstock with the spindle through its hole (clear: it
   // turns) and a chuck on the spindle's end, a carriage, and a tailstock with its quill out toward the chuck)
-  const s = new Asm('A lathe');
+  const s = new Asm('A lathe', FULL, ['mechanical', 'vehicles']);
   s.input('bed', 'number', 1000, 'the bed\'s length, mm', [], 'bed.a');
   s.input('chuck', 'number', 50, 'the chuck\'s radius, mm', [], 'chk.b');
   s.n('room.make', { name: 'headstock', shape: 'box', mat: 'iron-cast', a: 250, b: 300, c: 250, face: '+x', points: '80,0', hole: 20 }, 'The headstock, its spindle hole', 'hs');
@@ -381,7 +362,7 @@ function lathe(): void {
 function lawnmower(): void {
   // (a push petrol mower, sizes typical of a 46 cm cut (recalled): a deck (a cup turned over, open below) on two axles with
   // Ø200 wheels over their ends (they turn), an engine envelope on the deck and a two-tube handle tilted up and back)
-  const s = new Asm('A lawnmower');
+  const s = new Asm('A lawnmower', FULL, ['mechanical', 'vehicles']);
   s.input('deck', 'number', 230, 'the deck\'s radius, mm', [], 'deck.a');
   s.input('handle', 'number', 1200, 'the handle tubes\' length, mm', [], 'ht.length');
   roadWheel(s, 'wh', 'mower wheel', 60, 100, 45);
@@ -408,7 +389,7 @@ function scooter(): void {
   // (a kick scooter, sizes typical (recalled): Ø100 wheels each in a fork (a shell open below, its axle through its legs,
   // the wheel over the axle, clear: it turns), a deck between the forks with a brace under it (all on the ground), a 25 × 2
   // column up from the front fork's crown and a bar across its top; its folding hinge and brake not drawn)
-  const s = new Asm('A scooter');
+  const s = new Asm('A scooter', FULL, ['mechanical', 'vehicles']);
   s.input('deck', 'number', 480, 'the deck\'s length, mm', [], 'deck.c; brace.c');
   s.input('column', 'number', 800, 'the steering column\'s length, mm', [], 'col.length');
   roadWheel(s, 'wh', 'scooter wheel', 36, 50, 24);
@@ -439,7 +420,7 @@ function scooter(): void {
 function motorcycle(): void {
   // (a naked motorcycle, sizes typical of a 650 twin (recalled): Ø600 disc wheels over Ø20 axles (they turn), a rectangle
   // frame of Ø32 tubes (rough), the engine envelope under it, a tank and a seat on it, a stem and bar on the head tube)
-  const s = new Asm('A motorcycle');
+  const s = new Asm('A motorcycle', FULL, ['mechanical', 'vehicles']);
   s.input('seat', 'number', 450, 'the seat tube\'s length, mm', [], 'fst.b');
   s.input('top', 'number', 700, 'the top tube\'s length, mm', [], 'ftt0.b');
   discWheel(s, 'wh', 'motorcycle wheel', 40, 150, 216, 80, 300, 120);
@@ -467,7 +448,7 @@ function motorcycle(): void {
 function tractor(): void {
   // (a compact tractor, sizes typical of the 25 hp class (recalled): Ø1400 rear and Ø800 front wheels over their axles
   // (they turn), a spine between, the body on the rear axle, a cab shell on its back, a loader bucket off its front)
-  const s = new Asm('A tractor');
+  const s = new Asm('A tractor', FULL, ['mechanical', 'vehicles']);
   s.input('wheelbase', 'number', 1700, 'the wheelbase, mm (the spine between the axles is 1100 shorter)', [], 'sp.c');
   s.input('body', 'number', 2400, 'the body\'s length, mm', [], 'body.c');
   roadWheel(s, 'rwh', 'tractor rear wheel', 400, 700, 300);
@@ -509,7 +490,7 @@ function boxVehicle(id: string, title: string, o: { body: [number, number, numbe
 function robotDog(): void {
   // (seed.quadruped with a head: a neck plate across the body's front at its top, a head block in front of it, a camera on
   // the head's face)
-  const s = new Asm('A robot dog');
+  const s = new Asm('A robot dog', FULL, ['mechanical', 'vehicles']);
   s.n('group.in', { name: 'joints', type: 'text', unit: '', default: '2', choices: '2|3', says: 'each leg\'s joints: 2 or 3' }, 'in: joints', 'in_joints');
   s.input('head', 'number', 100, 'the head\'s length, mm', [], 'head.c');
   s.n('seed.quadruped', { joints: '2' }, 'The quadruped', 'quad'); s.w('in_joints', 'value', 'quad', 'joints');

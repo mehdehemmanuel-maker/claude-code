@@ -751,10 +751,12 @@ describe('every domain, in one pass', () => {
     const [l0, l1] = legs.map(lohi).sort((u, v) => u[0][0]! - v[0][0]!), ab = lohi(axle), hb = lohi(hub);
     expect([l0![1][0]! <= hb[0][0]! + 1e-9, hb[1][0]! <= l1![0][0]! + 1e-9, ab[0][0]! <= l0![0][0]! + 1e-9, ab[1][0]! >= l1![1][0]! - 1e-9], 'a leg each side of the wheel along x, the axle through both').toEqual([true, true, true, true]);
     expect([Math.abs(mid(ab, 1) - mid(hb, 1)), Math.abs(mid(ab, 2) - mid(hb, 2))].every((d) => d < 1e-6), 'the axle on the wheel\'s axis').toBe(true);
-    // (the gauge: 'envelope' where a piece is one, as its node says; not where it is not)
-    const pi = await node('piece.devboard', { size: 'Raspberry Pi 4 Model B' }), fanSaid = (await node('piece.fan')).says;
-    expect([massGauge([pi.says], true).sub, massGauge([fanSaid], true).sub, massGauge([pi.says], false).sub], 'the mass gauge').toEqual(['an envelope: not its real mass', 'of all that is shown', 'nothing shown']);
-    expect(massGauge([pi.says], true).label, 'its label').toMatch(/as drawn/);
+    // (the gauge: 'envelope' where a piece is one, as its node says; not where it is not. Wave 13 (AUDIT 4C): an envelope
+    // whose row gives a mass weighs it (the Pi its row's 46 g), one whose row gives none (a stepper) is its solid box's,
+    // said as drawn)
+    const pi = await node('piece.devboard', { size: 'Raspberry Pi 4 Model B' }), fanSaid = (await node('piece.fan')).says, stepper = (await node('piece.stepper')).says;
+    expect([massGauge([pi.says], true).sub, massGauge([fanSaid], true).sub, massGauge([pi.says], false).sub, massGauge([stepper], true).sub], 'the mass gauge').toEqual(['an envelope at its row\'s mass', 'of all that is shown', 'nothing shown', 'an envelope: mass unknown, drawn as a solid box']);
+    expect([massGauge([pi.says], true).label, massGauge([stepper, pi.says], true).label], 'its label').toEqual(['Mass', 'Mass, as drawn']);
     // (the valve: its lever runs one way from its stem, a nut on the stem over it)
     const valve = (await node('piece.ballvalve', { size: 'G1/2' })).block, piece = (re: RegExp) => lohi(valve.pieces.find((p) => re.test(p.name))!);
     const stem = piece(/ ball valve stem$/), lever = piece(/ ball valve lever$/), nut = piece(/ lever nut$/), sx = mid(stem, 0), near = Math.min(sx - lever[0][0]!, lever[1][0]! - sx), far = Math.max(sx - lever[0][0]!, lever[1][0]! - sx);

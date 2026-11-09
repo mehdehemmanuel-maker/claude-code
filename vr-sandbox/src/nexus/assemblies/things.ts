@@ -9,45 +9,7 @@
 // product is named. Loaded by one import in seeds.ts, after robots.ts (the leg reuses the arm's servo joint).
 
 import { fitGap } from '../room';
-import { register, type BlockDef, type Type } from '../blocks';
-import { Engine, emptyBoard, groupBlock, placeBlock, wire } from '../dataflow';
-import type { Board } from '../boards';
-
-const SERVOS = ['SG90', 'MG90S', 'MG996R', 'standard'];
-
-/** A board being built a node at a time, saved as a library block (as robots.ts's assemblies are). */
-class Asm {
-  readonly b: Board; private k = 0;
-  constructor(title: string) { this.b = emptyBoard(title); }
-  n(blockId: string, set: Record<string, unknown>, label: string, id = `n${this.k++}`): string { placeBlock(this.b, blockId, 0, 0, set, id); this.b.nodes[id]!.label = label; return id; }
-  /** An input: bound to inner settings (`into`, "node.setting; …") or, with none, a value wired on. */
-  input(name: string, type: Type, def: unknown, says: string, choices: string[] = [], into = ''): string { return this.n('group.in', { name, type, unit: '', default: String(def), choices: choices.join('|'), says, ...(into ? { into } : {}) }, `in: ${name}`, `in_${name}`); }
-  output(name: string, type: Type, from: string, port: string): void { const id = this.n('group.out', { name, type, unit: '' }, `out: ${name}`, `out_${name}`); this.w(from, port, id, 'value'); }
-  w(from: string, out: string, to: string, inp: string): void { wire(this.b, from, out, to, inp); }
-  /** An operation on blocks wired in: [node, port] each into its input. */
-  op(id: string, blockId: string, set: Record<string, unknown>, label: string, ins: Record<string, string | string[]>): string {
-    this.n(blockId, set, label, id);
-    for (const [inp, from] of Object.entries(ins)) for (const f of Array.isArray(from) ? from : [from]) { const [nd, port] = f.includes('.') ? f.split('.') as [string, string] : [f, 'block']; this.w(nd, port, id, inp); }
-    return id;
-  }
-  outs(from: string): void { this.output('block', 'block', from, 'block'); this.output('thing', 'assembly', from, 'thing'); this.output('pieces', 'integer', from, 'pieces'); this.output('offers', 'list<text>' as Type, from, 'offers'); this.output('says', 'text', from, 'says'); }
-  /** One of several builds by a choice wired from an input: its block, its thing and what it says, each picked. */
-  picked(choice: string, label: string, builds: Record<string, string>): void {
-    const options = Object.keys(builds).join('|');
-    for (const [port, type] of [['block', 'block'], ['thing', 'assembly'], ['pieces', 'integer'], ['offers', 'list<text>'], ['says', 'text']] as const) {
-      const id = this.op(`pick_${port}`, 'pick', { options }, port === 'block' ? label : `${label}: its ${port}`, Object.fromEntries(Object.entries(builds).map(([k, n]) => [k, `${n}.${port}`])));
-      this.w(choice, 'value', id, 'which'); this.output(port, type as Type, id, 'chosen');
-    }
-  }
-  save(id: string, name: string, says: string, gloss: string, domains = ['mechanical']): BlockDef {
-    layOut(this.b); const d = groupBlock(this.b, { id, name, says, domains, by: 'built in', spec: { gloss, discipline: 'mechanical.design.cad', role: 'geometry operation', codes: [{ scheme: 'MSC2020', code: '68U07', label: 'Computer science aspects of computer-aided design' }] } }); register(d); return d;
-  }
-}
-function layOut(b: Board): void {
-  const e = new Engine(b), col = new Map<string, number>(), rows = new Map<number, number>();
-  for (const id of e.sequence) col.set(id, Math.max(0, ...e.wiresInto(id).map((w) => (col.get(w.from) ?? 0) + 1)));
-  for (const id of e.sequence) { const c = col.get(id)!, r = rows.get(c) ?? 0; rows.set(c, r + 1); b.nodes[id]!.x = c * 330; b.nodes[id]!.y = r * 200; }
-}
+import { Asm, SERVOS } from './board';
 
 /** A three-bladed rotor about y, centred on its own axis: each blade a root (upright, the hub's plates on it) and the
  *  blade turned about its length by its pitch, three of them a ring turned out, the hub's two plates on the roots, aligned

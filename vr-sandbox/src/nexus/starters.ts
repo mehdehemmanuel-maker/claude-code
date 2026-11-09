@@ -618,16 +618,16 @@ export function starterBoards(tidy: (b: Board) => Board = (b) => b): [string, Ma
     const b = emptyBoard('Cut by the standards');
     const steel = { mat: 'steel-low', color: '#c8ccd2' }, cuts: [string, string, Record<string, unknown>, string, Record<string, unknown>, string][] = [
       ['housing', 'shape.box', { name: 'bearing housing', ...steel, w: 0.12, h: 0.02, d: 0.12 }, 'A steel plate, 120 × 20 mm: the bearing\'s housing', { row: 'bearing seat', side: 'housing', x: 0, y: 1, z: 0 }, 'The 6205\'s housing: its bore and shoulder'],
-      ['journal', 'shape.lathe', { name: 'stepped shaft', ...steel, profile: '0, 0; 12.5, 0; 12.5, 15; 16, 15; 16, 60; 0, 60' }, 'A stepped shaft, 25 then 32 mm', { row: 'bearing seat', side: 'shaft', toward: 'y', x: 0.001, y: -0.5, z: 0.0007 }, 'The 6205\'s journal, on the shaft\'s end'],
+      ['journal', 'room.make', { name: 'stepped shaft', mat: steel.mat, shape: 'lathe', pts: '0, 0; 12.5, 0; 12.5, 15; 16, 15; 16, 60; 0, 60' }, 'A stepped shaft, 25 then 32 mm', { row: 'bearing seat', side: 'shaft', toward: 'y', x: 0.001, y: -0.5, z: 0.0007 }, 'The 6205\'s journal, on the shaft\'s end'],
       ['keyed shaft', 'shape.cyl', { name: 'keyed shaft', ...steel, r: 0.015, h: 0.08 }, 'A 30 mm shaft, 80 long', { row: 'parallel key', side: 'shaft', toward: '-x', x: 1, y: 0, z: 0 }, 'The key\'s keyway in the shaft'],
-      ['hub', 'shape.lathe', { name: 'hub', ...steel, profile: '15, -20; 25, -20; 25, 20; 15, 20; 15, -20' }, 'A hub, 30 mm bore, 40 long', { row: 'parallel key', side: 'hub', toward: 'x', x: 0, y: 0.0005, z: 0 }, 'The key\'s keyway through the hub'],
+      ['hub', 'room.make', { name: 'hub', mat: steel.mat, shape: 'lathe', pts: '15, -20; 25, -20; 25, 20; 15, 20; 15, -20' }, 'A hub, 30 mm bore, 40 long', { row: 'parallel key', side: 'hub', toward: 'x', x: 0, y: 0.0005, z: 0 }, 'The key\'s keyway through the hub'],
       ['dowel plate', 'shape.box', { name: 'located plate', ...steel, w: 0.04, h: 0.01, d: 0.04 }, 'A 10 mm plate to be located', { row: 'dowel hole', x: 0, y: 1, z: 0 }, 'A 6 mm dowel\'s hole'],
       ['block', 'shape.box', { name: 'manifold block', mat: 'al-6061', color: '#d8dce0', w: 0.04, h: 0.03, d: 0.04 }, 'A 6061 block, 30 mm thick', { row: 'pipe port', x: 0, y: 1, z: 0 }, 'A G 1/2 port'],
       ['panel', 'shape.box', { name: 'panel', ...steel, w: 0.1, h: 0.002, d: 0.06 }, 'A 2 mm steel panel', { row: 'panel cut-out', x: 0, y: 1, z: 0 }, 'A 22 mm push button\'s cut-out'],
     ];
     cuts.forEach(([id, kind, set, label, ask, cutLabel], k) => {
       placeBlock(b, kind, 0, k * 170, set, id); b.nodes[id]!.label = label;
-      const { x, y, z, ...cs } = ask; placeBlock(b, 'cut.standard', 300, k * 170, { ...cs, x, y, z }, `${id} cut`); b.nodes[`${id} cut`]!.label = cutLabel; wire(b, id, 'part', `${id} cut`, 'part');
+      const { x, y, z, ...cs } = ask; placeBlock(b, 'cut.standard', 300, k * 170, { ...cs, x, y, z }, `${id} cut`); b.nodes[`${id} cut`]!.label = cutLabel; wire(b, id, kind === 'room.make' ? 'thing' : 'part', `${id} cut`, 'part');
       // (each laid so its cut faces up: the keyed shaft on its side, its keyway on top; the stepped shaft on its side, its
       // journal toward the front)
       const lay: Record<string, Record<string, number>> = { journal: { rz: -Math.PI / 2, y: 0.016 }, 'keyed shaft': { rz: Math.PI / 2, y: 0.015 } };

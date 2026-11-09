@@ -7,7 +7,8 @@
 
 import type { BlockDef, BlockTest, PortDef, SettingDef, Spec } from '../blocks';
 import { partOfBlock, type Block } from '../room';
-import { massOf } from '../mass';
+import type { Part } from '../kits';
+import { drawnMassOf, massOf, massSaid, sayMass, type MassSaid } from '../mass';
 import { MATTER, notMaterial } from '../matter';
 
 /** What a row says a piece built from it measures: its bound across x, y and z (m) and its mass (kg), where the row has
@@ -47,16 +48,33 @@ const P = (name: string, type: PortDef['type'], more: Partial<PortDef> = {}): Po
 /** What every piece gives (the same ports as the room's own nodes, blocks.ts ROOM_OUT). */
 export const PIECE_OUT: PortDef[] = [P('block', 'block', { label: 'the block, for the next operation' }), P('thing', 'assembly', { label: 'the block, drawn' }), P('pieces', 'integer'), P('faces', 'integer', { label: 'faces where pieces meet' }), P('offers', 'list<text>', { label: 'rooms and lines it offers' }), P('says', 'text')];
 export const offersOf = (b: Block): string[] => [...new Set([...b.pieces.flatMap((p) => p.lines.map((l) => l.port)), ...b.rooms.map((r) => r.name)])].sort();
-/** A piece's outputs, as the room's nodes give them; an envelope's says it is one. */
-export const pieceOut = (b: Block, envelope?: string) => ({ block: b, thing: partOfBlock(b), pieces: b.pieces.length, faces: b.faces.length, offers: offersOf(b),
-  says: `${b.name}: ${b.pieces.length} piece${b.pieces.length === 1 ? '' : 's'}, ${b.faces.length} face${b.faces.length === 1 ? '' : 's'} where they meet; every place given by the operations${envelope ? `; an envelope: ${envelope}` : ''}` });
+/** Every piece of a part that is drawn (has a shape), however deep: a case's floor and walls, a ring's core. */
+const leavesOf = (p: Part): Part[] => [...(p.shape ? [p] : []), ...(p.parts ?? []).flatMap(leavesOf)];
+/** The words for an envelope's mass, as what it builds says them: its row's, or unknown (AUDIT 4C). */
+export const MASS_UNKNOWN = 'mass unknown: drawn as a solid box';
+const kgSaid = (kg: number) => (kg >= 1 ? `${kg.toPrecision(4).replace(/\.?0+$/, '')} kg` : `${(kg * 1000).toPrecision(4).replace(/\.?0+$/, '')} g`);
+/** What is said of a built envelope's mass, from its pieces (the maker says it as it builds one): its row's, the sum of
+ *  its pieces', or unknown where any piece's is. */
+export function envelopeMass(b: Block): MassSaid | undefined {
+  const said = leavesOf(partOfBlock(b)).map((p) => massSaid(p)); if (!said.length || said.some((x) => x === undefined)) return undefined;
+  const unknown = said.find((x) => x && 'unknown' in x); if (unknown) return unknown;
+  return { kg: said.reduce((t, x) => t + (x as { kg: number }).kg, 0), from: (said[0] as { from: string }).from };
+}
+/** A piece's outputs, as the room's nodes give them; an envelope's says it is one, and what its mass is: its row's, or
+ *  unknown (drawn as a solid box). */
+export const pieceOut = (b: Block, envelope?: string) => { const m = envelope ? envelopeMass(b) : undefined;
+  return { block: b, thing: partOfBlock(b), pieces: b.pieces.length, faces: b.faces.length, offers: offersOf(b),
+    says: `${b.name}: ${b.pieces.length} piece${b.pieces.length === 1 ? '' : 's'}, ${b.faces.length} face${b.faces.length === 1 ? '' : 's'} where they meet; every place given by the operations${envelope ? `; an envelope: ${envelope}; ${m && 'kg' in m ? `weighed at its row's mass, ${kgSaid(m.kg)}` : MASS_UNKNOWN}` : ''}` }; };
 
-/** The mass gauge's words for what is shown, from what the board's nodes say: where one says it gives an envelope (as
- *  pieceOut writes it), the mass is the outline's as drawn, not the thing's, and the gauge says so (the critic,
- *  2026-11-05: a Raspberry Pi 4 shown at 111.7 g, its row 46 g, as its mass). */
+/** The mass gauge's words for what is shown, from what the board's nodes say (as pieceOut writes it): where an envelope's
+ *  mass is unknown, the mass is the outline's as drawn, a solid box's, not the thing's, and the gauge says so (the critic,
+ *  2026-11-05: a Raspberry Pi 4 shown at 111.7 g, its row 46 g, as its mass); where every envelope is weighed at its
+ *  row's mass (AUDIT 4C), the mass is the thing's and the gauge says where it is from. */
 export function massGauge(says: readonly unknown[], shown: boolean): { label: string; sub: string } {
   if (!shown) return { label: 'Mass', sub: 'nothing shown' };
-  return says.some((s) => /an envelope/.test(String(s ?? ''))) ? { label: 'Mass, as drawn', sub: 'an envelope: not its real mass' } : { label: 'Mass', sub: 'of all that is shown' };
+  const all = says.map((s) => String(s ?? ''));
+  if (all.some((s) => s.includes(MASS_UNKNOWN) || (/an envelope/.test(s) && !/weighed at its row's/.test(s)))) return { label: 'Mass, as drawn', sub: 'an envelope: mass unknown, drawn as a solid box' };
+  return all.some((s) => /an envelope/.test(s)) ? { label: 'Mass', sub: 'an envelope at its row\'s mass' } : { label: 'Mass', sub: 'of all that is shown' };
 }
 
 /** Every family made by the maker, by its node's id. */
@@ -69,7 +87,19 @@ export function build<R>(f: PartFamily<R>, size: string, set: Record<string, unk
   if (f.mat) { set = { ...set, mat: String(set.mat ?? f.mat) }; const not = notMaterial(String(set.mat)); if (not) throw new Error(`${f.name} ${size}: ${not}`); }
   const row = f.rows[size]; if (row === undefined) throw new Error(`no ${f.name} ${size}: its sizes are ${Object.keys(f.rows).slice(0, 40).join(', ')}${Object.keys(f.rows).length > 40 ? ' …' : ''}`);
   const why = f.cannot?.(row, size, set); if (why) throw new Error(`${f.name} ${size}: ${why}`);
-  return f.recipe(row, size, set);
+  const b = f.recipe(row, size, set); if (f.envelope) sayEnvelope(f, row, size, set, b); return b;
+}
+/** An envelope's mass said as it is built (AUDIT 4C: piece.transformer drew 3,281 kg, its row 420 kg): where its row gives
+ *  a mass (its expect's), each of its pieces weighs its share of that mass as their drawings share it (derived: the row's
+ *  mass spread as the drawn masses are, so its centre and its inertia are its boxes' scaled to it); where its row gives
+ *  none, each piece is said to be of mass unknown and weighs as the solid it is drawn as, said. */
+function sayEnvelope<R>(f: PartFamily<R>, row: R, size: string, set: Record<string, unknown>, b: Block): void {
+  // (its row's mass: as its expect says it; else a datasheet row's own `mass` (src/data's tables, in SI units, kg: a DC
+  // motor's from src/data/motors.ts), where the family's expect does not repeat it)
+  const own = (row as { mass?: unknown; source?: unknown } | null), sheet = own && typeof own === 'object' && typeof own.mass === 'number' && typeof own.source === 'string' ? own.mass : undefined;
+  const parts = leavesOf(partOfBlock(b)), kg = f.expect?.(row, size, set).mass ?? sheet, drawn = parts.map((p) => drawnMassOf({ ...p, parts: [] })), total = drawn.reduce((t, x) => t + x, 0);
+  const from = `${f.name} ${size}: its row's mass (${f.source})`;
+  parts.forEach((p, i) => { sayMass(p.name, p.mat, p.shape!, kg !== undefined && kg > 0 && total > 0 ? { kg: (kg * drawn[i]!) / total, from } : { unknown: `${p.name}: ${MASS_UNKNOWN} (${f.name}'s row gives no mass)` }); });
 }
 /** A family as one piece node: a size choice listing every row, its other settings, its card. */
 /** What a family's source is, read from its words (the audit, 2026-11-07: every family was stamped "standard", 436 of them
@@ -99,10 +129,13 @@ export function checkRow(id: string, size: string, set: Record<string, unknown> 
   const b = built ?? build(f, size, s), bound = [0, 1, 2].map((k) => b.hi[k]! - b.lo[k]!) as [number, number, number], mass = massOf(partOfBlock(b));
   const e = f.expect?.(row, size, s), misses: string[] = [], mm = (v: number) => (v * 1000).toFixed(2);
   if (e?.bound) for (const k of [0, 1, 2]) if (Math.abs(bound[k]! - e.bound[k]!) > e.tol * e.bound[k]! + 1e-6) misses.push(`its ${'xyz'[k]} ${mm(bound[k]!)} mm, the row's ${mm(e.bound[k]!)} mm`);
-  if (e?.mass !== undefined && !f.envelope && Math.abs(mass - e.mass) > (e.massTol ?? e.tol) * e.mass) misses.push(`its mass ${(mass * 1000).toFixed(2)} g, the row's ${(e.mass * 1000).toFixed(2)} g`);
-  const said = e ? `${e.says}; within ${(e.tol * 100).toFixed(0)} %${e.mass !== undefined && !f.envelope ? ` (mass ${((e.massTol ?? e.tol) * 100).toFixed(0)} %)` : ''}` : 'its row gives no size or mass to check against';
+  // (an envelope weighs its row's mass where its row gives one (AUDIT 4C), so that is checked too: what reads the room's
+  // parts takes it; where the row gives none it is not checked, and says its mass is unknown)
+  if (e?.mass !== undefined && Math.abs(mass - e.mass) > (e.massTol ?? e.tol) * e.mass) misses.push(`its mass ${(mass * 1000).toFixed(2)} g, the row's ${(e.mass * 1000).toFixed(2)} g`);
+  const said = e ? `${e.says}; within ${(e.tol * 100).toFixed(0)} %${e.mass !== undefined ? ` (mass ${((e.massTol ?? e.tol) * 100).toFixed(0)} %)` : ''}` : 'its row gives no size or mass to check against';
+  const drawn = f.envelope ? drawnMassOf(partOfBlock(b)) : mass;
   return { ok: misses.length === 0, family: id, size, bound, mass, ...(e ? { expect: e } : {}), misses,
-    says: `${f.name} ${size}: ${misses.length ? `off its row: ${misses.join('; ')}` : 'as its row says'} (${said})${f.envelope ? `; an envelope, its mass not checked (drawn ${(mass * 1000).toFixed(1)} g${e?.mass !== undefined ? `, the row ${(e.mass * 1000).toFixed(1)} g` : ''})` : ''}` };
+    says: `${f.name} ${size}: ${misses.length ? `off its row: ${misses.join('; ')}` : 'as its row says'} (${said})${f.envelope ? (e?.mass !== undefined ? `; an envelope, weighed at its row's ${(e.mass * 1000).toFixed(1)} g (drawn as solid, ${(drawn * 1000).toFixed(1)} g)` : `; an envelope, its mass not checked: ${MASS_UNKNOWN} (drawn ${(drawn * 1000).toFixed(1)} g)`) : ''}` };
 }
 /** The check as a node: a piece wired in (or built from its family and size where none is), held to its row. */
 export const CHECK_ROW: BlockDef = {

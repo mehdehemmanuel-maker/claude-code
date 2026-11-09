@@ -1261,12 +1261,6 @@ const shapeBlock = (id: string, name: string, says: string, inputs: PortDef[], m
   run: (i, c) => { const v = Object.fromEntries(inputs.filter((q) => i[q.name] !== undefined || q.default !== undefined).map((q) => [q.name, Number(i[q.name] ?? q.default)])); for (const [k, x] of Object.entries(v)) if (!(x >= 0) || !Number.isFinite(x)) throw new Error(`${k} must be a size, not ${x}`); const p = shapePart(name.toLowerCase(), make(v), lookOf(i, c.set)); return { part: p, mass: massOf(p) }; },
   tests: [{ set: { mat: 'steel-low' }, inputs: test.inputs, outputs: { mass: test.mass }, rel: 1e-9 }]
 });
-/** Points typed as "x, y; x, y; …" in millimetres. */
-function points(t: unknown): [number, number][] {
-  const pts = String(t ?? '').split(';').map((q) => q.split(',').map((x) => Number(x.trim()) / 1000)).filter((q) => q.length === 2 && q.every(Number.isFinite)) as [number, number][];
-  if (pts.length < 3) throw new Error('a profile needs three points or more, as "x, y; x, y; …" in mm');
-  return pts;
-}
 const asThing = (v: unknown): Part | Assembly => { if (isAssembly(v) || isPart(v)) return v; throw new Error('nothing made to place: wire a shape, a part or an assembly in'); };
 /** A thing as one part to look through by its pieces' names: an assembly's things gathered under it (where each sits does not matter to a name). */
 /** A thing as a tree of parts, each where it is placed (assembly.ts partOf: the one owner of that). */
@@ -1362,16 +1356,6 @@ const BUILT_THINGS: BlockDef[] = [
   shapeBlock('cone', 'Cone', 'A cone along y: base radius and height', [L('r', 0.05, 'radius'), L('h', 0.1, 'height')], (v) => ({ cone: [v.r!, v.h!] }), { inputs: { r: 0.05, h: 0.1 }, mass: (Math.PI * 0.0025 * 0.1 / 3) * 7850 }),
   shapeBlock('torus', 'Ring', 'A ring round z: its radius to the middle of the tube, and the tube\'s radius', [L('R', 0.05, 'ring radius'), L('r', 0.01, 'tube radius')], (v) => ({ torus: [v.R!, v.r!] }), { inputs: { R: 0.05, r: 0.01 }, mass: 2 * Math.PI ** 2 * 0.05 * 0.0001 * 7850 }),
   shapeBlock('tube', 'Tube', 'A straight tube along y: outside radius, wall and length', [L('r', 0.02, 'outside radius'), L('wall', 0.002, 'wall'), L('h', 0.5, 'length')], (v) => { if (v.wall! >= v.r!) throw new Error('the wall is as thick as the tube'); return { tube: { r: v.r!, wall: v.wall!, pts: [[0, -v.h! / 2, 0], [0, v.h! / 2, 0]] } }; }, { inputs: { r: 0.02, wall: 0.002, h: 0.5 }, mass: Math.PI * (0.02 ** 2 - 0.018 ** 2) * 0.5 * 7850 }),
-  def({ id: 'shape.extrude', name: 'Extrude', kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing', 'structural'], says: 'A profile drawn in x and y (mm), pushed out along z to a length: a bracket, a beam, a plate of any outline',
-    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'profile' }, { key: 'profile', label: 'Profile, mm: x, y; x, y; …', type: 'code', default: '0, 0; 60, 0; 60, 6; 6, 6; 6, 40; 0, 40' }, ...look],
-    ports: { inputs: [L('L', 0.1, 'length'), ...lookIn()], outputs: [P('part', 'part'), N('mass', 'kg')] },
-    run: (i, c) => { const p = shapePart('profile', { prism: { pts: points(c.set.profile), L: Number(i.L ?? 0.1) } }, lookOf(i, c.set)); return { part: p, mass: massOf(p) }; },
-    tests: [{ set: { profile: '0,0; 100,0; 100,100; 0,100', mat: 'steel-low' }, inputs: { L: 0.1 }, outputs: { mass: 7.85 }, rel: 1e-9 }] }),
-  def({ id: 'shape.lathe', name: 'Turn (lathe)', kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing'], says: 'A profile of radius and height (mm) spun about y: a propeller hub, a pulley, a knob, a vase',
-    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'turned' }, { key: 'profile', label: 'Profile, mm: r, y; r, y; …', type: 'code', default: '0, 0; 20, 0; 20, 5; 8, 8; 8, 30; 0, 30' }, ...look],
-    ports: { inputs: lookIn(), outputs: [P('part', 'part'), N('mass', 'kg')] },
-    run: (i, c) => { const p = shapePart('turned', { lathe: points(c.set.profile) }, lookOf(i, c.set)); return { part: p, mass: massOf(p) }; },
-    tests: [{ set: { profile: '0,0; 50,0; 50,100; 0,100', mat: 'steel-low' }, inputs: {}, outputs: { mass: Math.PI * 0.0025 * 0.1 * 7850 }, rel: 1e-3 }] }),
   def({ id: 'part.family', name: 'Standard part by size', kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing', 'electrical', 'structural'],
     says: `A part drawn whole from its standard, its sizes set one by one: ${DESIGNED.length} families (bolts, nuts, bearings, steppers, rails, extrusions, beams, pipes…)`,
     settings: [{ key: 'family', label: 'Family', type: 'choice', default: 'bolt', choices: DESIGNED }],
@@ -1715,19 +1699,6 @@ const BUILT_THINGS: BlockDef[] = [
     ports: { inputs: [thing()], outputs: [thing('turned', 'turned')] },
     run: (i, c) => { const r: Record<string, [number, number, number]> = { x: [0, 0, -Math.PI / 2], '-x': [0, 0, Math.PI / 2], y: [0, 0, 0], '-y': [Math.PI, 0, 0], z: [Math.PI / 2, 0, 0], '-z': [-Math.PI / 2, 0, 0] }; const t = asThing(i.thing); return { turned: { name: t.name, items: [place(t, [0, 0, 0], r[String(c.set.to)] ?? [0, 0, 0])] } }; },
     tests: [{ set: { to: 'z' }, inputs: { thing: { name: 'b' } }, outputs: { turned: { items: [{ rot: [Math.PI / 2, 0, 0] }] } } }] }),
-  def({ id: 'hole', name: 'Hole', kind: 'logic', ability: 'transform', domains: ['mechanical', 'manufacturing'], says: 'A hole drilled into a part: its radius and depth, where it starts on the part and which way it goes in; with sides, a hex or square pocket. Its volume comes out of the mass',
-    settings: [{ key: 'dir', label: 'Drilled toward', type: 'choice', default: '-y', choices: ['-y', 'y', '-x', 'x', '-z', 'z'] }, { key: 'sides', label: 'Sides (0: round)', type: 'number', default: 0 }, { key: 'path', label: 'Into the piece named (blank: the part itself)', type: 'text', default: '' }],
-    ports: { inputs: [P('part', 'part'), L('r', 0.004, 'radius'), L('depth', 0.01, 'depth'), L('x', 0), L('y', 0), L('z', 0)], outputs: [P('drilled', 'part'), N('mass', 'kg')] },
-    run: (i, c) => {
-      const p = i.part as Part; if (!isPart(p)) throw new Error('a hole goes into a part (a shape or a standard part), not an assembly');
-      const d: Record<string, [number, number, number]> = { y: [0, 1, 0], '-y': [0, -1, 0], x: [1, 0, 0], '-x': [-1, 0, 0], z: [0, 0, 1], '-z': [0, 0, -1] };
-      const cut = { r: Number(i.r ?? 0.004), depth: Number(i.depth ?? 0.01), at: [Number(i.x ?? 0), Number(i.y ?? 0), Number(i.z ?? 0)] as [number, number, number], dir: d[String(c.set.dir)] ?? [0, -1, 0], ...(Number(c.set.sides) >= 3 ? { n: Math.round(Number(c.set.sides)) } : {}) };
-      const pat = c.set.path ? new RegExp(String(c.set.path), 'i') : null; let done = false;
-      const into = (q: Part): Part => { if (!done && q.shape && (!pat || pat.test(q.name))) { done = true; return { ...q, cuts: [...(q.cuts ?? []), cut] }; } return q.parts ? { ...q, parts: q.parts.map(into) } : q; };
-      const out = into(p); if (!done) throw new Error(pat ? `no piece named like "${c.set.path}" with a shape` : 'it has no shape of its own to drill: name the piece');
-      return { drilled: out, mass: massOf(out) };
-    },
-    tests: [{ inputs: { part: { name: 'b', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low' }, r: 0.01, depth: 0.1, y: 0.05 }, outputs: { mass: (0.001 - Math.PI * 0.0001 * 0.1) * 7850 }, rel: 1e-9 }, { inputs: { part: { name: 'b', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low' }, r: 0.01, depth: 0.1 }, outputs: { mass: (0.001 - Math.PI * 0.0001 * 0.05) * 7850 }, rel: 1e-9 }] }),
   def({ id: 'measure', name: 'Measure', kind: 'critic', ability: 'measure', domains: ['mechanical', 'structural', 'everyday'], says: 'What a thing weighs and spans, how many pieces it places, and how few distinct things it is stored as',
     ports: { inputs: [thing()], outputs: [N('mass', 'kg'), L('w', 0, 'width'), L('h', 0, 'height'), L('d', 0, 'depth'), P('placed', 'integer', { label: 'pieces placed' }), P('distinct', 'integer', { label: 'things stored' })] },
     run: (i) => { const t = asThing(i.thing), b = boundsOfAll(t), z = b.isEmpty(); return { mass: massOfAll(t), w: z ? 0 : b.max.x - b.min.x, h: z ? 0 : b.max.y - b.min.y, d: z ? 0 : b.max.z - b.min.z, placed: placedCount(t), distinct: distinctCount(t) }; },

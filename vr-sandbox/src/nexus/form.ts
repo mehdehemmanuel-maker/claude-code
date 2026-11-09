@@ -46,7 +46,6 @@ export function superPerimeter(a: number, b: number, n = 2, k = 64): number {
 const midOf = (s: Station) => Math.min(s.hi, Math.max(s.lo, s.mid ?? (s.hi + s.lo) / 2));
 const bLo = (s: Station) => Math.max(0, midOf(s) - s.lo), bHi = (s: Station) => Math.max(0, s.hi - midOf(s));
 // a section's two halves, each half of its own superellipse: below its widest line and above it
-const secArea = (s: Station) => (superArea(s.w, bLo(s), s.n) + superArea(s.wt ?? s.w, bHi(s), s.nt ?? s.n)) / 2;
 const secPerim = (s: Station) => (superPerimeter(s.w, bLo(s), s.n ?? 2) + superPerimeter(s.wt ?? s.w, bHi(s), s.nt ?? s.n ?? 2)) / 2;
 /** A point on a station's section at angle t (0 at +z, over the top first): each half by its own width, height and squareness. */
 export function sectionPoint(s: Station, t: number): [y: number, z: number] {
@@ -70,9 +69,38 @@ export function stationAt(l: Loft, x: number): Station | null {
   for (let i = 1; i < st.length; i++) { const a = st[i - 1]!, b = st[i]!; if (x <= b.x) { const f = (x - a.x) / Math.max(1e-9, b.x - a.x), m = (u: number, v: number) => u + (v - u) * f; return { x, w: m(a.w, b.w), lo: m(a.lo, b.lo), hi: m(a.hi, b.hi), n: m(a.n ?? 2, b.n ?? 2), wt: m(a.wt ?? a.w, b.wt ?? b.w), nt: m(a.nt ?? a.n ?? 2, b.nt ?? b.n ?? 2), mid: m(midOf(a), midOf(b)), z: m(a.z ?? 0, b.z ?? 0) }; } }
   return st[st.length - 1]!;
 }
-/** A loft's volume and its skin's area (the ends left open, as a shell's are). */
-export function loftVolume(l: Loft): number { let v = 0; for (let i = 1; i < l.st.length; i++) { const a = l.st[i - 1]!, b = l.st[i]!; v += ((secArea(a) + secArea(b)) / 2) * Math.abs(b.x - a.x); } return v; }
-export function loftArea(l: Loft): number { let A = 0; for (let i = 1; i < l.st.length; i++) { const a = l.st[i - 1]!, b = l.st[i]!; A += ((secPerim(a) + secPerim(b)) / 2) * Math.hypot(b.x - a.x, (b.hi + b.lo - a.hi - a.lo) / 2); } return A; }
+// ---- one loft (AUDIT 4B and 3: its exact solid, its mass and its drawing were three evaluations, 8.3 % apart on the hull)
+// A loft is its stations in order along x, each section LOFT_RING points round its outline (sectionPoint), and each point
+// joined straight to the same point of the next section: a ruled solid. Where two neighbours are as square (n and nt the
+// same), a point moving straight is stationAt's blend exactly (a section's points move straight with its width, height and
+// middle), so the room's own reading of it (room.ts, stationAt) is the same solid; where their squareness differs,
+// sections from stationAt are put between them, a step of at most a quarter in n, so the straight joins follow the blend.
+// brep.ts lofts these sections ruled, kit3d.ts draws them, and loftVolume weighs them: one definition.
+/** Points round a loft's section, in its solid, its drawing and its volume alike. */
+export const LOFT_RING = 64;
+const thin = (s: Station) => !(s.w > 1e-5 && s.hi - s.lo > 1e-5);
+/** A loft's sections as its solid, its drawing and its weight all take them: its stations sorted along x (one too thin to
+ *  have a section, under 0.01 mm wide or high, left out, as the kernel cannot loft it), and sections eased in by stationAt
+ *  where neighbours' squareness differs. */
+export function loftSections(l: Loft): Station[] {
+  const st = [...l.st].sort((a, b) => a.x - b.x).filter((x) => !thin(x)), out: Station[] = [];
+  st.forEach((b, i) => { if (i > 0) { const a = st[i - 1]!, dn = Math.max(Math.abs((a.n ?? 2) - (b.n ?? 2)), Math.abs((a.nt ?? a.n ?? 2) - (b.nt ?? b.n ?? 2))), k = Math.ceil(dn / 0.25 - 1e-9);
+    for (let j = 1; j < k; j++) { const s = stationAt({ st: [a, b] }, a.x + ((b.x - a.x) * j) / k); if (s) out.push(s); } } out.push(b); });
+  return out;
+}
+/** A section's outline as its LOFT_RING points, [y, z] (its middle's offset across, z, added). */
+export function sectionRing(s: Station, k = LOFT_RING): [number, number][] { return Array.from({ length: k }, (_, i) => { const [y, z] = sectionPoint(s, (2 * Math.PI * i) / k); return [y, z + (s.z ?? 0)]; }); }
+const ringArea = (p: [number, number][]) => { let A = 0; for (let i = 0; i < p.length; i++) { const [y0, z0] = p[i]!, [y1, z1] = p[(i + 1) % p.length]!; A += y0 * z1 - y1 * z0; } return Math.abs(A) / 2; };
+/** A loft's volume: the ruled solid through its sections' rings, span by span, exactly (each section between two is their
+ *  rings' points eased straight, so its area is quadratic along the span and Simpson's rule is exact for it). */
+export function loftVolume(l: Loft): number {
+  const S = loftSections(l), R = S.map((s) => sectionRing(s)); let v = 0;
+  for (let i = 1; i < S.length; i++) { const a = R[i - 1]!, b = R[i]!, m = a.map(([y, z], k) => [(y + b[k]![0]) / 2, (z + b[k]![1]) / 2] as [number, number]);
+    v += (Math.abs(S[i]!.x - S[i - 1]!.x) / 6) * (ringArea(a) + 4 * ringArea(m) + ringArea(b)); }
+  return v;
+}
+/** Its skin's area (the ends left open, as a shell's are), over the same sections. */
+export function loftArea(l: Loft): number { const st = loftSections(l); let A = 0; for (let i = 1; i < st.length; i++) { const a = st[i - 1]!, b = st[i]!; A += ((secPerim(a) + secPerim(b)) / 2) * Math.hypot(b.x - a.x, (b.hi + b.lo - a.hi - a.lo) / 2); } return A; }
 
 /** A tube's path as straights and bends: each corner cut back by R tan(θ/2) and joined by an arc. */
 export interface Leg { kind: 'line' | 'arc'; a: V3; b: V3; /** an arc's corner (the control point it bends round) */ c?: V3; len: number }
