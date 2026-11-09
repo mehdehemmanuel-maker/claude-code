@@ -56,7 +56,7 @@
 //   SERVOS) and the vendor figures below, labelled typical. The rest typical, each table says so.
 // (Figures are mm in the tables and m in the solids.)
 
-import { made, over, stack, through, turn, run, onto, fitGap, type Block, type RunSeg } from '../room';
+import { made, over, stack, through, turn, run, onto, fitGap, limited, type Block, type RunSeg } from '../room';
 import { bracket, METRIC } from '../common';
 import { densityKg } from '../mass';
 import { TAP_DRILL } from '../interfaces';
@@ -283,13 +283,24 @@ const UC_BORE: Record<string, number> = { '201': 12, '202': 15, '203': 17, '204'
 type PillowRow = { d: number; H: number; L: number } & (typeof UCP_MORE)[string];
 const PILLOWS: Record<string, PillowRow> = Object.fromEntries(Object.keys(UCP).map((k) => [`UCP${k}`, { d: UC_BORE[k]!, H: UCP[k]![0], L: UCP[k]![1], ...UCP_MORE[k]! }]));
 const WALL = 5; // (the housing's ring round its insert, mm: typical)
+/** A UC insert (a pillow block's or a flange unit's), bore d, outside OD, width B, mm: its bore drawn at the nominal and
+ *  the slide fit's gap there (P2, above), and its axis held from travel along itself (P3, AUDIT 5.3): its two set screws
+ *  (or its eccentric collar) lock the shaft to its inner ring, which its balls let turn in its housing, so a shaft in it
+ *  turns and never slides, whatever fit it was laid with (the set screws not drawn). */
+const ucInsert = (size: string, d: number, OD: number, B: number): Block => limited(made(`${size} insert`, 'steel-chrome', { tube: [mm(d) / 2 + fitGap('slide', mm(d)), mm(OD) / 2, mm(B)] }, { color: 0xb8bcc2 }), `${size} insert/axis`,
+  { travel: { min: 0, max: 0, unit: 'm', src: 'a UC insert\'s set screws lock the shaft to its inner ring (NTN and SKF Y-bearing tables, recalled)' } });
 const PILLOW: PartFamily<PillowRow> = {
   id: 'piece.pillowblock', name: 'Pillow block (UCP)', gloss: 'A UCP pillow block bearing (201 to 210) by its size: its insert in a ring on a pad between two bolted feet', domains: ['mechanical', 'manufacturing'],
   says: 'A UCP pillow block (201 to 210, bores 12 to 50 mm; housings typical): its insert bearing (its outer ring a 62xx\'s) in a cast-iron ring, its axis along z at its centre height, the ring on a pad between two feet, each foot with its bolt hole. Approximated: the housing drawn as ring, pad and feet (not one casting), its balls and set screws not drawn. It offers UCP<n> insert/axis (a shaft through it: Through a line), UCP<n> foot A/holes and foot B/holes (Bolted joint)',
   rows: PILLOWS, size: 'UCP204', source: 'centre heights and lengths from src/nexus/kinds/motion.ts (makers\' tables, typical); the rest typical',
   recipe: (r, size) => {
     const Rh = r.OD / 2 + WALL, foot = (r.L / 2 - Rh), u = r.J / 2 - (r.L / 2 + Rh) / 2;
-    const ring = over(made(`${size} insert`, 'steel-chrome', { tube: [mm(r.d) / 2, mm(r.OD) / 2, mm(r.B)] }, { color: 0xb8bcc2 }), `${size} insert/axis`, made(`${size} housing`, 'cast-iron', { tube: [mm(r.OD) / 2, mm(Rh), mm(r.B)] }, { color: 0x2f4f7f }), 'mid', 'touch');
+    // (P2, AUDIT 5.2: a UC insert's bore is toleranced above its nominal, so a shaft slides in and its set screws hold it
+    // (the Y-bearing tables of NTN and SKF, recalled, not read again this round); drawn at the nominal and the slide fit's
+    // gap at that size (H7/g6's least clearance, fitGap), so a slide-fit shaft seats in it. That the makers' band covers
+    // that much (6 to 9 µm on the diameter, 12 to 50 mm) is a guess. Before, drawn at the nominal: a slide fit was refused
+    // (it needs 20.007 mm) and the shaft held frozen)
+    const ring = over(ucInsert(size, r.d, r.OD, r.B), `${size} insert/axis`, made(`${size} housing`, 'cast-iron', { tube: [mm(r.OD) / 2, mm(Rh), mm(r.B)] }, { color: 0x2f4f7f }), 'mid', 'touch');
     const mid = stack(`${size} housing on its pad`, 1, [{ b: made(`${size} pad`, 'cast-iron', { box: [mm(2 * Rh), mm(r.H - Rh), mm(r.A)] }, { color: 0x2f4f7f }) }, { b: turn(ring, 0, 90) }]);
     const feet = (k: string, x: number) => made(`${size} foot ${k}`, 'cast-iron', { box: [mm(foot), mm(r.H1), mm(r.A)] }, { color: 0x2f4f7f, pattern: { name: 'holes', points: [[mm(x), 0]], hole: mm(r.N) / 2 } });
     return stack(`${size} pillow block`, 0, [{ b: feet('A', -u) }, { b: mid }, { b: feet('B', u) }], undefined, true); },
@@ -317,14 +328,17 @@ const BELT: PartFamily<number> = {
 // ---- wheels (hub and tyre), castors ------------------------------------------------------------------------------------
 /** Wheels for small robots and carts: diameter → tyre width, hub bore, mm (the sizes sold, typical). */
 const WHEELS: Record<string, [number, number, number]> = { '40': [40, 16, 5], '50': [50, 20, 5], '60': [60, 22, 6], '65': [65, 26, 6], '75': [75, 28, 6], '80': [80, 30, 8], '100': [100, 35, 8], '125': [125, 38, 10] };
+// (the hub drawn with no bore: Over bores it to the shaft it goes on at its fit, as a wheel is bored to its shaft; a bore
+// drawn from the row stood wider than the motor shafts it is put on, so P2's true faces wrote none (wave 11). The row's
+// bore sizes the boss.)
 const wheelOf = (name: string, D: number, W: number, bore: number): Block => {
   const t = Math.max(3, 0.12 * D), Rr = D / 2 - t, rs = bore / 2 + 4, wt = 0.35 * W;
-  const hub = made(`${name} hub`, 'pp', { lathe: { pts: [[0, -W / 2], [rs, -W / 2], [rs, -wt / 2], [Rr - 2, -wt / 2], [Rr - 2, -W / 2], [Rr, -W / 2], [Rr, W / 2], [Rr - 2, W / 2], [Rr - 2, wt / 2], [rs, wt / 2], [rs, W / 2], [0, W / 2]].map(([a, b]) => [mm(a!), mm(b!)] as [number, number]), bore: mm(bore) / 2 } }, { color: 0xd8d8d8 });
+  const hub = made(`${name} hub`, 'pp', { lathe: { pts: [[0, -W / 2], [rs, -W / 2], [rs, -wt / 2], [Rr - 2, -wt / 2], [Rr - 2, -W / 2], [Rr, -W / 2], [Rr, W / 2], [Rr - 2, W / 2], [Rr - 2, wt / 2], [rs, wt / 2], [rs, W / 2], [0, W / 2]].map(([a, b]) => [mm(a!), mm(b!)] as [number, number]) } }, { color: 0xd8d8d8 });
   return over(hub, `${name} hub/axis`, made(`${name} tyre`, 'rubber', { tube: [mm(Rr), mm(D) / 2, mm(W)] }, { color: 0x1c1c1c }), 'mid', 'touch');
 };
 const WHEEL: PartFamily<[number, number, number]> = {
   id: 'piece.wheel', name: 'Wheel', gloss: 'A small wheel, 40 to 125 mm: a dished plastic hub and its rubber tyre', domains: ['mechanical', 'everyday', 'vehicles'],
-  says: 'A wheel (40 to 125 mm, sizes typical of small robot and cart wheels) by its diameter: a turned polypropylene hub (boss, web and rim) with its bore, and its rubber tyre over the rim. It offers <size> mm wheel hub/axis: it slides over a shaft of its bore (Over a shaft) or a shaft passes through it; turned, it stands on its tyre',
+  says: 'A wheel (40 to 125 mm, sizes typical of small robot and cart wheels) by its diameter: a turned polypropylene hub (boss, web and rim) with its bore, and its rubber tyre over the rim. It offers <size> mm wheel hub/axis: Over a shaft bores it to that shaft at the fit, or a shaft passes through it; turned, it stands on its tyre',
   rows: WHEELS, size: '65', source: 'the wheel sizes sold for small robots and carts (typical)',
   recipe: ([D, W, b], size) => wheelOf(`${size} mm wheel`, D, W, b),
   expect: ([D, W]) => ({ bound: [mm(D), mm(W), mm(D)], tol: 0.01, says: 'its diameter by its width' }),
@@ -354,14 +368,17 @@ const CASTOR: PartFamily<number> = {
 /** Each can size's shaft: diameter and how far it stands out, mm (typical of the makers' drawings). */
 const DCM_SHAFT: Record<string, [number, number]> = { '130': [2, 8], '180': [2, 9], '280': [2.3, 10], '370': [2.3, 11], '385': [2.3, 12], '540': [3.17, 15], '550': [3.17, 15], '775': [5, 17] };
 const DCMS: Record<string, [number, number, number, number, number]> = Object.fromEntries(Object.entries(DCM).map(([k, [d, L, g]]) => [k, [d, L, g, ...DCM_SHAFT[k]!]]));
+/** A brushed motor's two terminals, as a line of kind power (AUDIT P6): its pins only; no voltage or current, since no
+ *  datasheet row gives this can's (a motor by its datasheet, with its rating and its constants, is parts/power.ts piece.motor). */
+const CAN_TERMINALS = { kind: 'power' as const, size: { pins: 2 } };
 const DCMOTOR: PartFamily<[number, number, number, number, number]> = {
   id: 'piece.dcmotor', name: 'Brushed DC motor (can)', gloss: 'A brushed DC can motor, 130 to 775, as its envelope: can, front boss and shaft', domains: ['electrical', 'mechanical'],
   says: 'A brushed DC can motor by its size code (130 to 775; can sizes as families.ts gives them, typical): its can, its front bearing boss and its shaft stacked on its face. It offers <n> motor shaft/axis, written shaft/axis for short (a wheel, a pulley, a prop or a coupler over it: Over a shaft, where hi, a clear fit for a joint the motor drives); never over its can\'s axis (the can is solid: no sleeve fits it); stack it on its face or slide a clamp round its can',
   rows: DCMS, size: '130', source: 'families.ts DCM (can sizes and masses, typical); shafts typical',
   envelope: 'its can is its outline (no magnets, armature or brushes inside), so its drawn mass is a solid can\'s, not the motor\'s',
-  recipe: ([d, L, , sd, so], size) => stack(`${size} motor`, 1, [{ b: made(`${size} motor can`, 'steel-low', { cyl: [mm(d) / 2, mm(L)] }, { color: 0xb0b4b8 }) }, { b: made(`${size} motor boss`, 'brass', { cyl: [mm(0.3 * d) / 2, mm(1.5)] }) }, { b: made(`${size} motor shaft`, 'steel-alloy', { cyl: [mm(sd) / 2, mm(so)] }) }]),
+  recipe: ([d, L, , sd, so], size) => stack(`${size} motor`, 1, [{ b: made(`${size} motor can`, 'steel-low', { cyl: [mm(d) / 2, mm(L)] }, { color: 0xb0b4b8, pattern: { name: 'terminals', points: [[0, 0]], port: CAN_TERMINALS } }) }, { b: made(`${size} motor boss`, 'brass', { cyl: [mm(0.3 * d) / 2, mm(1.5)] }) }, { b: made(`${size} motor shaft`, 'steel-alloy', { cyl: [mm(sd) / 2, mm(so)] }) }]),
   expect: ([d, L, g, , so]) => ({ bound: [mm(d), mm(L + 1.5 + so), mm(d)], mass: g / 1000, tol: 0.01, says: 'its can by its length, boss and shaft' }),
-  tests: [{ inputs: {}, outputs: { pieces: 3, offers: ['130 motor boss/axis', '130 motor can/axis', '130 motor shaft/axis'] } }],
+  tests: [{ inputs: {}, outputs: { pieces: 3, offers: ['130 motor boss/axis', '130 motor can/axis', '130 motor can/terminals', '130 motor shaft/axis'] } }],
 };
 /** Gear motors (src/nexus/kinds/motion.ts GM: diameter and length; typical): the length split between motor and gearbox
  *  and the output shaft (diameter, out), mm, typical. */
@@ -372,20 +389,27 @@ const GEARMOTOR: PartFamily<{ d: number; L: number; motor: number; shaft: [numbe
   rows: Object.fromEntries(Object.entries(GM).map(([k, g]) => [k, { d: g.d, L: g.L, ...GM_PARTS[k]! }])), size: 'N20', source: 'src/nexus/kinds/motion.ts GM (frames, typical); the split and shafts typical',
   envelope: 'its can and gearbox are their outlines (no windings or gears inside), so its drawn mass is not the motor\'s',
   recipe: (r, size) => { const n = `${size} gear motor`, gb = size === 'N20' ? made(`${n} gearbox`, 'zamak', { box: [mm(r.d), mm(r.L - r.motor), mm(0.83 * r.d)] }) : made(`${n} gearbox`, 'zamak', { cyl: [mm(r.d) / 2, mm(r.L - r.motor)] });
-    return stack(n, 1, [{ b: made(`${n} can`, 'steel-low', { cyl: [mm(r.d) / 2, mm(r.motor)] }, { color: 0xb0b4b8 }) }, { b: gb }, { b: made(`${n} shaft`, 'steel-alloy', { cyl: [mm(r.shaft[0]) / 2, mm(r.shaft[1])] }) }]); },
+    return stack(n, 1, [{ b: made(`${n} can`, 'steel-low', { cyl: [mm(r.d) / 2, mm(r.motor)] }, { color: 0xb0b4b8, pattern: { name: 'terminals', points: [[0, 0]], port: CAN_TERMINALS } }) }, { b: gb }, { b: made(`${n} shaft`, 'steel-alloy', { cyl: [mm(r.shaft[0]) / 2, mm(r.shaft[1])] }) }]); },
   expect: (r) => ({ bound: [mm(r.d), mm(r.L + r.shaft[1]), mm(r.d)], tol: 0.01, says: 'its frame by its length and shaft' }),
-  tests: [{ inputs: {}, outputs: { pieces: 3, offers: ['N20 gear motor can/axis', 'N20 gear motor shaft/axis'] } }],
+  tests: [{ inputs: {}, outputs: { pieces: 3, offers: ['N20 gear motor can/axis', 'N20 gear motor can/terminals', 'N20 gear motor shaft/axis'] } }],
 };
 /** Hobby servos, mm and g (vendor pages, typical; SG90 and MG996R's boxes and masses as families.ts SERVOS gives them):
  *  its case L × W, its height to the case's top Hc, the tabs (their span, thickness, height of their underside above the
  *  case's bottom), the tabs' holes (spacing, diameter), the output (its offset from the case's middle along L, the
- *  spline's diameter and height), its mass. */
-const SERVO_ROWS: Record<string, { L: number; W: number; Hc: number; span: number; tt: number; th: number; hs: number; hd: number; off: number; sd: number; sh: number; g?: number }> = {
-  SG90: { L: SERVOS.micro!.box[0], W: SERVOS.micro!.box[1], Hc: SERVOS.micro!.box[2] - 4, span: 32.5, tt: 2.5, th: 16, hs: 27.8, hd: 2, off: 5.5, sd: 4.8, sh: 4, g: SERVOS.micro!.g },
-  MG90S: { L: 22.8, W: 12.2, Hc: 24.5, span: 32.5, tt: 2.5, th: 15.5, hs: 28, hd: 2, off: 5.5, sd: 4.8, sh: 4, g: 13.4 },
-  MG996R: { L: SERVOS.standard!.box[0], W: SERVOS.standard!.box[1], Hc: SERVOS.standard!.box[2] - 5, span: 54, tt: 2.5, th: 27, hs: 48, hd: 4.3, off: 10, sd: 5.8, sh: 5, g: SERVOS.standard!.g },
-  standard: { L: 40, W: 20, Hc: 33, span: 54, tt: 2.5, th: 26, hs: 48, hd: 4.3, off: 10, sd: 5.8, sh: 5 },
+ *  spline's diameter and height), its mass; P3: its output's travel, degrees (`range`: 180 for each, the vendor pages'
+ *  "rotation 0 to 180°", recalled, typical; a continuous-rotation servo is another model). */
+const SERVO_ROWS: Record<string, { L: number; W: number; Hc: number; span: number; tt: number; th: number; hs: number; hd: number; off: number; sd: number; sh: number; g?: number; range: number }> = {
+  SG90: { L: SERVOS.micro!.box[0], W: SERVOS.micro!.box[1], Hc: SERVOS.micro!.box[2] - 4, span: 32.5, tt: 2.5, th: 16, hs: 27.8, hd: 2, off: 5.5, sd: 4.8, sh: 4, g: SERVOS.micro!.g, range: 180 },
+  MG90S: { L: 22.8, W: 12.2, Hc: 24.5, span: 32.5, tt: 2.5, th: 15.5, hs: 28, hd: 2, off: 5.5, sd: 4.8, sh: 4, g: 13.4, range: 180 },
+  MG996R: { L: SERVOS.standard!.box[0], W: SERVOS.standard!.box[1], Hc: SERVOS.standard!.box[2] - 5, span: 54, tt: 2.5, th: 27, hs: 48, hd: 4.3, off: 10, sd: 5.8, sh: 5, g: SERVOS.standard!.g, range: 180 },
+  standard: { L: 40, W: 20, Hc: 33, span: 54, tt: 2.5, th: 26, hs: 48, hd: 4.3, off: 10, sd: 5.8, sh: 5, range: 180 },
 };
+/** A hobby servo's output travel by the model its pieces are named for ("SG90 spline"), from its row (P3): degrees and
+ *  where that figure is from; undefined where no row's model is named. */
+export function servoRangeOf(names: string): { deg: number; model: string; src: string } | undefined {
+  const model = Object.keys(SERVO_ROWS).sort((a, b) => b.length - a.length).find((k) => new RegExp(`\\b${k}\\b`, 'i').test(names));
+  return model ? { deg: SERVO_ROWS[model]!.range, model, src: `piece.servo's ${model} row: rotation 0 to ${SERVO_ROWS[model]!.range}° (vendor pages, recalled, typical)` } : undefined;
+}
 const SERVO: PartFamily<(typeof SERVO_ROWS)[string]> = {
   id: 'piece.servo', name: 'Hobby servo', gloss: 'A hobby servo (SG90, MG90S, MG996R, standard size) as its envelope: case, mounting tabs with their holes, output spline', domains: ['electrical', 'mechanical', 'everyday'],
   says: 'A hobby servo by its model (SG90, MG90S, MG996R, a standard size; vendor figures, typical): its case below its tabs, the tabs with their two holes, its case above, its output spline (toothed) off the middle toward one end, and a stub of its three-wire lead out of the case\'s foot at that end. It offers <model> tabs/holes (screw it down: Bolted joint) and <model> spline/axis (a horn or a wheel over it: Over a shaft)',
@@ -440,7 +464,7 @@ const UCF: PartFamily<(typeof UCF_ROWS)[string]> = {
   rows: UCF_ROWS, size: 'UCF204', source: 'makers\' tables of UCF units (typical), the bores UC2xx',
   recipe: (r, size) => { const Rh = r.OD / 2 + WALL;
     const flange = made(`${size} flange`, 'cast-iron', { box: [mm(r.A), mm(r.T), mm(r.A)] }, { color: 0x2f4f7f, patterns: [{ name: 'holes', points: [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) => [mm((a! * r.J) / 2), mm((b! * r.J) / 2)] as [number, number]), hole: mm(r.N) / 2 }, { name: 'bore', points: [[0, 0]], hole: mm(Rh) }] });
-    const ring = over(made(`${size} insert`, 'steel-chrome', { tube: [mm(r.d) / 2, mm(r.OD) / 2, mm(r.B)] }, { color: 0xb8bcc2 }), `${size} insert/axis`, made(`${size} housing`, 'cast-iron', { tube: [mm(r.OD) / 2, mm(Rh), mm(r.B)] }, { color: 0x2f4f7f }), 'mid', 'touch');
+    const ring = over(ucInsert(size, r.d, r.OD, r.B), `${size} insert/axis`, made(`${size} housing`, 'cast-iron', { tube: [mm(r.OD) / 2, mm(Rh), mm(r.B)] }, { color: 0x2f4f7f }), 'mid', 'touch');
     return through(flange, ring, { port: `${size} flange/bore`, from: 'lo' }, 'touch'); },
   expect: (r) => ({ bound: [mm(r.A), mm(Math.max(r.T, r.B)), mm(r.A)], tol: 0.01, says: 'its flange\'s square, the insert\'s width' }),
   tests: [{ inputs: {}, outputs: { pieces: 3, offers: ['UCF204 flange/bore', 'UCF204 flange/holes', 'UCF204 housing/axis', 'UCF204 insert/axis'] } }],

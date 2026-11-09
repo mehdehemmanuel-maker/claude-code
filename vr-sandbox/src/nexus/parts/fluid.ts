@@ -16,7 +16,8 @@
 // tube sizes; ASTM F876 CTS outsides and SDR 9; EN 837-1 dial sizes); the bodies
 // round them (lengths, hexes, caps) are makers' proportions. None was cross-checked against a table here: left open.
 
-import { branch, joint, made, onto, over, room, run, stack, through, turn, type Block, type RunSeg } from '../room';
+import { Block, branch, joint, made, onto, over, room, run, stack, through, turn, type RunSeg } from '../room';
+import { FLUID_NETWORK } from '../fluidnet';
 import { densityKg } from '../mass';
 import { familyNode, type Expect, type PartFamily } from './maker';
 import type { BlockDef } from '../blocks';
@@ -167,7 +168,8 @@ export const FLUID_SOURCES: Record<string, string> = {
   NPT: 'ASME B1.20.1 outsides, threads an inch, L1 and L2 as recalled; ASME B16.3 class 150 proportions as recalled (typical)', COMPRESSION: 'EN 1254-2 tube sizes; bodies and nuts typical of makers\' tables',
   PEX_CTS: 'ASTM F876 copper tube size outsides and SDR 9 walls as recalled', PEX_METRIC: 'EN ISO 15875 sizes as sold (typical)', PEX_RING: 'typical of ASTM F1807 crimp ring makers\' tables',
   PEX_INSERT: 'typical of ASTM F1807 insert fitting makers\' tables', GHT_MAJOR: 'ANSI/ASME B1.20.7 garden hose thread 3/4-11.5 NH major, as recalled', GARDEN: 'typical of garden hose connector makers\' tables',
-  BONDED: 'typical of bonded seal makers\' tables', R1AT: 'typical of SAE 100R1AT hose makers\' tables', ORFS: 'SAE J1453 threads and tube sizes as recalled; hexes typical', PPR: 'DIN 8077 walls as recalled', PE100: 'EN 12201-2 walls as recalled', GATE: 'EN 558 series 14 and EN 1092-1 PN16 as recalled; flange thicknesses typical', FLUID: 'the families made from the tables above, each saying its own source', FLUID_NODES: 'the families\' piece nodes, each card saying its own source',
+  BONDED: 'typical of bonded seal makers\' tables', R1AT: 'typical of SAE 100R1AT hose makers\' tables', ORFS: 'SAE J1453 threads and tube sizes as recalled; hexes typical', PPR: 'DIN 8077 walls as recalled', PE100: 'EN 12201-2 walls as recalled', GATE: 'EN 558 series 14 and EN 1092-1 PN16 as recalled; flange thicknesses typical',
+  PUMP_ROWS: 'typical of 15 mm wet-rotor circulators (the 15-40 and 15-60 classes) and their makers\' charts: body, can and curve each typical, no maker\'s own table to hand', FLUID: 'the families made from the tables above, each saying its own source', FLUID_NODES: 'the families\' piece nodes, each card saying its own source',
 };
 export const FLUID_STATUS: Record<string, string> = Object.fromEntries(Object.keys(FLUID_SOURCES).map((k) => [k, 'estimated']));
 
@@ -675,8 +677,27 @@ const PE100PIPE = pressurePipe('piece.pe100pipe', 'PE100 pipe (EN 12201-2)', 'A 
   PE100, '32 SDR11', 'EN 12201-2 as recalled (src/nexus/parts/fluid.ts PE100)', 'pe', BLACK);
 
 /** Every pneumatic, hydraulic and plumbing family this file makes (most used first), registered in parts/index.ts. */
+
+// ---- circulating pumps (package P5): an inline pump by its row, its curve the points a maker's chart gives -----------
+/** Small inline circulating pumps, typical of 15 mm wet-rotor circulators: body length L, outside D, its waterway di, the
+ *  copper tube its compression ends take, its motor can's outside and height, mm; its curve, flow (L/min) against head
+ *  (m), typical of makers' charts for the class (no maker's own table to hand: each figure typical). */
+export const PUMP_ROWS: Record<string, { L: number; D: number; di: number; tube: number; can: number; canH: number; curve: [number, number][] }> = {
+  'circulator 15-40': { L: 130, D: 60, di: 13, tube: 15, can: 90, canH: 95, curve: [[0, 4.0], [10, 3.7], [20, 3.1], [30, 2.1], [40, 0.8]] },
+  'circulator 15-60': { L: 130, D: 60, di: 13, tube: 15, can: 95, canH: 100, curve: [[0, 6.0], [15, 5.6], [30, 4.6], [45, 2.9], [55, 1.4]] },
+};
+const CIRCULATOR: PartFamily<(typeof PUMP_ROWS)[string]> = {
+  id: 'piece.pump', name: 'Circulating pump', gloss: 'An inline circulating pump by its class (15-40, 15-60): its body along the flow, its motor can on top, its curve on its ends', domains: ['mechanical', 'pipelines'], aisle: 'Plumbing / Pumps',
+  says: 'A small inline circulating pump (sizes and curve typical of 15 mm wet-rotor circulators): its body a tube laid along the flow (x) with 15 mm compression ends, its motor can stood on it. Its body\'s line says it is a pump and carries its curve (flow against head, typical of makers\' charts), for fluid.network to meet the system curve with. Approximated: the impeller and volute inside not drawn',
+  rows: PUMP_ROWS, size: 'circulator 15-60', source: 'typical of 15 mm wet-rotor circulators and their makers\' charts (src/nexus/parts/fluid.ts PUMP_ROWS)',
+  recipe: (q, size) => { const n = `${size} pump`;
+    const body = turn(made(`${n} body`, 'cast-iron', { tube: [mm(q.di) / 2, mm(q.D) / 2, mm(q.L)] }, { color: 0x2a5db0 }), 2, 90);
+    const can = made(`${n} motor can`, 'steel-low', { cyl: [mm(q.can) / 2, mm(q.canH)] }, { color: 0x1c1c1c });
+    return Block.lined(onto(body, '+y', can, 'touch'), (l) => (l.port === `${n} body/axis` ? { kind: 'fluid', size: { role: 'pump', d: mm(q.tube), di: mm(q.di), curve: q.curve.map(([Q, H]) => `${Q}:${H}`).join('; ') }, std: `compression ends for ${q.tube} mm EN 1057 tube (EN 1254-2, typical)` } : undefined)); },
+  tests: [{ inputs: {}, outputs: { pieces: 2, offers: ['circulator 15-60 pump body/axis', 'circulator 15-60 pump motor can/axis'] } }],
+};
 export const FLUID = [CYL6432, CYL15552, HYDCYL, VALVE, NPTELBOW, NPTTEE, NPTCOUPLING, NPTNIPPLE, NPTPLUG, NPTCAP, NPTBUSHING, NPTELBOW45, NPTCROSS, NPTUNION, COMPCOUPLING, COMPELBOW, COMPTEE, COMPSTOPEND,
   PEXPIPE, PEXMETRIC, PEXRING, PEXCOUPLING, PEXELBOW, PEXTEE, QCOUPLER, QPLUG, JICUNION, JICELBOW, JICELBOW45, JICTEE, JICCAP, JICPLUG, ORFSUNION, ORFSELBOW, ORFSTEE, ORBPLUG, ORBJIC, HYDHOSE, HYDHOSER1, BONDEDSEAL, GAUGES, FILTERREGULATOR, SILENCERS,
-  GATEVALVE, PPRPIPE, PE100PIPE, HOSEFEMALE, HOSEMALE] as PartFamily<unknown>[];
+  GATEVALVE, PPRPIPE, PE100PIPE, HOSEFEMALE, HOSEMALE, CIRCULATOR] as PartFamily<unknown>[];
 /** Their piece nodes (registered with the maker's check.row by familyNode). */
-export const FLUID_NODES: BlockDef[] = FLUID.map((f) => familyNode(f));
+export const FLUID_NODES: BlockDef[] = [...FLUID.map((f) => familyNode(f)), FLUID_NETWORK];

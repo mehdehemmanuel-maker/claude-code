@@ -20,6 +20,8 @@ export interface MotorData {
     stallCurrent?: number;
     stallTorque?: number;
     terminalR?: number;
+    /** Terminal inductance, H, where the sheet gives it. */
+    terminalL?: number;
     torqueConstant?: number;
     rated?: { speed: number; current: number; power: number };
   };
@@ -89,6 +91,16 @@ export const MOTORS: Record<string, MotorData> = {
     thermal: { Rwh: 1.93, Rha: 4.65, tauW: 42.8, tauM: 809, maxWinding: 155 },
     price: { amount: 502.09, currency: 'EUR', seen: '2026-10', note: 'maxon online shop, 1 to 4 units, the RE 40 150 W graphite page (148866, the 12 V winding; the 24 V one not confirmed)' },
     source: 'maxon RE 40 Ø40 mm, graphite brushes, 150 W, order no. 148867 (24 V winding), current maxon online data: K_t 30.2 mN·m/A, 317 rpm/V, R 0.299 Ω, no-load 7580 rpm at 137 mA, stall 2420 mN·m, nominal 6 A, rotor 142 g·cm², R_th 1.93 + 4.65 K/W, τ 42.8 s winding and 809 s motor, 480 g. (148866 is the 12 V winding; older catalogue editions give R 0.317 Ω, τ_motor 1120 s.)'
+  },
+  'motor.dc.coreless.d40-150w-12v': {
+    status: 'specified',
+    id: 'motor.dc.coreless.d40-150w-12v', label: 'Coreless brushed DC motor, Ø40 mm, 150 W, 12 V winding', V: 12,
+    published: { noLoadSpeed: 6920, noLoadCurrent: 0.241, stallCurrent: 105, stallTorque: 1.72, terminalR: 0.115, torqueConstant: 0.0164, terminalL: 0.0245e-3 },
+    maxContinuousCurrent: 6,
+    mass: 0.48, diameter: 0.04, length: 0.071, shaft: 0.006,
+    rotorInertia: 139e-7,
+    thermal: { Rwh: 1.93, Rha: 4.65, tauW: 41.9, tauM: 809, maxWinding: 155 },
+    source: 'maxon RE 40 Ø40 mm, graphite brushes, 150 W, order no. 148866 (12 V winding), maxon online data read 2026-11-07 (https://www.maxongroup.com/maxon/view/product/148866): K_t 16.4 mN·m/A, 581 rpm/V, R 0.115 Ω, L 0.0245 mH, no-load 6920 rpm at 241 mA, stall 1720 mN·m and 105 A, nominal 6 A, rotor 139 g·cm², R_th 1.93 + 4.65 K/W, τ 41.9 s winding and 809 s motor, max winding +155 °C, 480 g. Its body Ø40 × 71 mm and Ø6 mm shaft are the RE 40 frame, as 148867\'s row gives them.'
   },
   'motor.dc.brushed.d100-250w-24v': {
     status: 'estimated',

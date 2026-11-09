@@ -8,6 +8,7 @@
 // from its piece) and the stack is aligned on that line (room.stack's `align`). Sizes are labelled typical where no real
 // product is named. Loaded by one import in seeds.ts, after robots.ts (the leg reuses the arm's servo joint).
 
+import { fitGap } from '../room';
 import { register, type BlockDef, type Type } from '../blocks';
 import { Engine, emptyBoard, groupBlock, placeBlock, wire } from '../dataflow';
 import type { Board } from '../boards';
@@ -71,7 +72,10 @@ function windTurbine(): void {
   const s = new Asm('A wind turbine');
   s.input('height', 'number', 6000, 'the mast\'s height, mm', [], 'mast.length');
   s.input('base', 'number', 400, 'the base plate\'s side, mm', [], 'base.w; base.d');
-  rotor(s, 'r', { name: 'turbine', mat: 'fibreglass', rin: 90, root: [60, 30, 80], blade: [540, 8, 100], pitch: 12, hub: [11.5, 110, 15] });
+  // (P3, AUDIT 5.2: the hub's bore the Ø20 shaft's radius and the clear fit's gap at Ø20 (room.ts fitGap, ISO 286), derived;
+  // before, 11.5 mm, 1.5 mm off the shaft all round, which over writes no face for at the clear fit, so the rotor did not
+  // turn. Drawn with no bore, over cannot bore it: the ring's turned blades stop it first)
+  rotor(s, 'r', { name: 'turbine', mat: 'fibreglass', rin: 90, root: [60, 30, 80], blade: [540, 8, 100], pitch: 12, hub: [10 + fitGap('clear', 0.02) * 1000, 110, 15] });
   s.n('piece.shaft', { size: '20', length: 150 }, 'The rotor shaft, Ø20', 'shaft');
   s.op('spun', 'room.over', { line: 'Ø20 shaft/axis', where: 'hi', fit: 'clear' }, 'The rotor over its shaft: it turns', { host: 'shaft', sleeve: 'rrotor' });
   s.op('rx', 'room.turn', { axis: 'z', degrees: -90 }, 'Laid along x, the rotor in front', { block: 'spun' });
@@ -129,7 +133,9 @@ function boat(): void {
   s.n('seed.hull', { length: 3660, transom: 25 }, 'The lofted hull, its transom and foredeck (seed.hull)', 'boat'); s.w('in_length', 'value', 'boat', 'length'); s.w('in_transom', 'value', 'boat', 'transom');
   // (the lower unit, built standing and laid aft)
   s.n('piece.shaft', { size: '10', length: 300 }, 'The prop shaft, Ø10', 'ps');
-  s.n('room.make', { name: 'motor pod', shape: 'tube', mat: 'al-6061', a: 6, b: 45, c: 160 }, 'The motor pod, Ø90', 'pod');
+  // (wave 11 integration: the pod drawn with no bore, so over bores it to the Ø10 shaft at the clear fit's gap and writes
+  // its face; before, a Ø12 bore stood 1 mm off the shaft, no face was written and the prop and its shaft fell away)
+  s.n('room.make', { name: 'motor pod', shape: 'rod', mat: 'al-6061', a: 45, b: 160 }, 'The motor pod, Ø90', 'pod');
   s.op('podded', 'room.over', { line: 'Ø10 shaft/axis', where: 'mid', fit: 'clear' }, 'The shaft turns in the pod', { host: 'ps', sleeve: 'pod' });
   s.n('room.make', { name: 'motor strut', shape: 'box', mat: 'al-6061', a: 30, b: 60, c: 40 }, 'The strut up from the pod to the shaft tube', 'strut');
   s.op('struck', 'room.onto', { face: '+z', fit: 'touch' }, 'On the pod\'s side (its top, once laid aft)', { host: 'podded', child: 'strut' });
@@ -197,7 +203,9 @@ function tripod(): void {
 }
 
 // ---- a leg, and robots walking on four and six of them ---------------------------------------------------------------
-const HORN = { name: 'servo horn', shape: 'tube', mat: 'pom', a: 5.2, b: 10, c: 3 };
+// (P3, AUDIT 5.2: a disc with no bore, which over bores to its spline at the clear fit, as robots.ts's horn; before, a
+// 10.4 mm bore on a 4.8 mm spline, 2.8 mm off it, which over writes no face for, so the servo's joint was lost)
+const HORN = { name: 'servo horn', shape: 'rod', mat: 'pom', a: 10, b: 3 };
 function leg(): void {
   // (a servo leg, as the robot arm's joints are made: a hip mount plate, then pitch joints (a servo stood on its end, its
   // horn over its spline (the joint), an aluminium link on the horn up to the next), and a foot pad with a rubber foot at
@@ -262,11 +270,13 @@ function winch(): void {
   s.input('turns', 'number', 12, 'the rope\'s turns on the drum (Ø6, 6.5 mm a turn: 13 at most)', [], 'rope.c');
   s.input('shaft', 'number', 160, 'the drum shaft\'s length, mm (the drum\'s 100 and the plates\' bearings)', [], 'sh.length');
   s.n('piece.shaft', { size: '12', length: 160 }, 'The drum shaft, Ø12', 'sh');
-  s.n('room.make', { name: 'winch drum', shape: 'tube', mat: 'steel-low', a: 7.2, b: 30, c: 88 }, 'The drum\'s barrel, Ø60, 88 long', 'drum');
+  // (wave 11 integration: the barrel and its flanges drawn with no bore, so over bores each to the Ø12 shaft at the clear
+  // fit's gap and writes its face; before, a Ø14.4 bore stood 1.2 mm off the shaft and the drum fell away from it)
+  s.n('room.make', { name: 'winch drum', shape: 'rod', mat: 'steel-low', a: 30, b: 88 }, 'The drum\'s barrel, Ø60, 88 long', 'drum');
   s.op('dr0', 'room.over', { line: 'Ø12 shaft/axis', where: 'mid', fit: 'clear' }, 'The drum over its shaft: it turns', { host: 'sh', sleeve: 'drum' });
   s.n('room.make', { name: 'winch rope', shape: 'coil', mat: 'nylon', a: 33, b: 6, c: 12, d: 6.5, e: 1 }, 'The rope (Ø6) wound on the barrel, twelve turns', 'rope');
   s.op('wound', 'room.over', { line: 'winch drum/axis', where: 'mid', fit: 'touch' }, 'Wound on the barrel', { host: 'dr0', sleeve: 'rope' });
-  s.n('room.make', { name: 'drum flange', shape: 'tube', mat: 'steel-low', a: 7.2, b: 45, c: 5 }, 'A drum flange, Ø90', 'fl');
+  s.n('room.make', { name: 'drum flange', shape: 'rod', mat: 'steel-low', a: 45, b: 5 }, 'A drum flange, Ø90', 'fl');
   s.op('dr1', 'room.over', { line: 'Ø12 shaft/axis', where: 'mid', fit: 'clear' }, 'A flange slid on against the barrel', { host: 'wound', sleeve: 'fl' });
   s.op('dr', 'room.over', { line: 'Ø12 shaft/axis', where: 'mid', fit: 'clear' }, 'And the other', { host: 'dr1', sleeve: 'fl' });
   s.op('drx', 'room.turn', { axis: 'z', degrees: 90 }, 'Laid across', { block: 'dr' });
@@ -317,7 +327,9 @@ function truck(): void {
   const s = new Asm('A truck');
   const axles = s.input('wheels', 'text', '4', 'four wheels (two axles) or six (a second rear axle)', ['4', '6']);
   s.input('bed', 'number', 4200, 'the bed\'s length, mm', [], 'bed4.a; bed6.a');
-  s.n('room.make', { name: 'truck rim', shape: 'tube', mat: 'steel-low', a: 23, b: 222, c: 180 }, 'A wheel disc (steel), Ø444', 'rim');
+  // (wave 11 integration: the disc drawn with no bore, so over bores it to the Ø44 stub axle at the clear fit's gap and
+  // writes its face; before, a Ø46 bore stood 1 mm off the axle and the chassis fell away from its wheels)
+  s.n('room.make', { name: 'truck rim', shape: 'rod', mat: 'steel-low', a: 222, b: 180 }, 'A wheel disc (steel), Ø444', 'rim');
   s.n('room.make', { name: 'truck tyre', shape: 'tube', mat: 'rubber', a: 222, b: 383, c: 215 }, 'Its tyre, 215/75 R17.5', 'tyre');
   s.op('wheel', 'room.over', { line: 'truck rim/axis', where: 'mid', fit: 'touch' }, 'The tyre on its rim', { host: 'rim', sleeve: 'tyre' });
   const builds: Record<string, string> = {};

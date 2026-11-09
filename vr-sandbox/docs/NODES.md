@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 1219 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 1225 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -35,16 +35,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 4 | a standard's, a maker's or a reference table's figure |
-| derived | 342 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 344 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 13 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 6 | typical values or an estimate, said so |
 | simplified | 39 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 683 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 687 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 1106 tested here (their own tests: that they do what they say, not that the world does); 103 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 1111 tested here (their own tests: that they do what they say, not that the world does); 104 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 128 of 1219 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 128 of 1225 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (15)
 
@@ -206,7 +206,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Window (frame, sash, glazing)** (`seed.window`): A timber casement window (sizes typical): a 4 mm glass pane between a sash's two rails and two stiles (PAR 44 × 44), the sash between the frame's two jambs, the head on top and the sill under (PAR 44 × 69). *hypothetical, untested*
 - **XY gantry** (`seed.xy-gantry`): An XY gantry (a cross-slide stage): two lead-screw linear axes (seed.linear-axis) crossed, the Y axis laid between two 2020 T-slot frame rails with a cross rail at each end, an aluminium cross-slide plate over them … *hypothetical, untested*
 
-## 3 · Arrange and mate (593)
+## 3 · Arrange and mate (597)
 
 Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones and mates as numbers; proximity; routes.
 
@@ -312,6 +312,7 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Chuck (3 jaw)** (`piece.chuck`): A three-jaw chuck by its diameter: its body (cast iron, bored through) with three hardened jaws (blocks) in a ring on its face, turned to face out. *hypothetical, tested here*
 - **Circular conduit box** (`piece.conduitbox`): A round PVC conduit box (Ø70 × 40, typical of BS 4662's round boxes): its cup open at the top (`<size> box/cavity`, a room for connectors) and a socket spout on each side its form has, each offering its axis for the … *hypothetical, tested here*
 - **Circular saw blade** (`piece.sawblade`): A circular saw blade by its diameter (115 to 305 mm; its bore and plate thickness typical, recalled): a steel disc lying flat with its bore, its teeth not cut, offered as `<size> saw blade/axis`: it slides over an … *hypothetical, tested here*
+- **Circulating pump** (`piece.pump`): A small inline circulating pump (sizes and curve typical of 15 mm wet-rotor circulators): its body a tube laid along the flow (x) with 15 mm compression ends, its motor can stood on it. *hypothetical, tested here*
 - **Clear away** (`clear`): What a thing places, less whatever comes within a distance of another thing (grass under a road, trees where a house stands) or, with "keep", only those: deleting by where things are *derived, tested here, before the update*
 - **Clevis pin** (`piece.clevispin`): A clevis pin (ISO 2341 B): its pin, its head on top, and its cross hole near its end, offered as `<name>/cross` (along x), for a split pin (Through a line). *hypothetical, tested here*
 - **Close with a lid** (`mate.lid`): A lid made for a box (empty, or with what was put into it): a plate its outside width and depth, onto its top (Onto a face); it rests on its walls, or on what stands highest in it, and closes its cavity *derived, tested here*
@@ -356,7 +357,10 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Damper (round)** (`piece.damper`): A round damper by its diameter: a short galvanised body (a tube) with its blade (a disc) through its axis at the −y end, drawn closed. *hypothetical, tested here*
 - **DC barrel jack** (`piece.jack`): A right-angle DC barrel jack for 5.5 × 2.1 mm plugs, as Same Sky's (CUI) PJ-002A datasheet draws it: its housing 9 × 11 × 14.4 mm (drawn as its back and its bored front, made upright and turned to lie along z), its … *hypothetical, tested here*
 - **DC gear motor** (`piece.gearmotor`): A DC gear motor by its frame (N20, JGA25, 37GB; their sizes as the kinds give them, typical): its motor, its gearbox and its output shaft stacked (the N20's flattened can and gearbox drawn as a can and a box; the … *hypothetical, tested here*
+- **DC motor (by its datasheet)** (`piece.motor`): A DC motor by its datasheet (src/data/motors.ts: each row a motor you can buy, its constants its maker's): its can (the row's diameter and length), its shaft (the row's diameter, standing out three diameters, typical) … *hypothetical, tested here*
+- **DC motor driver** (`piece.driver`): A brushed DC motor driver (an H-bridge chopping its supply at a duty) by its current (10 A, 30 A; typical): its board with its supply terminals (<size> driver PCB/in, power, its voltage range as limits), its motor … *hypothetical, tested here*
 - **DC plug 5.5 × 2.1** (`piece.plug`): A 5.5 × 2.1 mm DC plug, as Same Sky's (CUI) PP3-002A draws it: its centre contact (Ø2.1 inside), insulator and outer barrel (Ø5.5) slid over one another, 9.5 mm long, its cover Ø8.2 × 22.5 behind them; its cable not … *hypothetical, tested here*
+- **DC power supply** (`piece.psu`): A DC supply by its output (12 V 12.5 A, 24 V 6.5 A, 24 V 14.6 A; all typical): its case with its output terminals on top as one line, <size> supply case/out, of kind power, its size its voltage and current and its … *hypothetical, tested here*
 - **Deck screw (countersunk wood screw)** (`piece.deckscrew`): A countersunk deck screw by its diameter and length ("5x60", "#10x3"): its point, its shank (its thread not drawn) and its 90° countersunk head stacked up y, its length overall; its shank offers its axis (`<size> … *hypothetical, tested here*
 - **Derailleur** (`piece.bkmech`): A derailleur (typical): its envelope, a box of its size (its parallelogram, cage, pulleys and spring not drawn); it hangs from a frame's hanger or clamps a seat tube. *hypothetical, tested here*
 - **Development board** (`piece.devboard`): A development board by name (Arduino Uno R3, Mega 2560, Nano; Raspberry Pi 4, Pi 5, Pico; ESP32-DevKitC; NodeMCU): its PCB (FR-4, its drawing's outline) offering its mounting holes and pins as lines (`<board> … *hypothetical, tested here*
@@ -804,14 +808,16 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Z purlin** (`piece.zpurlin`): A cold-formed galvanised steel Z section by its series and gauge ("Z200 1.5": its depth up (y), its wider flange to +x on top and narrower to −x below, so two lap over a rafter, its lips square, its corners square), … *hypothetical, tested here*
 - **Zone** (`zone`): The room a thing needs kept clear, put on the thing itself and worked out from its own size: in front of a face, so deep (a toilet's clear floor, a kitchen's work aisle), or swept from a hinge at one edge of that face … *derived, tested here, before the update*
 
-## 4 · Choose, size and decide (19)
+## 4 · Choose, size and decide (21)
 
 Pick from a catalogue by duty, size a part, a wire, a battery; solve for what is wanted; if, compare, pick one.
 
 - **Autopilot** (`auto.loop`): Checks a thing by the rules, groups what is wrong into problems, and tries the repairs on each, least costly first, keeping one only if its problem is gone and the parts it changed have less wrong than before; then … *derived, tested here, before the update*
 - **Choose** (`logic.if`): The first value where the test holds, else the second *derived, tested here, before the update*
+- **Circuit (DC, steady)** (`circuit.solve`): The circuit of a built block: its supply, driver, motor and wires read from their power lines and what touches what, solved by nodal analysis at a duty and a load torque: the motor's current, the voltage at each … *derived, untested*
 - **Compare** (`logic.compare`): Whether a is less than, more than, or equal to b *derived, tested here, before the update*
 - **Compile: correct (failed requirements fitted, re-checked)** (`compile.correct`): Stage 27: the requirements the record says fail, corrected by the design values that reach them. *derived, tested here*
+- **Fluid network** (`fluid.network`): The flow through a built thing's pipes, valves, pumps and reservoirs: its nodes where their fluid ends touch (each join checked: a size or thread that differs is refused, saying why), each pipe by Darcy-Weisbach … *derived, tested here*
 - **Map of the space** (`field`): A map of one quantity over the space round part of a thing, cell by cell, where things could go (cells inside a solid piece left out): heat (°C: the rules' own fall-off from each hot surface, blocked by anything solid … *simplified, tested here, before the update*
 - **Maps as one cost** (`field.combine`): Maps of the same space as one cost per cell: each read as how bad it is (heat over a limit, room under a gap, reach short of an arm), weighted and added. *derived, tested here, before the update*
 - **Next size up** (`logic.next-size`): The smallest standard size at least the size worked out: a bolt from its diameter, a beam from its depth *derived, tested here, before the update*

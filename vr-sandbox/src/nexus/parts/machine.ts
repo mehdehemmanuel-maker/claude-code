@@ -493,14 +493,16 @@ const COMPRESSOR: PartFamily<(typeof COMPRESSORS)[string]> = {
   tests: [T(1)],
 };
 const REFLINES = rowsOf(['OD', 't', 'ins'], [['1/4', 6.35, 0.8, 9], ['3/8', 9.52, 0.8, 9], ['1/2', 12.7, 0.8, 9], ['5/8', 15.88, 1.0, 13], ['3/4', 19.05, 1.0, 13], ['7/8', 22.22, 1.0, 13], ['1 1/8', 28.58, 1.2, 13]]);
-const GAP = 0.0003;
 const REFLINE: PartFamily<(typeof REFLINES)[string]> = {
   id: 'piece.refline', name: 'Refrigerant line (insulated)', gloss: 'A refrigerant line by its tube size (inches): a copper tube with its foam insulation over it, along z, by its length (typical)', domains: HV, aisle: H('Pipework'),
   says: 'A refrigerant line by its copper tube size: the tube (its wall typical) with closed-cell foam insulation slid over it (Over a shaft), lying along z, so long. Its ends go into flare fittings',
   rows: REFLINES, size: '3/8', source: 'typical (ACR tube sizes recalled)', settings: [LEN(1000)], cannot: (_q, _s, set) => (len(set) >= 0.01 ? null : `a length of 10 mm or more (${String(set.length)} mm)`),
   recipe: (q, size, set) => { const L = len(set), r = mm(q.OD) / 2, tube = made(`${size} tube`, 'copper', { tube: [r - mm(q.t), r, L] }, { color: CU });
-    return turn(over(tube, `${size} tube/axis`, made(`${size} insulation`, 'foam', { tube: [r + GAP, r + GAP + mm(q.ins), L - 0.002] }, { color: BLACK }), 'mid', 'slide'), 0, 90); },
-  expect: (q, _s, set) => { const L = len(set), r = mm(q.OD) / 2, ro = r + GAP + mm(q.ins); return { bound: [2 * ro, 2 * ro, L], mass: annulus(mm(q.OD), mm(q.OD - 2 * q.t)) * L * rho('copper') + annulus(2 * ro, 2 * (r + GAP)) * (L - 0.002) * rho('foam'), tol: 0.01, massTol: 0.02, says: 'its insulated outside and length; nominal mass, tube and foam' }; },
+    // (wave 11 integration: the foam drawn with no bore, so over bores it to the tube at the slide fit's gap (a few µm) and
+    // writes its face; before, a 0.3 mm gap (typical) stood off the tube, more than the fit's, and no face was written. Its
+    // nominal mass below takes the foam's bore as the tube's outside: the fit's gap is under its 2 %)
+    return turn(over(tube, `${size} tube/axis`, made(`${size} insulation`, 'foam', { cyl: [r + mm(q.ins), L - 0.002] }, { color: BLACK }), 'mid', 'slide'), 0, 90); },
+  expect: (q, _s, set) => { const L = len(set), r = mm(q.OD) / 2, ro = r + mm(q.ins); return { bound: [2 * ro, 2 * ro, L], mass: annulus(mm(q.OD), mm(q.OD - 2 * q.t)) * L * rho('copper') + annulus(2 * ro, 2 * r) * (L - 0.002) * rho('foam'), tol: 0.01, massTol: 0.02, says: 'its insulated outside and length; nominal mass, tube and foam' }; },
   tests: [T(2, { faces: 1 })],
 };
 const GRILLES = rowsOf(['W', 'H'], [['200×100', 200, 100], ['300×150', 300, 150], ['400×200', 400, 200], ['600×300', 600, 300], ['600×600', 600, 600], ['1000×300', 1000, 300], ['1200×600', 1200, 600]]);
@@ -667,8 +669,11 @@ const POWERCABLE: PartFamily<(typeof CABLES)[string]> = {
   says: 'A single-core cable by its conductor section: its conductor (a solid copper rod of that section) with its PVC insulation (a sleeve) slid over it (Over a shaft), lying along z, so long. Approximated: solid, not stranded. Its ends go into terminals. Flexible cords are piece.flexcable',
   rows: CABLES, size: '2.5', source: 'HD 21 sections (recalled); insulation walls typical', settings: [LEN(1000)], cannot: (_q, _s, set) => (len(set) >= 0.01 ? null : `a length of 10 mm or more (${String(set.length)} mm)`),
   recipe: (q, size, set) => { const L = len(set), r = condD(q.A) / 2, rod = made(`${size} mm² conductor`, 'copper', { cyl: [r, L] }, { color: CU });
-    return turn(over(rod, `${size} mm² conductor/axis`, made(`${size} mm² insulation`, 'pvc', { tube: [r + GAP, r + GAP + mm(q.t), L - 0.002] }, { color: 0x8b3a2e }), 'mid', 'slide'), 0, 90); },
-  expect: (q, _s, set) => { const L = len(set), r = condD(q.A) / 2, ro = r + GAP + mm(q.t); return { bound: [2 * ro, 2 * ro, L], mass: disc(2 * r) * L * rho('copper') + annulus(2 * ro, 2 * (r + GAP)) * (L - 0.002) * rho('pvc'), tol: 0.01, massTol: 0.02, says: 'its outside and length; nominal mass, conductor and insulation' }; },
+    // (wave 11 integration: the insulation is extruded on its conductor, so it touches it: drawn with the conductor's
+    // radius for its bore and laid on by the touch fit, a face written; before, a 0.3 mm gap (typical) stood off the rod,
+    // more than the slide fit's, and no face was written)
+    return turn(over(rod, `${size} mm² conductor/axis`, made(`${size} mm² insulation`, 'pvc', { tube: [r, r + mm(q.t), L - 0.002] }, { color: 0x8b3a2e }), 'mid', 'touch'), 0, 90); },
+  expect: (q, _s, set) => { const L = len(set), r = condD(q.A) / 2, ro = r + mm(q.t); return { bound: [2 * ro, 2 * ro, L], mass: disc(2 * r) * L * rho('copper') + annulus(2 * ro, 2 * r) * (L - 0.002) * rho('pvc'), tol: 0.01, massTol: 0.02, says: 'its outside and length; nominal mass, conductor and insulation' }; },
   tests: [T(2, { faces: 1 })],
 };
 const EARTHRODS = rowsOf(['d', 'L'], [['5/8 × 1200', 15.9, 1200], ['5/8 × 1500', 15.9, 1500], ['5/8 × 2400', 15.9, 2400], ['3/4 × 1200', 19.05, 1200], ['3/4 × 2400', 19.05, 2400], ['3/4 × 3000', 19.05, 3000], ['1 × 3000', 25.4, 3000]]);

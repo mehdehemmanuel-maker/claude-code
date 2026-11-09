@@ -19,6 +19,8 @@ import type { Board } from './boards';
 import { edgesOf, nodesOf } from './boards';
 import { certificatesOf, check, diffOf, type Certificate, type Verdict } from './certify';
 import { massOfAll, type Assembly } from './assembly';
+import { alternatives, badConnections, compatible, interference, missingInterfaces, revisions, searchByFunction, variantsOf as variantsById, working, type Found, type Working } from './aitools';
+import type { Block } from './room';
 
 /** The docs the agent may read, by topic: the router in CLAUDE.md, as files under docs/. */
 const DOCS: Record<string, string> = { wanted: 'WANTED.md', owners: 'OWNERS.md', reality: 'REALITY.md', compiler: 'COMPILER.md', life: 'LIFE.md', nodes: 'NODES.md', atlas: 'ATLAS.md' };
@@ -193,6 +195,8 @@ export async function findLines(q: string, most = 10): Promise<string> {
 
 /** The agent's tools, each answering in as few words as will do (docs/FOR-AI.md says how they are used). */
 const plan = { nodes: { type: 'object', description: '{name:{"b":blockId,"s":{settings}}}' }, wires: { type: 'array', items: { type: 'string' }, description: '"a.out>b.in"' } };
+/** A part found by what it does, as a line for the agent: its id, name, score and why. */
+const foundLine = (f: Found): string => `${f.id} | ${f.name} | ${f.score}: ${f.why.join(', ')}`;
 export const TOOLS: Anthropic.Tool[] = [
   { name: 'find', description: 'Blocks and starter boards matching words, one a line.', input_schema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] } },
   { name: 'card', description: 'One block on one line: in, out, set.', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
@@ -202,6 +206,14 @@ export const TOOLS: Anthropic.Tool[] = [
   { name: 'read', description: 'One output of a node, in full (shadow: from the last change not taken).', input_schema: { type: 'object', properties: { node: { type: 'string' }, out: { type: 'string' }, shadow: { type: 'boolean' } }, required: ['node', 'out'] } },
   { name: 'fold', description: 'Nodes of the board folded into one new library block, saved: wires crossing in become its inputs, out its outputs (name them in outs). Omit nodes: all but the in.* nodes, which become its inputs. Its card back.', input_schema: { type: 'object', properties: { nodes: { type: 'array', items: { type: 'string' }, description: 'omit for all' }, outs: { type: 'array', items: { type: 'string' }, description: '"node.output": its outputs' }, name: { type: 'string' }, says: { type: 'string' } }, required: ['name', 'says'] } },
   { name: 'docs', description: `Lines of a document holding the words. Topics: ${Object.keys(DOCS).join(', ')}.`, input_schema: { type: 'object', properties: { topic: { type: 'string' }, find: { type: 'string' } }, required: ['topic', 'find'] } },
+  // (the AI's tools over the component contract, aitools.ts (acceptance 10): what a block offers, needs and clashes with)
+  { name: 'search', description: 'Parts by what they do ("pumps water", "drives a shaft"), best first, a line each with why.', input_schema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] } },
+  { name: 'compatible', description: 'Whether two nodes\' blocks can be joined: each pair of their interfaces that mates, with why.', input_schema: { type: 'object', properties: { a: { type: 'string' }, b: { type: 'string' } }, required: ['a', 'b'] } },
+  { name: 'missing', description: 'What a node\'s block leaves unjoined that it needs to work: a power, fluid or data line, a motor\'s power line, a pump\'s inlet.', input_schema: { type: 'object', properties: { node: { type: 'string' } }, required: ['node'] } },
+  { name: 'bad', description: 'Pieces of a node\'s block joined where what they offer does not mate.', input_schema: { type: 'object', properties: { node: { type: 'string' } }, required: ['node'] } },
+  { name: 'clash', description: 'Pieces of a node\'s block that pass into each other (the clash finder), and fits pressed by design.', input_schema: { type: 'object', properties: { node: { type: 'string' } }, required: ['node'] } },
+  { name: 'alternatives', description: 'Blocks on the same aisle that could stand in for one, and its variants (each setting\'s choices).', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
+  { name: 'revisions', description: 'A part remembered: its version, its board\'s digest, its uses.', input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
 ];
 
 /** The agent's standing instructions: docs/FOR-AI.md itself, so what it is told and what a person reads are one text; then
@@ -425,6 +437,9 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
     if (swap) { const was = out; out = swap[2]!; why = wireRefused(board, m[1]!, out, m[3]!, m[4]!); if (why === undefined || why === '') notes.push(`${m[1]}.${was}>${m[3]}.${m[4]} wired as ${m[1]}.${out}>${m[3]}.${m[4]} (${m[3]}.${m[4]} takes a ${swap[1]})`); }
     if (why === '') continue; if (why) { bad.push(`wire ${m[1]}.${m[2]}>${m[3]}.${m[4]}: ${why}`); continue; }
     try { wire(board, m[1]!, out, m[3]!, m[4]!); } catch (e) { bad.push(`wire ${w}: ${(e as Error).message}`); } } };
+  /** A node's room block on the board as last run (its block output, else the first block it gives). */
+  const blockOf = (id: string): Block => { if (!engine) throw new Error('build first'); const st = engine.state.get(id); if (!st) throw new Error(`no node ${id}`); const out = (st.out ?? {}) as Record<string, unknown>;
+    const v = isRoom(out.block) ? out.block : Object.values(out).find(isRoom); if (!v) throw new Error(`${id} gives no block`); return v as unknown as Block; };
   const doTool = async (name: string, a: Record<string, unknown>): Promise<string> => {
     switch (name) {
       case 'find': return findLines(String(a.q ?? ''), 10);
@@ -454,12 +469,24 @@ export async function toolsFor(board0: Board, blocks?: AgentBlock[]): Promise<{ 
         // (by default every node but the inputs (in.number, in.text, …): those stay outside, so what they feed becomes the new block's inputs)
         const ids = ((a.nodes as string[] | undefined) ?? nodesOf(board).filter((n) => !board.nodes[n.id]!.block?.startsWith('in.')).map((n) => n.id)).filter((id) => board.nodes[id] && !board.nodes[id]!.deleted);
         // (each output asked for is given a reader outside, so the wire to it crosses the fold and becomes the block's output)
-        for (const o2 of (a.outs ?? []) as string[]) { const [n, port] = String(o2).split('.'); if (!board.nodes[n!]) throw new Error(`no node ${n}`); const sh = `${n}_${port}`; placeBlock(board, 'view.show', 0, 0, {}, sh); board.nodes[sh]!.label = `${port}`; wire(board, n!, port!, sh, 'value'); }
-        const f = collapse(board, ids, String(a.name)), r = makeBlock(f.board, f.id, { name: String(a.name), says: String(a.says ?? ''), by: 'you' });
+        // (made on a copy: a fold with no outputs is refused and the board kept as it was (AUDIT §2 "7 AI": one was saved anyway))
+        const g = structuredClone(board) as Board;
+        for (const o2 of (a.outs ?? []) as string[]) { const [n, port] = String(o2).split('.'); if (!g.nodes[n!]) throw new Error(`no node ${n}`); const sh = `${n}_${port}`; placeBlock(g, 'view.show', 0, 0, {}, sh); g.nodes[sh]!.label = `${port}`; wire(g, n!, port!, sh, 'value'); }
+        const f = collapse(g, ids, String(a.name)), inner = f.board.nodes[f.id]?.inner;
+        if (!inner || !nodesOf(inner).some((n) => inner.nodes[n.id]!.block === 'group.out')) throw new Error('a fold with no outputs is refused: nothing it holds is wired out of it, so as a block it would give nothing; name its outputs in outs ("node.output"), or fold fewer nodes');
+        const r = makeBlock(f.board, f.id, { name: String(a.name), says: String(a.says ?? ''), by: 'you' });
         board = r.board; const d = r.block; made.push({ id: d.id, name: d.name, says: d.says ?? '', domains: d.domains ?? ['software'], graph: d.graph! });
         return `${r.duplicateOf ? `does what ${r.duplicateOf} does already: that one placed. ` : 'saved. '}${cardOf(d)}`; }
       case 'read': { const from = a.shadow ? shadow?.engine : engine; if (a.shadow && !from) throw new Error('no change is waiting as a shadow'); const st = from?.state.get(String(a.node)); if (!st) throw new Error('build first'); if (!st.out || !(String(a.out) in st.out)) throw new Error(`${a.node} has no output ${a.out}`); const v = st.out[String(a.out)];
         return (Array.isArray(v) ? v.slice(0, 60).map((x) => brief(x, 240)).join('\n') + (v.length > 60 ? `\n… ${v.length - 60} more rows` : '') : brief(v, 2000)).slice(0, 6000); }
+      case 'search': { const fs = searchByFunction(String(a.q ?? ''), 10); return fs.length ? fs.map(foundLine).join('\n') : `nothing builds that does "${a.q}"`; }
+      case 'compatible': return compatible(blockOf(String(a.a)), blockOf(String(a.b))).says;
+      case 'missing': { const m = missingInterfaces(blockOf(String(a.node))); return m.length ? m.map((x) => x.says).join('\n') : 'nothing it needs is left unjoined'; }
+      case 'bad': { const m = badConnections(blockOf(String(a.node))); return m.length ? m.map((x) => x.says).join('\n') : 'no joined pieces whose interfaces do not mate'; }
+      case 'clash': { const r = await interference(blockOf(String(a.node))); return [...(r.list.length ? r.list.map((x) => x.says) : ['no piece passes into another']), ...r.pressed].join('\n'); }
+      case 'alternatives': { const xs = alternatives(String(a.id)), vs = variantsById(String(a.id));
+        return [`alternatives: ${xs.map((x) => `${x.id} (${x.name})`).join('; ') || 'none on its aisle'}`, `variants: ${vs.map((v) => `${v.key} ${v.choices.length} choices (now ${brief(v.at, 30)})`).join('; ') || 'none'}`].join('\n'); }
+      case 'revisions': { const r = revisions(String(a.id)); if (!r) throw new Error(`no part remembered as "${a.id}"`); return r.says; }
       case 'docs': { const f = DOCS[String(a.topic)]; if (!f) throw new Error(`no topic "${a.topic}"`); const { readFileSync } = await import(/* @vite-ignore */ 'node:fs');
         const lines = readFileSync(new URL(`../../docs/${f}`, import.meta.url), 'utf8').split('\n'), w = String(a.find ?? '').toLowerCase(), hits = lines.map((l, k) => (l.toLowerCase().includes(w) ? k : -1)).filter((k) => k >= 0).slice(0, 4);
         return hits.length ? hits.map((k) => lines.slice(Math.max(0, k - 1), k + 3).join('\n')).join('\n…\n').slice(0, 2500) : `nothing in ${f} holds "${a.find}"`; }
@@ -757,7 +784,8 @@ export interface ComposeStep { stage: 'split' | 'part' | 'fold' | 'join' | 'gate
 export interface ComposeNode { name: string; is: string; by: NonNullable<ComposePart['by']>; from: string; saved?: string; pieces: number; failing: string[]; children: ComposeNode[] }
 export interface ComposeRun { board: Board; parts: ComposePart[]; joins: ComposeJoin[]; steps: ComposeStep[]; unmet: string[]; answer: string; asks: number; plans: AgentPlan[];
   /** each part as a tree; the ids kept for later in this run; the remembered parts placed again; what the final check found missing */
-  tree: ComposeNode[]; remembered: string[]; recalled: string[]; missing: string[] }
+  tree: ComposeNode[]; remembered: string[]; recalled: string[]; missing: string[];
+  /** the functional gate's last word (aitools.ts working: each driver joined to what it drives and to a supply) */ works?: Working }
 
 /** A request that names two or more things (a drone and an arm, a crane and a truck): Assist hands it to composeBuild.
  *  Words of machines, each counted once; a singular arm only ("the arms of a cross frame" is one thing). A guess from the
@@ -802,9 +830,11 @@ one goes onto, under, beside, through, into, around or bolted to another part.`;
 const rememberedLine = (p: SavedPart): string => `${p.id}: ${p.name}: ${p.says.slice(0, 90)}${p.offers?.length ? `; offers [${p.offers.slice(0, 6).join('; ')}]` : ''} (made for "${p.from.slice(0, 60)}"; ${p.checked.pieces} pieces; used ${p.uses} time${p.uses === 1 ? '' : 's'})`;
 /** The split call's prompt: the menu, then the rule (the cached head), then the parts remembered for these words (they
  *  differ request by request), then the request. */
-export async function splitAsk(request: string, blocks?: AgentBlock[], recalled: readonly SavedPart[] = []): Promise<string> {
+export async function splitAsk(request: string, blocks?: AgentBlock[], recalled: readonly SavedPart[] = [], found: readonly Found[] = []): Promise<string> {
+  const by = found.length ? `Found by what they do (search, aitools.ts; from: the id):\n${found.map(foundLine).join('\n')}\n\n` : '';
   const mem = recalled.length ? `Parts remembered (built before, each checked to run with nothing failing and be one thing; from: the id, placed as one node like an assembly):\n${recalled.map(rememberedLine).join('\n')}\n\n` : '';
-  return `${await composeMenu(blocks, request)}\n\n${SPLIT_RULE}${PROMPT_CUT}${mem}Request: ${request.slice(0, 600)}`;
+  // (the parts found by function go with the menu, which is the request's own already (composeMenu reads it))
+  return `${await composeMenu(blocks, request)}\n\n${by}${SPLIT_RULE}${PROMPT_CUT}${mem}Request: ${request.slice(0, 600)}`;
 }
 /** The split as a model answers it, held to its form: parts with names a wire can read, each once; joins between them. */
 export function splitOf(text: string): { parts: ComposePart[]; joins: ComposeJoin[] } {
@@ -887,6 +917,13 @@ A person asked for a thing; it was built from the parts listed with their pieces
 Missing: a thing the person named, or plainly needs to be what they asked (a boat's hull, a turbine's blades), that no part
 built is. An empty list when nothing is missing. Never a bolt, a plate or a wire alone; never a part already built again.`;
 
+/** The functional gate's mend rule (one task: make what is built work, nothing else). */
+const WORK_RULE = `## Here: make it work (one task)
+The build runs, but a part does not act on what it should (below). Reply with one JSON object and nothing else, a change:
+{"tool": "change", "remove": [...], "add": {...}, "wires": [...], "says": "..."}. Join each driver's shaft to what it drives
+(room.over the driven part on the shaft's line, room.through, or a coupling between them) and its power line to a supply;
+keep every part, replace only the joins, and end with a space.show of the last block's thing.`;
+
 /** A compound request built from its parts by small calls, each one task (decisions 0027, 0028): the parts remembered
  *  recalled first; split (a part of several things split again, two levels at most); each part placed from the library
  *  (an assembly or a part remembered), a starter board, or one plan (never skipped: asked again once where no plan could
@@ -906,7 +943,8 @@ export async function composeBuild(request: string, o: { ask: Ask; board?: Board
   const treeOf = (p: ComposePart): ComposeNode => ({ name: p.name, is: p.is, by: p.by ?? 'none', from: p.from, ...(p.saved ? { saved: p.saved } : {}), pieces: p.names.length, failing: p.failing, children: (p.children ?? []).map(treeOf) });
   let parts: ComposePart[] = [], joins: ComposeJoin[] = [];
   registerSaved(); // (parts kept in a store apart from this run, as blocks: placed like an assembly)
-  const done = (answer: string): ComposeRun => ({ board, parts, joins, steps, unmet, answer, asks, plans, tree: parts.map(treeOf), remembered, recalled, missing });
+  let works: Working | undefined;
+  const done = (answer: string): ComposeRun => ({ board, parts, joins, steps, unmet, answer, asks, plans, tree: parts.map(treeOf), remembered, recalled, missing, ...(works ? { works } : {}) });
 
   /** A part kept for later (built by a plan or a split, nothing failing, one group): its folded board, what it is, the
    *  request, its check and the split's words as tags. */
@@ -1029,8 +1067,9 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
   };
 
   // (1. what was built before, recalled by the request's words; then the split)
-  const mem = recall(request);
-  try { ({ parts, joins } = splitOf(await call(await splitAsk(request, o.blocks, mem), 'quick'))); }
+  const mem = recall(request), found = searchByFunction(request, 8);
+  if (found.length) say('split', `found by what they do: ${found.map((f) => f.id).join(', ')}`);
+  try { ({ parts, joins } = splitOf(await call(await splitAsk(request, o.blocks, mem, found), 'quick'))); }
   catch (e) { say('split', `Could not split it into parts: ${(e as Error).message}`, false); unmet.push('no parts: the split failed'); return done(`Nothing built: the split failed (${(e as Error).message}).`); }
   say('split', `${parts.length} part${parts.length === 1 ? '' : 's'}: ${parts.map((p) => `${p.name} (${p.is.slice(0, 50)}; from ${p.from || 'pieces'})`).join(', ')}${joins.length ? `; ${joins.map((j) => `${j.part} ${j.how} ${j.to}`).join(', ')}` : ''}${mem.length ? `; ${mem.length} part${mem.length === 1 ? '' : 's'} remembered offered` : ''}`);
   // (2 and 3. each part made and folded to one node, three side by side)
@@ -1059,6 +1098,47 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
     const host: ComposePart | undefined = now ? { name: now[0], node: now[0], is: 'the whole built so far', from: '', names: namesOf(now[2]), failing: [] } : undefined;
     board = (await joinUp(board, [...(host ? [host] : []), ...fresh], fresh.map((p) => ({ part: p.name, how: p.joins, to: host?.name ?? 'the whole' })), request, host?.name)).board;
   }
+  // (5b. the functional gate (acceptance 10): each driver asked joined to what it drives and to a supply (aitools.ts
+  // working); refused with its reasons, and one call asked to make it work with only those; still refused, not met)
+  const worksOn = async (b: Board): Promise<Working | undefined> => { const x = new Engine(b); await x.run(); const w = biggest(b, x)?.[2];
+    return w ? working(w as unknown as Block, made().map((p) => ({ name: p.name, is: p.is, names: p.names, ...(p.node ? { node: p.node } : {}) }))) : undefined; };
+  works = await worksOn(board);
+  if (works && !works.ok) {
+    say('gate', `not working: ${works.reasons.join('; ')}`, false);
+    try { const plan = planOf(await call(`${guideHead}${PROMPT_CUT}${boardBrief(board)}\n\n${WORK_RULE}\nAsked: ${request.slice(0, 400)}\nWhy it does not work:\n${works.reasons.map((r) => `- ${r}`).join('\n')}`, 'default')); plans.push(plan);
+      const ran = await runPlan(plan, board, o.blocks), after = await worksOn(ran.board);
+      if (after && after.reasons.length < works.reasons.length) { board = ran.board; works = after; }
+      say('gate', works.ok ? `working now: ${works.drives.map((d) => `${d.driver} drives ${d.load}`).join(', ')}` : `still not working: ${works.reasons.join('; ')}`, works.ok); }
+    catch (x) { say('gate', `asked to make it work: ${(x as Error).message.slice(0, 160)}`, false); }
+  // (a pass said as a check only where there was a driver to check; with none, the gate had nothing to say)
+  } else if (works?.drives.length) say('check', `working: ${works.drives.map((d) => `${d.driver} drives ${d.load}`).join(', ')}${works.notes.length ? `; not checked: ${works.notes.join('; ')}` : ''}`);
+  // (5c. a driver whose power line still reaches no supply, after the mend (whose joins the model may rewrite): by rule,
+  // no call, a supply added by its terminals' voltage (parts/power.ts psuFor) and joined to them by a lead, P6's wire model
+  // (circuit.ts LEAD: a round copper piece touching both), the three stacked supply, lead, driver; every input the
+  // driver's block fed wired again in its order with the powered stack in its place; taken only where the gate then
+  // gives fewer reasons, the supply then one of the parts)
+  if (works && !works.ok) for (const reason of [...works.reasons]) {
+    const m = /^(.+): its power line \((.+)\) is joined to no supply$/.exec(reason), d = m ? made().find((p) => p.name === m[1]) : undefined; if (!m || !d?.node || !works || works.ok) continue;
+    const n = d.node, outs = edgesOf(board).filter((e) => e.from === n && e.out === 'block'); if (!outs.length) { say('gate', `${d.name}: no supply added: its block feeds nothing to put a supply under`, false); continue; }
+    const [{ psuFor }, { LEAD, leadRadius }] = await Promise.all([import('./parts/power'), import('./circuit')]);
+    const x = new Engine(board); await x.run(); const mb = x.state.get(n)?.out?.block as RoomOut | undefined;
+    const pl = mb?.pieces.flatMap((pc) => (pc as unknown as Block['pieces'][number]).lines).find((l) => l.kind === 'power' && l.port === m[2]) as { size?: Record<string, unknown> } | undefined;
+    const V = typeof pl?.size?.V === 'number' ? pl.size.V : undefined, A = typeof pl?.size?.A === 'number' ? pl.size.A : undefined, psu = psuFor(V, A);
+    const used = new Set(nodesOf(board).map((q) => q.id)), id = (s: string) => { let k = `${n}_${s}`, i = 2; while (used.has(k)) k = `${n}_${s}${i++}`; used.add(k); return k; };
+    const sup = id('supply'), lead = id('lead'), pw = id('powered'), ins = [...new Set(outs.map((e) => `${e.to}.${e.in}`))];
+    const rewire = ins.flatMap((ti) => edgesOf(board).filter((e) => `${e.to}.${e.in}` === ti).map((e) => (e.from === n && e.out === 'block' ? `${pw}.block>${ti}` : `${e.from}.${e.out}>${ti}`)));
+    const plan: AgentPlan = { tool: 'change', says: `a supply for ${d.name} (piece.psu ${psu.size}) joined to its terminals by a lead`, input: {
+      add: { [sup]: { b: 'piece.psu', s: { size: psu.size } }, [lead]: { b: 'room.make', s: { name: `${d.name} supply lead`, shape: 'rod', mat: LEAD.mat, a: leadRadius() * 1000, b: LEAD.length * 1000 } }, [pw]: { b: 'room.stack', s: { name: `${d.name} powered`, axis: 'y', order: `${sup},${lead},${n}` } } },
+      unwire: ins, wires: [`${sup}.block>${pw}.blocks`, `${lead}.block>${pw}.blocks`, `${n}.block>${pw}.blocks`, ...rewire] } };
+    try { const ran = await runPlan(plan, board, o.blocks), y = new Engine(ran.board); await y.run(); const sb = y.state.get(sup)?.out?.block as RoomOut | undefined;
+      const part: ComposePart = { name: parts.some((p) => p.name === 'supply') ? `supply ${parts.length + 1}` : 'supply', is: `a DC supply for ${d.name}`, from: 'piece.psu', by: 'assembly', set: { size: psu.size }, node: sup, names: sb ? namesOf(sb) : [], failing: [] };
+      parts.push(part); const after = await worksOn(ran.board);
+      if (after && after.reasons.length < works.reasons.length) { board = ran.board; works = after; plans.push(plan);
+        say('gate', `${works.ok ? `working now: ${works.drives.map((q) => `${q.driver} drives ${q.load}`).join(', ')}` : `still not working: ${works.reasons.join('; ')}`}; ${d.name}'s power line (${m[2]}) joined to a supply by rule: piece.psu ${psu.says}, by a lead of ${LEAD.src}`, works.ok); }
+      else { parts.splice(parts.indexOf(part), 1); say('gate', `${d.name}: a supply joined by rule left it as it was: ${(after?.reasons ?? ['the build did not run']).join('; ')}`, false); } }
+    catch (e) { say('gate', `${d.name}: no supply added: ${(e as Error).message.slice(0, 160)}`, false); }
+  }
+  if (works && !works.ok) unmet.push(...works.reasons.map((r) => `not working: ${r}`));
   // (a show of the whole, where the plan put none)
   let e = new Engine(board); await e.run();
   const top = biggest(board, e);

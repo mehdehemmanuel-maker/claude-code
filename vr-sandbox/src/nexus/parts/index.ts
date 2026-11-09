@@ -142,7 +142,9 @@ const NPSPIPE: PartFamily<PipeRow> = {
 type NemaRow = [number, number, number, number, number, number, number];
 const stepperOf = ([w, ph, pd, sp, , , sh]: NemaRow, size: string, set: Record<string, unknown>): Block => {
   const L = len(set), out = mm(Number(set.shaft) > 0 ? Number(set.shaft) : NEMA_FACE[size]?.out ?? 20), a = mm(sp) / 2;
-  const body = made(`NEMA ${size} body`, 'steel-low', { box: [mm(w), L, mm(w)] }, { color: 0x2b2d30, pattern: { name: 'holes', points: [[-a, -a], [a, -a], [a, a], [-a, a]] } });
+  const body = made(`NEMA ${size} body`, 'steel-low', { box: [mm(w), L, mm(w)] }, { color: 0x2b2d30, patterns: [{ name: 'holes', points: [[-a, -a], [a, -a], [a, a], [-a, a]] },
+    // (its leads (AUDIT P6): a bipolar stepper's four, two to each coil, typical (a unipolar one has five or six); no rating: no datasheet row gives this frame's)
+    { name: 'leads', points: [[0, 0]], port: { kind: 'power', size: { pins: 4 } } }] });
   return stack(`NEMA ${size} stepper (envelope)`, 1, [{ b: body }, { b: made(`NEMA ${size} pilot`, 'al-6061', { cyl: [mm(pd) / 2, mm(ph)] }) }, { b: made(`NEMA ${size} shaft`, 'steel-alloy', { cyl: [mm(sh) / 2, out] }) }]);
 };
 const STEPPER: PartFamily<NemaRow> = {
@@ -154,7 +156,7 @@ const STEPPER: PartFamily<NemaRow> = {
   cannot: (_r, _s, set) => (len(set) > 0 ? null : `a body length above 0 (${String(set.length)} mm)`),
   recipe: stepperOf,
   expect: ([w, ph], size, set) => { const out = Number(set.shaft) > 0 ? Number(set.shaft) : NEMA_FACE[size]?.out ?? 20; return { bound: [mm(w), len(set) + mm(ph) + mm(out), mm(w)], tol: 0.01, says: 'its body width by body, pilot and shaft' }; },
-  tests: [{ inputs: {}, outputs: { pieces: 3, offers: ['NEMA 17 body/holes', 'NEMA 17 pilot/axis', 'NEMA 17 shaft/axis'] } }],
+  tests: [{ inputs: {}, outputs: { pieces: 3, offers: ['NEMA 17 body/holes', 'NEMA 17 body/leads', 'NEMA 17 pilot/axis', 'NEMA 17 shaft/axis'] } }],
 };
 // ---- every family of bought part (the 45 written by hand and every kind of src/nexus/kinds), as its envelope ------------
 const ROUND = /^(can|rod|tube|ring|dome|torus|wheel|spring|loop|motor)\b/;
@@ -205,3 +207,4 @@ import { INSTALL_NODES } from './install'; PIECE_NODES.push(...INSTALL_NODES); /
 import { HOME_NODES } from './home'; PIECE_NODES.push(...HOME_NODES); // tools, garden, kitchen, household, sports and toys (decision 0029, 2026-11-06)
 import { VEHICLE_NODES } from './vehicle'; PIECE_NODES.push(...VEHICLE_NODES); // vehicle and bicycle parts: wheels, tyres, brakes, suspension, steering, drivetrain (decision 0029, 2026-11-06)
 import { MACHINE_NODES } from './machine'; PIECE_NODES.push(...MACHINE_NODES); // aerospace, marine, machine tools, HVAC, electrical power (decision 0029, rough)
+import { POWER_NODES } from './power'; PIECE_NODES.push(...POWER_NODES); // electrical power and drives: motors by their datasheets, supplies, drivers, their terminals (AUDIT P6)

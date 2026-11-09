@@ -44,17 +44,21 @@ function layOut(b: Board): void {
 }
 
 
-const HORN = { name: 'servo horn', shape: 'tube', mat: 'pom', a: 5.2, b: 10, c: 3 };
+// (P3, AUDIT 5.2: a disc with no bore, which over bores to its spline at the clear fit, as robots.ts's horn; before, a
+// 10.4 mm bore on a 4.8 mm spline, 2.8 mm off it, which over writes no face for, so the servo's joint was lost)
+const HORN = { name: 'servo horn', shape: 'rod', mat: 'pom', a: 10, b: 3 };
 const D = ['mechanical', 'electrical'];
 function turntable(): void {
   // (a motorised turntable, sizes typical: a 160 × 160 × 6 base plate, an N20 gear motor under it, a Ø10 post up from the plate and a Ø200 platter over the post, a clear fit: it turns)
   const s = new Asm('A turntable');
-  s.input('platter', 'number', 100, 'the platter\'s radius, mm', [], 'platter.b');
+  s.input('platter', 'number', 100, 'the platter\'s radius, mm', [], 'platter.a');
   s.n('piece.gearmotor', {}, 'The gear motor, N20', 'gm');
   s.n('piece.plate', { name: 'turntable base', mat: 'al-6061', w: 160, t: 6, d: 160, holes: '-60,-60; 60,-60; -60,60; 60,60', hole: 4.5 }, 'The base plate, four holes', 'base');
   s.n('piece.shaft', { size: '10', length: 60 }, 'The post, Ø10', 'post');
   s.op('under', 'room.stack', { name: 'turntable', axis: 'y', fit: 'touch', order: 'gm, base, post' }, 'Motor, plate, post', { blocks: ['gm', 'base', 'post'] });
-  s.n('room.make', { name: 'platter', shape: 'tube', mat: 'al-6061', a: 6.2, b: 100, c: 8 }, 'The platter, bored for the post', 'platter');
+  // (wave 11 integration: the platter drawn with no bore (its radius now a, a rod's), so over bores it to the Ø10 post at
+  // the clear fit's gap and writes its face; before, a Ø12.4 bore stood 1.2 mm off the post and the platter fell away)
+  s.n('room.make', { name: 'platter', shape: 'rod', mat: 'al-6061', a: 100, b: 8 }, 'The platter, bored for the post', 'platter');
   s.op('all', 'room.over', { line: 'Ø10 shaft/axis', where: 'hi', fit: 'clear' }, 'The platter over its post: it turns', { host: 'under', sleeve: 'platter' });
   s.outs('all');
   s.save('seed.turntable', 'Turntable', 'A motorised turntable (sizes typical): a base plate (turntable base/holes) with an N20 gear motor under it, a Ø10 post and a platter over the post (a clear fit: it turns). Setting: platter (its radius), mm', 'A turntable: platter on a post over a gear motor, as one node', D);
@@ -250,7 +254,9 @@ function catapult(): void {
   s.n('room.make', { name: 'catapult base', shape: 'box', mat: 'wood', a: 300, b: 20, c: 200 }, 'The base', 'base');
   s.n('room.make', { name: 'catapult upright', shape: 'box', mat: 'wood', a: 20, b: 150, c: 20 }, 'An upright', 'up');
   s.n('piece.shaft', { size: '10', length: 160 }, 'The pivot, Ø10', 'pivot');
-  s.n('room.make', { name: 'catapult arm', shape: 'tube', mat: 'wood', a: 6.2, b: 12, c: 250 }, 'The arm, bored for the pivot', 'arm');
+  // (wave 11 integration: the arm drawn with no bore, so over bores it to the Ø10 pivot at the clear fit's gap and writes
+  // its face; before, a Ø12.4 bore stood 1.2 mm off the pivot and the pivot fell away from the rest)
+  s.n('room.make', { name: 'catapult arm', shape: 'rod', mat: 'wood', a: 12, b: 250 }, 'The arm, bored for the pivot', 'arm');
   s.op('armed', 'room.over', { line: 'Ø10 shaft/axis', where: 'mid', fit: 'clear' }, 'The arm over the pivot: it swings', { host: 'pivot', sleeve: 'arm' });
   s.n('piece.drawncup', {}, 'The cup', 'cup');
   s.op('loaded', 'room.onto', { face: '+y', fit: 'touch' }, 'The cup on the arm', { host: 'armed', child: 'cup' });
