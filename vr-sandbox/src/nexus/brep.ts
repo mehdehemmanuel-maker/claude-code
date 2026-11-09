@@ -29,7 +29,16 @@ export function kernel(): Promise<Replicad> {
       oc = await (init as (o: object) => Promise<unknown>)({ wasmBinary: readFileSync(file) });
     } else {
       const url = (await import('replicad-opencascadejs/wasm?url')).default as string;
-      oc = await (init as (o: object) => Promise<unknown>)({ locateFile: () => url });
+      // (where a host takes no file over 15 MB (the claude.ai artifact), the 23 MB kernel ships gzipped beside it as <name>.gz.wasm
+      // (7.2 MB; the host serves only web types), and is unzipped here; a host that sends it already unzipped, or none, is read as it comes; else the plain file, as before)
+      const zipped = await (async () => { try {
+        const r = await fetch(url.replace(/\.wasm$/, '.gz.wasm')); if (!r.ok) return undefined;
+        const b = new Uint8Array(await r.arrayBuffer());
+        if (b[0] === 0x00 && b[1] === 0x61 && b[2] === 0x73 && b[3] === 0x6d) return b.buffer; // ('\0asm': unzipped on the way)
+        if (b[0] !== 0x1f || b[1] !== 0x8b || typeof DecompressionStream === 'undefined') return undefined;
+        return await new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+      } catch { return undefined; } })();
+      oc = await (init as (o: object) => Promise<unknown>)(zipped ? { wasmBinary: zipped } : { locateFile: () => url });
     }
     rep.setOC(oc as Parameters<Replicad['setOC']>[0]); R = rep; return rep;
   })());
