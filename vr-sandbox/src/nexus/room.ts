@@ -63,6 +63,7 @@
 import type { Cut, Part, Shape } from './kits';
 import { stationAt, type Station } from './form';
 import type { InterfaceKind } from './interfaces';
+import { fluidJoinCheck } from './fluidnet';
 
 export type P3 = readonly [number, number, number];
 type V3 = [number, number, number];
@@ -115,7 +116,14 @@ export interface Piece { readonly name: string; readonly mat: string; readonly c
 export interface Face {
   readonly a: number; readonly b: number; readonly kind: 'contact' | 'gap'; readonly patch: 'area' | 'line'; readonly area: number; readonly length?: number;
   readonly at: P3; readonly normal: P3; readonly gap: number; /** the fit that left the gap, where an operation sized it (root 6) */ readonly fit?: Fit; readonly medium?: string; readonly gate?: string; readonly interference?: { readonly um: number; readonly pressure?: number; readonly src: string }; readonly by: string;
+  /** how the two may move at this face, written by the operation that made it (AUDIT 4F, P2): turns (a round face with a
+   *  gap: about its line only), slides (a round face with a slide fit, nothing holding it along its line: along its line
+   *  and, being round, about it; a flat or boxed one with a gap: along only), held by its fit (touching), pressed (an
+   *  interference), fixed (fastened: a bolted joint's), or a ball's. P3: motionOf reads it before it infers; a joint
+   *  slides only where every face of it says slides */
+  readonly joint?: FaceJoint;
 }
+export type FaceJoint = 'turns' | 'slides' | 'held' | 'pressed' | 'fixed' | 'ball';
 export interface RoomOf { readonly name: string; readonly c: P3; readonly r: number; readonly h: number; readonly open: boolean; /** a box-shaped room's width (x) and depth (z); r then its half-diagonal */ readonly size?: readonly [number, number] }
 
 declare const ROOM: unique symbol;
@@ -638,6 +646,18 @@ export class Block {
     if (MADE.has(b)) MADE.set(out, MADE.get(b)!); if (FLIPPED.has(b)) FLIPPED.add(out); const note = NOTES.get(b); if (note) NOTES.set(out, note);
     return out;
   }
+  /** The same block, nothing moved, its lines' port contract (AUDIT §4 4E: kind, size, limits, standard) written where
+   *  `contractOf` gives one (undefined keeps a line as it is): how a family says what its ends carry (package P5, fluid).
+   *  What an operation left on the block is kept, as `owned` keeps it. */
+  static lined(b: Block, contractOf: (l: Line, p: Piece) => Pick<Line, 'kind' | 'size' | 'limits' | 'std'> | undefined): Block {
+    Block.#is(b); let changed = false;
+    const pieces = b.pieces.map((p) => { let any = false; const lines = p.lines.map((l) => { const c = contractOf(l, p); if (!c) return l; any = true; return { ...l, ...c }; });
+      if (!any) return p; changed = true; return { ...p, lines }; });
+    if (!changed) return b;
+    const out = Block.#seal(b.name, pieces, [...b.faces], [...b.rooms]);
+    if (MADE.has(b)) MADE.set(out, MADE.get(b)!); if (FLIPPED.has(b)) FLIPPED.add(out); const note = NOTES.get(b); if (note) NOTES.set(out, note);
+    return out;
+  }
   static #mid(b: Block): V3 { return [(b.lo[0] + b.hi[0]) / 2, (b.lo[1] + b.hi[1]) / 2, (b.lo[2] + b.hi[2]) / 2]; }
   /** A block turned rigidly by R about M: every solid's middle and frame, every line's point and direction, every face's
    *  place and normal. Its rooms kept (round ones turned with it) only where R keeps y; otherwise closed. */
@@ -798,6 +818,8 @@ export class Block {
         });
       }
     }
+    // (the port contract a pattern carries, on each line it made)
+    for (const pat of [...(o.pattern ? [o.pattern] : []), ...(o.patterns ?? [])]) if (pat.port) lines.forEach((l, i) => { if (l.port === `${name}/${pat.name}`) lines[i] = { ...l, ...pat.port }; });
     const piece: Piece = { name, mat, ...(o.color !== undefined ? { color: o.color } : {}), solid: { base, minus }, lines, ...(o.joint ? { joint: o.joint, ...(o.joint.turn ? { axis: [0, 0] as const } : {}) } : {}), ...(o.bought ? { bought: true as const } : {}), ...(o.tapped ? { tapped: true as const } : {}) };
     const rooms: RoomOf[] = base.k === 'cup' ? [{ name: `${name}/cavity`, c: [0, (base.ends) / 2, 0], r: base.r - base.wall, h: base.h - base.ends, open: true }]
       : base.k === 'box' && base.tray ? [{ name: `${name}/cavity`, c: [0, base.tray.floor / 2, 0], r: Math.hypot(base.size[0] - 2 * base.tray.wall, base.size[2] - 2 * base.tray.wall) / 2, h: base.size[1] - base.tray.floor, open: true, size: [base.size[0] - 2 * base.tray.wall, base.size[2] - 2 * base.tray.wall] }] : [];
@@ -1002,7 +1024,7 @@ export class Block {
         // (only where nothing else stands in that bore between them)
         const between = bore > 0 && pieces.some((t, m) => m !== j && meets(boundOf(t), primBox({ k: 'cyl', c: B.c, r: (SB as { ri: number }).ri, h: (B as { h: number }).h })));
         if (bore && !between && !(w.area > 0 || w.length > 0)) { const sb = primBox(s.solid.base), lo = Math.max(sb[0][1], qb[0][1]), hi = Math.min(sb[1][1], qb[1][1]);
-          if (hi > lo) faces.push({ a: j, b: Q, kind: 'gap', patch: 'area', area: 2 * Math.PI * (B as { r: number }).r * (hi - lo), at: [B.c[0], (lo + hi) / 2, B.c[2]], normal: [1, 0, 0], gap: bore, medium: MEDIUM, by: `${q.name} in the bore of ${s.name}` }); }
+          if (hi > lo) faces.push({ a: j, b: Q, kind: 'gap', patch: 'area', area: 2 * Math.PI * (B as { r: number }).r * (hi - lo), at: [B.c[0], (lo + hi) / 2, B.c[2]], normal: [1, 0, 0], gap: bore, medium: MEDIUM, joint: 'turns', by: `${q.name} in the bore of ${s.name}` }); }
         // (or in a hole of the piece whose line it is, wider than it: across the clearance the hole leaves, its wall where the
         // piece has material round it (an insert in an oversized hole, a pin in a clearance hole: decision 0026); root 6: or in
         // a hole of another piece it crosses, offered at the same point (a bolt's shank in each ply's clearance hole, which a
@@ -1010,9 +1032,9 @@ export class Block {
         const own = j === o.k ? o.l : s.lines.find((l) => alongY(l) && l.opening !== undefined && Math.hypot(l.x - o.l.x, l.z - o.l.z) < 1e-12);
         const op = own?.opening, inHole = !!own && op !== undefined && !bore && !(w.area > 0 || w.length > 0) && roundish(B) && upright(B) && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-12 && op > B.r + g + 1e-12;
         if (inHole) { const hw = roundFace(s, o.l.x, o.l.z, op, qb[0][1], qb[1][1], false);
-          if (hw.area > 0) faces.push({ a: j, b: Q, kind: 'gap', patch: 'area', area: hw.area * (B as { r: number }).r / op, at: hw.at, normal: [1, 0, 0], gap: op - (B as { r: number }).r, medium: MEDIUM, by: `${q.name} in the hole of ${s.name}` }); }
+          if (hw.area > 0) faces.push({ a: j, b: Q, kind: 'gap', patch: 'area', area: hw.area * (B as { r: number }).r / op, at: hw.at, normal: [1, 0, 0], gap: op - (B as { r: number }).r, medium: MEDIUM, joint: 'turns', by: `${q.name} in the hole of ${s.name}` }); }
         if (w.area > 0 || w.length > 0) { const it = pressureOf(fit, 2 * (!boxy(B) ? B.r : Math.min(B.size[0], B.size[2]) / 2), 2 * outsideNear(s.solid.base, B.c[0], B.c[2]), q.mat, s.mat);
-          faces.push({ a: j, b: Q, kind, patch: w.area > 0 ? 'area' : 'line', area: w.area, ...(w.area > 0 ? {} : { length: w.length }), at: w.at, normal: [1, 0, 0], gap: g, ...(g > 0 ? { fit, medium: MEDIUM } : {}), ...(it ? { interference: it } : {}), by: `${q.name} through ${s.name}` }); }
+          faces.push({ a: j, b: Q, kind, patch: w.area > 0 ? 'area' : 'line', area: w.area, ...(w.area > 0 ? {} : { length: w.length }), at: w.at, normal: [1, 0, 0], gap: g, ...(g > 0 ? { fit, medium: MEDIUM } : {}), ...(it ? { interference: it } : {}), joint: it ? 'pressed' : g > 0 ? (!boxy(B) ? (fit === 'slide' && !heldAlong(o.l) && !s.lines.some(heldAlong) ? 'slides' : 'turns') : 'slides') : 'held', by: `${q.name} through ${s.name}` }); }
       });
       // (its ends against what lies beyond them: a head under its plies, a stud's end where a contact closes on it)
       const nearXZ = (j: number) => { const B = boundOf(pieces[j]!); return B[0][0] < qb[1][0] && qb[0][0] < B[1][0] && B[0][2] < qb[1][2] && qb[0][2] < B[1][2]; }, cand = pieces.map((_, j) => j).filter(nearXZ);
@@ -1088,11 +1110,27 @@ export class Block {
     const q = b.pieces[k]!, l = q.lines.find((x) => x.port.endsWith('/axis'))!; if (alongY(l) && !q.solid.base.frame) return undefined;
     const out = Block.#turned(b, toY(l.dir ?? [0, 1, 0]), Block.#mid(b), false); MADE.set(out, k); return out;
   }
+  /** The faces an operation made of others (P2, AUDIT 4F: a bolted joint laid by through, onto and over), from the `from`th
+   *  on, said to move as `joint` (a bolted joint's: fixed, whatever fit each was laid with); its pieces, rooms and note kept. */
+  static jointed(b: Block, from: number, joint: FaceJoint): Block {
+    Block.#is(b); const out = Block.#seal(b.name, [...b.pieces], b.faces.map((f, i) => (i >= from ? { ...f, joint } : f)), [...b.rooms]);
+    return noted(out, NOTES.get(b));
+  }
+  /** The lines named `port` given operating limits (AUDIT 4E, P3: a UC insert's axis, its travel along it held to none by its
+   *  set screws), by the quantity each bounds; its pieces' places, faces, rooms and note kept. */
+  static limited(b: Block, port: string, limits: Readonly<Record<string, LineLimit>>): Block {
+    Block.#is(b); if (!b.pieces.some((p) => p.lines.some((l) => l.port === port))) throw new Error(`limited: ${b.name} offers no line ${port} (it offers ${offered(b)})`);
+    const out = Block.#seal(b.name, b.pieces.map((p) => ({ ...p, lines: p.lines.map((l) => (l.port === port ? { ...l, limits: { ...l.limits, ...limits } } : l)) })), [...b.faces], [...b.rooms]);
+    return noted(out, NOTES.get(b));
+  }
   static over(host: Block, port: string, sleeve: Block, where:'lo' | 'hi' | 'mid' | { readonly from: 'lo' | 'hi'; readonly along: number } = 'mid', fit: Fit = 'slide'): Block {
     Block.#is(host); Block.#is(sleeve); if (!(fit in FITS)) throw new Error(`over: a fit by name`);
     const nm = namedIn(host, port, 'line', 'over'); if (nm.port !== port) return noted(Block.over(host, nm.port, sleeve, where, fit), nm.note);
     const offers = host.pieces.flatMap((p, k) => p.lines.filter((l) => l.port === port).map((l) => ({ p, k, l })));
     const o = offers[0]; if (!o) throw new Error(`over: ${host.name} offers no line ${port} (it offers ${offered(host)})`);
+    // (package P5: a fitting over a pipe whose ends both say what they carry: refused where their sizes or threads differ)
+    const sl = sleeve.pieces.flatMap((p) => p.lines).find((l) => l.kind === 'fluid' && l.size), fj = o.l.kind === 'fluid' && o.l.size && sl ? fluidJoinCheck(o.l, sl) : undefined;
+    if (fj && !fj.ok) throw new Error(`over: ${fj.why}`);
     // (a sleeve whose block was turned: laid as made again about its bored piece (decision 0026); a piece of it still turned
     // off that piece's axis is tried by its bound, and one on the axis leaves nothing free there and is refused)
     const asMade = Block.#asMade(sleeve, o.l.dir ?? [0, 1, 0], true); if (asMade) return Block.over(host, port, asMade, where, fit);
@@ -1155,11 +1193,39 @@ export class Block {
       if (best === undefined) throw new Error(`no room over ${port}: the ${sleeve.name} would meet the ${hit.name}`);
       S = at(best); hit = undefined; }
     const n = host.pieces.length, faces: Face[] = [...host.faces, ...S.faces.map((f) => ({ ...f, a: f.a + n, b: f.b + n }))];
+    // (P2, AUDIT 5.2: a face only where the two surfaces meet within the fit's gap: the piece's bore, read from its solid
+    // (free), no farther from what is on the line than the gap the fit leaves (a thread's flanks on its own size: none).
+    // Before, every piece round about the line had one: the shaft and a 6004's outer ring 8.973 mm apart carried "contact
+    // area 754 mm2", the shaft and a UCP204's housing round its insert 13.385 mm apart one too)
+    const meetsAt = (i: number) => threaded(i) || free[i]! - rs <= ge + 1e-9, stood: string[] = [];
+    // (P3: a slide fit on a round piece slides along the line too, save on a piece held along it (a UC insert's set screws))
+    const joint = (B: Prim, q?: Piece): FaceJoint => (ge > 0 ? (roundish(B) || boxy(B) ? (fit === 'slide' && !(q && q.lines.some(heldAlong)) ? 'slides' : 'turns') : 'slides') : 'held');
     S.pieces.forEach((q, i) => { const qb = primBox(q.solid.base), lo = Math.max(qb[0][1], sb[0][1]), hi = Math.min(qb[1][1], sb[1][1]);
       // (a face only for a piece round about the line: a bearing's inner ring on the shaft, not its balls beside it)
       // (root 3: and a section or a box round the line, its bore read from its solid: a sprocket, a gear, a plate)
-      const B = q.solid.base; if (hi > lo && ((roundish(B) && upright(B) && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-9) || (boxy(B) && !q.joint && roundAbout(q, o.l.x, o.l.z)))) faces.push({ a: o.k, b: n + i, kind: ge > 0 ? 'gap' : 'contact', patch: 'area', area: 2 * Math.PI * rs * (hi - lo), at: [o.l.x, (lo + hi) / 2, o.l.z], normal: [1, 0, 0], gap: ge, ...(ge > 0 ? { fit, medium: MEDIUM } : {}), by: `${sleeve.name} over ${port}` }); });
-    return Block.#seal(host.name, [...host.pieces, ...S.pieces], faces, [...host.rooms]);
+      const B = q.solid.base; if (!(hi > lo && ((roundish(B) && upright(B) && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-9) || (boxy(B) && !q.joint && roundAbout(q, o.l.x, o.l.z))))) return;
+      if (!meetsAt(i)) { if (free[i]! <= bore + 1e-9) stood.push(`the ${q.name}'s bore stands ${((free[i]! - rs) * 1e6).toFixed(1)} µm off the ${o.p.name}, more than the ${fit} fit's ${(ge * 1e6).toFixed(1)} µm: no face written; name the fit that leaves it`); return; }
+      faces.push({ a: o.k, b: n + i, kind: ge > 0 ? 'gap' : 'contact', patch: 'area', area: 2 * Math.PI * rs * (hi - lo), at: [o.l.x, (lo + hi) / 2, o.l.z], normal: [1, 0, 0], gap: ge, ...(ge > 0 ? { fit, medium: MEDIUM } : {}), joint: joint(B, q), by: `${sleeve.name} over ${port}` }); });
+    // (and a piece of the host that passes inside the sleeve's bore (a cage within an outer ring), where the two meet within
+    // the gap: a face between them, for the same reason)
+    host.pieces.forEach((h, j) => { if (j === o.k || !inBore(h)) return; const hs = sweepOf(h), hb = boundOf(h);
+      S.pieces.forEach((q, i) => { const B = q.solid.base, qb = primBox(B), lo = Math.max(qb[0][1], hb[0][1]), hi = Math.min(qb[1][1], hb[1][1]);
+        if (!(hi > lo && roundish(B) && upright(B) && Math.hypot(B.c[0] - o.l.x, B.c[2] - o.l.z) < 1e-9)) return; const apart = free[i]! - (hs as { r: number }).r;
+        if (apart < -1e-9 || apart > ge + 1e-9) return;
+        faces.push({ a: j, b: n + i, kind: ge > 0 ? 'gap' : 'contact', patch: 'area', area: 2 * Math.PI * (hs as { r: number }).r * (hi - lo), at: [o.l.x, (lo + hi) / 2, o.l.z], normal: [1, 0, 0], gap: ge, ...(ge > 0 ? { fit, medium: MEDIUM } : {}), joint: joint(B, q), by: `${sleeve.name} over ${port}` }); }); });
+    // (wave 11 integration, one rule for both builders' faces: where a piece of the sleeve ends against a piece of the host
+    // across a plane square to the line, touching, laid there (a washer laid up against the plate it clamps, a flange
+    // against its drum's barrel) or slid along until it rests there (a nut against the washer slid on before it), one face
+    // across that plane, written once, its patch sampled from both solids as a stack's are (planeFaces), so two pieces that
+    // touch have a face (I(B)). Only where the fit holds the sleeve on the line (no gap: touch, tight, or on by its
+    // thread); one on a running fit (clear, slide) slid to rest against what is in its way (a wheel against a motor's end
+    // bell) may rest there, but it turns or slides: no face fastens it to what it turns beside (movement 3). Before, two
+    // rules each wrote this face (one for a sleeve slid on, at any fit, one for a sleeve with no gap), so a sleeve slid on
+    // with no gap had it twice, and a wheel on the clear fit was fastened to the motor's end)
+    if (ge === 0) { const all = [...host.pieces, ...S.pieces], hs = host.pieces.flatMap((q, j) => (others.includes(q) ? [j] : [])), ss = S.pieces.map((_, i) => n + i), by = `${sleeve.name} over ${port}: against`;
+      faces.push(...planeFaces(all, hs, ss, 1, by), ...planeFaces(all, ss, hs, 1, by)); }
+    const sealed = Block.#seal(host.name, [...host.pieces, ...S.pieces], faces, [...host.rooms]);
+    return stood.length ? noted(sealed, `over: ${stood.join('; ')}`) : sealed;
   }
   /** Two spur gears meshed (the user, 2026-11-06: a loose gear on a rod, a second meshing it): the gear block put beside
    *  the host's gear, toward its +x, −x, +y or −y, their axes parallel at m (z₁ + z₂) / 2 and the fit's gap (the backlash
@@ -1619,7 +1685,9 @@ export interface MadeOpts { joint?: Joint; bought?: boolean; color?: number; pat
   tapped?: boolean }
 /** A pattern of holes or lines: a circle about its middle or points; on a face, through or so deep, plain, counterbored
  *  [radius, depth] or countersunk to a radius at the face, 90°. */
-export interface Pattern { name: string; circle?: { n: number; r: number; phase?: number }; points?: [number, number][]; hole?: number; face?: FaceName; depth?: number; sink?: { cbore: [number, number] } | { csink: number } }
+export interface Pattern { name: string; circle?: { n: number; r: number; phase?: number }; points?: [number, number][]; hole?: number; face?: FaceName; depth?: number; sink?: { cbore: [number, number] } | { csink: number };
+  /** the port contract its lines carry (AUDIT §4, 4E): a terminal's kind, size, limits and standard, written on each line the pattern makes */
+  port?: Pick<Line, 'kind' | 'size' | 'limits' | 'std'> }
 // (an outline clipped to the radius at least ri: the part of a turned profile outside its bore (Sutherland-Hodgman, one edge))
 const clipOut = (pts: [number, number][], ri: number): [number, number][] => { const out: [number, number][] = [];
   for (let i = 0; i < pts.length; i++) { const a = pts[i]!, b = pts[(i + 1) % pts.length]!, ia = a[0] >= ri, ib = b[0] >= ri; if (ia) out.push(a); if (ia !== ib) { const t = (ri - a[0]) / (b[0] - a[0]); out.push([ri, a[1] + t * (b[1] - a[1])]); } }
@@ -1668,6 +1736,10 @@ function boxSide(s: Piece, q: Piece, g: number): { area: number; length: number;
 }
 export const made = Block.made, stack = Block.stack, around = Block.around, through = Block.through, into = Block.into, onto = Block.onto, ring = Block.ring, over = Block.over, turn = Block.turn, run = Block.run, branch = Block.branch;
 export const mesh = Block.mesh, rack = Block.rack, belt = Block.belt, between = Block.between, along = Block.along, key = Block.key;
+export const jointed = Block.jointed, limited = Block.limited;
+/** Whether a piece's line is held from moving along itself (its travel limit none: a UC insert's set screws), so a round
+ *  face on it turns only, whatever fit it was laid with (P3) */
+export const heldAlong = (l: Line | undefined): boolean => { const t = l?.limits?.travel; return !!t && (t.max ?? 0) - (t.min ?? 0) <= 0; };
 
 /** A spur gear's teeth read from its outline (ISO 53's rack, as piece.gear draws it: addendum m, dedendum 1.25 m): its
  *  module and teeth (m, from its tip and root circles; z, from its tip), the angle of a tooth's middle in the room, its

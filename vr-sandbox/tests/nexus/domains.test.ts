@@ -145,15 +145,19 @@ describe('every domain, in one pass', () => {
     const uno = await ran({ dev: { b: 'piece.devboard' }, mp: { b: 'mate.plate', s: { line: 'PCB/holes', size: 'M2.5', w: 100, d: 70 } } }, ['dev.block>mp.held']);
     expect([uno.r.failing, uno.out('mp').note], 'the Uno by its PCB\'s holes').toEqual([[], "bolted down took 'Arduino Uno R3 PCB/holes' for 'PCB/holes' (the one holes line it offers whose name shares a word with it)"]);
     const lead = await ran({ lead: { b: 'piece.leadscrew', s: { size: 'T8 lead 2' } }, sl: tube(5, 8, 10), on: { b: 'room.over', s: { line: 'T8 shank/axis' } } }, ['lead.block>on.host', 'sl.block>on.sleeve']);
-    expect([lead.r.failing, lead.out('on').note], 'the lead screw\'s one axis').toEqual([[], "over took 'T8 lead 2 lead screw/axis' for 'T8 shank/axis' (the one axis line it offers whose name shares a word with it)"]);
+    // (wave 11, P2's true faces: the sleeve (bore Ø10) stands 1000.0 µm off the T8 screw (Ø8), more than the slide fit's 2.5 µm,
+    // so over writes no face and says so before the name it read; before, it said nothing of a sleeve that does not touch)
+    expect([lead.r.failing, lead.out('on').note], 'the lead screw\'s one axis').toEqual([[], "over: the sleeve's bore stands 1000.0 µm off the T8 lead 2 lead screw, more than the slide fit's 2.5 µm: no face written; name the fit that leaves it; over took 'T8 lead 2 lead screw/axis' for 'T8 shank/axis' (the one axis line it offers whose name shares a word with it)"]);
     const shaft = await ran({ st: { b: 'piece.stepper', s: { size: '17' } }, sl: tube(3, 6, 5), on: { b: 'room.over', s: { line: 'shaft/axis', where: 'hi' } } }, ['st.block>on.host', 'sl.block>on.sleeve']);
-    expect([shaft.r.failing, shaft.out('on').note], 'the stepper\'s shaft, not its pilot').toEqual([[], "over took 'NEMA 17 shaft/axis' for 'shaft/axis' (the one axis line it offers whose name shares a word with it)"]);
+    // (wave 11, P2's true faces, as the T8 sleeve above: the sleeve's Ø6 bore stands 500.0 µm off the stepper's Ø5 shaft)
+    expect([shaft.r.failing, shaft.out('on').note], 'the stepper\'s shaft, not its pilot').toEqual([[], "over: the sleeve's bore stands 500.0 µm off the NEMA 17 shaft, more than the slide fit's 2.0 µm: no face written; name the fit that leaves it; over took 'NEMA 17 shaft/axis' for 'shaft/axis' (the one axis line it offers whose name shares a word with it)"]);
     const fan = await ran({ fan: { b: 'piece.fan', s: { size: '80×25' } }, pin: { b: 'room.make', s: { name: 'pin', shape: 'rod', a: 1.5, b: 40 } }, th: { b: 'room.through', s: { line: 'fan/holes' } } }, ['fan.block>th.host', 'pin.block>th.passer']);
     expect([fan.r.failing, fan.out('th').note], 'the fan\'s frame\'s holes').toEqual([[], "through took '80×25 fan frame/holes' for 'fan/holes' (the one holes line it offers whose name shares a word with it)"]);
     // (two flanges of one name stacked: a bolt goes down the top one's hole, said; Through a line takes the lowest and says which (decision 0029))
     const fl = { bot: { b: 'piece.flange', s: { size: 'DN50', type: 'PN6' } }, gas: { b: 'piece.flangegasket' }, top: { b: 'piece.flange', s: { size: 'DN50', type: 'PN6' } }, st: { b: 'room.stack', s: { order: 'bot,gas,top' } } }, fw = ['bot.block>st.blocks', 'gas.block>st.blocks', 'top.block>st.blocks'];
     const flanged = await ran({ ...fl, j: { b: 'mate.bolted', s: { line: 'DN50 PN6 plate flange/holes', size: 'M12' } } }, [...fw, 'st.block>j.held']);
-    expect([flanged.r.failing, flanged.out('j').note], 'the bolt down the top flange').toEqual([[], "bolted joint: 2 pieces offer DN50 PN6 plate flange/holes: down the top one's (the DN50 PN6 plate flange, piece 3), through all under it"]);
+    // (wave 11, P2's one bolt to a hole: the note says which hole of how many as well as which flange it goes down)
+    expect([flanged.r.failing, flanged.out('j').note], 'the bolt down the top flange').toEqual([[], 'bolted joint: 2 pieces offer DN50 PN6 plate flange/holes: hole 0 of 4, down the DN50 PN6 plate flange (piece 3), through all under it']);
     const apart = await ran({ ...fl, pin: { b: 'room.make', s: { name: 'pin', shape: 'rod', a: 5, b: 60 } }, th: { b: 'room.through', s: { line: 'DN50 PN6 plate flange/holes' } } }, [...fw, 'st.block>th.host', 'pin.block>th.passer']);
     expect(apart.r.failing, 'the pin down the lowest flange').toEqual([]); expect(apart.out('th').note, 'which one, said').toMatch(/^through: 2 pieces offer DN50 PN6 plate flange\/holes; took the DN50 PN6 plate flange \(piece \d+, the lowest along it\)/);
     // (two or more that fit: refused, just them listed, never a pick)
@@ -551,7 +555,9 @@ describe('every domain, in one pass', () => {
     for (const f of FLUID) { const ks = Object.keys(f.rows);
       for (const size of new Set([ks[0]!, ks[ks.length >> 1]!, ks[ks.length - 1]!])) { try { const r = checkRow(f.id, size); checked++; if (!r.ok) bad.push(r.says); } catch (e) { bad.push(`${f.id} ${size}: ${(e as Error).message}`); } } }
     expect(bad).toEqual([]); expect(checked, 'sizes checked').toBeGreaterThan(2 * FLUID.length);
-    expect([FLUID.length, FLUID.reduce((n, f) => n + Object.keys(f.rows).length, 0)], 'families and sized parts').toEqual([48, 450]);
+    // (49 and 452 since wave 11: piece.pump, the circulating pump of package P5, one family of two rows, circulator 15-40
+    // and 15-60, counted with the plumbing families it is joined with by its compression ends)
+    expect([FLUID.length, FLUID.reduce((n, f) => n + Object.keys(f.rows).length, 0)], 'families and sized parts').toEqual([49, 452]);
     const make = (id: string, size: string, set: Record<string, unknown> = {}) => { const f = PART_FAMILIES.get(id)!; return build(f, size, { ...Object.fromEntries((f.settings ?? []).map((s) => [s.key, s.default])), ...set }); };
     // (moving: the piston and rod on one slide of the stroke, the gate and stem on one of the bore)
     const cyl = make('piece.cylinder6432', '20', { stroke: '100' }), hyd = make('piece.hydcylinder', '63', { stroke: 200 }), iso = make('piece.cylinder15552', '50'), gate = make('piece.gatevalve', 'DN80');
@@ -2481,7 +2487,10 @@ describe('every domain, in one pass', () => {
     // (a ball valve, made laid along its flow, slid over a pipe within its waterway: laid as made again about its body, so its
     // body goes along the pipe (a pipe of its thread's outside is refused by its waterway, with both sizes))
     const valve = await run({ pipe: { b: 'piece.pipe', s: { size: 'copper 15×0.7', length: 150 } }, v: { b: 'piece.ballvalve', s: { size: 'G1/2' } }, on: { b: 'room.over', s: { line: 'copper 15×0.7 pipe/axis', where: 'mid', fit: 'touch' } } }, ['pipe.block>on.host', 'v.block>on.sleeve'], 'on');
-    expect(valve, 'a valve over a pipe').toEqual([[], 1, 5]);
+    // (wave 11, P2's true faces: its waterway, 0.36 of the thread's major (an estimate, Ø15.088 mm), stands 43.8 µm off the
+    // Ø15 pipe, more than the touch fit's none: over lays it along the pipe and writes no face, saying so, so the valve and
+    // the pipe are two things; before P2 a face was written there at any distance)
+    expect(valve, 'a valve over a pipe: laid along it within its waterway, standing off it').toEqual([[], 2, 5]);
   }, 120_000);
   it('the hooks, installed in a repository, refuse in a clone and in a linked worktree', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'hooks-')), top = join(tmp, 'repo'), proj = join(top, 'vr-sandbox'), env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
@@ -2793,8 +2802,10 @@ describe('every domain, in one pass', () => {
     const quad = await built('seed.quadruped', {}), mq = motionOf(quad); chain('quadruped', quad, mq, 9, /rubber foot/); expect(mq.joints.length).toBe(8);
     const yaw = ma.joints.find((j) => has(arm, ma, j.a, /turntable/))!; expect([yaw.dir, has(arm, ma, yaw.b, /arm base mount/)]).toEqual([[0, 1, 0], true]);
     const shoulder = ma.joints.find((j) => has(arm, ma, j.a, /arm link/) && j.b === yaw.a)!; expect(shoulder.dir.map(Math.abs)).toEqual([1, 0, 0]);
-    // (the arm turned at 1 rad/s for two seconds: it turns (not stalled asleep at half a second), its held joints stay put)
-    const la = new LiveMotion(J, arm); la.spin(yaw.a, 1); la.step(2); expect(la.angle(yaw.a)).toBeGreaterThan(1.9); expect(la.angle(yaw.a)).toBeLessThan(2.1);
+    // (the arm turned at 1 rad/s for 1.2 s: it turns (not stalled asleep at half a second), its held joints stay put; 1.2 s,
+    // not 2, since the joints have their servo's travel (SG90, 180 degrees, ±π/2 drawn at its middle: wave 11, P3), which
+    // two seconds at 1 rad/s would run past)
+    const la = new LiveMotion(J, arm); la.spin(yaw.a, 1); la.step(1.2); expect(la.angle(yaw.a)).toBeGreaterThan(1.1); expect(la.angle(yaw.a)).toBeLessThan(1.3);
     for (const j of ma.joints) if (j !== yaw) expect(Math.abs(la.angle(j.a)), `${ma.bodies[j.a]!.name} held while the arm turns`).toBeLessThan(0.02);
     la.destroy();
     // (the MGN carriage: one joint, a slide along the rail (z), no turn, within the rail's ends; pulled, it slides)
@@ -3113,9 +3124,13 @@ describe('every domain, in one pass', () => {
     const shaft = roomMade('shaft', 'steel-alloy', { cyl: [0.004, 0.1] }), on = (b: RoomBlock, s = shaft) => roomOver(s, 'shaft/axis', b, 'mid', 'slide');
     const plate = (o = {}) => roomMade('plate', 'steel-low', { box: [0.03, 0.003, 0.03] }, o);
     const [sp, g, drilled, hub] = [on(build(PART_FAMILIES.get('piece.sprocket')!, 'ISO 08B 20T')), on(cpGear(2, 42, 0.02, 0.008)), on(plate({ pattern: { name: 'hole', points: [[0, 0]], hole: 0.0045 } })), on(plate())];
-    expect([sp, g, drilled, hub].map((b) => [b.pieces.length, b.faces.map((f) => f.by), sampleRoom(b, 12)]), 'each over the shaft by its bore, a face round it, no point in two pieces').toEqual(
-      ['ISO 08B 20T sprocket', 'm2 z42 spur gear', 'plate', 'plate'].map((n) => [2, [`${n} over shaft/axis`], APART]));
-    expect([sp, g, drilled, hub].map((b) => roomNoteOf(b) ?? ''), 'the gear\'s pilot opened, the solid plate bored, said').toEqual(['', 'over opened the m2 z42 spur gear\'s bore to the shaft (Ø8.01 mm, the slide fit)', '', 'over bored the plate to the shaft (Ø8.01 mm, the slide fit): it had no bore']); // (root 6: half g6's 5 µm at Ø8)
+    // (wave 11, P2's true faces: a face round the bore only where it meets the shaft within the fit's gap. The sprocket's
+    // pilot (Ø14, its 32-sided hole 6.966 mm to its flats) and the drilled plate's Ø9 hole stand 2966.3 and 500.0 µm off the
+    // Ø8 shaft, more than the slide fit's 2.5 µm: each goes over by its bore, with no face round it, and says so, as the
+    // T8 sleeve does; the gear's pilot opened to the shaft and the solid plate bored to it each have their face)
+    expect([sp, g, drilled, hub].map((b) => [b.pieces.length, b.faces.map((f) => f.by), sampleRoom(b, 12)]), 'each over the shaft by its bore, a face round it where the bore meets it, no point in two pieces').toEqual(
+      [['ISO 08B 20T sprocket', false], ['m2 z42 spur gear', true], ['plate', false], ['plate', true]].map(([n, meets]) => [2, meets ? [`${n} over shaft/axis`] : [], APART]));
+    expect([sp, g, drilled, hub].map((b) => roomNoteOf(b) ?? ''), 'the gear\'s pilot opened, the solid plate bored, the two that stand off said').toEqual(['over: the ISO 08B 20T sprocket\'s bore stands 2966.3 µm off the shaft, more than the slide fit\'s 2.5 µm: no face written; name the fit that leaves it', 'over opened the m2 z42 spur gear\'s bore to the shaft (Ø8.01 mm, the slide fit)', 'over: the plate\'s bore stands 500.0 µm off the shaft, more than the slide fit\'s 2.5 µm: no face written; name the fit that leaves it', 'over bored the plate to the shaft (Ø8.01 mm, the slide fit): it had no bore']); // (root 6: half g6's 5 µm at Ø8)
     expect(Math.abs(sp.pieces[1]!.solid.base.frame![5]), 'the sprocket laid with its axis along the shaft').toBe(1);
     // (a gear over a shaft along z (its own axis as made) stays a gear its mesh can read)
     expect(gearOf(on(cpGear(2, 42, 0.02, 0.009), roomTurn(shaft, 0, 90)).pieces[1]!)?.z, 'still a z42 gear on a shaft along z').toBe(42);
@@ -3181,11 +3196,12 @@ describe('every domain, in one pass', () => {
     // (a wheel on an N20's shaft: its hub longer than the shaft, so it stands on the gearbox, out past the shaft's free end)
     const wheel = await run({ motor: { b: 'piece.gearmotor' }, wheel: { b: 'piece.wheel' }, fit: { b: 'room.over', s: { line: 'N20 gear motor shaft/axis', where: 'hi', fit: 'slide' } }, show: { b: 'space.show' } }, ['motor.block>fit.host', 'wheel.block>fit.sleeve', 'fit.thing>show.thing']);
     expect(wheel.failing, 'a wheel on a gear motor').toEqual([]);
-    // (a 608 over an 8 mm rod: its balls beside the axis leave its inner ring's bore; a face for each piece round about the
-    // shaft (its rings and cage, as before), none for a ball)
+    // (a 608 over an 8 mm rod: its balls beside the axis leave its inner ring's bore; a face only for the piece that meets the
+    // shaft, its inner ring. Wave 11, P2's true faces: this asked for its rings and cage (3), but the cage's bore stands
+    // 1.150 mm and the outer ring's 5.850 mm off the Ø8 rod (measured, their drawn bores less 4 mm), so neither touches it)
     const brg = await run({ shaft: { b: 'room.make', s: { name: 'shaft', shape: 'rod', a: 4, b: 50 } }, brg: { b: 'piece.bearing', s: { size: '608' } }, on: { b: 'room.over', s: { line: 'shaft/axis', where: 'mid', fit: 'touch' } }, show: { b: 'space.show' } }, ['shaft.block>on.host', 'brg.block>on.sleeve', 'on.thing>show.thing']);
     expect(brg.failing, 'a bearing over a shaft').toEqual([]);
-    expect((brg.e.state.get('on')?.out?.block as { faces: { by: string }[] }).faces.filter((f) => /608.* over shaft/.test(f.by)).length, 'its rings and cage, not its balls').toBe(3);
+    expect((brg.e.state.get('on')?.out?.block as { faces: { by: string }[] }).faces.filter((f) => /608.* over shaft/.test(f.by)).length, 'its inner ring, not its cage, outer ring or balls').toBe(1);
   }, 60000);
   it('holes on any face: a pipe into a tank\'s side wall, a pin across a shaft, a counterbore; a gear on a shaft along its length', () => {
     const tank = roomMade('tank', 'abs', { case: [0.1, 0.08, 0.1, 0.004, 0.004] }, { pattern: { name: 'entry', points: [[0.02, 0]], hole: 0.008, face: '+x', depth: 0.004 } });

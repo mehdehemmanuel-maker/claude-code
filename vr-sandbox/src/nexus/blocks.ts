@@ -71,6 +71,8 @@ import { METRIC_SIZES, PIPES as CP_PIPES, WIRES as CP_WIRES, INSULATION as CP_IN
 import { RESISTORS as CP_RESISTORS, ELECTROLYTICS as CP_ELECTROLYTICS, CELLS as CP_CELLS, DOWELS as CP_DOWELS, INSERTS as CP_INSERTS, resistor as cpResistor, ceramicCap as cpCeramic, electrolytic as cpElectrolytic, to92 as cpTo92, cell as cpCell, toggle as cpToggle, fuse as cpFuse, pot as cpPot, closed as cpClosed, bracket as cpBracket, boltedDown as cpBoltedDown, dowel as cpDowel, gear as cpGear, gt2 as cpGt2, spring as cpSpring, hinge as cpHinge, insert as cpInsert } from './common';
 import { DIPS as CP_DIPS, dip as cpDip, barrelJack as cpJack, plug as cpPlug, tee as cpTee } from './common';
 import { PIECE_NODES } from './parts';
+import { CIRCUIT_NODES } from './circuit';
+import { motorOfBlock } from './parts/power';
 import { PART_FAMILIES, build as buildPart } from './parts/maker';
 import { needsOf, type Need } from './placement/model';
 import { combineFields, fieldOf, shareWhere, showField, statsOf, type Field, type FieldKind } from './placement/fields';
@@ -1525,7 +1527,9 @@ const BUILT_THINGS: BlockDef[] = [
     ports: { inputs: [P('host', 'block', { label: 'the shaft with its hub on' }), P('key', 'block', { label: 'the key (piece.key, or a box)' })], outputs: ROOM_OUT },
     run: (i, c) => { const w = String(c.set.where || 'hub'), d = Number(c.set.along ?? 0) / 1000; if (d > 0 && w !== 'lo' && w !== 'hi') throw new Error('a distance along the shaft is from its lo or its hi end: set where to lo or hi');
       return roomOut(roomKey(i.host as Block, String(c.set.line), i.key as Block, w === 'hub' ? undefined : d > 0 ? { from: w as 'lo', along: d } : (w as 'lo'), String(c.set.fit || 'tight') as Fit)); },
-    tests: [{ set: { line: 'shaft/axis' }, inputs: { host: roomOver(roomMade('shaft', 'steel-alloy', { cyl: [0.01, 0.1] }), 'shaft/axis', roomMade('hub', 'steel-low', { tube: [0.0103, 0.025, 0.03] }), 'mid', 'slide'), key: roomMade('6 × 6 key', 'steel-low', { box: [0.006, 0.006, 0.02] }) }, outputs: { pieces: 3, faces: 3 } }] }),
+    // (wave 11 integration: the hub drawn with no bore, so over bores it to the Ø20 shaft at the slide fit's gap and writes
+    // its face; before, a Ø20.6 bore stood 0.3 mm off the shaft, so the hub had no face on it and the key two, not three)
+    tests: [{ set: { line: 'shaft/axis' }, inputs: { host: roomOver(roomMade('shaft', 'steel-alloy', { cyl: [0.01, 0.1] }), 'shaft/axis', roomMade('hub', 'steel-low', { cyl: [0.025, 0.03] }), 'mid', 'slide'), key: roomMade('6 × 6 key', 'steel-low', { box: [0.006, 0.006, 0.02] }) }, outputs: { pieces: 3, faces: 3 } }] }),
   // ---- common pieces (common.ts): the small things builds are made of, each made by the operations, each saying how it
   // mates by the lines and rooms it offers
   // (the families the table-driven maker makes, every size of their tables, and the check of a piece against its row:
@@ -2250,16 +2254,18 @@ const BUILT_THINGS: BlockDef[] = [
     tests: [{ set: { seconds: 4 }, inputs: { things: { name: 'drop', items: [{ of: { name: 'cube', shape: { box: [0.1, 0.1, 0.1] }, mat: 'steel-low' }, at: [0, 0.55, 0], rot: [0, 0, 0], s: 1 }] } }, outputs: { heat: 7850 * 0.001 * 9.81 * 0.5 }, rel: 5e-3 }] }),
   def({ id: 'hinge', name: 'Hinge', kind: 'logic', ability: 'connect', domains: ['mechanical', 'structural', 'everyday'], says: 'A revolute joint for Let it go: one thing turning on another (or on the world, fixed) about an axis through a point, between limits, with friction. A door on its frame, a lid, a pendulum, a wheel on its axle',
     settings: [{ key: 'a', label: 'What turns (its name)', type: 'text', default: 'door' }, { key: 'b', label: 'On what (its name; blank: the world)', type: 'text', default: '' }, { key: 'axis', label: 'Axis', type: 'choice', default: 'y', choices: ['x', 'y', 'z'] },
-      { key: 'line', label: 'Or on a line a block wired in offers (as "wheel/axis": what offers it turns, about it)', type: 'text', default: '' }, { key: 'which', label: 'Which piece offering it (0: the first)', type: 'number', default: 0 }, { key: 'motor', label: 'Driven by (a motor from its datasheet)', type: 'choice', default: 'none', choices: ['none', ...Object.keys(MOTORS)] }, { key: 'gear', label: 'Through (a gearhead)', type: 'choice', default: 'none', choices: ['none', ...Object.keys(GEARHEADS)] }],
+      { key: 'line', label: 'Or on a line a block wired in offers (as "wheel/axis": what offers it turns, about it)', type: 'text', default: '' }, { key: 'which', label: 'Which piece offering it (0: the first)', type: 'number', default: 0 }, { key: 'motor', label: 'Driven by (a motor from its datasheet; its own: the motor the block holds, by its terminals)', type: 'choice', default: 'none', choices: ['none', 'its own', ...Object.keys(MOTORS)] }, { key: 'gear', label: 'Through (a gearhead)', type: 'choice', default: 'none', choices: ['none', ...Object.keys(GEARHEADS)] }],
     ports: { inputs: [P('block', 'block', { optional: true, label: 'a block of the room, for its line' }), L('x', 0), L('y', 0), L('z', 0), N('min', 'deg', { optional: true, label: 'turns no less than' }), N('max', 'deg', { optional: true, label: 'turns no more than' }), N('friction', 'N m', { default: 0, optional: true }), N('volts', 'V', { optional: true, label: 'volts across its motor (its own, if not set)' }), N('reverse', undefined, { default: 0, optional: true, label: 'turn it the other way (1)' })], outputs: [P('joint', 'any')] },
     run: (i, c) => {
       const ax = String(c.set.axis ?? 'y'), lim = i.min !== undefined && i.max !== undefined ? { limits: [Number(i.min), Number(i.max)].map((d) => (d * Math.PI) / 180) as [number, number] } : {};
       // a motor turns it at the torque its constants give at the speed it turns (sim.ts): K_t (V − K_t ω) / R − T_f
-      const md = c.set.motor && c.set.motor !== 'none' ? MOTORS[String(c.set.motor)] : undefined, gh = c.set.gear && c.set.gear !== 'none' ? GEARHEADS[String(c.set.gear)] : undefined;
+      const on = String(c.set.line ?? '').trim() && i.block ? lineOf(i.block as Block, String(c.set.line).trim(), Math.round(Number(c.set.which ?? 0))) : undefined;
+      // ('its own': the motor the block holds, by its terminals' link to its row in data/motors.ts (parts/power.ts), so
+      // the drive is that motor's own R, K_t and K_e)
+      const md = c.set.motor === 'its own' ? (i.block ? motorOfBlock(i.block as Block, on?.piece) : undefined) : c.set.motor && c.set.motor !== 'none' ? MOTORS[String(c.set.motor)] : undefined, gh = c.set.gear && c.set.gear !== 'none' ? GEARHEADS[String(c.set.gear)] : undefined;
       let drive = {}; if (md) { const m = motorModel(md), V = (i.volts !== undefined ? Number(i.volts) : md.V) * (Number(i.reverse ?? 0) ? -1 : 1); drive = { drive: { name: md.label, V, Kt: m.Kt, R: windingR(m, AMBIENT), Tf: m.Tf, ...(gh ? { gear: { ratio: gh.ratio, efficiency: gh.efficiency } } : {}) } }; }
       // (on a line a room block offers: the hinge where the operations put that line, about its direction, turning the
       // piece that offers it, by the name Let it go gives that piece's body; no x, y or z given)
-      const on = String(c.set.line ?? '').trim() && i.block ? lineOf(i.block as Block, String(c.set.line).trim(), Math.round(Number(c.set.which ?? 0))) : undefined;
       const a = on ? on.piece : String(c.set.a);
       return { joint: { kind: 'hinge', name: `hinge of ${a}`, a, b: String(c.set.b || '') ? String(c.set.b) : { fixed: -1 }, at: on ? on.point : [Number(i.x ?? 0), Number(i.y ?? 0), Number(i.z ?? 0)], axis: on ? on.dir : [ax === 'x' ? 1 : 0, ax === 'y' ? 1 : 0, ax === 'z' ? 1 : 0], friction: Number(i.friction ?? 0), ...lim, ...drive } };
     },
@@ -2928,6 +2934,7 @@ const BUILT_THINGS: BlockDef[] = [
 for (const b of BUILT_IN) LIBRARY.set(b.id, b);
 for (const b of BUILT_THINGS) LIBRARY.set(b.id, b);
 for (const b of lawBlocks()) LIBRARY.set(b.id, b);
+for (const b of CIRCUIT_NODES) LIBRARY.set(b.id, b); // the circuit of a built block (AUDIT P6)
 // nodes whose figures come from tables that cite their own sources: the citation said on the node too, so a node that
 // says it is specified or measured (src/nexus/evidence.ts) names where from
 const CITED: Record<string, Source> = {

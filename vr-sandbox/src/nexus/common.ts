@@ -24,7 +24,7 @@
 // equal tee (its branch joined into its run's side by Branch); the L bracket's upright and the hinge's leaves made flat
 // with their holes and turned up, and a block bolted to a wall plate by holes that run across it.
 
-import { made, stack, through, onto, ring, over, into, joint, run, turn, branch, boundOf, namedIn, noted, FITS, type Block, type Fit, type P3, type RunSeg, type RunTube } from './room';
+import { made, stack, through, onto, ring, over, into, joint, jointed, run, turn, branch, boundOf, namedIn, noted, FITS, fitGap, type Block, type Fit, type Line, type P3, type Piece, type RunSeg, type RunTube } from './room';
 import { SPRING_WIRES, springRate } from '../engineering/springs';
 import { ISO_METRIC } from './parts/bdw';
 import { BEARINGS as BEARING_SIZES, IPE, ballsOf } from './families';
@@ -90,9 +90,11 @@ export type PipeSize = keyof typeof PIPES;
 const pipeOf = (size: string) => { const p = PIPES[size as PipeSize]; if (!p) throw new Error(`no pipe ${size} (${Object.keys(PIPES).join(', ')})`); return p; };
 /** A pipe or tube: it offers its axis (`<name>/axis`), for a coupling to slide over or something to pass along. */
 export function pipe(size: string, length: number): Block { const p = pipeOf(size); return made(`${size} pipe`, p.mat, { tube: [mm(p.od / 2 - p.wall), mm(p.od / 2), length] }, p.mat === 'pvc' ? { color: 0xe8e8e4 } : {}); }
-/** A straight coupling for a pipe of that size: its bore the pipe's outside and a sliding fit (0.25 mm), its wall 1.2 mm,
- *  40 mm long (typical of a solder or press coupling). */
-export function coupling(size: string): Block { const p = pipeOf(size), ri = mm(p.od / 2) + 0.00025; return made(`${size} coupling`, p.mat === 'pvc' ? 'pvc' : p.mat === 'copper' ? 'brass' : p.mat, { tube: [ri, ri + mm(1.2), mm(40)] }); }
+/** A straight coupling for a pipe of that size: its bore the pipe's outside and the sliding fit's gap at that size (the
+ *  room's slide fit, ISO 286 H7/g6's least clearance halved: 3 µm at 15 mm, derived by fitGap), its wall 1.2 mm, 40 mm long
+ *  (typical of a solder or press coupling). (Wave 11 integration: before, a 0.25 mm gap, typical; since over writes a face
+ *  only within the fit's gap, the coupling stood 250 µm off its pipe, no face was written and the two fell apart.) */
+export function coupling(size: string): Block { const p = pipeOf(size), ri = mm(p.od / 2) + fitGap('slide', mm(p.od)); return made(`${size} coupling`, p.mat === 'pvc' ? 'pvc' : p.mat === 'copper' ? 'brass' : p.mat, { tube: [ri, ri + mm(1.2), mm(40)] }); }
 
 /** Socket elbows for copper pipe after EN 1254-1 (capillary, end feed), 90° and 45°, by the EN 1057 sizes: each socket's
  *  depth (how far the pipe goes in, mm), its wall (mm) and the body's bend radius to its middle line (mm). Typical of
@@ -217,16 +219,35 @@ export function terminal(poles: number): Block {
 
 /** A bolted joint: the bolt's shank down a hole of what it holds (from above), its head on top of it on that hole, and a
  *  washer and a nut slid over the shank's end below it. The shank is as long as the grip, the washer and the nut. */
+/** What already stands in a hole (P2's one bolt to a hole): a round piece, solid, on the hole's line where it runs up,
+ *  within the height of the piece `k` that offers it (a bolt's shank, a part's solder joint seated at its footprint). */
+function holdingIn(held: Block, k: number, o: Line): Piece | undefined {
+  const tb = boundOf(held.pieces[k]!); if (o.dir && !(Math.abs(o.dir[0]) < 1e-9 && Math.abs(o.dir[2]) < 1e-9)) return undefined;
+  return held.pieces.find((q, j) => { if (j === k) return false; const B = q.solid.base, qb = boundOf(q); if (B.k !== 'cyl' || B.ri !== undefined) return false;
+    return Math.hypot(B.c[0] - o.x, B.c[2] - o.z) < 1e-9 && qb[0][1] < tb[1][1] - 1e-9 && qb[1][1] > tb[0][1] + 1e-9; });
+}
 export function boltedJoint(held: Block, port0: string, size: string, i = 0, head: 'hex' | 'socket' = 'hex', fit: Fit = 'slide', turned = false): Block {
   // (a name given almost right: the holes it plainly means, said back as a note (decision 0026, step 4))
   const nm = namedIn(held, port0, 'line', 'bolted joint'), port = nm.port, notes = nm.note ? [nm.note] : [];
   // (holes of one name in two pieces or more, stacked: the bolt goes down the top one's, through all under it, said back)
-  const owners = held.pieces.map((p, k) => ({ p, k })).filter(({ p }) => p.lines.some((l) => l.port === port)), top = owners.reduce((a, x) => (a && boundOf(a.p)[1][1] >= boundOf(x.p)[1][1] ? a : x), owners[0]);
-  if (owners.length > 1) notes.push(`bolted joint: ${owners.length} pieces offer ${port}: down the top one's (the ${top!.p.name}, piece ${top!.k + 1}), through all under it`);
+  // (P2, AUDIT 5.2: holes of that name on pieces side by side (two pillow blocks' feet, each its own hole) are each a hole of
+  // their own: `which` (i) counts through every distinct hole, the top piece's first, then the others' in their order; at
+  // each the bolt goes down the top piece that offers it there. Before, `which` counted only the first top piece's holes and
+  // fell back to its first, so a second block stayed unbolted and one hole took two bolts)
+  const owners = held.pieces.map((p, k) => ({ p, k })).filter(({ p }) => p.lines.some((l) => l.port === port)), topY = (x: { p: Piece }) => boundOf(x.p)[1][1];
+  const order = [...owners].sort((u, v) => topY(v) - topY(u) || u.k - v.k), at = (l: Line, m: Line) => Math.hypot(l.x - m.x, l.z - m.z) < 1e-9 && (l.y ?? 0) === (m.y ?? 0) && (l.dir ?? [0, 1, 0]).every((v, k) => Math.abs(v - (m.dir ?? [0, 1, 0])[k]!) < 1e-9);
+  const holes: { w: { p: Piece; k: number }; l: Line; j: number }[] = [];
+  for (const w of order) w.p.lines.filter((l) => l.port === port).forEach((l, j) => { if (!holes.some((h) => at(h.l, l))) holes.push({ w, l, j }); });
+  const hole = holes[i] ?? (i === 0 ? undefined : (() => { throw new Error(`bolted joint: ${held.name} has ${holes.length} hole${holes.length === 1 ? '' : 's'} ${port} (which 0 to ${holes.length - 1}), not ${i}`); })());
+  const top = hole?.w, o = hole?.l;
+  if (!o || !top) throw new Error(`bolted joint: ${held.name} offers no hole ${port}`);
+  if (owners.length > 1) notes.push(`bolted joint: ${owners.length} pieces offer ${port}: hole ${i} of ${holes.length}, down the ${top.p.name} (piece ${top.k + 1})${owners.some((w) => w !== top && at(w.p.lines.find((l) => l.port === port)!, o)) ? ', through all under it' : ''}`);
+  // (one bolt to a hole: a hole that already holds a round piece on its line, through the piece that offers it, is refused)
+  const inIt = holdingIn(held, top.k, o);
+  if (inIt) throw new Error(`bolted joint: hole ${i} of ${port} (in the ${top.p.name}) already holds the ${inIt.name}: one bolt to a hole; name another (which 0 to ${holes.length - 1})`);
+  const ti = top.p.lines.filter((l) => l.port === port).indexOf(o);
   // (its grip: from the top of the piece whose hole it goes down to the bottom of the lowest piece under that hole, so a
   // second joint on the same plates is not lengthened by the first one's head and nut)
-  const lines = top ? top.p.lines.filter((l) => l.port === port) : [], o = lines.slice(i, i + 1)[0] ?? lines[0];
-  if (!o) throw new Error(`bolted joint: ${held.name} offers no hole ${port}`);
   // (a hole that runs across or down (a fan's frame stood on its side, a wall plate's): the whole turned so it runs up, bolted
   // there, and turned back, so the joint follows the hole's own direction (decision 0026, as Bolted down does); a hole at an
   // angle to x, y and z is refused)
@@ -238,16 +259,19 @@ export function boltedJoint(held: Block, port0: string, size: string, i = 0, hea
     const about: P3 = d[1] < 0 ? [1, 0, 0] : [-d[2], 0, d[0]], deg = d[1] < 0 ? 180 : 90;
     return noted(turn(boltedJoint(turn(held, about, deg), port, size, i, head, fit, true), about, -deg), notes.join('; '));
   }
-  const owner = top!.p, ceiling = boundOf(owner)[1][1];
+  const owner = top.p, ceiling = boundOf(owner)[1][1];
   const under = held.pieces.map(boundOf).filter((b) => b[0][0] < o.x && o.x < b[1][0] && b[0][2] < o.z && o.z < b[1][2] && b[1][1] <= ceiling + 1e-9);
   const m = sizeOf(size, 'hw', 'm'), grip = ceiling - Math.min(...under.map((b) => b[0][1])), L = grip + mm(m.hw) + mm(m.m);
   // (each joint's pieces named apart, so a second joint's washer and nut find its own shank: "M8 shank 2")
   const k = 1 + held.pieces.filter((p) => p.name.startsWith(`${size} shank`)).length, tag = k > 1 ? ` ${k}` : '';
   const shank = made(`${size} shank${tag}`, 'steel-alloy', { cyl: [mm(m.d) / 2, L] }, { color: 0x5c5f63 });
   const cap = head === 'hex' ? (() => { const h = sizeOf(size, 's', 'k'); return made(`${size} head${tag}`, 'steel-alloy', { hex: [mm(h.s), mm(h.k)] }, { color: 0x5c5f63 }); })() : (() => { const h = sizeOf(size, 'dk', 'ks'); return made(`${size} head${tag}`, 'steel-alloy', { cyl: [mm(h.dk) / 2, mm(h.ks)] }, { color: 0x2a2b2e }); })();
-  const passed = through(held, shank, { port, i, from: 'hi', ...(owners.length > 1 ? { k: top!.k } : {}) }, fit);
+  const passed = through(held, shank, { port, i: ti, from: 'hi', ...(owners.length > 1 ? { k: top.k } : {}) }, fit);
   const headed = onto(passed, '+y', cap, 'touch', `${size} shank${tag}/axis`);
-  return noted(over(headed, `${size} shank${tag}/axis`, stack(`${size} washer and nut`, 1, [{ b: nut(size) }, { b: washer(size) }]), 'lo', 'touch'), notes.join('; '));
+  // (P2: every face the joint made, the shank in its holes, the head and the nut on what they clamp, said fixed: a bolted
+  // joint holds what it clamps, whatever fit its shank was laid down the holes with)
+  const nutted = over(headed, `${size} shank${tag}/axis`, stack(`${size} washer and nut`, 1, [{ b: nut(size) }, { b: washer(size) }]), 'lo', 'touch');
+  return noted(jointed(nutted, held.faces.length, 'fixed'), notes.join('; '));
 }
 
 /** A coil of wire on its own (air-cored, or to slide over a core): its mean radius, its wire, its turns close-wound, its
@@ -427,8 +451,14 @@ export function boltedDown(held: Block, port0: string, w: number, t: number, d: 
     return turn(boltedDown(turn(held, about, deg), port, w, t, d, mat, size, head), about, -deg);
   }
   const cx = (held.lo[0] + held.hi[0]) / 2, cz = (held.lo[2] + held.hi[2]) / 2;
-  let b = stack(`${held.name}, bolted down`, 1, [{ b: plate(`${held.name} base plate`, w, t, d, mat, ls.map((l) => [l.x - cx, l.z - cz] as [number, number]), mm(sizeOf(size, 'clear').clear)) }, { b: held }]);
-  for (let i = 0; i < ls.length; i++) b = boltedJoint(b, port, size, i, head);
+  // (wave 11, P2's one bolt to a hole: a point of the line that already holds a piece (a board's footprint, where a part's
+  // solder joint is seated in it) is no hole to bolt through: only the free ones are bolted, and the plate drilled under
+  // them. Before, every point was: the Uno's 12, its headers', jacks' and chip's footprints with its 4 mounting holes)
+  const owners = held.pieces.map((p, k) => ({ p, k })).filter(({ p }) => p.lines.some((l) => l.port === port));
+  const free = ls.map((l) => !owners.some(({ k }) => holdingIn(held, k, l))), open = ls.filter((_, i) => free[i]);
+  if (!open.length) throw new Error(`bolted down: every one of the ${held.name}'s ${ls.length} holes ${port} already holds a piece: none left to bolt through`);
+  let b = stack(`${held.name}, bolted down`, 1, [{ b: plate(`${held.name} base plate`, w, t, d, mat, open.map((l) => [l.x - cx, l.z - cz] as [number, number]), mm(sizeOf(size, 'clear').clear)) }, { b: held }]);
+  for (let i = 0; i < ls.length; i++) if (free[i]) b = boltedJoint(b, port, size, i, head);
   return b;
 }
 /** Deep-groove ball bearings: bore d, outside D and width B, read from the one bearing table (`BEARINGS`, families.ts:

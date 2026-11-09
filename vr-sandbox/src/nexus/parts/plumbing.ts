@@ -51,7 +51,8 @@
 // fittings, hose barbs, valves, PVC-U and copper fittings, hoses, clamps and tanks. A figure recalled from a standard but
 // not read from it here is labelled typical, never specified.
 
-import { branch, made, onto, run, stack, turn, type Block, type RunSeg } from '../room';
+import { Block, branch, made, onto, run, stack, turn, type RunSeg } from '../room';
+import { CRANE_FT } from '../fluidnet';
 import { densityKg } from '../mass';
 import type { Expect, PartFamily } from './maker';
 
@@ -73,6 +74,12 @@ function teeCuts(ri: number, ro: number, rb: number): number {
 }
 const ch = (set: Record<string, unknown>, k: string) => String(set[k]);
 const len = (set: Record<string, unknown>, k = 'length') => Number(set[k]) / 1000;
+/** A block's fluid ends written (AUDIT §4 4E, package P5): each line `which` picks gets kind fluid, the size `size` gives
+ *  it (SI; a thread by its name) and its standard, so a join is checked by what they carry (fluidnet.ts). */
+const fluidEnds = (b: Block, which: (port: string) => boolean, size: Record<string, number | string>, std?: string): Block =>
+  Block.lined(b, (l) => (which(l.port) ? { kind: 'fluid', size, ...(std ? { std } : {}) } : undefined));
+/** The copper tube a valve's compression ends take, by its ISO 228-1 size: the UK trade's pairing, typical. */
+const CU_FOR_G: Record<string, number> = { 'G1/4': 8, 'G3/8': 10, 'G1/2': 15, 'G3/4': 22, G1: 28, 'G1-1/4': 35, 'G1-1/2': 42, G2: 54 };
 const COPPER = 0xb87333, BRASS = 0xc9a23f, PVC = 0xe8e8e4, STEEL = 0x8a8c90, BLACK = 0x1c1c1c, PBT = 0x2a5db0;
 
 // ---- the tables ----------------------------------------------------------------------------------------------------
@@ -221,7 +228,7 @@ const GFITTING: PartFamily<GRow> = {
   rows: G_ROWS, size: 'G1/2', source: 'ISO 228-1 thread sizes as bd_warehouse gives them (iso_228_1.csv); the fittings\' proportions typical of EN 10242 (src/nexus/parts/plumbing.ts G_FITTING)',
   settings: [{ key: 'type', label: 'Type', type: 'choice', default: 'elbow', choices: G_TYPES }, { key: 'matter', label: 'Made of', type: 'choice', default: 'brass', choices: Object.keys(G_MAT) }],
   cannot: (_g, size, set) => (!G_TYPES.includes(ch(set, 'type')) ? `a type of ${G_TYPES.join(', ')} (${ch(set, 'type')})` : ch(set, 'type') === 'reducer' && !smaller(size) ? `ISO 228-1 has no size here below ${size} to reduce to` : null),
-  recipe: gFitting, expect: gExpect,
+  recipe: (g, size, set) => fluidEnds(gFitting(g, size, set), () => true, { thread: size, major: mm(g.d) }, 'ISO 228-1'), expect: gExpect,
   tests: [{ inputs: {}, outputs: { pieces: 3, offers: ['G1/2 elbow port 1/axis', 'G1/2 elbow port 2/axis'] } }, { set: { type: 'tee' }, inputs: {}, outputs: { pieces: 5 } }],
 };
 
@@ -235,14 +242,19 @@ const valveBody = (d: number, rh: number, rm: number, e: number, Lb: number, rb:
 type VRow = GRow;
 const V_MAT: Record<string, string> = { brass: 'brass', stainless: 'stainless-304' };
 // (a ball valve's body, its sizes worked from its thread by ratios read off makers' drawings: an estimate)
-const ballOf = (g: VRow) => { const d = g.d, Lb = 2.6 * d + 2, rh = g.D / 2, rm = 0.85 * d, rb = 0.36 * d; return { pts: valveBody(d, rh, rm, g.e, Lb, rb), Lb: mm(Lb), rm: mm(Math.max(rm, rh)), rs: mm(Math.max(2.5, 0.15 * d)), hs: mm(0.6 * d + 8), ll: mm(4 * d + 20), tl: mm(Math.max(3, 0.12 * d)), wl: mm(Math.max(10, 0.6 * d)), af: mm(3.2 * Math.max(2.5, 0.15 * d)), nh: mm(1.6 * Math.max(2.5, 0.15 * d)) }; };
+const ballOf = (g: VRow) => { const d = g.d, Lb = 2.6 * d + 2, rh = g.D / 2, rm = 0.85 * d, rb = 0.36 * d; return { pts: valveBody(d, rh, rm, g.e, Lb, rb), rb: mm(rb), Lb: mm(Lb), rm: mm(Math.max(rm, rh)), rs: mm(Math.max(2.5, 0.15 * d)), hs: mm(0.6 * d + 8), ll: mm(4 * d + 20), tl: mm(Math.max(3, 0.12 * d)), wl: mm(Math.max(10, 0.6 * d)), af: mm(3.2 * Math.max(2.5, 0.15 * d)), nh: mm(1.6 * Math.max(2.5, 0.15 * d)) }; };
 const VALVE_ROWS: Record<string, VRow> = Object.fromEntries(Object.entries(G_ROWS).filter(([k]) => k !== 'G1/8'));
 const BALLVALVE: PartFamily<VRow> = {
   id: 'piece.ballvalve', name: 'Ball valve', gloss: 'A two-way ball valve by its ISO 228-1 thread, G1/4 to G2: its body turned, its stem and lever on top', domains: ['mechanical', 'pipelines', 'everyday'],
   says: 'A two-way ball valve, female both ends (ISO 228-1 G1/4 to G2): its body a turned profile along the flow (its ends, shoulders and the swell round the ball), laid along x; its stem stood on top, its lever on the stem running one way from it along the flow (open), held by a nut on the stem. Approximated: the ball, its seats and the stem\'s packing inside not drawn, the threads not drawn, its sizes worked from the thread by makers\' proportions (an estimate). Its body offers the flow\'s axis (`<size> ball valve body/axis`) for a pipe or nipple at either end',
   rows: VALVE_ROWS, size: 'G1/2', source: 'ISO 228-1 sizes (bd_warehouse); the body by makers\' proportions, an estimate (src/nexus/parts/plumbing.ts)',
-  settings: [{ key: 'matter', label: 'Body', type: 'choice', default: 'brass', choices: Object.keys(V_MAT) }],
-  recipe: (g, size, set) => { const v = ballOf(g), mat = V_MAT[ch(set, 'matter')] ?? 'brass', n = `${size} ball valve`;
+  settings: [{ key: 'matter', label: 'Body', type: 'choice', default: 'brass', choices: Object.keys(V_MAT) }, { key: 'ends', label: 'Ends', type: 'choice', default: 'female G', choices: ['female G', 'compression'] }],
+  recipe: (g, size, set) => fluidEnds(ballBuilt(g, size, set), (p) => p === `${size} ball valve body/axis`, { role: 'valve', ...(ch(set, 'ends') === 'compression' ? { d: mm(CU_FOR_G[size]!) } : { thread: size, major: mm(g.d) }), di: 2 * ballOf(g).rb, ...(CRANE_FT[size] !== undefined ? { K: 3 * CRANE_FT[size]! } : {}) }, ch(set, 'ends') === 'compression' ? `compression ends for ${CU_FOR_G[size]} mm EN 1057 tube (EN 1254-2; drawn with its threaded body)` : 'ISO 228-1'),
+  expect: (g, _s, set) => ballExpect(g, set),
+  tests: [{ inputs: {}, outputs: { pieces: 4, offers: ['G1/2 ball valve body/axis', 'G1/2 ball valve lever/stem', 'G1/2 ball valve stem/axis', 'G1/2 lever nut/axis'] } }],
+};
+function ballBuilt(g: VRow, size: string, set: Record<string, unknown>): Block {
+    const v = ballOf(g), mat = V_MAT[ch(set, 'matter')] ?? 'brass', n = `${size} ball valve`;
     const body = turn(made(`${n} body`, mat, { lathe: { pts: v.pts } }, { color: mat === 'brass' ? BRASS : STEEL }), 2, 90);
     // (the lever's stem point at one end, half its width in: the stem, the lever and its nut stacked aligned on it, so the
     // lever runs one way from the stem; its nut's across-flats 1.6 and height 0.8 of the stem's diameter, as ISO 4032's
@@ -250,11 +262,12 @@ const BALLVALVE: PartFamily<VRow> = {
     // body's or its stem's)
     const lever = made(`${n} lever`, 'steel-low', { box: [v.ll, v.tl, v.wl] }, { color: 0xc0392b, pattern: { name: 'stem', points: [[-(v.ll - v.wl) / 2, 0]] } });
     const handle = stack(`${n} handle`, 1, [{ b: made(`${n} stem`, mat, { cyl: [v.rs, v.hs] }, { color: STEEL }) }, { b: lever }, { b: made(`${size} lever nut`, 'steel-low', { hex: [v.af, v.nh] }, { color: STEEL }) }], `${n} lever/stem`);
-    return onto(body, '+y', handle, 'touch', `${n} stem/axis`); },
-  expect: (g, _s, set) => { const v = ballOf(g), d = rho(V_MAT[ch(set, 'matter')] ?? 'brass'), rc = v.af / Math.sqrt(3);
-    return { bound: [Math.max(v.Lb / 2, v.wl / 2, rc) + Math.max(v.Lb / 2, v.ll - v.wl / 2, rc), 2 * v.rm + v.hs + v.tl + v.nh, Math.max(2 * v.rm, v.wl, 2 * rc)], mass: latheV(v.pts) * d + Math.PI * v.rs * v.rs * v.hs * d + (v.ll * v.tl * v.wl + hexV(v.af, v.nh)) * rho('steel-low'), tol: 0.01, massTol: 0.03, says: 'its body\'s length and swell, its stem, its lever one way from it and its nut (an estimate); nominal mass, the body turned (Pappus), stem, lever and nut' }; },
-  tests: [{ inputs: {}, outputs: { pieces: 4, offers: ['G1/2 ball valve body/axis', 'G1/2 ball valve lever/stem', 'G1/2 ball valve stem/axis', 'G1/2 lever nut/axis'] } }],
-};
+    return onto(body, '+y', handle, 'touch', `${n} stem/axis`);
+}
+function ballExpect(g: VRow, set: Record<string, unknown>): Expect {
+    const v = ballOf(g), d = rho(V_MAT[ch(set, 'matter')] ?? 'brass'), rc = v.af / Math.sqrt(3);
+    return { bound: [Math.max(v.Lb / 2, v.wl / 2, rc) + Math.max(v.Lb / 2, v.ll - v.wl / 2, rc), 2 * v.rm + v.hs + v.tl + v.nh, Math.max(2 * v.rm, v.wl, 2 * rc)], mass: latheV(v.pts) * d + Math.PI * v.rs * v.rs * v.hs * d + (v.ll * v.tl * v.wl + hexV(v.af, v.nh)) * rho('steel-low'), tol: 0.01, massTol: 0.03, says: 'its body\'s length and swell, its stem, its lever one way from it and its nut (an estimate); nominal mass, the body turned (Pappus), stem, lever and nut' };
+}
 const checkOf = (g: VRow) => { const d = g.d, Lb = 2.2 * d + 12, rh = g.D / 2, rm = Math.max(rh + 1, 0.7 * d); return { pts: valveBody(d, rh, rm, g.e, Lb, 0.36 * d), Lb: mm(Lb), rm: mm(rm) }; };
 const CHECKVALVE: PartFamily<VRow> = {
   id: 'piece.checkvalve', name: 'Check valve', gloss: 'A spring check valve by its ISO 228-1 thread, G1/4 to G2: its body turned along the flow', domains: ['mechanical', 'pipelines', 'everyday'],
@@ -400,7 +413,7 @@ const CUTUBE: PartFamily<CuRow> = {
   rows: CU_ROWS, size: '15×0.7', source: 'EN 1057 outsides and walls, as src/nexus/kinds/fluid.ts holds them (src/nexus/parts/plumbing.ts EN1057)',
   settings: [{ key: 'length', label: 'Length, mm', type: 'number', default: 300 }],
   cannot: (_r, _s, set) => (len(set) > 0 ? null : `a length above 0 (${String(set.length)} mm)`),
-  recipe: (r, size, set) => made(`copper ${size} tube`, 'copper', { tube: [mm(r.od / 2 - r.t), mm(r.od / 2), len(set)] }, { color: COPPER }),
+  recipe: (r, size, set) => fluidEnds(made(`copper ${size} tube`, 'copper', { tube: [mm(r.od / 2 - r.t), mm(r.od / 2), len(set)] }, { color: COPPER }), () => true, { role: 'pipe', d: mm(r.od), di: mm(r.od - 2 * r.t) }, 'EN 1057'),
   expect: (r, _s, set) => ({ bound: [mm(r.od), len(set), mm(r.od)], mass: annV(mm(r.od / 2 - r.t), mm(r.od / 2), len(set)) * rho('copper'), tol: 0.01, massTol: 0.02, says: 'its outside by its length; nominal mass, the tube' }),
   tests: [{ inputs: {}, outputs: { pieces: 1, offers: ['copper 15×0.7 tube/axis'] } }],
 };
@@ -467,7 +480,8 @@ const TANK: PartFamily<TankRow> = {
   settings: [{ key: 'port', label: 'Port bore, mm', type: 'number', default: 22 }],
   cannot: ([, h, d, t], _s, set) => { const p = Number(set.port); return !(p > 0) ? `a port above 0 mm (${String(set.port)})` : 4 * p > h - 2 * t || p > d - 4 * t ? `a port of ${p} mm does not fit its wall (${h} × ${d} mm)` : null; },
   recipe: (r, size, set) => { const [w, h, d, t] = r, p = mm(Number(set.port));
-    return made(`${size} tank`, 'pe', { case: [mm(w), mm(h), mm(d), mm(t), mm(t)] }, { color: 0x3c7d4a, pattern: { name: 'ports', points: portsOf(r, p), hole: p / 2, face: '+x', depth: mm(t) } }); },
+    // (its ports a reservoir's: the free surface a fixed head to whatever its ports feed, package P5)
+    return fluidEnds(made(`${size} tank`, 'pe', { case: [mm(w), mm(h), mm(d), mm(t), mm(t)] }, { color: 0x3c7d4a, pattern: { name: 'ports', points: portsOf(r, p), hole: p / 2, face: '+x', depth: mm(t) } }), (q) => q === `${size} tank/ports`, { role: 'reservoir', d: p }); },
   expect: ([w, h, d, t], _s, set) => { const p = mm(Number(set.port)), [W, H, D, T] = [w, h, d, t].map(mm) as [number, number, number, number];
     return { bound: [W, H, D], mass: (W * H * D - (W - 2 * T) * (H - T) * (D - 2 * T) - 2 * Math.PI * (p / 2) ** 2 * T) * rho('pe'), tol: 0.01, massTol: 0.02, says: 'its outside; nominal mass, its walls and floor less its two ports' }; },
   tests: [{ inputs: {}, outputs: { pieces: 1, offers: ['10 L tank/cavity', '10 L tank/ports'] } }],

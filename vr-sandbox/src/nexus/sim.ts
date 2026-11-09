@@ -26,6 +26,7 @@ import type { Part } from './kits';
 import type { Material } from '../data/materials';
 import { FITS, boundOf, gearOf, partOfBlock, primBox, rackOf, teethOf, type Block } from './room';
 import { SERVOS } from './families';
+import { servoRangeOf } from './parts/motion';
 
 
 /** A piece of a body; with its own mass where it is known (what it is made of times its volume), so a body of a steel
@@ -459,7 +460,10 @@ export interface MoveMotor { kind: 'servo' | 'gear motor' | 'stepper'; torque?: 
 export interface MoveJoint { a: number; b: number; point: V3; dir: V3; by: string[]; turns: boolean; slide?: boolean; range?: [number, number]; motor?: MoveMotor;
   /** a screw joint (decision 0029): a lead screw in its tapped nut, the nut moved this far along the line, m, a turn of it */ screw?: number;
   /** a ball joint (AUDIT §4, 4F): it turns about every line through `point`, three freedoms; nothing infers one yet (a face
-   *  that says so, P2's Face.joint, will) */ ball?: true }
+   *  that says so: P2's Face.joint 'ball', read by P3) */ ball?: true;
+  /** its travel, from the piece that has it (P3, AUDIT 5.3): a turn's in radians from where it stands as made (a servo's
+   *  range from its row, centred on the angle it is drawn at), `src` where the figure is from; none where none is known
+   *  (`limitsSays` on Motion names those) */ limits?: { lo: number; hi: number; src: string } }
 /** Two meshing gears: their bodies, pieces, teeth. */
 export interface MoveMesh { a: number; b: number; ga: string; gb: string; za: number; zb: number; m: number }
 /** A gear (its body a) moving a rack (body b) along `dir` by its pitch radius r times its turn. */
@@ -471,7 +475,8 @@ export interface Motion { bodies: MoveBody[]; joints: MoveJoint[]; meshes: MoveM
    *  a screw 1, its turn and slide tied by its lead, a ball 3), less one for each mesh, rack and belt that ties two of them;
    *  a joint between two frozen bodies leaves none. Counted over the joints as a tree: a closed loop of joints is not
    *  closed here (Grübler's count is not applied), said in `freedomSays`. */
-  freedom: number; freedomSays: string }
+  freedom: number; freedomSays: string;
+  /** which joints have a travel limit and from what, which none known (P3) */ limitsSays: string }
 
 const TURNS = / over | through |in the bore of /, IN_HOLE = / in the hole of /;
 /** Hobby servos' stall torque, N·m (families.ts SERVOS: SG90 1.8 kg·cm, MG996R 9.4 kg·cm at 4.8 V, vendor figures, typical;
@@ -498,9 +503,18 @@ const isSlide = (f: Block['faces'][number]): boolean => f.fit === 'slide' || (f.
 export function motionOf(b: Block): Motion {
   const n = b.pieces.length, up = Array.from({ length: n }, (_, i) => i), find = (i: number): number => (up[i] === i ? i : (up[i] = find(up[i]!)));
   const join = (i: number, j: number) => { up[find(i)] = find(j); };
-  const turns: { shaft: number; on: number; point: V3; dir: V3; by: string; slide: boolean; screw?: number; flat?: true }[] = [], touches: typeof b.faces[number][] = [];
+  const turns: { shaft: number; on: number; point: V3; dir: V3; by: string; slide: boolean; screw?: number; flat?: true; ball?: true }[] = [], touches: typeof b.faces[number][] = [];
+  // (P3, AUDIT 4F: what the operation wrote is read before anything is inferred: fixed (a bolted joint's) and pressed (an
+  // interference) fasten the two, joined first and never given way; held is a touch; ball a ball joint at the face; turns
+  // and slides say which way a face the old reading takes for a joint moves (below))
+  const fastened: typeof b.faces[number][] = [];
   for (const f of b.faces) {
     if (/ meshes | laid round /.test(f.by)) continue;
+    if (f.joint === 'fixed' || f.joint === 'pressed') { fastened.push(f); continue; }
+    // (save a lead screw's nut on its thread, which over writes held (no gap drawn): a screw joint, read below by its lead)
+    const onThread = TURNS.test(f.by) && !f.gate && !!b.pieces[/ over /.test(f.by) ? f.b : f.a]!.tapped && leadOf(b.pieces[/ over /.test(f.by) ? f.a : f.b]!.name) !== undefined;
+    if (f.joint === 'held' && !onThread) { touches.push(f); continue; }
+    if (f.joint === 'ball') { const c = f.at as V3; turns.push({ shaft: f.a, on: f.b, point: [c[0], c[1], c[2]], dir: unitOf(f.normal as V3), by: f.by, slide: false, ball: true }); continue; }
     // (the round one of the two is round about the line: the sleeve over it, or the passer along it)
     const round = b.pieces[f.b]!.solid.base, over = / over /.test(f.by);
     // (or a shaft in the hole of a section: a gear's or a pulley's pilot bore, wider than it; not a bolt in a plate's hole)
@@ -509,7 +523,10 @@ export function motionOf(b: Block): Motion {
     const lead = TURNS.test(f.by) && !f.gate && b.pieces[over ? f.b : f.a]!.tapped ? leadOf(b.pieces[over ? f.a : f.b]!.name) : undefined;
     if ((lead !== undefined || (f.gap > 0 && !f.gate && (TURNS.test(f.by) || sectHole))) && round.k !== 'box' && round.k !== 'bend') {
       const d = round.frame ? [round.frame[1], round.frame[4], round.frame[7]] as V3 : [0, 1, 0] as V3;
-      turns.push({ shaft: over ? f.a : f.b, on: over ? f.b : f.a, point: [round.c[0], round.c[1], round.c[2]], dir: d, by: f.by, slide: lead !== undefined || isSlide(f), ...(lead !== undefined ? { screw: lead } : {}) }); continue; }
+      // (P3: a face that says turns turns only, about its line (a revolute); one that says slides slides along it too; one
+      // with nothing written, by its fit as before)
+      const slides = lead !== undefined || (f.joint === 'turns' ? false : f.joint === 'slides' ? true : isSlide(f));
+      turns.push({ shaft: over ? f.a : f.b, on: over ? f.b : f.a, point: [round.c[0], round.c[1], round.c[2]], dir: d, by: f.by, slide: slides, ...(lead !== undefined ? { screw: lead } : {}) }); continue; }
     // (a box stacked against another with a slide fit (a rail between a carriage's skirts): the longer slides in the shorter's
     // grip along its length, the one across the face's normal; it never turns)
     if (f.kind === 'gap' && isSlide(f) && /: stacked$/.test(f.by)) {
@@ -527,6 +544,7 @@ export function motionOf(b: Block): Motion {
   // (a touch on a joint's own axis end: on the shaft or on what turns on it, its face along the joint's line; joined last)
   const onAxisEnd = (f: typeof b.faces[number]) => turns.some((t) => (t.shaft === f.a || t.shaft === f.b || t.on === f.a || t.on === f.b) && Math.abs(dot(unitOf(f.normal as V3), unitOf(t.dir))) > 0.99);
   const sorted = touches.sort((p, q) => weight(q) - weight(p)), late = sorted.filter(onAxisEnd), early = sorted.filter((f) => !onAxisEnd(f));
+  for (const f of fastened) join(f.a, f.b);
   for (const f of [...early, ...late]) { const A = find(f.a), B = find(f.b); if (A === B) continue;
     const locks = turns.some((t) => { const o = find(t.on), s = find(t.shaft); return (o === A && s === B) || (o === B && s === A); });
     if (locks) { said.push(`the ${b.pieces[f.a]!.name} touching the ${b.pieces[f.b]!.name} gives way to the joint`); continue; } join(f.a, f.b); }
@@ -543,7 +561,7 @@ export function motionOf(b: Block): Motion {
   const bodyOf = (i: number) => of.get(find(i))!, boxes = b.pieces.map((p) => boundOf(p));
   const joints: MoveJoint[] = [];
   for (const t of turns) { const a = of.get(find(t.on))!, s = of.get(find(t.shaft))!; if (a === s) continue; const j = joints.find((x) => (x.a === a && x.b === s) || (x.a === s && x.b === a));
-    if (j) { j.by.push(t.by); if (!same(j, t) || t.flat) j.turns = false; j.slide = j.slide && t.slide; if (t.screw) j.screw = t.screw; } else joints.push({ a, b: s, point: t.point, dir: t.dir, by: [t.by], turns: !t.flat, slide: t.slide, ...(t.screw ? { screw: t.screw } : {}) }); }
+    if (j) { j.by.push(t.by); if (!same(j, t) || t.flat) j.turns = false; j.slide = j.slide && t.slide; if (t.screw) j.screw = t.screw; } else joints.push({ a, b: s, point: t.point, dir: t.dir, by: [t.by], turns: !t.flat, slide: t.slide, ...(t.screw ? { screw: t.screw } : {}), ...(t.ball ? { ball: true as const } : {}) }); }
   // (a slide's room: along its line, to the nearest piece of another body in its way, and never off the ends of what it is on)
   const rangeOf = (j: MoveJoint, onto: number[]): [number, number] | undefined => { const k = j.dir.findIndex((x) => Math.abs(Math.abs(x) - 1) < 1e-9); if (k < 0) return undefined;
     const mine = bodies[j.a]!.pieces, lo = Math.min(...mine.map((i) => boxes[i]![0][k]!)), hi = Math.max(...mine.map((i) => boxes[i]![1][k]!)), o = [0, 1, 2].filter((x) => x !== k);
@@ -559,6 +577,10 @@ export function motionOf(b: Block): Motion {
     if (!j.slide && !j.turns) j.turns = true; }
   // (a motor where one drives the joint: the shaft's body a servo's or a gear motor's)
   for (const j of joints) { const m = motorOf([...bodies[j.b]!.pieces.map((i) => b.pieces[i]!.name), ...j.by].join(' ')); if (m) j.motor = m; }
+  // (P3: a turn's travel from the piece that has one: a servo's from its row, centred on the angle it is drawn at (a horn
+  // fitted at the servo's middle, as arm kits are put together: typical, an assumption); none known for the rest)
+  for (const j of joints) { if (!j.turns || j.ball || j.motor?.kind !== 'servo') continue; const r = servoRangeOf([...bodies[j.b]!.pieces.map((i) => b.pieces[i]!.name), ...j.by].join(' ')); if (!r) continue;
+    const h = (r.deg * Math.PI) / 360; j.limits = { lo: -h, hi: h, src: `${r.src}, drawn at its middle (typical)` }; }
   // (a rack meshed by a gear: it slides along its length, on what its gear turns on, the gear driving it)
   const racks: MoveRack[] = [];
   for (const f of b.faces) { if (!/ meshes /.test(f.by)) continue; const [ri, gi] = rackOf(b.pieces[f.a]!) ? [f.a, f.b] : rackOf(b.pieces[f.b]!) ? [f.b, f.a] : [-1, -1]; if (ri < 0) continue;
@@ -590,7 +612,10 @@ export function motionOf(b: Block): Motion {
   const own = (j: MoveJoint): number => (bodies[j.a]!.frozen && bodies[j.b]!.frozen ? 0 : j.ball ? 3 : j.screw ? 1 : j.turns && j.slide ? 2 : 1);
   const each = joints.map(own), ties = meshes.length + racks.length + belts.length, freedom = each.reduce((t, f) => t + f, 0) - ties;
   const freedomSays = `${freedom} degree${freedom === 1 ? '' : 's'} of freedom: ${joints.length} joint${joints.length === 1 ? '' : 's'} (${[['turn', joints.filter((j) => own(j) === 1 && j.turns && !j.slide && !j.ball).length], ['slide', joints.filter((j) => own(j) === 1 && !j.turns).length], ['turn and slide', joints.filter((j) => own(j) === 2).length], ['screw', joints.filter((j) => own(j) === 1 && j.screw).length], ['ball', joints.filter((j) => own(j) === 3).length], ['held both sides', each.filter((f) => f === 0).length]].filter(([, c]) => c).map(([w, c]) => `${c} ${w}`).join(', ') || 'none'})${ties ? `, less ${ties} tied (${meshes.length} mesh, ${racks.length} rack, ${belts.length} belt)` : ''}; loops not closed`;
-  return { bodies, joints, meshes, racks, belts, says, freedom, freedomSays };
+  const lim = joints.filter((j) => j.limits), none = joints.filter((j) => !j.limits && !(j.slide && j.range));
+  const limitsSays = [...(lim.length ? [`${lim.length} with a travel limit (${[...new Set(lim.map((j) => j.limits!.src))].join('; ')})`] : []), ...joints.filter((j) => !j.limits && j.slide && j.range).map((j) => `${bodies[j.a]!.name}: its slide's room ${(j.range![0] * 1000).toFixed(1)} to ${(j.range![1] * 1000).toFixed(1)} mm`),
+    ...(none.length ? [`no travel limit known for ${none.map((j) => `${bodies[j.a]!.name} on ${bodies[j.b]!.name}`).join(', ')}`] : [])].join('; ') || 'no joints';
+  return { bodies, joints, meshes, racks, belts, says, freedom, freedomSays, limitsSays };
 }
 const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
@@ -678,6 +703,8 @@ export class LiveMotion {
         // stiffness the engine sets from the two bodies' own inertia alone, so a light turntable between the base and the arm
         // left the shoulder's spring weaker than the arm's weight over it, and a kick of 1e-4 N·m grew to a fall in a second,
         // while with the turntable frozen it held; a spring of no frequency drives nothing at all (everything fell))
+        // (P3: its travel limit, where the piece that has one gives it: the engine holds it within)
+        if (j.limits) { st.mLimitsMin = j.limits.lo; st.mLimitsMax = j.limits.hi; }
         if (j.motor) { const ms = st.mMotorSettings, sp = ms.mSpringSettings, k = j.motor.torque ? 20 * j.motor.torque : 100; sp.mMode = J.ESpringMode_StiffnessAndDamping; sp.mStiffness = k; sp.mDamping = 0.1 * k; if (j.motor.torque) { ms.mMinTorqueLimit = -j.motor.torque; ms.mMaxTorqueLimit = j.motor.torque; } }
         const c = J.castObject(st.Create(b1, b2), J.HingeConstraint); J.destroy(st); ps.AddConstraint(c); this.joint.set(who, { kind: 'hinge', c, dir: u, point: j.point, last: 0, add: 0, s0: 0 });
         if (j.motor) { c.SetMotorState(J.EMotorState_Position); c.SetTargetAngle(0); this.held.add(who); }

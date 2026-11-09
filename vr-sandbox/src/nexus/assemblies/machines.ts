@@ -226,7 +226,9 @@ function lampArm(): void {
   s.n('room.make', { name: 'lamp base', shape: 'rod', mat: 'steel-low', a: 75, b: 20 }, 'The base, Ø150 steel', 'base');
   s.n('room.make', { name: 'lower arm', shape: 'rod', mat: 'al-6061', a: 6, b: 300 }, 'The lower arm, Ø12', 'a1');
   s.n('room.make', { name: 'pivot pin', shape: 'rod', mat: 'steel-alloy', a: 3, b: 30 }, 'A pivot pin, Ø6', 'pin');
-  s.n('room.make', { name: 'knuckle', shape: 'tube', mat: 'al-6061', a: 4, b: 8, c: 16 }, 'Its knuckle', 'kn');
+  // (wave 11 integration: the knuckle drawn with no bore, so over bores it to the Ø6 pin at the clear fit's gap and writes
+  // its face; before, a Ø8 bore stood 1 mm off the pin, no face was written and each pin fell away from the lamp)
+  s.n('room.make', { name: 'knuckle', shape: 'rod', mat: 'al-6061', a: 8, b: 16 }, 'Its knuckle', 'kn');
   s.op('pv', 'room.over', { line: 'pivot pin/axis', where: 'mid', fit: 'clear' }, 'The knuckle over the pin: the joint', { host: 'pin', sleeve: 'kn' });
   s.op('pvx1', 'room.turn', { axis: 'x', degrees: 90 }, 'Its pin across', { block: 'pv' });
   s.op('pvx2', 'room.turn', { axis: 'x', degrees: 90 }, 'The second pivot, its pin across', { block: 'pv' });

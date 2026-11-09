@@ -50,8 +50,11 @@ function layOut(b: Board): void {
   for (const id of e.sequence) { const c = col.get(id)!, r = rows.get(c) ?? 0; rows.set(c, r + 1); b.nodes[id]!.x = c * 330; b.nodes[id]!.y = r * 200; }
 }
 /** A servo's horn: a round disc horn over its spline, a clear fit (the joint), 20 mm across, 3 mm thick (typical of the
- *  disc horns sold with micro servos); its bore wide enough for a standard servo's 25-tooth spline and the fit's gap. */
-const HORN = { name: 'servo horn', shape: 'tube', mat: 'pom', a: 5.2, b: 10, c: 3 };
+ *  disc horns sold with micro servos). Drawn as a disc with no bore: over bores it to the spline it goes on with the clear
+ *  fit's gap (a horn's splined bore is made to its servo's spline; its teeth not drawn), so a micro servo's 4.8 mm spline
+ *  and a standard one's 5.8 mm each get their own. (P3, AUDIT 5.2: before, a 10.4 mm bore on a 4.8 mm spline, 2.8 mm off
+ *  it, which over now writes no face for, so the arm had no joints) */
+const HORN = { name: 'servo horn', shape: 'rod', mat: 'pom', a: 10, b: 3 };
 
 // ---- a gripper --------------------------------------------------------------------------------------------------------
 function gripper(): void {
@@ -252,7 +255,9 @@ function quadcopter(): void {
     s.op(q('row'), 'room.stack', { name: 'quadcopter', axis: 'x', fit: 'touch', level: 'on the ground', order: `${q('mW')}, ${hub}, ${q('mE')}` }, `${k}: arms W and E against the hub`, { blocks: [q('mW'), hub, q('mE')] });
     s.op(q('cross'), 'room.stack', { name: 'quadcopter', axis: 'z', fit: 'touch', level: 'on the ground', order: `${q('mS')}, ${q('row')}, ${q('mN')}` }, `${k}: arms S and N`, { blocks: [q('mS'), q('row'), q('mN')] });
     // (the prop, made once: a hub and two blades, flat (a sleeve goes over its line as it was made: the pitch not drawn))
-    s.n('room.make', { name: 'prop hub', shape: 'tube', mat: 'pc', a: 3.6, b: 7, c: 7 }, `${k}: the prop's hub`, q('ph'));
+    // (wave 11 integration: the hub drawn with no bore, so over bores it to the 5 mm motor shaft at the clear fit's gap and
+    // writes its face; before, a Ø7.2 bore stood 1.1 mm off the shaft, no face was written and each prop fell away)
+    s.n('room.make', { name: 'prop hub', shape: 'rod', mat: 'pc', a: 7, b: 7 }, `${k}: the prop's hub`, q('ph'));
     for (const b of ['pa', 'pb']) s.n('room.make', { name: 'prop blade', shape: 'box', mat: 'pc', a: f.prop / 2 - 7, b: 1.5, c: f.prop > 200 ? 22 : 14 }, `${k}: a blade, the prop ${f.prop} mm across`, q(b));
     s.op(q('prop'), 'room.stack', { name: 'prop', axis: 'x', fit: 'touch', order: `${q('pa')}, ${q('ph')}, ${q('pb')}` }, `${k}: a two-blade prop`, { blocks: [q('pa'), q('ph'), q('pb')] });
     host = s.op(q('packed'), 'room.onto', { face: '+y', fit: 'touch' }, `${k}: the battery on the top plate`, { host: q('cross'), child: q('packx') });

@@ -48,8 +48,11 @@ function layOut(b: Board): void {
   for (const id of e.sequence) { const c = col.get(id)!, r = rows.get(c) ?? 0; rows.set(c, r + 1); b.nodes[id]!.x = c * 330; b.nodes[id]!.y = r * 200; }
 }
 /** A road wheel: a rim (a tube round its bore) with its tyre over it, a tight fit; it goes over an axle by its bore. */
-function roadWheel(s: Fold, k: string, name: string, bore: number, rim: number, tyre: number, width: number): string {
-  s.n('room.make', { name: `${name} rim`, shape: 'tube', mat: 'al-6061', a: bore, b: rim, c: width }, `${name}: its rim`, `${k}_r`);
+// (P3, AUDIT 5.2: the rim a disc drawn with no bore, which the axle it goes over bores to its fit, as vehicles.ts's road
+// wheel; before, a bore 1 mm wider than its axle all round, which over writes no face for at the clear fit, so the wheel
+// had no joint)
+function roadWheel(s: Fold, k: string, name: string, rim: number, tyre: number, width: number): string {
+  s.n('room.make', { name: `${name} rim`, shape: 'rod', mat: 'al-6061', a: rim, b: width }, `${name}: its rim`, `${k}_r`);
   s.n('room.make', { name: `${name} tyre`, shape: 'tube', mat: 'rubber', a: rim, b: tyre, c: width }, `${name}: its tyre`, `${k}_t`);
   return s.op(k, 'room.over', { line: `${name} rim/axis`, where: 'mid', fit: 'touch' }, `${name}: the tyre on its rim`, { host: `${k}_r`, sleeve: `${k}_t` });
 }
@@ -159,7 +162,7 @@ function door(): void {
   const s = new Fold('A door');
   s.set('width', 'number', 662, 'the leaf\'s width less its 100 mm lock stile, mm (662 for a 762 leaf, 738 for 838)', 'leaf.a');
   s.set('height', 'number', 1981, 'the leaf\'s, its lock stile\'s and its hinge pin\'s height, mm (UK 1981, EU 2040)', 'leaf.b; stile.b; pin.b');
-  s.set('knuckles', 'number', 988, 'each hinge knuckle\'s and leaf\'s length, mm: half the height less 2.5', 'kf.c; km.c; lf.b; lm.b');
+  s.set('knuckles', 'number', 988, 'each hinge knuckle\'s and leaf\'s length, mm: half the height less 2.5', 'kf.c; km.b; lf.b; lm.b');
   s.set('jambs', 'number', 2000, 'the jambs\' length, mm (the leaf\'s height and about 20)', 'jamb.length');
   s.set('head', 'number', 830, 'the head\'s length, mm (the leaf\'s whole width and about 70)', 'hd.length');
   s.n('room.make', { name: 'door leaf', shape: 'box', mat: 'wood', a: 662, b: 1981, c: 35 }, 'The leaf, a 35 mm flush door', 'leaf');
@@ -168,7 +171,9 @@ function door(): void {
   s.n('room.make', { name: 'hinge pin', shape: 'rod', mat: 'steel-low', a: 3, b: 1981 }, 'The hinge pin, Ø6', 'pin');
   s.n('room.make', { name: 'hinge knuckle fixed', shape: 'tube', mat: 'steel-low', a: 3, b: 6.5, c: 988 }, 'Its fixed knuckle', 'kf');
   s.op('h1', 'room.over', { line: 'hinge pin/axis', where: 'lo', fit: 'touch' }, 'The fixed knuckle on the pin\'s lower half', { host: 'pin', sleeve: 'kf' });
-  s.n('room.make', { name: 'hinge knuckle', shape: 'tube', mat: 'steel-low', a: 4, b: 6.5, c: 988 }, 'Its knuckle that turns', 'km');
+  // (P3, AUDIT 5.2: drawn with no bore, which over bores to the pin at the clear fit; before, a Ø8 bore on the Ø6 pin, 1 mm
+  // off it all round, which over writes no face for, so the door had no joint)
+  s.n('room.make', { name: 'hinge knuckle', shape: 'rod', mat: 'steel-low', a: 6.5, b: 988 }, 'Its knuckle that turns', 'km');
   s.op('h2', 'room.over', { line: 'hinge pin/axis', where: 'hi', fit: 'clear' }, 'The turning knuckle over the upper half, a clear fit: the joint', { host: 'h1', sleeve: 'km' });
   s.n('room.make', { name: 'hinge leaf fixed', shape: 'box', mat: 'steel-low', a: 2.5, b: 988, c: 35 }, 'The fixed leaf, 2.5 mm', 'lf');
   s.op('h3', 'room.onto', { face: '-x', fit: 'touch', end: 'lo' }, 'The fixed leaf on the fixed knuckle', { host: 'h2', child: 'lf' });
@@ -287,8 +292,8 @@ function kart(): void {
     s.n('room.make', { name: `${side} rail`, shape: 'box', mat: 'steel-alloy', a: 34, b: 34, c: 1120, points: '0,-520; 0,520', hole: 12.5, face: '+x' }, `The ${side} side rail, its two stub axle holes`, k);
   s.n('piece.sheet', { size: 'aluminium 2', w: 500, l: 1120 }, 'The floor tray, aluminium 2', 'pan');
   s.op('body', 'room.stack', { name: 'kart frame', axis: 'x', fit: 'touch', order: 'rl,pan,rr' }, 'The tray between the rails', { blocks: ['rl', 'pan', 'rr'] });
-  roadWheel(s, 'rw', 'rear wheel', 13.5, 63.5, 139.7, 180);
-  roadWheel(s, 'fw', 'front wheel', 13.5, 63.5, 127, 114);
+  roadWheel(s, 'rw', 'rear wheel', 63.5, 139.7, 180);
+  roadWheel(s, 'fw', 'front wheel', 63.5, 127, 114);
   s.n('piece.plate', { name: 'nose plate', mat: 'al-6061', w: 567, t: 3, d: 200, holes: '0,0', hole: 24 }, 'The nose plate, aluminium 3, its column\'s hole', 'nz');
   s.op('ch', 'room.onto', { face: '-z', fit: 'touch' }, 'The nose plate in front of the frame', { host: 'body', child: 'nz' });
   let h = 'ch';
@@ -334,7 +339,7 @@ function trailer(): void {
   s.op('box', 'room.stack', { name: 'trailer box', axis: 'x', fit: 'touch', end: 'lo', order: 'sideup,bed,sideup' }, 'A side either side of the bed', { blocks: ['sideup', 'bed', 'sideup'] });
   s.op('tb', 'room.onto', { face: '+y', fit: 'touch', end: 'hi' }, 'The box on the frame, flush at the tail', { host: 'frame', child: 'box' });
   s.n('room.make', { name: 'trailer axle', shape: 'rod', mat: 'steel-alloy', a: 20, b: 1300 }, 'The axle, Ø40', 'ax');
-  roadWheel(s, 'wh', 'trailer wheel', 21, 101.6, 203, 122);
+  roadWheel(s, 'wh', 'trailer wheel', 101.6, 203, 122);
   s.op('ax1', 'room.over', { line: 'trailer axle/axis', where: 'lo', fit: 'clear' }, 'A wheel on one end, clear: it turns', { host: 'ax', sleeve: 'wh' });
   s.op('ax2', 'room.over', { line: 'trailer axle/axis', where: 'hi', fit: 'clear' }, 'And the other', { host: 'ax1', sleeve: 'wh' });
   s.turn('axx', 'ax2', 'z', 'Laid across');
@@ -367,7 +372,7 @@ function wheelbarrow(): void {
   s.op('lp', 'room.stack', { name: 'barrow legs', axis: 'x', fit: 'touch', end: 'hi', order: 'legup,brx,legup' }, 'Two legs and their brace, flush at the top', { blocks: ['legup', 'brx', 'legup'] });
   s.op('fl', 'room.onto', { face: '-y', fit: 'touch', end: 'hi' }, 'The legs under the handles\' rear', { host: 'fr', child: 'lp' });
   s.op('fa', 'room.through', { line: 'left fork/holes', which: 0, from: 'above', fit: 'touch' }, 'The axle through the fork plates', { host: 'fl', passer: 'ax' });
-  roadWheel(s, 'wh', 'barrow wheel', 9, 101.6, 195, 89);
+  roadWheel(s, 'wh', 'barrow wheel', 101.6, 195, 89);
   s.op('fw', 'room.over', { line: 'barrow axle/axis', where: 'mid', fit: 'clear' }, 'The wheel over the axle\'s middle, clear: it turns', { host: 'fa', sleeve: 'wh' });
   s.n('room.make', { name: 'barrow tray', shape: 'case', mat: 'steel-low', a: 486, b: 250, c: 700, d: 1.2, e: 1.2 }, 'The tray, 1.2 mm steel', 'tray');
   s.op('wb', 'room.onto', { face: '+y', fit: 'touch' }, 'The tray on the handles', { host: 'fw', child: 'tray' });
