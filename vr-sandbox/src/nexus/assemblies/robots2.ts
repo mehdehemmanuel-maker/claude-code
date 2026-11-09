@@ -4,44 +4,8 @@
 // the room's operations. Where a part should move (a platter, a link, a wheel), it goes over its shaft with a clear fit.
 // Loaded by one import in seeds.ts.
 
-import { register, type BlockDef, type Type } from '../blocks';
-import { Engine, emptyBoard, groupBlock, placeBlock, wire } from '../dataflow';
-import type { Board } from '../boards';
+import { Asm } from './board';
 
-
-/** A board being built a node at a time, saved as a library block (as robots.ts's assemblies are). */
-class Asm {
-  readonly b: Board; private k = 0;
-  constructor(title: string) { this.b = emptyBoard(title); }
-  n(blockId: string, set: Record<string, unknown>, label: string, id = `n${this.k++}`): string { placeBlock(this.b, blockId, 0, 0, set, id); this.b.nodes[id]!.label = label; return id; }
-  /** An input: bound to inner settings (`into`, "node.setting; …") or, with none, a value wired on. */
-  input(name: string, type: Type, def: unknown, says: string, choices: string[] = [], into = ''): string { return this.n('group.in', { name, type, unit: '', default: String(def), choices: choices.join('|'), says, ...(into ? { into } : {}) }, `in: ${name}`, `in_${name}`); }
-  output(name: string, type: Type, from: string, port: string): void { const id = this.n('group.out', { name, type, unit: '' }, `out: ${name}`, `out_${name}`); this.w(from, port, id, 'value'); }
-  w(from: string, out: string, to: string, inp: string): void { wire(this.b, from, out, to, inp); }
-  /** An operation on blocks wired in: [node, port] each into its input. */
-  op(id: string, blockId: string, set: Record<string, unknown>, label: string, ins: Record<string, string | string[]>): string {
-    this.n(blockId, set, label, id);
-    for (const [inp, from] of Object.entries(ins)) for (const f of Array.isArray(from) ? from : [from]) { const [nd, port] = f.includes('.') ? f.split('.') as [string, string] : [f, 'block']; this.w(nd, port, id, inp); }
-    return id;
-  }
-  outs(from: string): void { this.output('block', 'block', from, 'block'); this.output('thing', 'assembly', from, 'thing'); this.output('pieces', 'integer', from, 'pieces'); this.output('offers', 'list<text>' as Type, from, 'offers'); this.output('says', 'text', from, 'says'); }
-  /** One of several builds by a choice wired from an input: its block, its thing and what it says, each picked. */
-  picked(choice: string, label: string, builds: Record<string, string>): void {
-    const options = Object.keys(builds).join('|');
-    for (const [port, type] of [['block', 'block'], ['thing', 'assembly'], ['pieces', 'integer'], ['offers', 'list<text>'], ['says', 'text']] as const) {
-      const id = this.op(`pick_${port}`, 'pick', { options }, port === 'block' ? label : `${label}: its ${port}`, Object.fromEntries(Object.entries(builds).map(([k, n]) => [k, `${n}.${port}`])));
-      this.w(choice, 'value', id, 'which'); this.output(port, type as Type, id, 'chosen');
-    }
-  }
-  save(id: string, name: string, says: string, gloss: string, domains = ['mechanical']): BlockDef {
-    layOut(this.b); const d = groupBlock(this.b, { id, name, says, domains, by: 'built in', spec: { gloss, discipline: 'mechanical.design.cad', role: 'geometry operation', codes: [{ scheme: 'MSC2020', code: '68U07', label: 'Computer science aspects of computer-aided design' }] } }); register(d); return d;
-  }
-}
-function layOut(b: Board): void {
-  const e = new Engine(b), col = new Map<string, number>(), rows = new Map<number, number>();
-  for (const id of e.sequence) col.set(id, Math.max(0, ...e.wiresInto(id).map((w) => (col.get(w.from) ?? 0) + 1)));
-  for (const id of e.sequence) { const c = col.get(id)!, r = rows.get(c) ?? 0; rows.set(c, r + 1); b.nodes[id]!.x = c * 330; b.nodes[id]!.y = r * 200; }
-}
 
 
 // (P3, AUDIT 5.2: a disc with no bore, which over bores to its spline at the clear fit, as robots.ts's horn; before, a
@@ -238,15 +202,24 @@ function toyCar(): void {
   s.save('seed.toy-car', 'Toy car', 'A toy car (sizes typical of 1:32): an ABS body 120 × 25 × 55 on an axle with a Ø28 wheel over each end (a clear fit: they turn)', 'A toy car: body, axle, two wheels, as one node', ['mechanical', 'everyday']);
 }
 function modelRocket(): void {
-  // (a model rocket, sizes typical of an Estes-class kit: a Ø25 × 300 body tube, a nose cone, three fins in a ring and an engine mount tube at the tail)
-  const s = new Asm('A model rocket');
-  s.n('room.make', { name: 'rocket body', shape: 'tube', mat: 'cardboard', a: 11.5, b: 12.5, c: 300 }, 'The body tube, Ø25 × 300', 'body');
-  s.n('piece.nosecone', {}, 'The nose cone', 'nose');
+  // (a model rocket, sizes typical of an Estes-class kit: a Ø25 × 300 body tube, a nose cone, three fins in a ring and an engine mount tube at the tail.
+  // Wave 13: each fin stacked flush against the tube's side at its tail (a stack along x at the touch fit, on the tube's
+  // axis, flush with its low end), the tube turned a third of a turn about its axis between fins, so each fin's root is
+  // joined to the tube by the face the stack writes; before, the fins were a ring under the tube's end and only one met it.
+  // The tube's outside the smallest nose cone's base (piece.nosecone 'rocket 29 mm', Ø29: machine.ts CONES, typical), its
+  // wall 1 mm as before, so the cone's base ring stands on the tube's end; before, a Ø54 cone on a Ø25 tube)
+  const s = new Asm('A model rocket'), n = 3;
+  s.n('room.make', { name: 'rocket body', shape: 'tube', mat: 'cardboard', a: 13.5, b: 14.5, c: 300 }, 'The body tube, Ø29 × 300', 'body');
+  s.n('piece.nosecone', { size: 'rocket 29 mm' }, 'The nose cone, Ø29', 'nose');
   s.n('room.make', { name: 'rocket fin', shape: 'box', mat: 'wood', a: 40, b: 60, c: 2 }, 'A fin (balsa class), 40 × 60 × 2', 'fin');
-  s.op('fins', 'room.ring', { name: 'rocket fins', n: 3, R: 26, fit: 'clear', out: 'yes' }, 'Three fins, turned out', { block: 'fin' });
-  s.op('all', 'room.stack', { name: 'model rocket', axis: 'y', fit: 'touch', order: 'fins, body, nose' }, 'Fins, body, nose', { blocks: ['fins', 'body', 'nose'] });
+  let on = 'body';
+  for (let k = 0; k < n; k++) {
+    s.op(`fin${k}`, 'room.stack', { name: 'rocket body', axis: 'x', fit: 'touch', align: 'rocket body/axis', end: 'lo,mid', order: `${on}, fin` }, `Fin ${k + 1} flush on the tube's side, at its tail`, { blocks: [on, 'fin'] });
+    on = `fin${k}`; if (k + 1 < n) on = s.op(`turn${k}`, 'room.turn', { axis: 'y', degrees: 360 / n }, 'Turned a third of a turn about the tube\'s axis', { block: on });
+  }
+  s.op('all', 'room.stack', { name: 'model rocket', axis: 'y', fit: 'touch', align: 'rocket body/axis', order: `${on}, nose` }, 'The nose on the finned body, on the tube\'s axis', { blocks: [on, 'nose'] });
   s.outs('all');
-  s.save('seed.model-rocket', 'Model rocket', 'A model rocket (sizes typical of a hobby kit): a Ø25 × 300 cardboard body tube, a nose cone and three fins in a ring at the tail', 'A model rocket: tube, nose, three fins, as one node', ['mechanical', 'aerospace', 'everyday']);
+  s.save('seed.model-rocket', 'Model rocket', 'A model rocket (sizes typical of a hobby kit): a Ø29 × 300 cardboard body tube, a Ø29 nose cone on its end and three fins flush on its side at the tail, a third of a turn apart', 'A model rocket: tube, nose, three fins, as one node', ['mechanical', 'aerospace', 'everyday']);
 }
 function catapult(): void {
   // (a tabletop catapult, sizes typical: a 300 × 200 × 20 wooden base, two 150 mm uprights, a Ø10 pivot rod through them, an arm tube over the pivot (a clear fit: it swings) and a cup)

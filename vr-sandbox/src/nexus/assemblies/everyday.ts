@@ -6,47 +6,8 @@
 // or labelled typical. Each says what it offers next. Where a piece should move (a door's leaf, a wheel), it goes over its
 // pin or axle with a clear fit: the joint motionOf reads. Loaded by one import in seeds.ts.
 
-import { register, type BlockDef, type Type } from '../blocks';
-import { Engine, emptyBoard, groupBlock, placeBlock, wire } from '../dataflow';
-import type { Board } from '../boards';
+import { Fold } from './board';
 
-const SPEC = { discipline: 'mechanical.design.cad', role: 'geometry operation' as const, codes: [{ scheme: 'MSC2020' as const, code: '68U07', label: 'Computer science aspects of computer-aided design' }] };
-
-/** A board being built a node at a time and saved as one block (as machines.ts builds its assemblies). */
-class Fold {
-  readonly b: Board; private k = 0;
-  constructor(title: string) { this.b = emptyBoard(title); }
-  n(blockId: string, set: Record<string, unknown>, label: string, id = `n${this.k++}`): string { placeBlock(this.b, blockId, 0, 0, set, id); this.b.nodes[id]!.label = label; return id; }
-  /** A setting of the block: its name, type, default, what it is, and the inner settings it sets ("node.setting; ..."). */
-  set(name: string, type: Type, def: unknown, says: string, into: string, choices?: string[]): void { this.n('group.in', { name, type, unit: '', default: String(def), choices: (choices ?? []).join('|'), says, into }, `in: ${name}`); }
-  /** A setting that goes in along a wire (a folded block's own settings are its inputs). */
-  feed(name: string, def: unknown, says: string, to: [string, string][]): void { const id = this.n('group.in', { name, type: 'number', unit: '', default: String(def), choices: '', says }, `in: ${name}`); for (const [n, i] of to) wire(this.b, id, 'value', n, i); }
-  out(name: string, type: Type, from: string, port: string): void { const id = this.n('group.out', { name, type, unit: '' }, `out: ${name}`); wire(this.b, from, port, id, 'value'); }
-  /** The node `id` of block `blk`, fed by blocks into input `inp` (a many input takes them in the order of the list). */
-  op(id: string, blk: string, set: Record<string, unknown>, label: string, ins: Record<string, string | string[]>): string {
-    // (a stack's order is by its sources' names: a block that goes in twice goes in the second time as the same block
-    // passed on (turned by nothing), so each place in the order has a name of its own)
-    if (blk === 'room.stack' && Array.isArray(ins.blocks)) { const seen = new Map<string, number>();
-      ins = { ...ins, blocks: ins.blocks.map((f) => { const k = seen.get(f) ?? 0; seen.set(f, k + 1); return k ? this.op(`${id}_${f}${k}`, 'room.turn', { axis: 'y', degrees: 0 }, 'The same again', { block: f }) : f; }) };
-      set = { ...set, order: (ins.blocks as string[]).join(',') }; }
-    this.n(blk, set, label, id); for (const [inp, from] of Object.entries(ins)) for (const f of [from].flat()) wire(this.b, f, 'block', id, inp); return id; }
-  /** A block turned about an axis (a quarter turn unless said). */
-  turn(id: string, from: string, axis: 'x' | 'y' | 'z', label: string, degrees = 90): string { return this.op(id, 'room.turn', { axis, degrees }, label, { block: from }); }
-  /** A board made a post or a stile: timber's length (z) stood up, its thickness across (x), its width deep (z). */
-  stand(id: string, from: string, label: string): string { return this.turn(id, this.turn(`${id}_e`, from, 'z', `${label}: on its edge`), 'x', label); }
-  /** A board laid across: timber's length along x, its thickness up, its width deep. */
-  across(id: string, from: string, label: string): string { return this.turn(id, from, 'y', label); }
-  save(id: string, name: string, says: string, domains: string[], gloss: string, last: string): BlockDef {
-    this.out('block', 'block', last, 'block'); this.out('thing', 'assembly', last, 'thing'); this.out('pieces', 'integer', last, 'pieces'); this.out('offers', 'list<text>' as Type, last, 'offers'); this.out('says', 'text', last, 'says');
-    layOut(this.b);
-    const d = groupBlock(this.b, { id, name, says, domains, by: 'built in', spec: { gloss, ...SPEC } }); register(d); return d;
-  }
-}
-function layOut(b: Board): void {
-  const e = new Engine(b), col = new Map<string, number>(), rows = new Map<number, number>();
-  for (const id of e.sequence) col.set(id, Math.max(0, ...e.wiresInto(id).map((w) => (col.get(w.from) ?? 0) + 1)));
-  for (const id of e.sequence) { const c = col.get(id)!, r = rows.get(c) ?? 0; rows.set(c, r + 1); b.nodes[id]!.x = c * 330; b.nodes[id]!.y = r * 200; }
-}
 /** A road wheel: a rim (a tube round its bore) with its tyre over it, a tight fit; it goes over an axle by its bore. */
 // (P3, AUDIT 5.2: the rim a disc drawn with no bore, which the axle it goes over bores to its fit, as vehicles.ts's road
 // wheel; before, a bore 1 mm wider than its axle all round, which over writes no face for at the clear fit, so the wheel

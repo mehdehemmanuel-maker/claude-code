@@ -9,46 +9,8 @@
 // labelled typical. Loaded by one import in seeds.ts; it needs only blocks.ts's pieces and operations, and its own blocks
 // in the order below (the gripper before the arm).
 
-import { register, type BlockDef, type Type } from '../blocks';
-import { Engine, emptyBoard, groupBlock, placeBlock, wire } from '../dataflow';
-import type { Board } from '../boards';
+import { Asm, SERVOS, SHORT } from './board';
 
-const SERVOS = ['SG90', 'MG90S', 'MG996R', 'standard'];
-
-/** A board being built a node at a time, saved as a library block (as seeds.ts's seeds are). */
-class Asm {
-  readonly b: Board; private k = 0;
-  constructor(title: string) { this.b = emptyBoard(title); }
-  n(blockId: string, set: Record<string, unknown>, label: string, id = `n${this.k++}`): string { placeBlock(this.b, blockId, 0, 0, set, id); this.b.nodes[id]!.label = label; return id; }
-  /** An input: bound to inner settings (`into`, "node.setting; …") or, with none, a value wired on. */
-  input(name: string, type: Type, def: unknown, says: string, choices: string[] = [], into = ''): string { return this.n('group.in', { name, type, unit: '', default: String(def), choices: choices.join('|'), says, ...(into ? { into } : {}) }, `in: ${name}`, `in_${name}`); }
-  output(name: string, type: Type, from: string, port: string): void { const id = this.n('group.out', { name, type, unit: '' }, `out: ${name}`, `out_${name}`); this.w(from, port, id, 'value'); }
-  w(from: string, out: string, to: string, inp: string): void { wire(this.b, from, out, to, inp); }
-  /** An operation on blocks wired in: [node, port] each into its input. */
-  op(id: string, blockId: string, set: Record<string, unknown>, label: string, ins: Record<string, string | string[]>): string {
-    this.n(blockId, set, label, id);
-    for (const [inp, from] of Object.entries(ins)) for (const f of Array.isArray(from) ? from : [from]) { const [nd, port] = f.includes('.') ? f.split('.') as [string, string] : [f, 'block']; this.w(nd, port, id, inp); }
-    return id;
-  }
-  /** The block, the drawn thing and what it says, from a node giving all three. */
-  outs(from: string): void { this.output('block', 'block', from, 'block'); this.output('thing', 'assembly', from, 'thing'); this.output('says', 'text', from, 'says'); }
-  /** One of several builds by a choice wired from an input: its block, its thing and what it says, each picked. */
-  picked(choice: string, label: string, builds: Record<string, string>): void {
-    const options = Object.keys(builds).join('|');
-    for (const [port, type] of [['block', 'block'], ['thing', 'assembly'], ['says', 'text']] as const) {
-      const id = this.op(`pick_${port}`, 'pick', { options }, port === 'block' ? label : `${label}: its ${port}`, Object.fromEntries(Object.entries(builds).map(([k, n]) => [k, `${n}.${port}`])));
-      this.w(choice, 'value', id, 'which'); this.output(port, type, id, 'chosen');
-    }
-  }
-  save(id: string, name: string, says: string, gloss: string, domains = ['mechanical', 'electrical']): BlockDef {
-    layOut(this.b); const d = groupBlock(this.b, { id, name, says, domains, by: 'built in', spec: { gloss, discipline: 'mechanical.design.cad', role: 'geometry operation', codes: [{ scheme: 'MSC2020', code: '68U07', label: 'Computer science aspects of computer-aided design' }] } }); register(d); return d;
-  }
-}
-function layOut(b: Board): void {
-  const e = new Engine(b), col = new Map<string, number>(), rows = new Map<number, number>();
-  for (const id of e.sequence) col.set(id, Math.max(0, ...e.wiresInto(id).map((w) => (col.get(w.from) ?? 0) + 1)));
-  for (const id of e.sequence) { const c = col.get(id)!, r = rows.get(c) ?? 0; rows.set(c, r + 1); b.nodes[id]!.x = c * 330; b.nodes[id]!.y = r * 200; }
-}
 /** A servo's horn: a round disc horn over its spline, a clear fit (the joint), 20 mm across, 3 mm thick (typical of the
  *  disc horns sold with micro servos). Drawn as a disc with no bore: over bores it to the spline it goes on with the clear
  *  fit's gap (a horn's splined bore is made to its servo's spline; its teeth not drawn), so a micro servo's 4.8 mm spline
@@ -62,7 +24,7 @@ function gripper(): void {
   // tool flange), the jaw servo standing on it, its horn over its spline (the joint), a palm on the horn, two fingers
   // standing on the palm as a ring of two, the jaw open between them. The linkage from the horn to the fingers is not
   // drawn (a finger sliding is not an operation yet): the fingers stand at the opening set)
-  const s = new Asm('A gripper');
+  const s = new Asm('A gripper', SHORT, ['mechanical', 'electrical']);
   s.input('servo', 'text', 'SG90', 'the jaw servo, by its model', SERVOS, 'servo.size');
   s.input('R', 'number', 14, 'each finger\'s middle from the jaw\'s, mm: the opening between them is twice it less a finger\'s 5 mm', [], 'fingers.R');
   s.input('finger', 'number', 30, 'the fingers\' length, mm', [], 'finger.b');
@@ -90,7 +52,7 @@ function robotArm(): void {
   // servo's foot past its top, the next servo standing on the link's top; a wrist roll (a servo standing, its horn up)
   // for the fifth; a tool flange on the last horn or link and the gripper on it. Its three arms (3, 4 and 5 joints) are
   // each built and one picked by `joints`. Drawn standing straight up (every joint at its zero))
-  const s = new Asm('A robot arm');
+  const s = new Asm('A robot arm', SHORT, ['mechanical', 'electrical']);
   const joints = s.input('joints', 'text', '4', 'how many joints: 3 (base, shoulder, elbow), 4 (and a wrist pitch) or 5 (and a wrist roll)', ['3', '4', '5']);
   s.input('link', 'number', 60, 'each link plate\'s length, mm', [], 'link.b');
   s.input('servo', 'text', 'SG90', 'the servos, by their model', SERVOS, 'yaw.size; pitch.size; roll.size');
@@ -136,7 +98,7 @@ function panTilt(): void {
   // the horn, the tilt servo stood on its end on the bracket, its horn over its spline (tilt, about a level line), a camera
   // plate against the horn and a camera module on it: the Raspberry Pi Camera Module 2's board, 25 × 23.86 × 9 mm
   // overall (raspberrypi.com, its mechanical drawing), drawn as its board and its lens)
-  const s = new Asm('A pan-tilt head');
+  const s = new Asm('A pan-tilt head', SHORT, ['mechanical', 'electrical']);
   s.input('servo', 'text', 'SG90', 'the two servos, by their model', SERVOS, 'pan.size; tilt.size');
   s.n('piece.plate', { name: 'pan-tilt mount', mat: 'al-6061', w: 50, t: 3, d: 40, holes: '-20,-15; 20,-15; -20,15; 20,15', hole: 3.2 }, 'Its mount plate (aluminium), four M3 holes', 'base');
   s.n('piece.servo', { size: 'SG90' }, 'The pan servo, standing', 'pan');
@@ -166,7 +128,7 @@ function wheeledBase(): void {
   // (gear motors laid across, a wheel over each output shaft (a clear fit: the wheel's joint), two back to back for an axle;
   // two-wheel drive: one axle and a castor in front; four-wheel: two axles; a deck on the motors between the wheels and a
   // mount plate on the deck. Gear motors and wheels by their families (typical sizes); the deck acrylic, 3 mm)
-  const s = new Asm('A wheeled base');
+  const s = new Asm('A wheeled base', SHORT, ['mechanical', 'electrical']);
   const drive = s.input('drive', 'text', '2WD', 'two wheels driven and a castor, or four driven', ['2WD', '4WD']);
   s.input('motor', 'text', 'JGA25', 'the gear motors, by their frame', ['N20', 'JGA25', '37GB'], 'motor.size');
   s.input('wheel', 'text', '75', 'the wheels, by their diameter, mm', ['40', '50', '60', '65', '75', '80', '100', '125'], 'wheel.size');
@@ -215,7 +177,7 @@ function quadcopter(): void {
   // its stator, the bell made round the stator, a shaft along its axis, each shaft named for its arm); the arms against
   // the hub's four sides, all on the ground; a prop over each shaft, a clear fit (the joint), last, so nothing is laid
   // against a prop's sweep; the mount plate for a payload under it all)
-  const s = new Asm('A quadcopter');
+  const s = new Asm('A quadcopter', SHORT, ['mechanical', 'electrical']);
   const size = s.input('size', 'text', '250', 'the frame\'s class, by its motor-to-motor diagonal, mm', Object.keys(FRAMES));
   s.input('stack', 'number', 8, 'the flight board\'s standoffs, mm', [], Object.keys(FRAMES).map((k) => `fso${k}.length`).join('; '));
   for (const [k, f] of Object.entries(FRAMES)) {

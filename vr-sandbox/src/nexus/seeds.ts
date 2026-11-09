@@ -4,9 +4,7 @@
 // model from a picture) were deleted with the old builds (decision 0021, the user: "get rid of the old builds"); what is
 // built now is put together by the operations of room.ts. This file also loads the library's other modules.
 
-import { register, type BlockDef, type Type } from './blocks';
-import { Engine, emptyBoard, groupBlock, placeBlock, wire } from './dataflow';
-import type { Board } from './boards';
+import { Seed } from './assemblies/board';
 import { SPRING_WIRES } from '../engineering/springs';
 import './genai';
 import './compiler';
@@ -19,35 +17,6 @@ import './assemblies/things';
 import './assemblies/everyday';
 import './assemblies/vehicles';
 import './assemblies/robots2';
-
-/** A board being built, a node at a time, and saved as a seed. */
-class Seed {
-  readonly b: Board; private k = 0;
-  constructor(title: string) { this.b = emptyBoard(title); }
-  /** A node of a block, with its settings; and a label to read it by. */
-  n(blockId: string, set: Record<string, unknown> = {}, label?: string, id = `n${this.k++}`): string { placeBlock(this.b, blockId, 0, 0, set, id); if (label) this.b.nodes[id]!.label = label; return id; }
-  /** One of the seed's inputs: its name, type, value when not given, and the choices it may be picked from; `into`, the
-   *  inner settings it sets ("node.setting; node.setting"), where it sets settings rather than feeding a wire (NC5). */
-  input(name: string, type: Type, def: unknown, says: string, choices?: string[], unit = '', into = ''): string { return this.n('group.in', { name, type, unit, default: String(def), choices: (choices ?? []).join('|'), says, ...(into ? { into } : {}) }, `in: ${name}`); }
-  output(name: string, type: Type, from: string, port: string, unit = ''): void { const id = this.n('group.out', { name, type, unit }, `out: ${name}`); this.w(from, port, id, 'value'); }
-  w(from: string, out: string, to: string, inp: string): void { wire(this.b, from, out, to, inp); }
-  /** A formula over named wires: { name: [node, port] }. */
-  f(expr: string, ins: Record<string, [string, string]>, label?: string): string { const id = this.n('math.expr', { expr }, label ?? expr); for (const [k, [from, port]] of Object.entries(ins)) this.w(from, port, id, k); return id; }
-  /** Things as one, each where it is. */
-  all(name: string, things: [string, string][]): string { const id = this.n('combine', { name }, name); for (const [n, p] of things) this.w(n, p, id, 'things'); return id; }
-  /** Saved to the library under its id: laid out to be read, its inputs and outputs its own. */
-  save(id: string, name: string, says: string, domains: string[], spec?: BlockDef['spec']): BlockDef {
-    layOut(this.b);
-    const d = groupBlock(this.b, { id, name, says, domains, by: 'built in', ...(spec ? { spec } : {}) });
-    register(d); return d;
-  }
-}
-/** Columns by how far each node is from where its values start, so a seed opened reads left to right. */
-function layOut(b: Board): void {
-  const e = new Engine(b), col = new Map<string, number>(), rows = new Map<number, number>();
-  for (const id of e.sequence) col.set(id, Math.max(0, ...e.wiresInto(id).map((w) => (col.get(w.from) ?? 0) + 1)));
-  for (const id of e.sequence) { const c = col.get(id)!, r = rows.get(c) ?? 0; rows.set(c, r + 1); b.nodes[id]!.x = c * 330; b.nodes[id]!.y = r * 200; }
-}
 
 // ---- a window, a door --------------------------------------------------------------------------------------------------
 function springChecked(): void {

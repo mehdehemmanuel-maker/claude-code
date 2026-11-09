@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 import { flatten, isPart, massOfAll, type Assembly } from './assembly';
-import { densityKg, massOf } from './mass';
+import { densityKg, drawnMassOf, massOf, massSaid } from './mass';
 import { shapeBox } from './make/space';
 import { matterOf, type Evidence } from './matter';
 import type { Part, Shape } from './kits';
@@ -18,8 +18,10 @@ import type { Part, Shape } from './kits';
 type V3 = [number, number, number];
 type M3 = [V3, V3, V3];
 
-/** One piece as placed: its mass, where its centre is, its own inertia about its centre (in the thing's frame). */
-export interface Piece { name: string; mat: string | null; mass: number; centre: V3; inertia: M3; volume: number; exactInertia: boolean }
+/** One piece as placed: its mass, where its centre is, its own inertia about its centre (in the thing's frame); where it
+ *  is drawn as an envelope (AUDIT 4C), where its mass is from (its row's), or that it is unknown (drawn as a solid box),
+ *  so what reads it is told so, never given a box's mass silently. */
+export interface Piece { name: string; mat: string | null; mass: number; centre: V3; inertia: M3; volume: number; exactInertia: boolean; massFrom?: string; massUnknown?: string }
 
 /** A piece's inertia about its own centre, in its own frame: exact for a box, a solid cylinder and a ball; any other
  *  shape as the uniform box round it (an estimate, said). */
@@ -37,16 +39,18 @@ function ownInertia(s: Shape, m: number): { I: V3; exact: boolean } {
 export function piecesOf(t: Part | Assembly): { pieces: Piece[]; unplaced: { name: string; mass: number }[] } {
   const pieces: Piece[] = [];
   flatten(t, (f) => {
-    const leaf = f.leaf, mat = f.over.mat ?? leaf.mat ?? null, own = massOf({ ...leaf, parts: [] });
+    const leaf = f.leaf, mat = f.over.mat ?? leaf.mat ?? null, own = massOf({ ...leaf, parts: [] }), said = leaf.kg === undefined ? massSaid(leaf) : undefined;
     const rho = leaf.mat ? densityKg(leaf.mat) : undefined, rhoNew = f.over.mat ? densityKg(f.over.mat) : undefined;
-    const det = Math.abs(f.m.determinant()), mass = (rho && rhoNew ? (own * rhoNew) / rho : own) * det;
+    // (a mass said as its row's is the thing's whatever it is drawn of: a material changed over it does not scale it)
+    const det = Math.abs(f.m.determinant()), mass = (rho && rhoNew && !(said && 'kg' in said) ? (own * rhoNew) / rho : own) * det;
     const pos = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3(); f.m.decompose(pos, q, sc);
     const b = leaf.shape ? shapeBox(leaf.shape) : null, c = b ? b.getCenter(new THREE.Vector3()).applyMatrix4(f.m) : pos;
     // its own inertia, scaled as it is placed, turned into the thing's frame: R diag(I) Rᵀ
     const own3 = leaf.shape ? ownInertia(leaf.shape, mass) : { I: [0, 0, 0] as V3, exact: false }, s2 = (sc.x * sc.y * sc.z) ** (2 / 3);
     const R = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationFromQuaternion(q)).elements, I: M3 = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
     for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { let v = 0; for (let k = 0; k < 3; k++) v += R[k * 3 + i]! * own3.I[k]! * s2 * R[k * 3 + j]!; I[i]![j] = v; }
-    pieces.push({ name: leaf.name, mat, mass, centre: [c.x, c.y, c.z], inertia: I, volume: rho ? (own / rho) * det : 0, exactInertia: own3.exact && Math.abs(sc.x - sc.y) < 1e-9 && Math.abs(sc.y - sc.z) < 1e-9 });
+    pieces.push({ name: leaf.name, mat, mass, centre: [c.x, c.y, c.z], inertia: I, volume: rho ? ((said && 'kg' in said ? drawnMassOf({ ...leaf, parts: [] }) : own) / rho) * det : 0, exactInertia: own3.exact && Math.abs(sc.x - sc.y) < 1e-9 && Math.abs(sc.y - sc.z) < 1e-9,
+      ...(said ? ('kg' in said ? { massFrom: said.from } : { massUnknown: said.unknown }) : {}) });
   });
   const unplaced: { name: string; mass: number }[] = [];
   const unseen = (p: Part) => { if (!p.shape && p.kg !== undefined) unplaced.push({ name: p.name, mass: p.kg }); for (const c of p.parts ?? []) unseen(c); };
@@ -68,6 +72,9 @@ export interface MassProperties {
   exactShare: number;
   /** Σ m c over the pieces whose material's specific heat is known, J/K; and the share of the mass that covers. */
   heatCapacity: number; heatCovered: number;
+  /** Of the mass, how much is of pieces whose mass is unknown, weighed as the solid boxes they are drawn as (envelopes
+   *  whose rows give no mass), and what is said of them; and how much is an envelope's row's (AUDIT 4C). */
+  unknownMass: number; unknown: string[]; rowMass: number;
 }
 
 /** What follows from a thing's pieces: its mass, centre, inertia, heat capacity, nothing counted twice. */
@@ -80,7 +87,8 @@ export function massProperties(t: Part | Assembly): MassProperties {
   for (const p of pieces) { const d = [p.centre[0] - c[0], p.centre[1] - c[1], p.centre[2] - c[2]], d2 = d[0]! ** 2 + d[1]! ** 2 + d[2]! ** 2; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) I[i]![j]! += p.inertia[i]![j]! + p.mass * ((i === j ? d2 : 0) - d[i]! * d[j]!); }
   let heat = 0, covered = 0; const cOf = new Map<string, number | null>();
   for (const p of pieces) { if (!p.mat) continue; if (!cOf.has(p.mat)) cOf.set(p.mat, matterOf(p.mat).props.find((x) => x.key === 'c')?.value ?? null); const cv = cOf.get(p.mat); if (cv) { heat += p.mass * cv; covered += p.mass; } }
-  return { mass: placedMass + unplacedMass, placedMass, unplacedMass, centre: c, inertia: I, principal: eigenSym(I), exactShare: placedMass ? pieces.filter((p) => p.exactInertia).reduce((a, p) => a + p.mass, 0) / placedMass : 0, heatCapacity: heat, heatCovered: placedMass + unplacedMass ? covered / (placedMass + unplacedMass) : 0 };
+  const unknownOf = pieces.filter((p) => p.massUnknown), unknownMass = unknownOf.reduce((a, p) => a + p.mass, 0), rowMass = pieces.filter((p) => p.massFrom).reduce((a, p) => a + p.mass, 0);
+  return { unknownMass, unknown: [...new Set(unknownOf.map((p) => p.massUnknown!))], rowMass, mass: placedMass + unplacedMass, placedMass, unplacedMass, centre: c, inertia: I, principal: eigenSym(I), exactShare: placedMass ? pieces.filter((p) => p.exactInertia).reduce((a, p) => a + p.mass, 0) / placedMass : 0, heatCapacity: heat, heatCovered: placedMass + unplacedMass ? covered / (placedMass + unplacedMass) : 0 };
 }
 /** The eigenvalues of a symmetric 3 × 3 matrix, least first (Jacobi). */
 function eigenSym(A: M3): V3 {
@@ -127,6 +135,7 @@ export function madeOf(t: Part | Assembly, depth = 6): MadeOf {
   if (weightless) unknown.push(`${weightless} pieces are of materials with no density (${[...weightlessMats].join(', ')}): they weigh nothing here`);
   const vague = materials.filter((m) => !m.specified);
   if (vague.length) unknown.push(`${vague.length} materials are known only by their family (${vague.slice(0, 8).map((m) => m.mat).join(', ')}${vague.length > 8 ? ', …' : ''}): ${(100 * vague.reduce((a, m) => a + m.share, 0)).toFixed(1)} % of the mass`);
+  const boxes = pieces.filter((p) => p.massUnknown); if (boxes.length) unknown.push(`${boxes.length} pieces (${boxes.reduce((a, p) => a + p.mass, 0).toPrecision(3)} kg) are envelopes whose rows give no mass: their mass unknown, weighed as the solid boxes they are drawn as`);
   if (unplaced.length) unknown.push(`${unplaced.length} masses are stated, not worked out from a shape and a material (${unplaced.slice(0, 5).map((u) => u.name).join(', ')}${unplaced.length > 5 ? ', …' : ''}): ${unplaced.reduce((a, u) => a + u.mass, 0).toPrecision(3)} kg`);
   // the thing's own tree, a level at a time: an assembly's items (each thing once, with how many times it is placed), a
   // part's own piece and its parts

@@ -1,6 +1,6 @@
 # The node library
 
-Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 1225 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
+Generated from the library (`libraryCatalogue()` in `src/nexus/blocks.ts`); `tests/nexus/docs.ts` fails if it is out of date (write it again with `UPDATE_NODES=1 npx vitest run tests/nexus/docs.ts`). 1222 nodes, on 11 shelves in the order a board runs; a node's shelf is read from what it is (`stageOf`), never filed by hand.
 
 ## Fields and the disciplines they reach
 
@@ -35,16 +35,16 @@ What each node's own contribution rests on, read from what it is (src/nexus/evid
 | exact | 84 | holds exactly: a definition, geometry, counting |
 | measured | 1 | read from a measurement (a die traced, a test run) |
 | specified | 4 | a standard's, a maker's or a reference table's figure |
-| derived | 344 | worked out from what it is given by laws that hold here; no weaker than its inputs |
+| derived | 343 | worked out from what it is given by laws that hold here; no weaker than its inputs |
 | given | 13 | set by whoever made the board |
 | empirical | 47 | a fit to measurements, or a material's own behaviour: holds over the range it was fitted to |
 | estimated | 6 | typical values or an estimate, said so |
 | simplified | 39 | a model that leaves things out (a perception model, a rigid-body simulation, an approximation) |
-| hypothetical | 687 | a design or a guess: what something would be, not a measurement of a thing that is |
+| hypothetical | 685 | a design or a guess: what something would be, not a measurement of a thing that is |
 
-Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 1111 tested here (their own tests: that they do what they say, not that the world does); 104 untested; none validated against experiment.
+Checked: 10 compared with an independent reference (laws the rest of the book reaches another way, agreeing); 1108 tested here (their own tests: that they do what they say, not that the world does); 104 untested; none validated against experiment.
 
-Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 128 of 1225 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
+Built before the update of 2026-10-28 (laws with their units, evidence and ±, materials down to their elements): 125 of 1222 (dated in src/nexus/built.ts from git): their tests may be flawed, and each is to be re-checked against it; marked *before the update* below.
 
 ## 1 · Start: values and inputs (15)
 
@@ -66,7 +66,7 @@ Numbers, text, lists, tables, the clock, cards of materials and parts: what a bo
 - **Yes / no** (`in.toggle`): A switch you flip: yes or no, carried on a wire to whatever decides by it *given, tested here, before the update*
 - **ZenRows: read a web page** (`api.zenrows`): A web page fetched through ZenRows (ZENROWS_API_KEY under Node): its scripts run where asked, its words back as Markdown or its HTML as it is. *given, untested*
 
-## 2 · Make: shapes, parts, things (135)
+## 2 · Make: shapes, parts, things (133)
 
 Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car), bodies, lines.
 
@@ -108,7 +108,6 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Drill press** (`seed.drill-press`): A bench drill press (sizes typical, rough): a Ø70 column up through the head's hole, the head on its top with a Ø20 spindle hanging under its front and a chuck on the spindle's end, a round cast table with its collar … *hypothetical, untested*
 - **Drone with a camera gimbal** (`seed.gimbal-drone`): A drone with a camera gimbal (sizes typical): the quadcopter (seed.quadcopter) with a yaw servo under it, a yoke, a pitch servo and the camera (seed.camera) at the bottom *hypothetical, untested*
 - **Excavator** (`seed.excavator`): A mini excavator (sizes typical of the 3 t class, rough): two tracks (boxes), an undercarriage, a slewing post with the body's ring over it (clear: it slews), a box body with a cab shell on it, and an arm off the … *hypothetical, untested*
-- **Extrude** (`shape.extrude`): A profile drawn in x and y (mm), pushed out along z to a length: a bracket, a beam, a plate of any outline *hypothetical, tested here, before the update*
 - **fal.ai: draw from words (FLUX)** (`api.fal.draw`): Words sent to fal.ai's FLUX models (FAL_KEY under Node), a picture back; an account with no credit is said as fal says it *hypothetical, untested*
 - **Fence (posts, rails, boards)** (`seed.fence`): A close-board fence bay (sizes typical of a UK 6 ft bay): twelve PAR 21 × 144 boards edge to edge, a C24 47 × 100 rail on edge behind them at the bottom and at the top, and a C24 100 × 100 post at each end, all on the … *hypothetical, untested*
 - **Fillet (exact)** (`solid.fillet`): Edges of a block's exact solid rounded by OpenCascade to a radius (the edges a selector picks: all, those of a face of its bound, the rims round a line it offers, those longer or shorter than a length, those along an … *hypothetical, tested here*
@@ -141,7 +140,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Mesh gears** (`room.mesh`): A spur gear (and whatever it is on: its shaft) put beside the host's gear toward +x, -x, +y or -y, meshing: their axes parallel at m (z₁ + z₂) / 2 and the fit's gap (its backlash), faces level, turned about its axis … *derived, tested here*
 - **Microscope** (`seed.microscope`): A compound microscope (sizes typical): a cast-iron base, a Ø30 column, a stage plate, and a head (objective, body tube, eyepiece) *hypothetical, untested*
 - **Mirror (exact)** (`solid.mirror`): A block's exact solid mirrored in a plane (yz, xz or xy) through its bound's middle, the frame the room makes it about; its image alone, or joined to it *hypothetical, tested here*
-- **Model rocket** (`seed.model-rocket`): A model rocket (sizes typical of a hobby kit): a Ø25 × 300 cardboard body tube, a nose cone and three fins in a ring at the tail *hypothetical, untested*
+- **Model rocket** (`seed.model-rocket`): A model rocket (sizes typical of a hobby kit): a Ø29 × 300 cardboard body tube, a Ø29 nose cone on its end and three fins flush on its side at the tail, a third of a turn apart *hypothetical, untested*
 - **Monitor** (`seed.monitor`): A desktop monitor (24 in class, sizes typical): a base, a neck, a 540 × 320 panel with its glass *hypothetical, untested*
 - **Motorcycle** (`seed.motorcycle`): A naked motorcycle (sizes typical of a 650 twin, rough): two Ø600 disc wheels over Ø20 axles (they turn), a rectangle frame of Ø32 tubes, the engine envelope under it, a tank and a seat on it, a stem and 760 mm bar on … *hypothetical, untested*
 - **Offset (exact)** (`solid.offset`): A block's exact solid with every face moved out by a distance (in, below zero), its edges and corners rounded *hypothetical, tested here*
@@ -194,7 +193,6 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Truck** (`seed.truck`): A light truck (sizes typical of the 7.5 t class): a ladder chassis (two steel rails and a cross member), a stub axle out through each rail's axle holes and a wheel over each (a 17.5 in steel disc and a 215/75 R17.5 … *hypothetical, untested*
 - **Tube** (`shape.tube`): A straight tube along y: outside radius, wall and length *hypothetical, tested here, before the update*
 - **Turn** (`room.turn`): A whole block turned rigidly about its bound's middle, by any angle about x, y, z or a direction ("1,1,0"): a plate tilted, a pipe laid across. *derived, tested here*
-- **Turn (lathe)** (`shape.lathe`): A profile of radius and height (mm) spun about y: a propeller hub, a pulley, a knob, a vase *hypothetical, tested here, before the update*
 - **Turntable** (`seed.turntable`): A motorised turntable (sizes typical): a base plate (turntable base/holes) with an N20 gear motor under it, a Ø10 post and a platter over the post (a clear fit: it turns). *hypothetical, untested*
 - **Union (exact)** (`solid.union`): Two blocks' exact solids, as each is placed, joined by OpenCascade's Boolean operations; it weighs as the first block's material *hypothetical, tested here*
 - **Van** (`seed.van`): A panel van (sizes typical of a mid-size van, rough): a body shell 2 m wide, 1.9 m tall, 5 m long (its roof and doors not drawn) set on four Ø680 wheels over two axles (they turn) with a spine between. *hypothetical, untested*
@@ -206,7 +204,7 @@ Shapes, standard parts, makers by process, seeds (a door, a room, a house, a car
 - **Window (frame, sash, glazing)** (`seed.window`): A timber casement window (sizes typical): a 4 mm glass pane between a sash's two rails and two stiles (PAR 44 × 44), the sash between the frame's two jambs, the head on top and the sill under (PAR 44 × 69). *hypothetical, untested*
 - **XY gantry** (`seed.xy-gantry`): An XY gantry (a cross-slide stage): two lead-screw linear axes (seed.linear-axis) crossed, the Y axis laid between two 2020 T-slot frame rails with a cross rail at each end, an aluminium cross-slide plate over them … *hypothetical, untested*
 
-## 3 · Arrange and mate (597)
+## 3 · Arrange and mate (596)
 
 Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones and mates as numbers; proximity; routes.
 
@@ -460,7 +458,6 @@ Place, rows and grids, combine, variants; mate by faces, ports and shafts; zones
 - **Hitch receiver** (`piece.hitchreceiver`): A hitch receiver (typical; classes recalled): a square tube of its inside size and wall (or the solid shank that goes in one), its pin hole through both walls 60 mm from its end (`<size> receiver/pin`), laid along x … *hypothetical, tested here*
 - **Hob** (`piece.hob`): A hob by its width (30 to 90 cm; typical, recalled): its envelope, a flat glass-topped box lying in a worktop's cut-out; its zones and controls not drawn. *hypothetical, tested here*
 - **Hobby servo** (`piece.servo`): A hobby servo by its model (SG90, MG90S, MG996R, a standard size; vendor figures, typical): its case below its tabs, the tabs with their two holes, its case above, its output spline (toothed) off the middle toward one … *hypothetical, tested here*
-- **Hole** (`hole`): A hole drilled into a part: its radius and depth, where it starts on the part and which way it goes in; with sides, a hex or square pocket. *derived, tested here, before the update*
 - **Hollow box** (`piece.case`): A box hollow inside and open at the top (a project box, a tray, a tank): its walls and floor round a box-shaped cavity, offered as a room for a board or a part to go into (Into a room); refused with both sizes where … *hypothetical, tested here*
 - **Horn cleat** (`piece.cleat`): A horn cleat by its length: its base (a block, bolted down) with its horn (a bar of the cleat's length) across its top. *hypothetical, tested here*
 - **Hose barb** (`piece.hosebarb`): A hose barb by the hose's bore (4 to 25 mm; its male end the thread sold for that hose, typical): its male end (the thread not drawn), its hex and its barbed tail (three teeth, turned), stacked. *hypothetical, tested here*

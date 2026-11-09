@@ -28,7 +28,7 @@ The phases' state is in the table below (rewritten 2026-11-06; it had said every
 | `QUESTIONS.md` | what only the user can decide, and what the research could not answer | as questions are answered |
 | `BOOK-OF-QUESTIONS.md` | the best questions Nexus must answer (171 of 2,244, cut 2026-11-01, decision 0010), grouped by the spec each bears on and tagged with the task it feeds | as questions are answered; a new round's questions are cut to the best before they stay |
 
-Every spec extends the owners named in `../CLAUDE.md`. Nothing here is a second owner.
+Every spec extends the owners named in `../docs/OWNERS.md` (its module map in `../CLAUDE.md`). Nothing here is a second owner.
 
 ## The vision, in one paragraph
 
@@ -107,7 +107,7 @@ connection needs the first and a civil vocabulary needs the second.
 2. **Contract**: write in the task what will change, which checks will prove it, and its budget (files, owner). A
    decision record if it reaches past its owner.
 3. **Build** within the budget. Two minutes on one run or three failed tries: stop and ask whether a pipeline is
-   missing (`../CLAUDE.md`).
+   missing (`../docs/CRITIC.md`, "When work is slow: step back").
 4. **Check**: the task's own check, the gate on the fields touched, then a **fresh evaluator** (an agent with no view of
    the builder's reasoning) reads the requirement and the result, drives the app (a screenshot, the walker as
    playtester), and passes or fails it. Only the evaluator moves a task to `passing`.

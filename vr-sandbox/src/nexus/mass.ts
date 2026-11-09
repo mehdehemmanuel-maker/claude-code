@@ -106,10 +106,28 @@ function turnedVolume(prof: [number, number][], upTo: number): number {
     const ra = r0 + ((r1 - r0) * (a - d0)) / (d1 - d0), rb = r0 + ((r1 - r0) * (b - d0)) / (d1 - d0); v += (Math.PI * (b - a) * (ra * ra + ra * rb + rb * rb)) / 3; }
   return v;
 }
-/** A part's mass, kg: its own (shape and material's density, or its wall where it is hollow) and its parts'. */
 /** The volume a shape encloses, m³ (before what is drilled out of it, and its fill). */
 export const volumeOf = (s: Shape): number => vol(s);
-export function massOf(p: Part): number {
+/** What is said of a piece's mass where its drawing is not the thing (AUDIT 4C: an envelope, a transformer drawn as its
+ *  box): its table row's mass, kg, where the row gives one (and where that is from); else that its mass is unknown, said,
+ *  so it weighs as the solid it is drawn as and every reader is told so, never silently. */
+export type MassSaid = { kg: number; from: string } | { unknown: string };
+// (keyed by what the piece is drawn as: its name, its material and its shape's volume (a turn or a move of the room's
+// leaves all three as they were), so it weighs the same wherever the operations put it and in whatever reads the room's
+// parts (madeof.ts, sim.ts, the gauges); filled by the table-driven maker as an envelope is built (parts/maker.ts))
+const SAID = new Map<string, MassSaid>();
+const saidKey = (name: string, mat: string | undefined, s: Shape) => `${name}\u0001${mat ?? ''}\u0001${vol(s).toPrecision(9)}`;
+/** Say a piece's mass, as it is drawn (its name, material and shape): its row's, or unknown. */
+export function sayMass(name: string, mat: string | undefined, shape: Shape, said: MassSaid): void { SAID.set(saidKey(name, mat, shape), said); }
+/** What is said of a part's own mass (its row's, or unknown), where anything is. */
+export function massSaid(p: Pick<Part, 'name' | 'mat' | 'shape'>): MassSaid | undefined { return p.shape ? SAID.get(saidKey(p.name, p.mat, p.shape)) : undefined; }
+/** A part's mass, kg: its own (shape and material's density, or its wall where it is hollow; or its mass as said, its
+ *  row's, where it is drawn as an envelope) and its parts'. */
+export function massOf(p: Part): number { return weigh(p, false); }
+/** A part's mass as it is drawn (its shape's volume times its material's density), whatever is said of it: an envelope's
+ *  solid box. */
+export function drawnMassOf(p: Part): number { return weigh(p, true); }
+function weigh(p: Part, asDrawn: boolean): number {
   // (a round shape drawn with flat sides, a nut's six, is that polygon round its axis, not the circle through its corners)
   const flats = p.facets && p.shape && ('cyl' in p.shape || 'lathe' in p.shape) ? (p.facets * Math.sin((2 * Math.PI) / p.facets)) / (2 * Math.PI) : 1;
   // (less what is drilled out of it: each hole its own cylinder, or its n-sided prism)
@@ -121,6 +139,7 @@ export function massOf(p: Part): number {
   // as it runs inside; it took a plain cylinder of its hole's radius, missing a counterbore's ring (fault D18, 2026-11-01))
   const holes = (p.cuts ?? []).reduce((v, c) => v + (c.prof ? turnedVolume(c.prof, inside(p.shape, c)) : (c.sect ? sectArea(c.sect) : (c.n ? ((c.n / 2) * Math.sin((2 * Math.PI) / c.n)) / Math.PI : 1) * acrossInside(p.shape, c)) * inside(p.shape, c)), 0);
   const rho = p.mat ? densityKg(p.mat) : undefined;
-  const own = p.kg !== undefined ? p.kg : p.shape && rho ? (p.shell ? area(p.shape) * p.shell : Math.max(0, vol(p.shape) * flats - holes)) * rho * (p.fill ?? 1) : 0;
-  return own + (p.parts ?? []).reduce((a, q) => a + massOf(q), 0);
+  const said = p.kg === undefined && !asDrawn ? massSaid(p) : undefined;
+  const own = p.kg !== undefined ? p.kg : said && 'kg' in said ? said.kg : p.shape && rho ? (p.shell ? area(p.shape) * p.shell : Math.max(0, vol(p.shape) * flats - holes)) * rho * (p.fill ?? 1) : 0;
+  return own + (p.parts ?? []).reduce((a, q) => a + weigh(q, asDrawn), 0);
 }

@@ -4,36 +4,8 @@
 // place is given by the operations (no at, no rot); every size is a real part's row (its family's source) or labelled
 // typical. Each says what it offers next: a mount's face and holes, a shaft line, a carriage's plate.
 
-import { register, type BlockDef, type Type } from '../blocks';
-import { Engine, emptyBoard, groupBlock, placeBlock, wire } from '../dataflow';
-import type { Board } from '../boards';
-
-const SPEC = { discipline: 'mechanical.design.cad', role: 'geometry operation' as const, codes: [{ scheme: 'MSC2020' as const, code: '68U07', label: 'Computer science aspects of computer-aided design' }] };
-
-/** A board being built a node at a time and saved as one block (as seeds.ts builds its seeds). */
-class Fold {
-  readonly b: Board; private k = 0;
-  constructor(title: string) { this.b = emptyBoard(title); }
-  n(blockId: string, set: Record<string, unknown>, label: string, id = `n${this.k++}`): string { placeBlock(this.b, blockId, 0, 0, set, id); this.b.nodes[id]!.label = label; return id; }
-  /** A setting of the block: its name, type, default, what it is, and the inner settings it sets ("node.setting; ..."). */
-  set(name: string, type: Type, def: unknown, says: string, into: string, choices?: string[]): void { this.n('group.in', { name, type, unit: '', default: String(def), choices: (choices ?? []).join('|'), says, into }, `in: ${name}`); }
-  out(name: string, type: Type, from: string, port: string): void { const id = this.n('group.out', { name, type, unit: '' }, `out: ${name}`); wire(this.b, from, port, id, 'value'); }
-  /** Wires into a node: [from, its output, the input]. */
-  w(to: string, ...ws: [string, string, string][]): string { for (const [f, o, i] of ws) wire(this.b, f, o, to, i); return to; }
-  /** The node `id` of block `blk`, fed by blocks into input `inp` (a many input takes them in order of the list). */
-  op(id: string, blk: string, set: Record<string, unknown>, label: string, ins: Record<string, string | string[]>): string {
-    this.n(blk, set, label, id); for (const [inp, from] of Object.entries(ins)) for (const f of [from].flat()) wire(this.b, f, 'block', id, inp); return id; }
-  save(id: string, name: string, says: string, domains: string[], gloss: string, last: string): BlockDef {
-    this.out('block', 'block', last, 'block'); this.out('thing', 'assembly', last, 'thing'); this.out('pieces', 'integer', last, 'pieces'); this.out('offers', 'list<text>' as Type, last, 'offers'); this.out('says', 'text', last, 'says');
-    layOut(this.b);
-    const d = groupBlock(this.b, { id, name, says, domains, by: 'built in', spec: { gloss, ...SPEC } }); register(d); return d;
-  }
-}
-function layOut(b: Board): void {
-  const e = new Engine(b), col = new Map<string, number>(), rows = new Map<number, number>();
-  for (const id of e.sequence) col.set(id, Math.max(0, ...e.wiresInto(id).map((w) => (col.get(w.from) ?? 0) + 1)));
-  for (const id of e.sequence) { const c = col.get(id)!, r = rows.get(c) ?? 0; rows.set(c, r + 1); b.nodes[id]!.x = c * 330; b.nodes[id]!.y = r * 200; }
-}
+import { Fold } from './board';
+import { wire } from '../dataflow';
 
 // ---- a linear axis ------------------------------------------------------------------------------------------------------
 function linearAxis(): void {
