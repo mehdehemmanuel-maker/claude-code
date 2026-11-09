@@ -62,6 +62,7 @@
 // under 1e-12 in a direction cosine is taken as upright whatever the length.
 import type { Cut, Part, Shape } from './kits';
 import { stationAt, type Station } from './form';
+import type { InterfaceKind } from './interfaces';
 
 export type P3 = readonly [number, number, number];
 type V3 = [number, number, number];
@@ -101,10 +102,16 @@ export type Prim = Turned & (
 type Turned = { readonly frame?: M3 };
 /** A solid: its base less the union of what was taken out of it. */
 export interface Solid { readonly base: Prim; readonly minus: readonly Prim[] }
-/** A line a piece offers: along +y through (x, z); or, turned, through (x, y, z) along `dir`. */
-export interface Line { readonly port: string; readonly x: number; readonly z: number; readonly slot: number; readonly opening?: number; readonly y?: number; readonly dir?: P3 }
+/** A line a piece offers: along +y through (x, z); or, turned, through (x, y, z) along `dir`. The port contract (AUDIT
+ *  §4, 4E), each optional and none written yet: its `kind` (interfaces.ts `kindOfLine` reads one from the name where it
+ *  is not written), its `size` (SI, a thread's name as text, `tol` its tolerance class: "h6"), its operating `limits` by
+ *  the quantity each bounds ("pressure", "current"), each with its unit and source, and the standard it is made to. */
+export interface Line { readonly port: string; readonly x: number; readonly z: number; readonly slot: number; readonly opening?: number; readonly y?: number; readonly dir?: P3;
+  readonly kind?: InterfaceKind; readonly size?: Readonly<Record<string, number | string>>; readonly limits?: Readonly<Record<string, LineLimit>>; readonly std?: string }
+/** An operating limit of a line: below `min`, above `max` it is out of its rating; in `unit`, from `src`. */
+export interface LineLimit { readonly min?: number; readonly max?: number; readonly unit: string; readonly src: string }
 export interface JointRef { readonly name: string; readonly slide?: number; readonly turn?: true }
-export interface Piece { readonly name: string; readonly mat: string; readonly color?: number; readonly solid: Solid; readonly joint?: JointRef; readonly axis?: readonly [number, number]; readonly bought?: true; readonly tapped?: true; readonly lines: readonly Line[] }
+export interface Piece { readonly name: string; readonly mat: string; readonly color?: number; readonly solid: Solid; readonly joint?: JointRef; readonly axis?: readonly [number, number]; readonly bought?: true; readonly tapped?: true; readonly lines: readonly Line[]; /** the path of block names it came through, outermost first, a copy's number on the name it repeats ("Robot leg #2"): written by dataflow.ts as a folded board carries its pieces out (`Block.owned`); none for a piece made on the board in hand */ readonly owner?: readonly string[] }
 export interface Face {
   readonly a: number; readonly b: number; readonly kind: 'contact' | 'gap'; readonly patch: 'area' | 'line'; readonly area: number; readonly length?: number;
   readonly at: P3; readonly normal: P3; readonly gap: number; /** the fit that left the gap, where an operation sized it (root 6) */ readonly fit?: Fit; readonly medium?: string; readonly gate?: string; readonly interference?: { readonly um: number; readonly pressure?: number; readonly src: string }; readonly by: string;
@@ -619,6 +626,17 @@ export class Block {
   static #shift(b: Block, d: P3): { pieces: Piece[]; faces: Face[]; rooms: RoomOf[] } {
     return { pieces: b.pieces.map((p) => ({ ...p, solid: { base: shiftPrim(p.solid.base, d), minus: p.solid.minus.map((m) => shiftPrim(m, d)) }, lines: p.lines.map((l) => ({ ...l, x: l.x + d[0], z: l.z + d[2], ...(l.y !== undefined ? { y: l.y + d[1] } : {}) })), ...(p.axis ? { axis: [p.axis[0] + d[0], p.axis[1] + d[2]] as const } : {}) })),
       faces: b.faces.map((f) => ({ ...f, at: add(f.at, d) })), rooms: b.rooms.map((r) => ({ ...r, c: add(r.c, d) })) };
+  }
+  /** The same block, nothing moved, its pieces' owners as `ownerOf` gives them (Piece.owner; undefined keeps a piece as
+   *  it is): how a folded board's pieces are carried out under its name (dataflow.ts). What an operation left on the
+   *  block (its note, the piece it was laid along) is kept. */
+  static owned(b: Block, ownerOf: (p: Piece, k: number) => readonly string[] | undefined): Block {
+    Block.#is(b); let changed = false;
+    const pieces = b.pieces.map((p, k) => { const o = ownerOf(p, k); if (!o || o === p.owner) return p; changed = true; return { ...p, owner: o }; });
+    if (!changed) return b;
+    const out = Block.#seal(b.name, pieces, [...b.faces], [...b.rooms]);
+    if (MADE.has(b)) MADE.set(out, MADE.get(b)!); if (FLIPPED.has(b)) FLIPPED.add(out); const note = NOTES.get(b); if (note) NOTES.set(out, note);
+    return out;
   }
   static #mid(b: Block): V3 { return [(b.lo[0] + b.hi[0]) / 2, (b.lo[1] + b.hi[1]) / 2, (b.lo[2] + b.hi[2]) / 2]; }
   /** A block turned rigidly by R about M: every solid's middle and frame, every line's point and direction, every face's

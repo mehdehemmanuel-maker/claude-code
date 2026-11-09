@@ -457,14 +457,21 @@ export interface MoveMotor { kind: 'servo' | 'gear motor' | 'stepper'; torque?: 
  *  shaft); with `turns` false, it only slides (two parallel lines, a carriage on its rods; a rack); a motor where one
  *  drives it (a servo's spline, a gear motor's shaft). */
 export interface MoveJoint { a: number; b: number; point: V3; dir: V3; by: string[]; turns: boolean; slide?: boolean; range?: [number, number]; motor?: MoveMotor;
-  /** a screw joint (decision 0029): a lead screw in its tapped nut, the nut moved this far along the line, m, a turn of it */ screw?: number }
+  /** a screw joint (decision 0029): a lead screw in its tapped nut, the nut moved this far along the line, m, a turn of it */ screw?: number;
+  /** a ball joint (AUDIT §4, 4F): it turns about every line through `point`, three freedoms; nothing infers one yet (a face
+   *  that says so, P2's Face.joint, will) */ ball?: true }
 /** Two meshing gears: their bodies, pieces, teeth. */
 export interface MoveMesh { a: number; b: number; ga: string; gb: string; za: number; zb: number; m: number }
 /** A gear (its body a) moving a rack (body b) along `dir` by its pitch radius r times its turn. */
 export interface MoveRack { a: number; b: number; gear: string; rack: string; r: number; z: number; m: number; dir: V3 }
 /** Two pulleys or sprockets (bodies a and b) a belt or chain turns together, the same way, by their teeth (or radii). */
 export interface MoveBelt { a: number; b: number; pa: string; pb: string; za: number; zb: number; belt: string; teeth: boolean }
-export interface Motion { bodies: MoveBody[]; joints: MoveJoint[]; meshes: MoveMesh[]; racks: MoveRack[]; belts: MoveBelt[]; says: string }
+export interface Motion { bodies: MoveBody[]; joints: MoveJoint[]; meshes: MoveMesh[]; racks: MoveRack[]; belts: MoveBelt[]; says: string;
+  /** The degrees of freedom its joints leave (AUDIT §4, DOF): each joint's own (a turn or a slide 1, a turn with a slide 2,
+   *  a screw 1, its turn and slide tied by its lead, a ball 3), less one for each mesh, rack and belt that ties two of them;
+   *  a joint between two frozen bodies leaves none. Counted over the joints as a tree: a closed loop of joints is not
+   *  closed here (Grübler's count is not applied), said in `freedomSays`. */
+  freedom: number; freedomSays: string }
 
 const TURNS = / over | through |in the bore of /, IN_HOLE = / in the hole of /;
 /** Hobby servos' stall torque, N·m (families.ts SERVOS: SG90 1.8 kg·cm, MG996R 9.4 kg·cm at 4.8 V, vendor figures, typical;
@@ -580,7 +587,10 @@ export function motionOf(b: Block): Motion {
     if (d > a0 - 1e-9 && d < a0 + 0.25 * A.m && A.z0 < B.z1 && B.z0 < A.z1) meshes.push({ a: of.get(find(i))!, b: of.get(find(k))!, ga: b.pieces[i]!.name, gb: b.pieces[k]!.name, za: A.z, zb: B.z, m: A.m }); }
   const says = [`${bodies.length} bod${bodies.length === 1 ? 'y' : 'ies'} (${bodies.filter((x) => x.frozen).length} frozen)`, ...joints.map((j) => `${bodies[j.a]!.name} ${j.screw ? `screws along ${bodies[j.b]!.name}, ${(j.screw * 1000).toFixed(2)} mm a turn` : `${j.turns ? 'turns' : 'slides'} on ${bodies[j.b]!.name}${j.turns && j.slide ? ', sliding along it' : ''}`}${j.motor ? ` (a ${j.motor.kind}: it holds)` : ''}`),
     ...meshes.map((m) => `${m.ga} meshes ${m.gb}: ${m.zb}:${m.za}, the other way`), ...racks.map((r) => `${r.gear} drives ${r.rack}: ${(r.r * 1000).toFixed(2)} mm a radian`), ...belts.map((x) => `${x.belt} joins ${x.pa} and ${x.pb}: ${x.zb}:${x.za}, the same way`), ...said].join('; ');
-  return { bodies, joints, meshes, racks, belts, says };
+  const own = (j: MoveJoint): number => (bodies[j.a]!.frozen && bodies[j.b]!.frozen ? 0 : j.ball ? 3 : j.screw ? 1 : j.turns && j.slide ? 2 : 1);
+  const each = joints.map(own), ties = meshes.length + racks.length + belts.length, freedom = each.reduce((t, f) => t + f, 0) - ties;
+  const freedomSays = `${freedom} degree${freedom === 1 ? '' : 's'} of freedom: ${joints.length} joint${joints.length === 1 ? '' : 's'} (${[['turn', joints.filter((j) => own(j) === 1 && j.turns && !j.slide && !j.ball).length], ['slide', joints.filter((j) => own(j) === 1 && !j.turns).length], ['turn and slide', joints.filter((j) => own(j) === 2).length], ['screw', joints.filter((j) => own(j) === 1 && j.screw).length], ['ball', joints.filter((j) => own(j) === 3).length], ['held both sides', each.filter((f) => f === 0).length]].filter(([, c]) => c).map(([w, c]) => `${c} ${w}`).join(', ') || 'none'})${ties ? `, less ${ties} tied (${meshes.length} mesh, ${racks.length} rack, ${belts.length} belt)` : ''}; loops not closed`;
+  return { bodies, joints, meshes, racks, belts, says, freedom, freedomSays };
 }
 const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 

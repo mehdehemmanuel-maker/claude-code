@@ -16,8 +16,30 @@ import { METRIC } from './threads';
 import { NEMA_FACE } from './kinds/motion';
 import { BEARINGS, KEYS } from './families';
 import { BSP } from './kinds/fluid';
+import type { Block, Line, LineLimit, Piece } from './room';
 
-export type InterfaceKind = 'holes' | 'threads' | 'pins' | 'frame' | 'shaft' | 'bore' | 'thread.external' | 'thread.internal' | 'drive' | 'chain' | 'face';
+export type InterfaceKind = 'holes' | 'threads' | 'pins' | 'frame' | 'shaft' | 'bore' | 'thread.external' | 'thread.internal' | 'drive' | 'chain' | 'face'
+  // (the port contract, AUDIT §4 4E: the kinds the directive's classes need that no part offered before)
+  | 'power' | 'signal' | 'fluid' | 'thermal' | 'optical' | 'acoustic' | 'data' | 'mount';
+/** The ten classes of connection the directive names (plan/DIRECTIVE-2026-11-07.md, 4E), in its words and order. */
+export const PORT_CLASSES = ['mechanical rotational', 'mechanical translational', 'structural mounting', 'electrical power', 'electrical signal', 'fluid', 'thermal', 'optical', 'acoustic', 'data communication'] as const;
+export type PortClass = typeof PORT_CLASSES[number];
+/** The classes each kind serves: a shaft or a bore carries a turn and, on a slide fit, a slide; holes, pins, threads,
+ *  frames, faces and mounts hold one thing to another; a drive and a chain pass a turn on; the rest one class each. */
+const CLASS_OF: Record<InterfaceKind, readonly PortClass[]> = {
+  shaft: ['mechanical rotational', 'mechanical translational'], bore: ['mechanical rotational', 'mechanical translational'], drive: ['mechanical rotational'], chain: ['mechanical rotational'],
+  holes: ['structural mounting'], threads: ['structural mounting'], pins: ['structural mounting'], frame: ['structural mounting'], face: ['structural mounting'], mount: ['structural mounting'],
+  'thread.external': ['structural mounting'], 'thread.internal': ['structural mounting'],
+  power: ['electrical power'], signal: ['electrical signal'], fluid: ['fluid'], thermal: ['thermal'], optical: ['optical'], acoustic: ['acoustic'], data: ['data communication'],
+};
+export const classOf = (k: InterfaceKind): readonly PortClass[] => CLASS_OF[k];
+/** What each kind meets: the rule PORT_KIND and IFACE_KIND below give the kinds parts offered before, kept as it was; a
+ *  new kind meets its own kind, a mount a mount, a face or holes. */
+export const MATES: Record<InterfaceKind, readonly InterfaceKind[]> = {
+  holes: ['holes', 'threads', 'pins', 'thread.external'], threads: ['holes', 'thread.external'], pins: ['holes'], frame: ['frame'], shaft: ['bore'], bore: ['shaft'],
+  'thread.external': ['thread.internal', 'threads', 'holes'], 'thread.internal': ['thread.external'], drive: ['drive'], chain: ['chain'], face: ['face'],
+  power: ['power'], signal: ['signal'], fluid: ['fluid'], thermal: ['thermal'], optical: ['optical'], acoustic: ['acoustic'], data: ['data'], mount: ['mount', 'face', 'holes'],
+};
 export interface Interface {
   /** where it is: the names from the thing asked down to its part, then its own name ("frame/left motor/mount face") */ id: string;
   name: string; kind: InterfaceKind;
@@ -27,6 +49,7 @@ export interface Interface {
   /** what it was read from: a port by its name, or an old interface by its kind and role */ from: { port: string } | { iface: Iface['kind']; role: Iface['role'] };
   /** the kinds it meets */ mates: InterfaceKind[];
   /** the joint its part makes where it meets (a bearing turns, a slide slides) */ joint?: string;
+  /** its operating limits, by the quantity each bounds, where its line states them (room.ts `Line.limits`) */ limits?: Readonly<Record<string, LineLimit>>;
   to?: string; says?: string;
 }
 
@@ -43,6 +66,70 @@ const IFACE_KIND: Record<`${Iface['kind']}.${Iface['role']}`, { kind: InterfaceK
   'chain.provides': { kind: 'chain', name: 'chain', mates: ['chain'] }, 'chain.requires': { kind: 'chain', name: 'chain', mates: ['chain'] },
   'mount.provides': { kind: 'face', name: 'mount', mates: ['face'] }, 'mount.requires': { kind: 'face', name: 'mount', mates: ['face'] },
 };
+
+// ---- a room line's kind, read from its name (AUDIT §4, 4E: so no piece needs an edit) -------------------------------------
+// A line's port is "<its piece's name>/<what the line is>" (room.ts). Its kind is the one written on it where there is
+// one; else it is read from those words by the rules below, in order, the first that holds. This is a reading of names,
+// said on every record it makes ("read from its name: …"), never a measurement: a name that says nothing is read as a
+// mechanical line (a shaft; a bore where its piece is hollow on it, which interfacesOf sees from the solid).
+const electric = (piece: string): InterfaceKind => (DATA.test(piece) ? 'data' : POWER.test(piece) ? 'power' : 'signal');
+/** A line's kind and how it was read: the kind written on it, or what its name says by the first rule that holds. */
+export function lineKind(line: Pick<Line, 'port' | 'kind'> | string): { kind: InterfaceKind; why: string } {
+  const l = typeof line === 'string' ? { port: line } as Pick<Line, 'port' | 'kind'> : line;
+  if (l.kind) return { kind: l.kind, why: 'written on its line' };
+  const cut = l.port.lastIndexOf('/'), role = (cut < 0 ? l.port : l.port.slice(cut + 1)).trim(), piece = cut < 0 ? '' : l.port.slice(0, cut);
+  const by = (kind: InterfaceKind, rule: string) => ({ kind, why: `read from its name: ${rule}` });
+  if (ROLE_MOUNT.test(role)) return /breadboard|perfboard/i.test(piece) ? by('signal', `"${role}" on a board leads go in`) : /wire entries/i.test(piece) ? by('power', `"${role}" where wires enter`) : by('holes', `"${role}" fix one thing to another`);
+  if (/^studs?$/.test(role)) return POWER.test(piece) ? by('power', `a stud of ${piece}`) : by('thread.external', `"${role}"`);
+  if (/^stud \d+$/.test(role)) return by('pins', `"${role}"`);
+  if (ROLE_FLUID.test(role)) return by('fluid', `"${role}" something flows through`);
+  if (ROLE_ELEC.test(role) && (ELEC.test(piece) || /^(ln|e|leads?|pads?|terminals?|contacts?|wires|cores)$/.test(role))) return by(electric(piece), `"${role}" of ${piece}`);
+  if (ROLE_PINS.test(role)) return ELEC.test(piece) ? by(electric(piece), `"${role}" of ${piece}`) : by('pins', `"${role}"`);
+  if (/^(thread|set screw)$/.test(role)) return by('threads', `"${role}"`);
+  if (role === 'socket') return by('drive', 'a socket a key turns');
+  if (/^(bore|pockets|eye|cross|pilot|hole)$/.test(role)) return by('bore', `"${role}"`);
+  if (/^(stem|spindle|pedal|axle|output|actuators)$/.test(role)) return by('shaft', `"${role}"`);
+  if (/^(one|six)$/.test(role)) return by('face', `"${role}"`);
+  // (an axis, and every other name: what its piece is)
+  if (THREADED.test(piece)) return by('thread.external', `${piece}: a thread its name gives`);
+  if (MECH_FIRST.test(piece)) return by('shaft', `${piece} moves or holds on it`);
+  if (FLUID.test(piece)) return by('fluid', `${piece} carries a fluid`);
+  if (/\b(leads?|wire|pin|contact)\b/i.test(piece) && ELEC.test(piece)) return by(electric(piece), `${piece} conducts`);
+  if (POWER.test(piece)) return by('power', `${piece} carries current`);
+  if (DATA.test(piece)) return by('data', `${piece} carries data`);
+  if (OPTICAL.test(piece)) return by('optical', `light passes along ${piece}`);
+  if (ACOUSTIC.test(piece)) return by('acoustic', `sound leaves or reaches ${piece}`);
+  if (THERMAL.test(piece)) return by('thermal', `heat passes through ${piece}`);
+  return by('shaft', `"${role}": nothing in it says more than a line to turn or slide on`);
+}
+export const kindOfLine = (line: Pick<Line, 'port' | 'kind'> | string): InterfaceKind => lineKind(line).kind;
+const isBlock = (t: object): t is Block => 'pieces' in t && 'faces' in t && 'rooms' in t;
+/** Hollow on its line (a tube, a cup, a bend, a line with an opening, a solid with a round cut whose middle is on the line,
+ *  within its radius): what turns on it is a bore. */
+const hollowOn = (p: Piece, l: Line): boolean => { const s = p.solid.base as { k: string; ri?: number };
+  if (s.k === 'cup' || s.k === 'bend' || (s.ri ?? 0) > 0 || l.opening !== undefined) return true;
+  const o: V3 = [l.x, l.y ?? p.solid.base.c[1], l.z], d = l.dir ?? [0, 1, 0], k = Math.hypot(...d) || 1;
+  return p.solid.minus.some((m) => { if (m.k !== 'cyl') return false; const w: V3 = [m.c[0] - o[0], m.c[1] - o[1], m.c[2] - o[2]], t = (w[0] * d[0] + w[1] * d[1] + w[2] * d[2]) / k;
+    return Math.hypot(w[0] - (t * d[0]) / k, w[1] - (t * d[1]) / k, w[2] - (t * d[2]) / k) < m.r; }); };
+const perpOf = (n: V3): V3 => { const a: V3 = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0], d = a[0] * n[0] + a[1] * n[1] + a[2] * n[2], u: V3 = [a[0] - d * n[0], a[1] - d * n[1], a[2] - d * n[2]], k = Math.hypot(...u); return [u[0] / k, u[1] / k, u[2] / k]; };
+/** Every line of a room block as an interface record: its kind (lineKind), what it meets (MATES), its sizes (its slot and
+ *  opening radii, m, and any size written on it), its standard and limits where written, and its frame (its point; its
+ *  direction as n; u any square to it). A port repeated is told apart by its point, in mm. */
+function linesOf(b: Block): { list: Interface[]; clashes: { id: string; count: number }[] } {
+  const all = b.pieces.flatMap((p) => p.lines.map((l) => ({ p, l }))), ids = all.map(({ l }) => l.port), list: Interface[] = [];
+  for (const { p, l } of all) {
+    const at: V3 = [l.x, l.y ?? p.solid.base.c[1], l.z], d = l.dir ?? [0, 1, 0], k = Math.hypot(...d), n: V3 = [d[0] / k, d[1] / k, d[2] / k], r = lineKind(l);
+    // (a tapped piece's line is its internal thread; a hollow one's a bore)
+    const kind: InterfaceKind = (r.kind === 'shaft' || r.kind === 'bore') && p.tapped ? 'thread.internal' : r.kind === 'shaft' && hollowOn(p, l) ? 'bore' : r.kind;
+    const says = kind === r.kind ? r.why : `${r.why}; ${kind === 'bore' ? 'its piece is hollow on it: a bore' : 'its piece is tapped: an internal thread'}`;
+    const id = ids.filter((x) => x === l.port).length > 1 ? `${l.port}@${at.map(mm).join(',')}` : l.port;
+    list.push({ id, name: l.port.slice(l.port.lastIndexOf('/') + 1) || l.port, kind, mates: [...MATES[kind]], size: { slot: l.slot, ...(l.opening !== undefined ? { opening: l.opening } : {}), ...(l.size ?? {}) },
+      ...(l.std ? { std: l.std } : {}), frame: { at: toV3(new THREE.Vector3(...at)), n: toV3(new THREE.Vector3(...n)), u: toV3(new THREE.Vector3(...perpOf(n))) }, from: { port: l.port },
+      ...(p.joint ? { joint: p.joint.name } : {}), ...(l.limits ? { limits: l.limits } : {}), says });
+  }
+  const seen = new Map<string, number>(); for (const x of list) seen.set(x.id, (seen.get(x.id) ?? 0) + 1);
+  return { list, clashes: [...seen].filter(([, c]) => c > 1).map(([id, count]) => ({ id, count })) };
+}
 
 /** A part's own placing in its holder's frame: where it stands and how it is turned (as every view draws it). */
 export const matrixOfPart = (p: Part): THREE.Matrix4 => new THREE.Matrix4().compose(new THREE.Vector3(...(p.at ?? [0, 0, 0])), new THREE.Quaternion().setFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))), new THREE.Vector3(1, 1, 1));
@@ -105,8 +192,10 @@ function longestShaft(p: Part, d: number): { a: THREE.Vector3; b: THREE.Vector3;
 }
 const toV3 = (v: THREE.Vector3): V3 => [r3(v.x), r3(v.y), r3(v.z)];
 
-/** Every interface of a thing, read from its parts as they are, and the ids two of them would share (each a clash). */
-export function interfacesOf(t: Part | Assembly): { list: Interface[]; clashes: { id: string; count: number }[] } {
+/** Every interface of a thing, read from its parts as they are, and the ids two of them would share (each a clash); of a
+ *  room block, from its pieces' lines (linesOf above). */
+export function interfacesOf(t: Part | Assembly | Block): { list: Interface[]; clashes: { id: string; count: number }[] } {
+  if (isBlock(t)) return linesOf(t);
   const list: Interface[] = [];
   const frame = (m: THREE.Matrix4, q: { at: V3; n: V3; u: V3 }) => { const r = new THREE.Matrix4().extractRotation(m);
     return { at: toV3(new THREE.Vector3(...q.at).applyMatrix4(m)), n: toV3(new THREE.Vector3(...q.n).applyMatrix4(r).normalize()), u: toV3(new THREE.Vector3(...q.u).applyMatrix4(r).normalize()) }; };
@@ -405,6 +494,20 @@ export interface NegativeRow { of: { kind: string; says: string }; /** the sizes
   sides: Record<string, SideRow>; side: string; sources: string[] }
 const UNIT = { mm: MM, um: 1e-6, '1': 1 } as const;
 // ---- rows (data): the tables rows read and the rows; no code above or below names a row ---------------------------------
+// (the words a line's name is read by (lineKind, above): data, as the rows are; read only when lineKind is called)
+const ROLE_MOUNT = /^(holes|hole|screw holes|mounting holes|rack holes|truck holes|bolts|screws|screw|fixings|mounting|mount|hinge cups|slots?|tabs|tie rods|ends|tine \d+)$/;
+const ROLE_FLUID = /^(ports?|in port|out port|work ports|supply ports|windows)$/;
+const ROLE_ELEC = /^(leads?|side leads|pads?|exposed pad|terminals?|contacts?|wires|cores|lugs|entries|ln|e|line|bend|points|detent)$/;
+const ROLE_PINS = /^(pins?|legs)$/;
+const ELEC = /\b(header|DIP|SOIC|TSSOP|MSOP|QFN|TQFP|PLCC|SOT|TO-\d+|DO-\d+|1N\d+|L78\d+\w*|relay|switch|DHT\d*|buzzer|JST|digit|trimmer|LED|PCB|crystal|HC-49\/U|inductor|resistor|capacitor|tantalum|encoder|pot|jack|XT60|terminal|cable|core|wire|winding|transistor|cell|fuse|ferrule|lug|rocker|toggle|inlet|SG90 lead|perfboard|breadboard|1363|C14|6LR61|splice|tab|poles|insulator|plug)\b/i;
+const POWER = /\b(cell|battery|fuse|cable(?! tie)|core \d|winding|lug|ferrule|XT60|terminal block|2\.5 mm²|mains|power|BS 1363|C14|6LR61|9 V|DC jack|DC plug|4 mm plug|rocker|toggle|tab|splice|copper wire|wire entries|poles|AA|18650|21700)\b/i;
+const DATA = /\b(USB(-[A-C])?|RJ45|8P8C|Ethernet|HDMI|DE-9|D-sub|ICSP|SD card)\b/i;
+const FLUID = /(\b(G ?\d+(\/\d+)?|NPT|BSP|DN ?\d+|NPS ?\d*|PN ?\d+|PEX|PVC|SDR ?\d+|JIC|ORB|ORFS|R\dAT)\b|pipe|hose|valve|nozzle|spout|inlet|outlet|downpipe|drain|air tube|compression|copper 15|barb|silencer|socket coupler|junction|gasket|bonded seal|filter regulator)/i;
+const MECH_FIRST = /lead screw|lead nut|set screw|stem|knob|lever|handle|bonnet|clamp band|crimp ring/i;
+const OPTICAL = /\b(lens|glass|lamp|bulb|LED|shade|optic|fibre|fiber|laser|mirror|prism)\b/i;
+const ACOUSTIC = /\b(buzzer|speaker|microphone|ultrasonic|piezo|siren)\b/i;
+const THREADED = /\b(M\d+(\.\d+)?|#\d+-\d+|\d+\/\d+-\d+|UNC|UNF)\b.*\b(shank|thread|stud|screw|bolt)\b/;
+const THERMAL = /\b(heat ?sink|heat pipe|radiator|cooler|peltier|heater|thermal pad)\b/i;
 // (each cell read by two readers apart from its source (spec 01, I15, its cases 6 and 11 to 14); only the cells those cases
 // read are held, so any other size or kind is refused, never guessed: reading more is the readers' work, row by row)
 /** SKF's abutments for a bearing (its product page, read in inches and converted): the shaft's shoulder at least da_min, the

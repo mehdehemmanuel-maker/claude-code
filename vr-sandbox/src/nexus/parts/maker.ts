@@ -8,6 +8,7 @@
 import type { BlockDef, BlockTest, PortDef, SettingDef, Spec } from '../blocks';
 import { partOfBlock, type Block } from '../room';
 import { massOf } from '../mass';
+import { MATTER, notMaterial } from '../matter';
 
 /** What a row says a piece built from it measures: its bound across x, y and z (m) and its mass (kg), where the row has
  *  them; and how near the built piece must come (a share, 0.02 for 2 %), and what the figures are. */
@@ -27,6 +28,9 @@ export interface PartFamily<R> {
   settings?: SettingDef[];
   /** drawn as its outline only, said in its card and in what it builds says */
   envelope?: string;
+  /** the material its recipe makes it of, where the recipe takes one (`set.mat`): its node then offers a material
+   *  choice, and a material the tables do not know is refused, saying why */
+  mat?: string;
   /** the recipe: a row (and the other settings) to a piece, by the operations only */
   recipe(row: R, size: string, set: Record<string, unknown>): Block;
   /** why the recipe cannot make this size (so set), or null */
@@ -62,6 +66,7 @@ const sizesSaid = (rows: Record<string, unknown>) => { const k = Object.keys(row
 export const cardOf = (f: AnyFamily): string => `${f.says}. Sizes ${sizesSaid(f.rows as Record<string, unknown>)}, from ${f.source}${f.envelope ? `. An envelope: ${f.envelope}` : ''}`;
 /** A size of a family built, or refused saying why. */
 export function build<R>(f: PartFamily<R>, size: string, set: Record<string, unknown> = {}): Block {
+  if (f.mat) { set = { ...set, mat: String(set.mat ?? f.mat) }; const not = notMaterial(String(set.mat)); if (not) throw new Error(`${f.name} ${size}: ${not}`); }
   const row = f.rows[size]; if (row === undefined) throw new Error(`no ${f.name} ${size}: its sizes are ${Object.keys(f.rows).slice(0, 40).join(', ')}${Object.keys(f.rows).length > 40 ? ' …' : ''}`);
   const why = f.cannot?.(row, size, set); if (why) throw new Error(`${f.name} ${size}: ${why}`);
   return f.recipe(row, size, set);
@@ -76,7 +81,8 @@ export function sourceKindOf(cite: string): 'standard' | 'maker' | 'rule of thum
 }
 export function familyNode<R>(f: PartFamily<R>): BlockDef {
   PART_FAMILIES.set(f.id, f as AnyFamily);
-  const settings: SettingDef[] = [{ key: 'size', label: 'Size', type: 'choice', default: f.size, choices: Object.keys(f.rows) }, ...(f.settings ?? [])];
+  const settings: SettingDef[] = [{ key: 'size', label: 'Size', type: 'choice', default: f.size, choices: Object.keys(f.rows) }, ...(f.settings ?? []),
+    ...(f.mat ? [{ key: 'mat', label: 'Material', type: 'choice' as const, default: f.mat, choices: Object.keys(MATTER).filter((k) => !notMaterial(k)).sort() }] : [])];
   const defaults = Object.fromEntries(settings.map((s) => [s.key, s.default]));
   return { id: f.id, name: f.name, version: 1, by: 'built in', pure: true, kind: 'generator', ability: 'generate', domains: f.domains, ...(f.aisle ? { aisle: f.aisle } : {}), says: cardOf(f as AnyFamily), spec: { gloss: f.gloss, ...ROOM_SPEC } as Spec,
     settings, ports: { inputs: [], outputs: PIECE_OUT }, sources: [{ cite: f.source, kind: sourceKindOf(f.source) } as NonNullable<BlockDef['sources']>[number]],

@@ -33,6 +33,7 @@ import { boundsOfAll, designOf, fromLibrary, hash, isAssembly, isPart, massOfAll
 import { fitByAsync, fitByBatchAsync, minimizeAsync } from './numeric';
 import { atDetailAsync } from './lod';
 import { runMany, type Carry, type Job } from './pool';
+import { Block } from './room';
 const P_ = (name: string, type: Type): PortDef => ({ name, type }), PL = (name: string, type: Type, more: Partial<PortDef> = {}): PortDef => ({ name, type, ...more });
 
 // ---- keys -----------------------------------------------------------------------------------------------------------
@@ -47,11 +48,18 @@ export function stable(v: unknown): string {
 const valueKeys = new WeakMap<object, string>();
 /** What a value that comes in along a wire adds to a node's key (spec 11, LW12; fault D5): the value itself, digested,
  *  not the key of what made it. So a node run again that gives what it gave before leaves what it feeds alone: the cut
- *  off early. An object is digested once and kept by its identity (an output is never changed after it is given). */
+ *  off early. An object is digested once and kept by its identity (an output is never changed after it is given). The
+ *  blocks a piece came through (Piece.owner) are in the key though `digest` leaves them out, so a node never hands back
+ *  pieces carried out under another block's name (decision 0029 P7). */
 export function valueKey(v: unknown): string {
   if (v === null || typeof v !== 'object') return hash(digest(v));
-  let k = valueKeys.get(v); if (k === undefined) { k = hash(digest(v)); valueKeys.set(v, k); } return k;
+  let k = valueKeys.get(v); if (k === undefined) { const o = ownersIn(v); k = hash(digest(v) + (o ? `@${o}` : '')); valueKeys.set(v, k); } return k;
 }
+/** The owners of a room block's pieces, or of the blocks in a list, as text ('' where none has one). */
+const ownersIn = (v: unknown): string => (v instanceof Block ? (v.pieces.some((p) => p.owner) ? v.pieces.map((p) => (p.owner ?? []).join('/')).join('|') : '') : Array.isArray(v) ? (v.some((x) => x instanceof Block || Array.isArray(x)) ? v.map(ownersIn).join(';').replace(/^;+$/, '') : '') : '');
+/** A piece's owner (Piece.owner) is where it came from, not what it is: `digest` leaves it out, so a block folded is the
+ *  same build as its board inline; `valueKey` keeps it apart. */
+const provenance = (rec: Record<string, unknown>, k: string): boolean => k === 'owner' && 'solid' in rec && 'lines' in rec;
 const fnIds = new WeakMap<object, number>(); let fnNext = 0;
 /** A value written so two values write the same only when they are the same (spec 11, LW15; fault D6): what `stable`
  *  cannot tell apart, this does. A Map or a Set by its entries (in a sorted order, so the order they were added in does
@@ -81,7 +89,7 @@ export function digest(v: unknown, path: object[] = []): string {
     if (o instanceof Date) return `Date(${o.getTime()})`;
     if (o instanceof RegExp) return `RegExp(${String(o)})`;
     const name = Object.getPrototypeOf(o)?.constructor?.name, rec = o as Record<string, unknown>;
-    return `${name && name !== 'Object' ? name : ''}{${Object.keys(rec).sort().map((k) => `${JSON.stringify(k)}:${digest(rec[k], path)}`).join(',')}}`;
+    return `${name && name !== 'Object' ? name : ''}{${Object.keys(rec).sort().filter((k) => !provenance(rec, k)).map((k) => `${JSON.stringify(k)}:${digest(rec[k], path)}`).join(',')}}`;
   } finally { path.pop(); }
 }
 const boardKeys = new WeakMap<Board, string>();
@@ -136,8 +144,8 @@ export function groupBlock(inner: Board, meta: Partial<BlockDef> = {}): BlockDef
       let type = String(s.type || 'any') as Type, dv = String(s.default ?? ''), choices = String(s.choices ?? '').split('|').map((c) => c.trim()).filter(Boolean);
       // (an input bound to inner settings (`into`, NC5) takes the first one's type, choices and value where it says none)
       const to = x.block === 'group.in' && String(s.into ?? '').trim() ? (() => { try { return intoOf(s.into)[0]; } catch { return undefined; } })() : undefined;
-      if (to) { const tn = inner.nodes[to[0]], st = tn ? blockOf(tn)?.settings?.find((q) => q.key === to[1]) : undefined;
-        if (st) { if (type === 'any') type = (st.type === 'number' || st.type === 'quantity' ? 'number' : st.type === 'boolean' ? 'boolean' : 'text') as Type; if (!choices.length && st.choices) choices = st.choices.map(String); if (dv === '') dv = String(tn!.set?.[to[1]] ?? st.default ?? ''); } }
+      if (to) { const t = (() => { try { return boundTo(inner, String(s.name), to[0], to[1]); } catch { return undefined; } })();
+        if (t) { if (type === 'any') type = t.type as Type; if (!choices.length && t.choices.length) choices = t.choices; if (dv === '') dv = String(t.value ?? ''); } }
       const def = dv === '' ? undefined : type === 'number' || type === 'integer' ? Number(dv) : type === 'boolean' ? dv === 'true' : dv;
       const p: PortDef = { name: String(s.name), type, ...(unit ? { unit } : {}), label: String(s.says || s.name), ...(def !== undefined ? { default: def, optional: true } : {}), ...(choices.length ? { choices } : {}) };
       if (x.block === 'group.in') ins.push(p); else if (x.block === 'group.out') outs.push(p);
@@ -429,7 +437,7 @@ export class Engine {
     // (its inputs bound to inner settings set into a copy of its board, one for each set of values: NC5)
     const g = boundBoard(b.graph, inputs);
     let k = this.kids.get(id); if (!k || k.board !== g) { k = new Engine(g, this.env, this.memo); this.kids.set(id, k); }
-    return runInside(k, g, inputs);
+    return runInside(k, g, inputs, b.name);
   }
   /** The engine running a group's board, once it has run. */
   inside(id: string): Engine | undefined { return this.kids.get(id); }
@@ -560,12 +568,24 @@ function intoOf(into: unknown): [string, string][] {
  *  setting not there. Returns the group.in's id and the value it starts at. */
 export function bindSetting(inner: Board, name: string, into: string, id = `in_${name}`, says = ''): { id: string; value: unknown } {
   const ts = intoOf(into); if (!ts.length) throw new Error(`${name}: nothing to set`);
-  let first: { st: NonNullable<BlockDef['settings']>[number]; v: unknown } | undefined;
-  for (const [nid, key] of ts) { const n = inner.nodes[nid]; if (!n || n.deleted) throw new Error(`${name} sets ${nid}.${key}: there is no node "${nid}" inside`); const d = blockOf(n), st = d?.settings?.find((q) => q.key === key); if (!d || !st) throw new Error(`${name} sets ${nid}.${key}: ${d?.name ?? nid} has no setting "${key}"`); first ??= { st, v: n.set?.[key] ?? st.default }; }
+  let first: ReturnType<typeof boundTo> | undefined;
+  for (const [nid, key] of ts) { const t = boundTo(inner, name, nid, key); first ??= t; }
   let k = 2, nid = id; while (inner.nodes[nid]) nid = `${id}${k++}`;
-  const { st, v } = first!;
-  inner.nodes[nid] = { label: `in ${name}`, block: 'group.in', set: { name, type: st.type === 'number' || st.type === 'quantity' ? 'number' : st.type === 'boolean' ? 'boolean' : 'text', unit: '', default: String(v ?? ''), choices: (st.choices ?? []).join('|'), says: says || st.label, into } };
-  return { id: nid, value: v };
+  const t = first!;
+  inner.nodes[nid] = { label: `in ${name}`, block: 'group.in', set: { name, type: t.type, unit: '', default: String(t.value ?? ''), choices: t.choices.join('|'), says: says || t.label, into } };
+  return { id: nid, value: t.value };
+}
+/** What an `into` sets inside (NC5; root 5: an inner block's input as well as its setting): the node's setting of that
+ *  key, else its input of that name not wired from another node (a value set on the node, as a placed block's inputs
+ *  are), with the type, choices and value it has now. Refused for a node, setting or input not there, and an input wired. */
+function boundTo(inner: Board, name: string, nid: string, key: string): { type: 'number' | 'boolean' | 'text'; choices: string[]; value: unknown; label: string } {
+  const n = inner.nodes[nid]; if (!n || n.deleted) throw new Error(`${name} sets ${nid}.${key}: there is no node "${nid}" inside`);
+  const d = blockOf(n), st = d?.settings?.find((q) => q.key === key);
+  if (d && st) return { type: st.type === 'number' || st.type === 'quantity' ? 'number' : st.type === 'boolean' ? 'boolean' : 'text', choices: (st.choices ?? []).map(String), value: n.set?.[key] ?? st.default, label: st.label };
+  const ip = d ? portsOf(d, { ...defaultsOf(d), ...(n.set ?? {}) }).inputs.find((q) => q.name === key) : undefined;
+  if (!d || !ip) throw new Error(`${name} sets ${nid}.${key}: ${d?.name ?? nid} has no setting or input "${key}"`);
+  if (edgesOf(inner).some((e) => isWire(e) && e.to === nid && e.in === key)) throw new Error(`${name} sets ${nid}.${key}: that input of ${n.label || d.name} is wired from another node inside`);
+  return { type: ip.type === 'number' || ip.type === 'integer' ? 'number' : ip.type === 'boolean' ? 'boolean' : 'text', choices: (ip.choices ?? []).map(String), value: n.set?.[key] ?? ip.default, label: ip.label ?? ip.name };
 }
 const bounds = new WeakMap<Board, Map<string, Board>>();
 /** A group's board with what comes in set into the inner settings its inputs are bound to (`into`, NC5): a copy for each
@@ -581,8 +601,7 @@ export function boundBoard(g: Board, inputs: Record<string, unknown>): Board {
   const c: Board = { ...g, nodes: { ...g.nodes } };
   bs.forEach((x, j) => { const v = vals[j]; if (v === undefined) return;
     for (const [nid, k] of x.to) {
-      const n = c.nodes[nid]; if (!n || n.deleted) throw new Error(`${x.name} sets ${nid}.${k}: there is no node "${nid}" inside`);
-      const d = blockOf(n); if (!d || !d.settings?.some((q) => q.key === k)) throw new Error(`${x.name} sets ${nid}.${k}: ${d?.name ?? nid} has no setting "${k}"`);
+      boundTo(c, x.name, nid, k); const n = c.nodes[nid]!, d = blockOf(n)!;
       const set = { ...defaultsOf(d), ...(n.set ?? {}) }, was = portsOf(d, set), now = portsOf(d, { ...set, [k]: v }), sig = (p: Ports) => [...p.inputs, ...p.outputs].map((q) => `${q.name}:${q.type}`).join(',');
       if (sig(was) !== sig(now)) throw new Error(`${x.name} sets ${nid}.${k}, which changes the ports of ${n.label || d.name}: a setting that gives other ports is not bound`);
       c.nodes[nid] = { ...n, set: { ...(n.set ?? {}), [k]: v } };
@@ -729,8 +748,8 @@ export function makeBlock(b: Board, gid: string, meta: { id?: string; name: stri
 /** What every seed run by a spawner has worked out, shared: rows asking the same give the very same thing. */
 const SEEDS = SHARED;
 /** A group's board run by its engine with what came in: what its outputs give. */
-async function runInside(k: Engine, g: Board, inputs: Record<string, unknown>): Promise<Outputs> {
-  k.feeds = Object.fromEntries(Object.entries(inputs).map(([name, value]) => [name, { value, key: hash(digest(value)) }]));
+async function runInside(k: Engine, g: Board, inputs: Record<string, unknown>, owner?: string): Promise<Outputs> {
+  k.feeds = Object.fromEntries(Object.entries(inputs).map(([name, value]) => [name, { value, key: valueKey(value) }]));
   k.reshape(); await k.run();
   const out: Outputs = {};
   for (const n of nodesOf(g)) {
@@ -739,7 +758,30 @@ async function runInside(k: Engine, g: Board, inputs: Record<string, unknown>): 
     if (!s || s.status !== 'ok') { const bad = [...k.state.entries()].find(([, v]) => v.status === 'failed'); throw new Error(`inside, ${bad ? `${g.nodes[bad[0]]?.label || bad[0]}: ${bad[1].error}` : `${name} has nothing`}`); }
     out[name] = s.out!.value;
   }
+  // (a room block carried out under the folded board's name: each piece's owner, Piece.owner, decision 0029 P7)
+  if (owner !== undefined) for (const [o, v] of Object.entries(out)) if (v instanceof Block) out[o] = carriedOut(v, owner);
   return out;
+}
+/** Each owner path written by carriedOut, with how many pieces it was given there: so copies of them made further out (a
+ *  ring of four legs: the leg's pieces four times; one block placed on two nodes and run once) are told apart. */
+const CARRIED = new WeakMap<readonly string[], number>();
+/** A block carried out of a folded board named `name` (Piece.owner, decision 0029 P7): a piece made on that board gets
+ *  [name]; one that came out of a board inside it gets [name, ...the path it had]. Where one thing inside comes out more
+ *  than once (copies laid by a ring, a stack or along; one block placed on two nodes), each comes out with its number on
+ *  the name it repeats ("Robot leg #2"), in the order its pieces come, so every copy keeps an identity of its own. */
+export function carriedOut(b: Block, name: string): Block {
+  const seen = new Map<readonly string[], number>(), at = new Map<string, number>(), ids = new Map<readonly string[], number>(), things: { from?: readonly string[]; n: number }[] = [];
+  const which = b.pieces.map((p) => {
+    const o = p.owner; let key = 'own';
+    if (o) { const k = seen.get(o) ?? 0, m = CARRIED.get(o); seen.set(o, k + 1); if (!ids.has(o)) ids.set(o, ids.size); key = `${ids.get(o)}#${m ? Math.floor(k / m) : 0}`; }
+    let i = at.get(key); if (i === undefined) { i = things.length; at.set(key, i); things.push({ ...(o ? { from: o } : {}), n: 0 }); }
+    things[i]!.n++; return i;
+  });
+  const alike = new Map<string, number[]>(); things.forEach((t, i) => { const s = (t.from ?? []).join('\u0000'); (alike.get(s) ?? alike.set(s, []).get(s)!).push(i); });
+  const paths = things.map((t, i) => { const same = alike.get((t.from ?? []).join('\u0000'))!;
+    const path: readonly string[] = !t.from ? [name] : same.length > 1 ? [name, `${t.from[0]} #${same.indexOf(i) + 1}`, ...t.from.slice(1)] : [name, ...t.from];
+    CARRIED.set(path, t.n); return path; });
+  return Block.owned(b, (_, k) => paths[which[k]!]);
 }
 /** A block run again and again (a fit's trials): one that runs, called; one made of a board, through one engine kept for
  *  all of them, so what the trials' values do not reach inside it is worked out once. */
@@ -750,7 +792,7 @@ export function runnerOf(d: BlockDef): (inputs: Record<string, unknown>, set: Re
   // (one engine for each bound copy of its board: its inputs bound to inner settings set into it, NC5)
   const ks = new WeakMap<Board, Engine>(), dflt = Object.fromEntries(portsOf(d, defaultsOf(d)).inputs.filter((q) => q.default !== undefined).map((q) => [q.name, q.default]));
   return (inputs) => { const all = { ...dflt, ...Object.fromEntries(Object.entries(inputs).filter(([, v]) => v !== undefined)) }, g = boundBoard(d.graph!, all);
-    let k = ks.get(g); if (!k) { k = new Engine(g, {}); ks.set(g, k); } return runInside(k, g, all); };
+    let k = ks.get(g); if (!k) { k = new Engine(g, {}); ks.set(g, k); } return runInside(k, g, all, d.name); };
 }
 /** A library block run on its own with these inputs: its outputs (a seed's whole board, run where it is needed). */
 export async function runBlock(id: string, inputs: Record<string, unknown>, env: Env = {}): Promise<Outputs> {

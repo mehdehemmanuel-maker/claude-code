@@ -2,7 +2,7 @@
 
 Task in hand: 06.M2 (decision 0028: parts remembered, an orchestrator, more assemblies and movement; decision 0027: the app on claude.ai with reports, movement in general, compound builds, a thousand parts; decision 0026 before it); the phone page (decisions 0023, 0025, `npm run app`)
 Spec in hand: spec 06, the phone (`plan/specs/06-phone/`); spec 01, interfaces (`plan/specs/01-interfaces/`)
-Last commit the gate passed: ab3033c (2026-11-07)
+Last commit the gate passed: e0275d6 (2026-11-07)
 
 ## Next three (from the start queue in `plan/README.md`)
 
@@ -35,4 +35,4 @@ Last commit the gate passed: ab3033c (2026-11-07)
 - Hosting is proposed (decision 0011), to confirm at phase 3. The Pages copy (main only, after Settings → Pages) has no relay, so no Claude.
 
 ## Pipeline notes (the loop breaker reads these: a line "pipeline: <task>: <answer>" resets its count)
-pipeline: 06.M2: yes: three runs failed on bookkeeping again (the plan's page not routing to two new files, the gated-commit distance after a fold), the code passing each time; the merge script now routes new plan files and folds first, and while working the gate runs on the fields touched only, the whole gate once at push (CLAUDE.md, Speed)
+pipeline: 06.M2: yes, again a merging one, not a judgement made by hand: three runs failed on what parallel packages did to each other (P2's true faces left the arm with no joints; P1's name tables in code the negative engine forbids; three nodes made in a loop the dater cannot find); each package passed its own file. Missing: every builder's acceptance files and the whole domains test run on the merged tree before the fold (done since 2026-11-07), and a package that changes a shared rule (P2) merged alone and gated before the rest

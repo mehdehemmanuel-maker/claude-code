@@ -43,7 +43,8 @@ export interface PartsTree {
 /** The aisle of the parts remembered (decision 0028). */
 export const YOURS = 'Yours / Remembered';
 /** The aisle of the assemblies: the seeds, each placeable with one tap, grouped by domain. */
-export const ASSEMBLIES = 'Assemblies';
+// (named apart from the catalogue's own trade Assemblies (aisles.ts: its folded builds), which opened this aisle in its place)
+export const ASSEMBLIES = 'Built assemblies';
 const assembliesByDomain = (): { name: string; families: FamilyRow[] }[] => {
   const by = new Map<string, FamilyRow[]>();
   for (const d of LIBRARY.values()) { if (!d.id.startsWith('seed.') || d.id === 'seed.spring-checked') continue; const g = d.domains?.[0] ?? 'other'; by.set(g, [...(by.get(g) ?? []), { id: d.id, name: d.name, sizes: [], envelope: false }]); }
@@ -78,17 +79,12 @@ export async function startRemembered(): Promise<{ kept: number; came: number; s
     setRemote(shared); const r = await syncRemote(); return { kept: kept + r.in, came: r.in, sent: r.out, shared: true }; }
   catch (e) { return { kept, came: 0, sent: 0, shared: false, why: whyNot(e) }; }
 }
-/** The browser store the saved blocks and the parts remembered are kept in (memory.ts reads the same). */
-const KEY = 'nexus.nodeblocks.v1';
-/** A part deleted: from the store here (memory's own forget where it has one), from the library, and from the page's
- *  shared store where there is one (else, on claude.ai, it would come back at the next start). */
+/** A part deleted: from the store here (memory's forget: memory.ts is the one writer of that store, decision 0029 P7), from
+ *  the library, and from the page's shared store where there is one (else, on claude.ai, it would come back at the next
+ *  start). */
 export async function forgetPart(id: string): Promise<{ gone: boolean; shared: boolean; why?: string }> {
-  const had = savedParts().some((p) => p.id === id), own = (memory as unknown as { forget?: (id: string) => unknown }).forget;
-  if (typeof own === 'function') own(id);
-  else { let s: Storage | null = null; try { s = typeof localStorage === 'undefined' ? null : localStorage; } catch { s = null; }
-    if (s) { try { s.setItem(KEY, JSON.stringify((JSON.parse(s.getItem(KEY) ?? '[]') as { id: string }[]).filter((p) => p.id !== id))); } catch { /* left as it was */ } }
-    // (under Node memory keeps its parts in the very list it hands out: the part taken out of that list)
-    else { const all = savedParts(), k = all.findIndex((p) => p.id === id); if (k >= 0) all.splice(k, 1); } }
+  const had = savedParts().some((p) => p.id === id);
+  memory.forget(id);
   if (had || block(id)?.by === 'you') LIBRARY.delete(id);
   let out: { gone: boolean; shared: boolean; why?: string } = { gone: had && !savedParts().some((p) => p.id === id) && !block(id), shared: false };
   if (shared) { try { await shared.drop(id); out = { ...out, shared: true }; } catch (e) { out = { ...out, why: `still in the page's shared store (${whyNot(e)}): it comes back when the page starts` }; } }
@@ -258,14 +254,47 @@ const FIRST_SIZES = 18;
  * before is kept as a button in the browser, named `keepAs`), or by a button put at the end of `into`. A size (or a
  * family that has none) tapped is handed to `add` with the piece's node and its settings, and the browser closes.
  */
-export function mountParts(o: { trigger?: HTMLElement; keepAs?: string; into?: HTMLElement; label?: string; add: (id: string, set: Record<string, unknown>) => unknown; said?: (text: string, bad: boolean) => void }): { open: (trade?: string) => void; close: () => void; tree: () => PartsTree } {
+export function mountParts(o: { trigger?: HTMLElement; keepAs?: string; into?: HTMLElement; label?: string; add: (id: string, set: Record<string, unknown>) => unknown; said?: (text: string, bad: boolean) => void }): PartsApi {
+  // (what the trigger did before (the chat's Start again): a button in the head of the browser it opens)
+  const kept = o.trigger?.onclick ?? null, keepOwn: Keep | undefined = kept && o.keepAs ? { label: o.keepAs, run: (e) => kept.call(o.trigger!, e as PointerEvent) } : undefined;
+  // (one Parts browser: the page's own (the dashboard's, by its board's name) is the one; a page in a frame of it (the
+  // chat) opens that one, with its own head button, and makes none of its own; its own only where it stands alone)
+  let own: PartsApi | null = null; const mine = () => (own ??= browser(o)), host = () => (o.trigger && !o.into ? hostParts() : undefined);
+  const api: PartsApi = { open: (to, keep = keepOwn) => (host() ?? mine()).open(to, keep), close: () => { host()?.close(); own?.close(); }, tree: () => (host() ?? mine()).tree() };
+  if (o.into) (window as unknown as { nexusParts?: PartsApi }).nexusParts = api;
+  if (o.trigger) { o.trigger.onclick = () => api.open(); o.trigger.title = `Parts: every piece by trade, category and size${o.keepAs ? ` (${o.keepAs} is in it)` : ''}`; }
+  if (o.into) { const b = document.createElement('button'); b.textContent = o.label ?? '＋ Parts'; b.title = 'Every piece in the library, by trade, category and size; tap a size to add it'; b.onclick = () => api.open(); o.into.appendChild(b);
+    // (Import file: the browser's file picker; a STEP, STP or STL read and placed as an import.file node fed its bytes)
+    const pick = document.createElement('input'); pick.type = 'file'; pick.accept = '.step,.stp,.stl'; pick.hidden = true;
+    pick.onchange = () => { const f = pick.files?.[0]; if (!f) return; void importInto(o.add, f).then(() => o.said?.(`imported ${f.name}: its volume, mass and bound are on its node`, false), (e: Error) => o.said?.(e.message, true)).finally(() => { pick.value = ''; }); };
+    const ib = document.createElement('button'); ib.textContent = '⤒ Import file'; ib.title = 'A STEP, STP or STL file from this computer, placed as a fixed piece: its volume, mass and bound'; ib.onclick = () => pick.click(); o.into.append(ib, pick); }
+  return api;
+}
+/** A head button for one opening of the browser (the chat's Start again). */
+export interface Keep { label: string; run: (e: MouseEvent) => void }
+export interface PartsApi { open: (trade?: string, keep?: Keep) => void; close: () => void; tree: () => PartsTree }
+/** The page's own browser, where this page is in a frame of it (the chat in the dashboard). */
+const hostParts = (): PartsApi | undefined => { try { return window.parent !== window ? (window.parent as unknown as { nexusParts?: PartsApi }).nexusParts : undefined; } catch { return undefined; } };
+/** The file types Import file takes. */
+export const IMPORTS = /\.(step|stp|stl)$/i;
+/** A file read for the board: the settings of an import.file node (its name, its bytes as base64), or a refusal for a
+ *  file that is not STEP, STP or STL. */
+export async function importSet(f: Blob & { name: string }): Promise<Record<string, unknown>> {
+  if (!IMPORTS.test(f.name)) throw new Error(`${f.name}: not a STEP, STP or STL file`);
+  const b = new Uint8Array(await f.arrayBuffer()); let s = '';
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return { name: f.name, data: btoa(s) };
+}
+/** The Import file button's handler: the file read and handed to the page's add as an import.file node with its bytes. */
+export async function importInto(add: (id: string, set: Record<string, unknown>) => unknown, f: Blob & { name: string }): Promise<unknown> { return add('import.file', await importSet(f)); }
+/** The browser itself, made the first time it is opened. */
+function browser(o: { add: (id: string, set: Record<string, unknown>) => unknown; said?: (text: string, bad: boolean) => void }): PartsApi {
   addStyle();
   const ov = document.createElement('div'); ov.className = 'pb-ov'; ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-label', 'Parts');
-  const kept = o.trigger?.onclick ?? null;
-  ov.innerHTML = `<div class="pb-hd"><b>Parts</b><span class="n"></span>${kept && o.keepAs ? `<button class="pb-keep">${esc(o.keepAs)}</button>` : ''}<button class="pb-x" aria-label="Close">✕</button></div><input class="pb-q" type="search" placeholder="Find a part: M8 nut, 608 bearing, 2x4, Raspberry Pi 4" enterkeyhint="search"><div class="pb-tr"></div><div class="pb-ls"></div>`;
+  ov.innerHTML = `<div class="pb-hd"><b>Parts</b><span class="n"></span><span class="pb-kp"></span><button class="pb-x" aria-label="Close">✕</button></div><input class="pb-q" type="search" placeholder="Find a part: M8 nut, 608 bearing, 2x4, Raspberry Pi 4" enterkeyhint="search"><div class="pb-tr"></div><div class="pb-ls"></div>`;
   document.body.appendChild(ov);
   const q = ov.querySelector<HTMLInputElement>('.pb-q')!, tr = ov.querySelector<HTMLElement>('.pb-tr')!, ls = ov.querySelector<HTMLElement>('.pb-ls')!;
-  let trade = '', opened = new Set<string>(), tree = partsTree();
+  let trade = '', opened = new Set<string>(), tree = partsTree(), keepNow: Keep | undefined;
   const sizeBtn = (id: string, size: string | undefined, label: string) => `<button data-id="${esc(id)}"${size !== undefined ? ` data-size="${esc(size)}"` : ''}>${esc(label)}</button>`;
   // (a part remembered: what it was made for, how often used, what was checked when kept; placed by "＋ Add", deleted by ✕)
   const keptRow = (f: FamilyRow, k: Kept) => { const c = k.checked, bad = c.failing > 0 || c.groups > 1;
@@ -281,19 +310,18 @@ export function mountParts(o: { trigger?: HTMLElement; keepAs?: string; into?: H
       ls.innerHTML = tree.hits.length ? `<h4>Found</h4>${tree.hits.map((h) => `<div class="pb-f"><div class="t"><span>${esc(h.name)}${h.size ? ` ${esc(h.size)}` : ''}</span><em>${esc(h.aisle)}</em></div><div class="pb-sz">${h.size ? sizeBtn(h.id, h.size, `＋ ${h.size}`) : (() => { const f = tree.categories.flatMap((c) => c.families).find((x) => x.id === h.id); const sizes = f?.sizes ?? (block(h.id)?.settings ?? []).find((s) => s.key === 'size')?.choices?.map(String) ?? []; return sizes.length ? sizes.slice(0, FIRST_SIZES).map((s) => sizeBtn(h.id, s, s)).join('') : sizeBtn(h.id, undefined, '＋ Add'); })()}</div></div>`).join('')}` : '<div class="pb-none">Nothing found: try what it is (nut, bearing, valve) or its size (M8, 608, DN20).</div>';
     } else ls.innerHTML = tree.categories.map((c) => `<h4>${esc(c.name)} · ${c.families.length}</h4>${c.families.map(famRow).join('')}`).join('');
   };
-  const open = (to?: string) => { if (typeof to === 'string') { trade = to; q.value = ''; } ov.classList.add('on'); draw(); }, close = () => ov.classList.remove('on');
+  // (each opening: a part kept on another page of this browser (the chat) made a block here first, so the two never differ)
+  const open = (to?: string, keep?: Keep) => { registerSaved(); keepNow = keep; ov.querySelector('.pb-kp')!.innerHTML = keep ? `<button class="pb-keep">${esc(keep.label)}</button>` : ''; if (typeof to === 'string') { trade = to; q.value = ''; } ov.classList.add('on'); draw(); }, close = () => ov.classList.remove('on');
   ov.addEventListener('click', (e) => { const t = (e.target as HTMLElement).closest('button'); if (!t) return;
     if (t.classList.contains('pb-x')) { close(); return; }
     if (t.dataset.forget) { const id = t.dataset.forget, name = savedParts().find((p) => p.id === id)?.name ?? id; t.disabled = true;
       void forgetPart(id).then((r) => { draw(); o.said?.(r.gone ? `Deleted ${name} (${id}): from this browser and the library${r.shared ? ', and from the page\'s shared store' : ''}.${r.why ? ` It is ${r.why}.` : ''}` : `${name} was not deleted: it is not a part remembered here.`, !r.gone || !!r.why); });
       return; }
-    if (t.classList.contains('pb-keep')) { close(); kept?.call(o.trigger!, e as PointerEvent); return; }
+    if (t.classList.contains('pb-keep')) { close(); keepNow?.run(e); return; }
     if (t.dataset.trade) { trade = t.dataset.trade; q.value = ''; draw(); ls.scrollTop = 0; return; }
     if (t.dataset.more) { opened.add(t.dataset.more); draw(); return; }
     if (t.dataset.id) { close(); void o.add(t.dataset.id, t.dataset.size !== undefined ? { size: t.dataset.size } : {}); } });
   q.addEventListener('input', draw);
   ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-  if (o.trigger) { o.trigger.onclick = () => open(); o.trigger.title = `Parts: every piece by trade, category and size${o.keepAs ? ` (${o.keepAs} is in it)` : ''}`; }
-  if (o.into) { const b = document.createElement('button'); b.textContent = o.label ?? '＋ Parts'; b.title = 'Every piece in the library, by trade, category and size; tap a size to add it'; b.onclick = () => open(); o.into.appendChild(b); }
-  opened = new Set(); return { open, close, tree: () => tree };
+  return { open, close, tree: () => tree };
 }

@@ -7,6 +7,10 @@ import type { Part, Shape, V3 } from './kits';
 import { cutFrame, sectionPoint, tubeLegs } from './form';
 import { massOf, densityKg } from './mass';
 import { register, type BlockDef, type PortDef, type Type } from './blocks';
+import { Block, partOfBlock } from './room';
+// (the features on a block's exact solid, as nodes: fillet, chamfer, shell, offset, booleans, mirror, pattern, thread, slot,
+// groove, rib; package P9)
+import './features';
 
 // (the kernel's types are its own; this module hands out only what it measures)
 type Solid = any; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -33,10 +37,20 @@ export function kernel(): Promise<Replicad> {
 
 const deg = 180 / Math.PI;
 /** A profile [r, y] spun about y: closed as it is where it ends where it began (a ring), else along the axis. */
+// (two points nearer than the kernel's confusion distance are one point to it: OpenCascade's Precision::Confusion, 1e-7
+// in its units, metres here; a point that near the axis is on it. A dome's last point, r cos 90°, is 1e-18 m off its axis,
+// and was taken for a point off it: a second point on the axis was added beside it, an edge of no length, and the kernel
+// threw on it)
+const CONFUSION = 1e-7;
 function revolved(r: Replicad, prof: [number, number][]): Solid {
-  let pts = prof.filter((q, i) => i === 0 || Math.hypot(q[0] - prof[i - 1]![0], q[1] - prof[i - 1]![1]) > 1e-9).map(([a, y]) => [Math.max(0, a), y] as [number, number]);
+  const snapped = prof.map(([a, y]) => [a > CONFUSION ? a : 0, y] as [number, number]);
+  let pts = snapped.filter((q, i) => i === 0 || Math.hypot(q[0] - snapped[i - 1]![0], q[1] - snapped[i - 1]![1]) > CONFUSION);
   const closed = pts.length > 2 && Math.hypot(pts[0]![0] - pts[pts.length - 1]![0], pts[0]![1] - pts[pts.length - 1]![1]) < 1e-9;
-  if (closed) pts = pts.slice(0, -1);
+  if (closed) { pts = pts.slice(0, -1);
+    // (a hollow ring drawn as one line round its outside, along a cut to its inside and round that (a rim's, a tyre's):
+    // its outside spun and each inside spun and taken out; drawn as one face it touches itself along the cut, not valid)
+    const [outer, ...inner] = loopsOf(pts), spin = (l: [number, number][]) => r.revolution(r.makePolygon(l.map(([a, y]) => [a, y, 0])), [0, 0, 0], [0, 1, 0]);
+    if (inner.length) return inner.reduce((s: Solid, l) => s.cut(spin(l)), spin(outer!)); }
   else { if (pts[pts.length - 1]![0] > 0) pts.push([0, pts[pts.length - 1]![1]]); if (pts[0]![0] > 0) pts.unshift([0, pts[0]![1]]); }
   if (pts.length < 3) throw new Error('a profile of fewer than three points');
   return r.revolution(r.makePolygon(pts.map(([a, y]) => [a, y, 0])), [0, 0, 0], [0, 1, 0]);
@@ -77,19 +91,46 @@ export function solidOfShape(r: Replicad, s: Shape, facets?: number): Solid {
   if ('capsule' in s) { const [a, h] = s.capsule; return revolved(r, [[0, -h / 2], [a, -h / 2], [a, h / 2], [0, h / 2]]).fuse(r.makeSphere(a).translate([0, h / 2, 0])).fuse(r.makeSphere(a).translate([0, -h / 2, 0])); }
   if ('lathe' in s) return facets ? faceted(r, s.lathe, facets) : revolved(r, s.lathe);
   // (its outline's points each once: a point repeated, or the first said again at the end, is an edge of no length)
-  if ('prism' in s) { const poly = (p0: [number, number][]) => { const pts = p0.filter((p, i) => Math.hypot(p[0] - p0[(i + 1) % p0.length]![0], p[1] - p0[(i + 1) % p0.length]![1]) > 1e-9); return r.assembleWire(pts.map((p, i) => r.makeLine([p[0], p[1], 0], [pts[(i + 1) % pts.length]![0], pts[(i + 1) % pts.length]![1], 0]))); };
+  if ('prism' in s) { const poly = (pts: [number, number][]) => r.assembleWire(pts.map((p, i) => r.makeLine([p[0], p[1], 0], [pts[(i + 1) % pts.length]![0], pts[(i + 1) % pts.length]![1], 0])));
     // (each opening cut through it as a solid of its own, a little longer than it: an inner loop of one face is as good
     // only while it is wound the other way and clear of the outline, which an outline drawn as points does not promise)
     const bar = (pts: [number, number][], L: number) => r.basicFaceExtrusion(r.makeFace(poly(pts)), new r.Vector([0, 0, L])).translate([0, 0, -L / 2]);
-    return (s.prism.holes ?? []).reduce((b: Solid, h) => b.cut(bar(h, s.prism.L * 1.02)), bar(s.prism.pts, s.prism.L)); }
+    // (an outline drawn as one line round a bore, out along a cut and back (a gear's, a pulley's, a T-slot bar's) made its
+    // loops first: the outline round the outside and each loop inside an opening; drawn as one face it touches itself
+    // along the cut, and the kernel's check calls the face, and the solid, not valid)
+    const [outer, ...inner] = loopsOf(s.prism.pts);
+    return [...inner, ...(s.prism.holes ?? []).map(dedupe)].reduce((b: Solid, h) => b.cut(bar(h, s.prism.L * 1.02)), bar(outer!, s.prism.L)); }
   if ('loft' in s) { const st = [...s.loft.st].sort((a, b) => a.x - b.x).filter((x) => x.w > 1e-5 && x.hi - x.lo > 1e-5); if (st.length < 2) throw new Error('a loft of fewer than two sections'); return r.loft(st.map((x) => stationWire(r, x)), { ruled: true }); }
   if ('tube' in s) return swept(r, s.tube);
   if ('surf' in s) throw new Error('a freeform skin (its NURBS surface thickened: not built yet)');
   throw new Error(`a ${Object.keys(s)[0]} (not a solid)`);
 }
 
+/** An outline's points each once: a point repeated, or the first said again at the end, is an edge of no length. */
+const same = (a: readonly number[], b: readonly number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!) <= CONFUSION;
+const dedupe = (p0: [number, number][]) => p0.filter((p, i) => !same(p, p0[(i + 1) % p0.length]!));
+const areaOf = (l: [number, number][]) => Math.abs(l.reduce((a, p, i) => a + p[0] * l[(i + 1) % l.length]![1] - l[(i + 1) % l.length]![0] * p[1], 0)) / 2;
+/** An outline's loops, the largest first: an edge gone along and come back along (the cut that joins an outline to a
+ *  bore drawn in the same line) taken out, and what is left followed round into closed loops. An outline with no such
+ *  edge is its one loop. */
+export function loopsOf(p0: [number, number][]): [number, number][][] {
+  const pts = dedupe(p0), n = pts.length, e = pts.map((p, i) => [p, pts[(i + 1) % n]!] as const), gone = new Set<number>();
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n && !gone.has(i); j++) if (!gone.has(j) && same(e[i]![0], e[j]![1]) && same(e[i]![1], e[j]![0])) { gone.add(i); gone.add(j); }
+  if (!gone.size) return [pts];
+  const used = new Set(gone), loops: [number, number][][] = [];
+  for (let s = 0; s < n; s++) {
+    if (used.has(s)) continue; const loop: [number, number][] = []; let k = s;
+    for (;;) { used.add(k); loop.push(e[k]![0]); const end = e[k]![1]; if (same(end, e[s]![0])) break;
+      // (the next edge in order where it starts here, else any edge left that does)
+      const nx = !used.has((k + 1) % n) && same(e[(k + 1) % n]![0], end) ? (k + 1) % n : e.findIndex((x, i) => !used.has(i) && same(x[0], end));
+      if (nx < 0) return [pts]; k = nx; }
+    if (loop.length >= 3) loops.push(loop);
+  }
+  return loops.length ? loops.sort((a, b) => areaOf(b) - areaOf(a)) : [pts];
+}
+
 /** The kernel's own validity check (BRepCheck_Analyzer). */
-function valid(sol: Solid): boolean { try { const oc = (R as unknown as { getOC: () => any }).getOC(), a = new oc.BRepCheck_Analyzer(sol.wrapped, true, false); const ok = typeof a.IsValid_2 === 'function' ? a.IsValid_2() : a.IsValid(); a.delete(); return !!ok; } catch { return false; } }
+export function valid(sol: Solid): boolean { try { const oc = (R as unknown as { getOC: () => any }).getOC(), a = new oc.BRepCheck_Analyzer(sol.wrapped, true, false); const ok = typeof a.IsValid_2 === 'function' ? a.IsValid_2() : a.IsValid(); a.delete(); return !!ok; } catch { return false; } }
 
 export interface SolidRow { path: string; /** its place in the tree by index ("/12/3"), as layout and the rules say it */ ix: string; name: string; shape: string; ok: boolean; why?: string; valid?: boolean; volume?: number; kg?: number; ourKg: number; diff?: number; fill?: number; shell?: boolean; cuts: number }
 export interface Solids { rows: SolidRow[]; made: number; failed: number; invalid: number; volume: number; kg: number; ourKg: number; byWhy: Record<string, number>; solids: { path: string; ix: string; solid: Solid }[] }
@@ -190,6 +231,67 @@ export async function readStep(bytes: Uint8Array): Promise<{ solids: number; vol
   for (; ex.More(); ex.Next()) { n++; const sol = new r.Solid(ex.Current()); v += Math.abs(r.measureVolume(sol)); }
   ex.delete(); return { solids: n, volume: v / 1e9 };
 }
+// ---- import: STEP and STL ------------------------------------------------------------------------------------------
+/** What a file is, by its first bytes, else its name: STEP (ISO 10303-21 opens every one with "ISO-10303-21"), else STL. */
+const formatOf = (bytes: Uint8Array, name: string): 'step' | 'stl' => /^\s*ISO-10303-21/.test(new TextDecoder().decode(bytes.slice(0, 64))) || /\.ste?p$/i.test(name) ? 'step' : 'stl';
+/** An STL's triangles (binary, or ASCII where its length is not a binary one's): their volume (mm³, the signed
+ *  tetrahedra to the origin summed), their bound, and whether they close (every edge on two triangles). */
+export function meshOfStl(b: Uint8Array): { triangles: number; volume: number; lo: V3; hi: V3; closed: boolean; open: number } {
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength), bin = b.length >= 84 && 84 + 50 * dv.getUint32(80, true) === b.length, tri: V3[][] = [];
+  if (bin) for (let t = 0, n = dv.getUint32(80, true); t < n; t++) { const o = 84 + 50 * t + 12; tri.push([0, 1, 2].map((k) => [0, 1, 2].map((j) => dv.getFloat32(o + 12 * k + 4 * j, true)) as V3)); }
+  else { const v = [...new TextDecoder().decode(b).matchAll(/vertex\s+(\S+)\s+(\S+)\s+(\S+)/g)].map((m) => [+m[1]!, +m[2]!, +m[3]!] as V3); for (let i = 0; i + 2 < v.length; i += 3) tri.push([v[i]!, v[i + 1]!, v[i + 2]!]); }
+  let vol = 0; const lo: V3 = [Infinity, Infinity, Infinity], hi: V3 = [-Infinity, -Infinity, -Infinity], edges = new Map<string, number>(), key = (p: V3) => p.join(',');
+  for (const [a, c, d] of tri as [V3, V3, V3][]) { vol += dot(a, [c[1] * d[2] - c[2] * d[1], c[2] * d[0] - c[0] * d[2], c[0] * d[1] - c[1] * d[0]]);
+    for (const p of [a, c, d]) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k]!, p[k]!); hi[k] = Math.max(hi[k]!, p[k]!); }
+    for (const [p, q] of [[a, c], [c, d], [d, a]] as [V3, V3][]) { const e = [key(p), key(q)].sort().join('|'); edges.set(e, (edges.get(e) ?? 0) + 1); } }
+  const open = [...edges.values()].filter((x) => x !== 2).length;
+  return { triangles: tri.length, volume: Math.abs(vol) / 6, lo, hi, closed: tri.length > 0 && open === 0, open };
+}
+export interface Imported { block: Block; format: 'step' | 'stl'; solids: number; /** m³, by the kernel */ volume: number; /** m: x, y, z */ bound: V3; mat: string; kg?: number; says: string }
+/** A STEP or STL file made a fixed piece: read by the kernel (STEP through its reader, in millimetres, as OpenCascade
+ *  converts every file to; STL by its own triangles, closed, read as millimetres, which STL does not say and every
+ *  slicer assumes), its solids measured (volume, bound), and given to the room as one bought piece: its bound's box,
+ *  its mass its solid's volume times its material's density, never its box's. Its own surfaces are not the room's: what
+ *  the room places it by is its box. */
+export async function importFile(bytes: Uint8Array, name: string, o: { mat?: string } = {}): Promise<Imported> {
+  const r = await kernel(), format = formatOf(bytes, name), oc = (r as unknown as { getOC: () => any }).getOC(), blob = new Blob([bytes as BlobPart]);
+  let n = 0, v = 0, lo: V3, hi: V3;
+  if (format === 'step') { const sh = await r.importSTEP(blob) as Solid, ex = new oc.TopExp_Explorer(sh.wrapped, oc.TopAbs_ShapeEnum.TopAbs_SOLID, oc.TopAbs_ShapeEnum.TopAbs_SHAPE);
+    for (; ex.More(); ex.Next()) { n++; v += Math.abs(r.measureVolume(new r.Solid(ex.Current()))); } ex.delete();
+    if (!n || !(v > 0)) throw new Error(`${name}: the kernel read no solid from it (a STEP of surfaces only?)`);
+    [lo, hi] = (sh.boundingBox as { bounds: [V3, V3] }).bounds; sh.delete?.(); }
+  // (an STL by its own triangles: the kernel's reader (replicad's importSTL, its faces unified and made a solid) throws on
+  // the STL this module writes, so its volume is the triangles' own, by the divergence theorem, exact for the mesh; it is
+  // a solid only where it is closed, each edge shared by two triangles)
+  else { const m = meshOfStl(bytes); if (!m.closed) throw new Error(`${name}: an STL that is not closed (${m.open} edges on one triangle only): no solid`); n = 1; v = m.volume; lo = m.lo; hi = m.hi; }
+  const bound = [0, 1, 2].map((k) => (hi[k]! - lo[k]!) / 1000) as V3;
+  const mat = o.mat || 'steel-low', rho = densityKg(mat), volume = v / 1e9, piece = name.replace(/\.[^.]*$/, '') || 'imported';
+  if (!bound.every((x) => x > 0)) throw new Error(`${name}: a solid with no extent along one axis (${bound.map((x) => x * 1000).join(' × ')} mm)`);
+  const block = Block.made(piece, mat, { box: [bound[0], bound[1], bound[2]] }, { bought: true });
+  const kg = rho !== undefined ? volume * rho : undefined;
+  return { block, format, solids: n, volume, bound, mat, ...(kg !== undefined ? { kg } : {}), says: `${name}: ${format.toUpperCase()}, ${n} solid${n === 1 ? '' : 's'}, ${(volume * 1e6).toPrecision(6)} cm³, ${bound.map((x) => (x * 1000).toPrecision(4)).join(' × ')} mm${kg !== undefined ? `, ${(kg * 1000).toPrecision(4)} g as ${mat}` : `; ${mat} has no density here, so no mass`}; placed by its box, a fixed piece` };
+}
+// (import.file's test: a 10 × 40 mm steel rod written as STEP by Export's own writer (filesOf), made once, when the test
+// first reads it, so loading the library starts no kernel; its volume πr²h and its mass πr²h ρ, derived)
+const ROD: Part = { name: 'rod', shape: { cyl: [0.005, 0.04] }, at: [0, 0, 0], mat: 'steel-low' };
+let rodStep: Promise<Record<string, Uint8Array>> | undefined;
+const rodFiles = (): Promise<Record<string, Uint8Array>> => (rodStep ??= filesOf(ROD, { formats: ['step'] }).then((x) => x.files));
+register({ version: 1, by: 'built in', pure: true, id: 'import.file', name: 'Import a file (STEP, STL)', kind: 'bridge', ability: 'transform', domains: ['mechanical', 'manufacturing'],
+  spec: { gloss: 'What is in a STEP or STL file, as a piece to build with: its solids, volume, bound and mass?', discipline: 'mechanical.design', role: 'data source', codes: [{ scheme: 'ACM CCS 2012', code: '10010147.10010371.10010396', label: 'Computing methodologies: shape modeling' }],
+    model: { equations: ['V = the kernel\'s volume of the solids read', 'm = ρ V'], class: 'data', time: 'steady', linear: true, method: 'OpenCascade\'s STEP reader (STEPControl, through replicad), measured by its mass properties; an STL by its own triangles (closed: each edge on two), its volume by the divergence theorem', references: ['ISO 10303-21 (STEP physical file)', 'replicad and replicad-opencascadejs 1.1.0 (S. Genoud), LGPL-2.1'] } },
+  says: 'A STEP or STL file (a maker\'s CAD, a part from a slicer) made a fixed piece to build with: the kernel reads its solids and measures them; the piece is its bound\'s box, placed by the room\'s operations like any other, and weighs its solid\'s volume times its material\'s density. STL says no units: read as millimetres',
+  settings: [{ key: 'name', label: 'Its file name (says STEP or STL where its bytes do not)', type: 'text', default: 'part.step' }, { key: 'mat', label: 'Its material (for its mass)', type: 'text', default: 'steel-low' },
+    { key: 'data', label: 'Its bytes, as base64 (the board\'s Import file puts them here; a wired file is read first)', type: 'code', default: '' }],
+  ports: { inputs: [P('file', 'any', { label: 'the file: its bytes, a Blob, or Export\'s files (its first STEP)', optional: true })], outputs: [P('block', 'block'), P('thing', 'part'), P('volume', 'number', { unit: 'm^3' }), P('kg', 'number', { unit: 'kg' }), P('bound', 'record', { label: 'its bound: x, y, z', unit: 'm' }), P('solids', 'integer'), P('says', 'text')] },
+  run: async (i, c) => { let f = await (i.file as unknown), name = String(c.set.name ?? '');
+    // (no file wired: the bytes the board's Import file read from a person's file, kept on the node as base64)
+    if (f === undefined && c.set.data) f = Uint8Array.from(atob(String(c.set.data)), (ch) => ch.charCodeAt(0));
+    if (f && typeof f === 'object' && !(f instanceof Uint8Array) && !(f instanceof Blob) && !ArrayBuffer.isView(f)) { const e = Object.entries(f as Record<string, unknown>), k = e.find(([x]) => /\.ste?p$/i.test(x)) ?? e.find(([x]) => /\.stl$/i.test(x)); if (k) { name = k[0]; f = k[1]; } }
+    const bytes = f instanceof Uint8Array ? f : f instanceof Blob ? new Uint8Array(await f.arrayBuffer()) : f instanceof ArrayBuffer ? new Uint8Array(f) : undefined;
+    if (!bytes) throw new Error('wire a file in (its bytes, a Blob, or Export\'s files)');
+    const m = await importFile(bytes, name, { mat: String(c.set.mat ?? '') }); return { block: m.block, thing: partOfBlock(m.block), volume: m.volume, kg: m.kg, bound: { x: m.bound[0], y: m.bound[1], z: m.bound[2] }, solids: m.solids, says: m.says }; },
+  tests: [{ inputs: { get file() { return rodFiles(); } }, set: { mat: 'steel-low' }, outputs: { solids: 1, volume: Math.PI * 0.005 ** 2 * 0.04, kg: Math.PI * 0.005 ** 2 * 0.04 * densityKg('steel-low')!, bound: { x: 0.01, y: 0.04, z: 0.01 } } }] } as BlockDef);
+
 register({ version: 1, by: 'built in', pure: true, id: 'export.files', name: 'Export (STEP, STL, 3MF, glTF, BOM)', kind: 'bridge', ability: 'transform', domains: ['mechanical', 'manufacturing', 'vehicles'],
   spec: { gloss: 'What are its files, for any CAD program, slicer or viewer, and does its STEP read back as it went out?', discipline: 'mechanical.design', role: 'data source', codes: [{ scheme: 'ACM CCS 2012', code: '10010147.10010371.10010396', label: 'Computing methodologies: shape modeling' }],
     model: { equations: ['the STEP read back by the kernel: its solids counted and their volume against what was written'], class: 'data', time: 'steady', linear: true, method: 'Exact solids made, written by OpenCascade (STEP AP242 through XDE, names and colours), meshed by its tessellator for STL, 3MF and glTF', references: ['ISO 10303-242 (STEP AP242)', '3MF Consortium, 3MF Core Specification 1.3', 'Khronos glTF 2.0'] } },
