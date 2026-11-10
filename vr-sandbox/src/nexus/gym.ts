@@ -143,7 +143,7 @@ export async function inspect(request: string, features: readonly Feature[], vie
   const prompt = `${INSPECT_RULE}\n\nThe request: ${request}\n${features.length ? `Its recognition list:\n${features.map((f) => `- ${f.name}: ${f.is}${f.where ? ` (${f.where})` : ''}`).join('\n')}` : 'It has no recognition list: "features" is [].'}\nThe pictures, in order: ${views.map((v) => v.name).join(', ')}.`;
   let why = '';
   for (let k = 0; k < 2; k++) {
-    let reply: string; try { reply = await ask(why ? `${prompt}\n\nYour last reply could not be read: ${why}. Reply again with the one JSON object, in its form, and nothing else.` : prompt, 'default', views.map((v) => v.png)); }
+    let reply: string; try { const got = await ask(why ? `${prompt}\n\nYour last reply could not be read: ${why}. Reply again with the one JSON object, in its form, and nothing else.` : prompt, 'default', views.map((v) => v.png)); reply = typeof got === "string" ? got : JSON.stringify(got); }
     catch (e) { why = `the inspector could not be asked: ${(e as Error).message}`; continue; }
     try { return inspectionOf(reply, features); } catch (e) { why = (e as Error).message; }
   }

@@ -497,7 +497,7 @@ async function composeShown(q: string, why: string): Promise<void> {
   const tick = window.setInterval(paint, 1000); paint();
   try {
     let done: ComposeRun & { tokens?: Tok };
-    if (inViewer) done = await composeBuild(q.trim(), { ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: savedBlocks(), onStep: (s, b) => heard(s, structuredClone(b)) });
+    if (inViewer) done = await composeBuild(q.trim(), { features: true, ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: savedBlocks(), onStep: (s, b) => heard(s, structuredClone(b)) });
     else {
       const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'compose', request: q.trim(), blocks: savedBlocks() }) });
       if (res.status === 404 || res.status === 405) throw new Error('this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand works without it; to build with Claude, open the app the session serves (npm run app), or the page on claude.ai.');
