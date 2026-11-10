@@ -881,6 +881,39 @@ Reply with one JSON object and nothing else, compact: {"rows":[[name, count, kin
 - kind "link": one slender piece pinned between two others (a cylinder, a strut, a rod).
 - 2 to 14 rows; names short, plain, unique among the rows. Never repeat the thing itself as a row, and never summarise ("hardware", "internals", "fittings" are not rows: name the bolts, the seals, the pins).
 - If the thing given is itself ONE made piece or ONE bought part, reply {"rows":[],"is":"piece"} or {"rows":[],"is":"bought"}.`;
+/** Every part connects to another part (the user, 2026-11-10: "make it so each part has to connect to another part"). The
+ *  solids are read as their boxes (a turned one as the box round it, a member as the box round its line and thickness);
+ *  two connect where their boxes meet or stand within 2 mm. The largest connected group stays where it is; every other
+ *  group is moved, nearest first, straight along the gap to the nearest solid of what is already connected, a millimetre
+ *  into it so they bear on each other, and joins it. With `small`, only groups of less than that share of the whole
+ *  volume are moved (a machine's big parts are held by its pivots, and are not dragged off them). Returns how many
+ *  solids were moved; a group made only of pinned links is left on its pins. */
+function connectParts(solids: Record<string, unknown>[], o: { small?: number; fixed?: Record<string, unknown>[] } = {}): number {
+  const N = (v: unknown) => [0, 1, 2].map((k) => Number((v as unknown[])?.[k]) || 0);
+  const boxOf = (x: Record<string, unknown>): { lo: number[]; hi: number[] } => { if (Array.isArray(x.span)) { const [a, c] = x.span as number[][], t = (Array.isArray(x.thick) ? Math.max(...(x.thick as number[]).map(Number)) : Number(x.thick) || 0) / 2; return { lo: [0, 1, 2].map((k) => Math.min(a![k]!, c![k]!) - t), hi: [0, 1, 2].map((k) => Math.max(a![k]!, c![k]!) + t) }; }
+    const at = N(x.at), z = N(x.size).map(Math.abs), rt = N(x.rot); let h = [z[0]! / 2, z[1]! / 2, z[2]! / 2];
+    if (rt.some((v) => Math.abs(v) > 0.5)) { const Rs = rt.map((d, ax) => roomTurnOf(ax as 0 | 1 | 2, d)), mv = (M: readonly number[], v: number[]) => [0, 1, 2].map((i) => M[i * 3]! * v[0]! + M[i * 3 + 1]! * v[1]! + M[i * 3 + 2]! * v[2]!), e = [0, 0, 0];
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) { const c = Rs.reduce((a, M) => mv(M, a), [sx * h[0]!, sy * h[1]!, sz * h[2]!]); for (let k = 0; k < 3; k++) e[k] = Math.max(e[k]!, Math.abs(c[k]!)); } h = e; }
+    return { lo: [at[0]! - h[0]!, at[1]!, at[2]! - h[2]!], hi: [at[0]! + h[0]!, at[1]! + 2 * h[1]!, at[2]! + h[2]!] }; };
+  const n = solids.length, fx = (o.fixed ?? []).map(boxOf); if (n < 2 && !fx.length) return 0;
+  const bx = solids.map(boxOf), gap = (a: { lo: number[]; hi: number[] }, b: { lo: number[]; hi: number[] }): number[] => [0, 1, 2].map((k) => (a.hi[k]! < b.lo[k]! ? b.lo[k]! - a.hi[k]! : a.lo[k]! > b.hi[k]! ? b.hi[k]! - a.lo[k]! : 0)), near = (g: number[]) => Math.hypot(g[0]!, g[1]!, g[2]!);
+  const up = Array.from({ length: n }, (_, i) => i), find = (i: number): number => (up[i] === i ? i : (up[i] = find(up[i]!)));
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) if (near(gap(bx[i]!, bx[j]!)) <= 2) up[find(i)] = find(j);
+  const vol = (b: { lo: number[]; hi: number[] }) => Math.max(1, (b.hi[0]! - b.lo[0]!) * (b.hi[1]! - b.lo[1]!) * (b.hi[2]! - b.lo[2]!)), groups = new Map<number, number[]>(); for (let i = 0; i < n; i++) groups.set(find(i), [...(groups.get(find(i)) ?? []), i]);
+  const gs = [...groups.values()], vg = gs.map((g) => g.reduce((t, i) => t + vol(bx[i]!), 0)), total = vg.reduce((t, v) => t + v, 0);
+  // (what is already connected: with fixed solids given, all that touches them; else the largest group)
+  const touchesFixed = (g: number[]) => g.some((i) => fx.some((f) => near(gap(bx[i]!, f)) <= 2));
+  const done: { lo: number[]; hi: number[] }[] = [...fx], left: number[][] = [];
+  if (fx.length) { for (const g of gs) { if (touchesFixed(g)) done.push(...g.map((i) => bx[i]!)); else left.push(g); } if (done.length === fx.length && !left.length) return 0; }
+  else { const main = vg.indexOf(Math.max(...vg)); gs.forEach((g, k) => { if (k === main) done.push(...g.map((i) => bx[i]!)); else left.push(g); }); }
+  let moved = 0;
+  while (left.length) { let best = -1, bg: number[] = [], bd = Infinity; left.forEach((g, k) => { for (const i of g) for (const d of done) { const q = gap(bx[i]!, d), dist = near(q); if (dist < bd) { bd = dist; best = k; bg = q; } } }); if (best < 0) break;
+    const g = left.splice(best, 1)[0]!, gv = g.reduce((t, i) => t + vol(bx[i]!), 0);
+    const skip = (o.small !== undefined && gv > total * o.small) || g.every((i) => Array.isArray(solids[i]!.span) && !Array.isArray(solids[i]!.thick)) || bd <= 2;
+    if (!skip) { const sh = bg.map((v) => (v === 0 ? 0 : v + Math.sign(v))); for (const i of g) { const x = solids[i]!; if (Array.isArray(x.span)) for (const e of x.span as number[][]) for (let k = 0; k < 3; k++) e[k] = e[k]! + sh[k]!; if (Array.isArray(x.at)) x.at = N(x.at).map((v, k) => v + sh[k]!); for (let k = 0; k < 3; k++) { bx[i]!.lo[k] = bx[i]!.lo[k]! + sh[k]!; bx[i]!.hi[k] = bx[i]!.hi[k]! + sh[k]!; } } moved += g.length; }
+    done.push(...g.map((i) => bx[i]!)); }
+  return moved;
+}
 /** The part builder (the user, 2026-11-10: "each part even tires and screws and everything need to be built and or placed"):
  *  an assembly that has been taken apart is built from its own pieces, in place of the rough solids that stood for it. */
 const BUILDER_RULE = `## Here: PART BUILDER (one task: one assembly's own pieces, each in its real shape and place)
@@ -935,6 +968,8 @@ export async function buildDeep(request: string, tree: PipeNode[], path: string[
       await Promise.all(jobs); }
     catch (e) { built.push(...rough.map((x) => ({ ...x }))); o.onPipe?.({ id: myId, stage: 'part builder', label, state: 'fail', ms: Date.now() - t0, rule: BUILDER_RULE, sent, got: (e as Error).message.slice(0, 600) }); } };
   await one(node, path, boxOf(mine), mine);
+  // (every piece connects to another: among themselves first, then the whole to the rest of the machine if it stands clear)
+  const joined = connectParts(built); connectParts(built, { fixed: rest.filter((x) => !Array.isArray(x.span) || Array.isArray(x.thick)).slice(0, 400), small: 1.01 });
   for (const x of built) if (body !== undefined) x.body = body;
   // (a piece of a kind becomes that kind's library part, fitted to its box; one that will not fit stays as drawn. No more
   // than 250 library parts in one layout: each is a node of its own, and a phone must still draw it)
@@ -948,7 +983,7 @@ export async function buildDeep(request: string, tree: PipeNode[], path: string[
     const e = new Engine(nb); await e.run(); const bad = tools.filter((_t, k) => e.state.get(idOf(k))?.status !== 'ok'), st = e.state.get('layout');
     if (!bad.length) { if (st?.status !== 'ok') throw new Error(String(st?.error ?? 'the layout did not build').slice(0, 200)); out = nb; break; }
     if (pass) throw new Error(`${bad.length} library parts did not build`); for (const t of bad) { delete t.use; delete t.set; delete t.pre; real--; asDrawn++; } solids = [...solids]; }
-  const says = `built ${P}: ${built.length} pieces in place of ${mine.length} rough solids, ${real} of them real library parts${asDrawn ? `, ${asDrawn} bought parts drawn plain (no library part of that size, or over the limit)` : ''}; ${calls} call${calls === 1 ? '' : 's'}${skipped ? `; ${skipped} assemblies left rough (press Build on them to go on)` : ''}`;
+  const says = `built ${P}: ${built.length} pieces in place of ${mine.length} rough solids${joined ? `, ${joined} of them moved to touch another piece (they were given standing clear)` : ', every one touching another'}, ${real} of them real library parts${asDrawn ? `, ${asDrawn} bought parts drawn plain (no library part of that size, or over the limit)` : ''}; ${calls} call${calls === 1 ? '' : 's'}${skipped ? `; ${skipped} assemblies left rough (press Build on them to go on)` : ''}`;
   o.onPipe?.({ id: id++, stage: 'app', label: says, state: 'ok' }); o.onPipe?.({ tree });
   return { board: out, calls, pieces: built.length, real, says };
 }
@@ -1491,6 +1526,9 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         if (poor) say('features', `${poor} library part${poor === 1 ? '' : 's'} could not be made the size asked and stay as drawn (${misfit.slice(0, 3).join('; ')})`, false); }
       // (nothing is below the ground: a foot or a member's end given under y = 0 is brought up to it)
       for (const x of solids) { if (Array.isArray(x.span)) { for (const e of x.span as number[][]) if (e[1]! < 0) e[1] = 0; } else if (Array.isArray(x.at) && Number(x.at[1]) < 0) (x.at as unknown[])[1] = 0; }
+      // (every part connects to another: small things given standing clear of everything are moved to touch what is nearest;
+      // the big parts are held by their pivots and are not moved here)
+      { const mv2 = connectParts(solids, { small: 0.05 }); if (mv2) say('features', `${mv2} part${mv2 === 1 ? ' was' : 's were'} touching nothing and moved to touch the nearest part`); }
       // (MOVEMENT: every solid is of a body, and every pivot a pin one body turns on. A solid's body is the deepest thing on
       // its path that a pivot names; a link rides with the solid its first end is on; what no pivot names goes with the
       // body most of its subsystem is of, else with the nearest. The pivots are kept as a tree from what stands lowest, each
