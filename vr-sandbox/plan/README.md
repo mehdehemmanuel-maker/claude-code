@@ -16,6 +16,7 @@ The phases' state is in the table below (rewritten 2026-11-06; it had said every
 | `ANDON.md`, `NEAR-MISS.md` | stop the line: an open andon keeps its task, and all that waits on it, from being called passing; near misses, each with its kind (error, at-risk, reckless) and the response it called for, no blame | when a check fails on something done; when something nearly goes wrong |
 | `DEFECTS.md` | faults found in the code, each checked there (file and line), its state and the task that fixes it | when a fault is found or fixed |
 | `FIX-PLAN.md` | the faults a rough pass's builders met, grouped by the rule under them, and the fix for each root in order (decision 0029); the user reviews it before any root is fixed | at the end of each rough pass |
+| `GYM-LESSONS.md` | what the practice gym's inspector keeps saying of random builds: the recurring faults by root and by pipeline stage, counted (decision 0029, wave 14); rewritten by each run of `tests/evals/gym.eval.ts`, never by hand | when choosing which root of the pipeline to fix |
 | `CRITIQUE.md` | a panel's hard critique of the plan and the way of working, time first (2026-11-06); what to stop doing | when a critique is asked for |
 | `CRITIQUE-2.md` | the second hard critique (2026-11-07): code, context and process measured; the context tiers and the wave loop to run | before planning a wave |
 | `DIRECTIVE-2026-11-07.md` | the user's directive for a universal, functional CAD library, word for word; `AUDIT.md` is its audit and the work it starts | never: it is the user's |
