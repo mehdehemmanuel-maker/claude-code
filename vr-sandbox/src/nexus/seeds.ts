@@ -16,6 +16,7 @@ import './assemblies/machines';
 import './assemblies/things';
 import './assemblies/everyday';
 import './assemblies/vehicles';
+import './assemblies/kit-bodies';
 import './assemblies/robots2';
 
 // ---- a window, a door --------------------------------------------------------------------------------------------------
