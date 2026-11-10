@@ -859,6 +859,12 @@ Reply compactly, one row a solid, no spaces or line breaks: {"solids":[["front l
 - Solids touch their neighbours (a wheel's inner face at the body's side, a cab's foot on the deck's top); they do not sink into each other and nothing floats.
 - Hold the overall size to the size asked. Real proportions: look at how the real machine is built and place every solid where it is on the real thing; left and right sides mirror in z.
 - "mat" one of: steel-low, al-6061, rubber, abs, glass, wood-pine. "color" the real thing's colour as #rrggbb (machine bodies painted, tyres and tracks near black, glass pale blue, bare metal grey).`;
+/** The pipeline as it runs, for a page to show live (the user, 2026-11-10: "I wanna see the actual pipeline run in the chat
+ *  interface"): one event when a stage's call starts and one when it ends, with what was sent (the part after the stage's
+ *  rule) and what came back, word for word; a line of the app's own work is a stage "app". And the tree of what the thing
+ *  is made of, each node with where it stands. */
+export interface PipeEvent { id: number; stage: string; label: string; state: 'run' | 'ok' | 'fail'; ms?: number; rule?: string; sent?: string; got?: string }
+export interface PipeNode { name: string; n: number; kind: string; is: string; state: 'waiting' | 'decomposed' | 'placed' | 'pinned' | 'failed'; kids: PipeNode[] }
 export interface ComposeStep { stage: 'features' | 'split' | 'part' | 'fold' | 'join' | 'gate' | 'look' | 'remember' | 'check'; line: string; ok: boolean }
 /** The run's steps as a tree (decision 0028), for the pages to show: each part, how it was made, the id it is kept
  *  under, its pieces, what still fails, its own parts. */
@@ -1049,7 +1055,7 @@ every join, and end with a space.show of the last block's thing.`;
  *  it passes. `ask` makes each call; `onStep` hears each step's line and the board as it stands. A new board: what was
  *  open before is the caller's to keep (the page's Undo). `remember: false` keeps nothing (a test that must leave the
  *  library as it was). */
-export async function composeBuild(request: string, o: { ask: Ask; board?: Board; blocks?: AgentBlock[]; onStep?: (s: ComposeStep, board: Board) => void; remember?: boolean;
+export async function composeBuild(request: string, o: { ask: Ask; board?: Board; blocks?: AgentBlock[]; onStep?: (s: ComposeStep, board: Board) => void; onPipe?: (e: PipeEvent | { tree: PipeNode[] }) => void; remember?: boolean;
   /** the eye (decision 0029, wave 14): a picture of the board as the 3D view shows it (PNG bytes), or undefined where none
    *  can be taken; given, the model is shown it with the recognition list after the build and its checks */ look?: (board: Board) => Promise<{ png: Uint8Array } | undefined>;
   /** the recognition list written before the split (one call more); on where `look` is given, unless said */ features?: boolean;
@@ -1059,7 +1065,8 @@ export async function composeBuild(request: string, o: { ask: Ask; board?: Board
   const { starterBoards } = await import('./starters'), steps: ComposeStep[] = [], plans: AgentPlan[] = [], unmet: string[] = [], remembered: string[] = [], recalled: string[] = [], missing: string[] = [];
   let board: Board = emptyBoard(request.slice(0, 80)), asks = 0;
   const keep = o.remember !== false, three = limiter(3);
-  const say = (stage: ComposeStep['stage'], line: string, ok = true) => { const s = { stage, line, ok }; steps.push(s); o.onStep?.(s, board); };
+  let pipeId = 0;
+  const say = (stage: ComposeStep['stage'], line: string, ok = true) => { const s = { stage, line, ok }; steps.push(s); o.onStep?.(s, board); if (o.skeleton) o.onPipe?.({ id: pipeId++, stage: 'app', label: line, state: ok ? 'ok' : 'fail' }); };
   const t00 = Date.now(), budget = o.budgetMs ?? 240_000, notReached: string[] = [], replies = newReplies(), labelOf = (prompt: string) => /## Here: ([^\n(]+)/.exec(prompt.slice(Math.max(0, prompt.indexOf(PROMPT_CUT) - 2500)))?.[1]?.trim() ?? /## Here: ([^\n(]+)/.exec(prompt)?.[1]?.trim() ?? 'a call';
   /** One ask within the budget: none is begun once it is spent, and one in flight is left when it runs out (said, never waited for). */
   const within = async <T>(what: string, f: () => Promise<T>): Promise<T> => { const left = budget - (Date.now() - t00);
@@ -1263,7 +1270,14 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
     type Tree = { name: string; n: number; kind: 'part' | 'system' | 'link'; is: string; kids: Tree[] };
     // (calls side by side, sixteen at a time at most: more than that and the service turns them away)
     const pooled = async <A, B>(xs: A[], f: (x: A) => Promise<B>): Promise<B[]> => { const out = new Array<B>(xs.length); let k = 0; await Promise.all(Array.from({ length: Math.min(16, xs.length) }, async () => { for (;;) { const i = k++; if (i >= xs.length) return; out[i] = await f(xs[i]!); } })); return out; };
-    const split1 = async (path: string[], is: string): Promise<Tree[]> => { const r = firstJson(await call(`${DECOMPOSE_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nDecompose: ${path.length ? `${path.join(' > ')} (${is})` : 'the whole thing asked for'}`, 'quick'), 'decomposer') as { rows?: unknown };
+    // (a stage's call, shown: its start, then its end with what was sent after the rule and what came back)
+    const tcall = async (stage: string, label: string, prompt: string): Promise<string> => { const id = pipeId++, t0 = Date.now(), cut = prompt.indexOf(PROMPT_CUT), rule = (cut > 0 ? prompt.slice(0, cut) : '').slice(0, 6000), sent = (cut > 0 ? prompt.slice(cut + PROMPT_CUT.length) : prompt).slice(0, 6000);
+      o.onPipe?.({ id, stage, label, state: 'run', rule, sent });
+      try { const got = await call(prompt, 'quick'); o.onPipe?.({ id, stage, label, state: 'ok', ms: Date.now() - t0, rule, sent, got: got.slice(0, 8000) }); return got; }
+      catch (e) { o.onPipe?.({ id, stage, label, state: 'fail', ms: Date.now() - t0, rule, sent, got: (e as Error).message.slice(0, 600) }); throw e; } };
+    const stateOf = new Map<string, PipeNode['state']>(), showTree = () => { if (!o.onPipe) return; const walk = (ns: Tree[], path: string[]): PipeNode[] => ns.map((n) => { const k = [...path, n.name].join(' > '); return { name: n.name, n: n.n, kind: n.kind, is: n.is, state: stateOf.get(k) ?? (n.kids.length ? 'decomposed' : 'waiting'), kids: walk(n.kids, [...path, n.name]) }; }); o.onPipe({ tree: walk(tree, []) }); };
+    const mark = (ns: Tree[], path: string[], st: PipeNode['state']) => { for (const n of ns) { const k = [...path, n.name].join(' > '); if (n.kind !== 'link') stateOf.set(k, st); mark(n.kids, [...path, n.name], st); } };
+    const split1 = async (path: string[], is: string): Promise<Tree[]> => { const r = firstJson(await tcall('decomposer', path.length ? path.join(' > ') : 'the whole thing', `${DECOMPOSE_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nDecompose: ${path.length ? `${path.join(' > ')} (${is})` : 'the whole thing asked for'}`), 'decomposer') as { rows?: unknown };
       return (Array.isArray(r.rows) ? r.rows : []).filter(Array.isArray).slice(0, 12).map((x) => ({ name: String(x[0]), n: Math.max(1, Math.round(Number(x[1]) || 1)), kind: x[2] === 'system' ? 'system' as const : x[2] === 'link' ? 'link' as const : 'part' as const, is: String(x[3] ?? ''), kids: [] })); };
     // (a tool's size as built with some settings, mm, kept; and the fit: the settings that bring it nearest a box asked for,
     // found by trying its choices and scaling its numbers, with the quarter turns that lay its long side along the box's)
@@ -1290,12 +1304,12 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       let pre: number[] = [], po = Infinity; for (const seq of SWAPS) { const v = turnedDims(best!, seq), e2 = v.reduce((t, x, i) => t + Math.abs(Math.log(Math.max(x, 1e-3) / target[i]!)), 0); if (e2 < po - 1e-9) { po = e2; pre = seq; } }
       return { set, pre, err: bestErr, dims: best! }; };
     let tree: Tree[] = [], treeText = '', sizing: Promise<unknown> | undefined;
-    try { tree = await split1([], '');
-      const size1 = () => call(`${SIZER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nIts subsystems (and under each, what it is made of):\n${tree.map((n) => `${n.name}${n.n > 1 ? ` x${n.n}` : ''} (${n.is})${n.kids.map((k) => `\n  ${k.name}${k.n > 1 ? ` x${k.n}` : ''}`).join('')}`).join('\n').slice(0, 5000)}`, 'quick').then((t) => firstJson(t, 'sizer'), (e: unknown) => e);
+    try { tree = await split1([], ''); showTree();
+      const size1 = () => tcall('sizer', 'zones and pivots', `${SIZER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nIts subsystems (and under each, what it is made of):\n${tree.map((n) => `${n.name}${n.n > 1 ? ` x${n.n}` : ''} (${n.is})${n.kids.map((k) => `\n  ${k.name}${k.n > 1 ? ` x${k.n}` : ''}`).join('')}`).join('\n').slice(0, 5000)}`).then((t) => firstJson(t, 'sizer'), (e: unknown) => e);
       let level = tree.map((n) => ({ n, path: [n.name] })), total = tree.length, depth = 1;
       for (; depth < 3 && total < 200; depth++) { const sys = level.filter((x) => x.n.kind === 'system').slice(0, 24); if (!sys.length) break;
         const next = await pooled(sys, async (x) => { try { x.n.kids = await split1(x.path, x.n.is); } catch { x.n.kids = []; } return x.n.kids.map((k) => ({ n: k, path: [...x.path, k.name] })); });
-        level = next.flat(); total += level.length; sizing ??= size1(); }
+        level = next.flat(); total += level.length; sizing ??= size1(); showTree(); }
       sizing ??= size1();
       const lines = (ns: Tree[], d: number): string[] => ns.flatMap((n) => [`${'  '.repeat(d)}${n.name}${n.n > 1 ? ` x${n.n}` : ''}${n.kids.length ? ':' : ''} (${n.is})`, ...lines(n.kids, d + 1)]);
       treeText = lines(tree, 0).join('\n'); const count = (ns: Tree[]): number => ns.reduce((a, n) => a + (n.kids.length ? count(n.kids) : 1), 0);
@@ -1319,21 +1333,21 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         const units = bare.flatMap((n) => { const subs = n.kids.filter((k) => k.kids.length), loose = n.kids.filter((k) => !k.kids.length);
           return subs.length ? [...subs.map((k) => ({ path: [n.name, k.name], is: k.is, parts: k.kids })), ...(loose.length ? [{ path: [n.name], is: n.is, parts: loose }] : [])] : [{ path: [n.name], is: n.is, parts: n.kids.length ? n.kids : [n] }]; }).slice(0, 48);
         const placed = await pooled(units, async (u) => { const nm = u.path.join(' > '); try {
-          const r = firstJson(await call(`${PLACER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${livery}\nEvery subsystem's zone:\n${zoneText}\n${pivotText}\nYour branch: ${nm} (${u.is}), inside the zone of ${u.path[0]}. Its parts:\n${lines1(u.parts, 0).join('\n').slice(0, 2000)}`, 'quick'), `placer (${nm})`) as { rows?: unknown };
+          const r = firstJson(await tcall('placer', nm, `${PLACER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${livery}\nEvery subsystem's zone:\n${zoneText}\n${pivotText}\nYour branch: ${nm} (${u.is}), inside the zone of ${u.path[0]}. Its parts:\n${lines1(u.parts, 0).join('\n').slice(0, 2000)}`), `placer (${nm})`) as { rows?: unknown }; mark(u.parts, u.path, Array.isArray(r.rows) && r.rows.length ? 'placed' : 'failed'); showTree();
           return (Array.isArray(r.rows) ? r.rows as Row[] : []).filter(Array.isArray).slice(0, 40).map((x): Record<string, unknown> => (x[1] === 'beam' || x[1] === 'bar'
             ? (() => { const p1 = [Number(x[3]), Number(x[4]), Number(x[5])], p2 = [Number(x[6]), Number(x[7]), Number(x[8])], len = Math.hypot(p2[0]! - p1[0]!, p2[1]! - p1[1]!, p2[2]! - p1[2]!), dp = Math.abs(Number(x[2])) || len / 10, wd = Math.abs(Number(x[11])) || dp;
                 return [...p1, ...p2].every(Number.isFinite) && len > 5 ? { name: `${nm} > ${kindOf(x[0]).name}`, kind: kindOf(x[0]).kind, span: [p1, p2], thick: [dp, wd], ends: true, shape: x[1] === 'bar' ? 'rod' : 'box', size: [dp, len, wd], at: [(p1[0]! + p2[0]!) / 2, (p1[1]! + p2[1]!) / 2, (p1[2]! + p2[2]!) / 2], mat: x[9], color: x[10], rot: [0, 0, 0] } : { name: `${nm} > ${String(x[0])}`, shape: 'box', size: [1, 1, 1], at: [0, 0, 0], skip: true }; })()
             : x[0] === 'use'
             ? { use: String(x[1]), name: `${nm} > ${String(x[2])}`, size: [x[3], x[4], x[5]], at: [x[6], x[7], x[8]], rot: [x[9] ?? 0, x[10] ?? 0, x[11] ?? 0] }
             : { name: `${nm} > ${kindOf(x[0]).name}`, kind: kindOf(x[0]).kind, shape: x[1], axis: x[2], size: [x[3], x[4], x[5]], at: [x[6], x[7], x[8]], mat: x[9], color: x[10], rot: [x[11] ?? 0, x[12] ?? 0, x[13] ?? 0] }));
-        } catch (e) { say('features', `placer (${nm}): ${(e as Error).message.slice(0, 100)}`, false); return []; } });
+        } catch (e) { mark(u.parts, u.path, 'failed'); showTree(); say('features', `placer (${nm}): ${(e as Error).message.slice(0, 100)}`, false); return []; } });
         // (a row whose size or place is not three numbers is left out, and said: one bad row must not lose the whole machine)
         { const all = placed.flat().filter((x) => !x.skip), fin = (v: unknown) => Array.isArray(v) && [0, 1, 2].every((k) => v[k] !== null && v[k] !== '' && Number.isFinite(Number(v[k])));
           solids = all.filter((x) => fin(x.size) && fin(x.at) && (x.size as unknown[]).every((v) => Math.abs(Number(v)) >= 1)).slice(0, 500); if (solids.length < all.length) say('features', `${all.length - solids.length} row${all.length - solids.length === 1 ? '' : 's'} left out: no size or place given`, false); } say('features', `placers: ${solids.length} solids from ${placed.filter((x) => x.length).length} of ${units.length} branches`);
         if (links.length && solids.length) { try {
           const N3 = (v: unknown) => [0, 1, 2].map((k) => Number((v as unknown[])?.[k]) || 0), vol = (x: Record<string, unknown>) => N3(x.size).reduce((a, v) => a * Math.abs(v), 1);
           const anchors = [...solids].sort((p, q) => vol(q) - vol(p)).slice(0, 140);
-          const r = firstJson(await call(`${JOINER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${livery}\nThe solids placed:\n${anchors.map((x, k) => { const sz = N3(x.size), at = N3(x.at), rt = N3(x.rot); if (Array.isArray(x.span)) { const [a, c] = x.span as number[][]; return `${k} ${String(x.name)} | a member ${sz[0]} deep, ${sz[2]} wide, from ${a!.join(' ')} to ${c!.join(' ')} (true heights)`; } return `${k} ${String(x.name)} | ${sz.join(' ')} | ${at.join(' ')}${rt.some((v) => v) ? ` | turned ${rt.join(' ')}` : ''}`; }).join('\n')}\n${pivotText}\nThe links to place:\n${links.slice(0, 40).map((l) => `${l.name}${l.n > 1 ? ` x${l.n}` : ''} (${l.is})`).join('\n')}`, 'quick'), 'joiner') as { rows?: unknown };
+          const r = firstJson(await tcall('joiner', `${links.length} link${links.length === 1 ? '' : 's'}`, `${JOINER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${livery}\nThe solids placed:\n${anchors.map((x, k) => { const sz = N3(x.size), at = N3(x.at), rt = N3(x.rot); if (Array.isArray(x.span)) { const [a, c] = x.span as number[][]; return `${k} ${String(x.name)} | a member ${sz[0]} deep, ${sz[2]} wide, from ${a!.join(' ')} to ${c!.join(' ')} (true heights)`; } return `${k} ${String(x.name)} | ${sz.join(' ')} | ${at.join(' ')}${rt.some((v) => v) ? ` | turned ${rt.join(' ')}` : ''}`; }).join('\n')}\n${pivotText}\nThe links to place:\n${links.slice(0, 40).map((l) => `${l.name}${l.n > 1 ? ` x${l.n}` : ''} (${l.is})`).join('\n')}`), 'joiner') as { rows?: unknown }; for (const l of links) stateOf.set(l.name, 'pinned'); showTree();
           // (each end is brought onto the solid it names: the nearest point of that solid's box, turned as the solid is)
           const mv = (M: readonly number[], v: number[]) => [0, 1, 2].map((i) => M[i * 3]! * v[0]! + M[i * 3 + 1]! * v[1]! + M[i * 3 + 2]! * v[2]!), mtv = (M: readonly number[], v: number[]) => [0, 1, 2].map((i) => M[i]! * v[0]! + M[3 + i]! * v[1]! + M[6 + i]! * v[2]!);
           const onto = (p: number[], k: unknown): number[] => { const x = anchors[Number(k)]; if (!x || typeof x.use === 'string' || !Number.isInteger(Number(k))) return p;
@@ -1352,7 +1366,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         } catch (e) { say('features', `joiner: ${(e as Error).message.slice(0, 120)}`, false); } }
       } catch (e) { say('features', `sizer: ${(e as Error).message.slice(0, 120)}; one layout call instead`, false); } }
       // (no tree, or nothing placed: the whole laid out by one call, as before)
-      if (!solids.length) { const lo = firstJson(await call(`${LAYOUT_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}${treeText ? `\nWhat it is made of (place every part; name each solid by its path, as "subsystem > part"; x2 means two solids, mirrored or spaced as on the real thing):\n${treeText.slice(0, 6000)}` : ''}`, 'quick'), 'layout') as { solids?: unknown };
+      if (!solids.length) { const lo = firstJson(await tcall('layout', 'the whole in one call', `${LAYOUT_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}${treeText ? `\nWhat it is made of (place every part; name each solid by its path, as "subsystem > part"; x2 means two solids, mirrored or spaced as on the real thing):\n${treeText.slice(0, 6000)}` : ''}`), 'layout') as { solids?: unknown };
         solids = (Array.isArray(lo.solids) ? lo.solids.slice(0, 200) : []).map((r) => (Array.isArray(r) ? { name: r[0], shape: r[1], axis: r[2], size: [r[3], r[4], r[5]], at: [r[6], r[7], r[8]], mat: r[9], color: r[10], rot: [r[11] ?? 0, r[12] ?? 0, r[13] ?? 0] } : r)); if (!solids.length) throw new Error('no solids in the reply'); }
       // (a row of a kind becomes that kind's library part; where the part cannot be made to fit, the row stays as drawn)
       for (const x of solids) { const id = typeof x.kind === 'string' ? KINDS[x.kind] : undefined; if (id && LIBRARY.has(id) && x.use === undefined && !(Array.isArray(x.span) && Array.isArray(x.thick))) x.use = id; }

@@ -26,7 +26,7 @@ import { starterBoards } from '../starters';
 import { boundsOfAll, isAssembly, isPart, massOfAll, placedCount } from '../assembly';
 import { LIBRARY, block, defaultsOf, portsOf, register, show, type BlockDef, type SettingDef } from '../blocks';
 import { DENSITY } from '../mass';
-import { TOOLS, boardBrief, composeBuild, gateOf, guideOf, isCompound, joinPlan, nearMissesView, planOf, planRequest, runPlan, setGuideMd, toolsFor, type AgentBlock, type AgentPlan, type AgentRun, type ComposeRun, type ComposeStep, type PlanRan, type PlanRun } from '../agent';
+import { TOOLS, boardBrief, composeBuild, gateOf, guideOf, isCompound, joinPlan, nearMissesView, planOf, planRequest, runPlan, setGuideMd, toolsFor, type AgentBlock, type AgentPlan, type AgentRun, type ComposeRun, type ComposeStep, type PipeEvent, type PipeNode, type PlanRan, type PlanRun } from '../agent';
 import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
 import { aiHere, askClaude, askForKey, inViewer, keyHere, sendReport, whyNot, type Report } from './viewer';
 // (the guide bundled, for the page on claude.ai, which builds Assist's call itself: decision 0027)
@@ -192,7 +192,29 @@ function pickEnd(key: string): void {
 // ---- the chat ----------------------------------------------------------------------------------------------------------
 interface Said { who: 'me' | 'ai'; html: string; bad?: boolean }
 let chat: Said[] = []; try { chat = JSON.parse(store.get(CHAT_KEY) ?? '[]') as Said[]; } catch { chat = []; }
-function drawChat(): void { $('msgs').innerHTML = chat.slice(-30).map((m) => `<div class="msg ${m.who}${m.bad ? ' bad' : ''}">${m.html}</div>`).join(''); $('msgs').scrollTop = $('msgs').scrollHeight; }
+// (it follows the newest line only while the reader is at the bottom: one who has scrolled up to read a stage stays there)
+function drawChat(): void { const el = $('msgs'), atEnd = el.scrollHeight - el.scrollTop - el.clientHeight < 60, was = el.scrollTop; el.innerHTML = chat.slice(-30).map((m) => `<div class="msg ${m.who}${m.bad ? ' bad' : ''}">${m.html}</div>`).join(''); el.scrollTop = atEnd ? el.scrollHeight : was; }
+// ---- the pipeline, live (the user, 2026-11-10: "I wanna see the actual pipeline run in the chat interface and it's
+// thinking collapsible or expandable"): each stage's call a row that opens onto what was sent and what came back, the
+// app's own work as lines between them, and the tree of what the thing is made of with where each node stands. What is
+// open stays open while the build goes on (the chat is redrawn every second). Tokens are an estimate, said so: a quarter
+// of the characters sent and got.
+const pipeOpen = new Set<string>(), pipeRuns = new Map<string, () => void>();
+const PIPE_ICON = { run: '◌', ok: '✓', fail: '✕' } as const, NODE_SAYS: Record<PipeNode['state'], string> = { waiting: 'waiting', decomposed: 'decomposed', placed: 'placed', pinned: 'pinned', failed: 'failed' };
+function pipeHtml(events: PipeEvent[], tree: PipeNode[], key: string): string {
+  const det = (k: string, cls: string, sum: string, body: string) => `<details class="${cls}" data-k="${esc(k)}"${pipeOpen.has(k) ? ' open' : ''}><summary>${sum}</summary>${pipeOpen.has(k) ? body : ''}</details>`;
+  const count = (ns: PipeNode[]): number => ns.reduce((t, n) => t + (n.kids.length ? count(n.kids) : 1), 0);
+  const node = (n: PipeNode, path: string): string => { const k = `${key}:t:${path}${n.name}`, line = `<span class="nm" data-focus="${esc(n.name)}">${esc(n.name)}</span>${n.n > 1 ? ` ×${n.n}` : ''} <span class="kd">${esc(n.kind)}</span> <span class="ns ${n.state}">${NODE_SAYS[n.state]}</span>`;
+    return n.kids.length ? det(k, 'pn', `${line} <span class="kd">${count(n.kids)} parts</span>`, `<div class="is">${esc(n.is)}</div>${n.kids.map((c) => node(c, `${path}${n.name} > `)).join('')}`) : `<div class="pl" title="${esc(n.is)}">${line}</div>`; };
+  const calls = events.filter((e) => e.stage !== 'app'), tok = Math.round(calls.reduce((t, e) => t + (e.rule?.length ?? 0) + (e.sent?.length ?? 0) + (e.got?.length ?? 0), 0) / 4);
+  const row = (e: PipeEvent): string => e.stage === 'app' ? `<div class="pa ${e.state}">${PIPE_ICON[e.state]} ${esc(e.label)}</div>`
+    : det(`${key}:e:${e.id}`, `ps ${e.state}`, `<span class="pi">${PIPE_ICON[e.state]}</span> <b>${esc(e.stage)}</b> ${esc(e.label)}<span class="pm">${e.ms !== undefined ? ` · ${(e.ms / 1000).toFixed(1)} s` : ' · running'}${e.got ? ` · ≈${Math.round(((e.rule?.length ?? 0) + (e.sent?.length ?? 0) + e.got.length) / 4)} tokens` : ''}</span>`,
+      `<div class="io"><b>Sent</b><pre>${esc(e.sent ?? '')}</pre>${e.got !== undefined ? `<b>${e.state === 'fail' ? 'Failed' : 'Came back'}</b><pre>${esc(e.got)}</pre>` : ''}<details class="rl" data-k="${esc(`${key}:r:${e.id}`)}"${pipeOpen.has(`${key}:r:${e.id}`) ? ' open' : ''}><summary>The stage's rule</summary><pre>${esc(e.rule ?? '')}</pre></details></div>`);
+  if (!events.length && !tree.length) return '';
+  return `<div class="pipe"><div class="ph">Pipeline · ${calls.length} call${calls.length === 1 ? '' : 's'}${calls.some((e) => e.state === 'run') ? ` · ${calls.filter((e) => e.state === 'run').length} running` : ''} · ≈${tok} tokens (estimated)</div>${tree.length ? det(`${key}:tree`, 'pt', `What it is made of · ${count(tree)} parts · tap a name to find it in the view`, tree.map((n) => node(n, '')).join('')) : ''}${events.map(row).join('')}</div>`;
+}
+$('msgs').addEventListener('toggle', (ev) => { const d = ev.target as HTMLDetailsElement, k = d?.dataset?.k; if (!k) return; const had = pipeOpen.has(k); if (d.open) pipeOpen.add(k); else pipeOpen.delete(k); if (d.open !== had) { pipeRuns.get(k.split(':')[0]!)?.(); drawChat(); } }, true);
+$('msgs').addEventListener('click', (ev) => { const f = (ev.target as HTMLElement).closest?.('[data-focus]') as HTMLElement | null; if (!f) return; ev.preventDefault(); const n = dock.focus(new RegExp(f.dataset.focus!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')); if (!n) say(`Nothing in the view is named "${f.dataset.focus}" yet.`, true); });
 function say(text: string, bad = false): void { chat.push({ who: 'ai', html: md(text), ...(bad ? { bad: true } : {}) }); keepChat(); drawChat(); }
 const keepChat = () => store.set(CHAT_KEY, JSON.stringify(chat.slice(-30)));
 $('grab').onclick = () => $('sheet').classList.toggle('low');
@@ -493,12 +515,16 @@ async function composeShown(q: string, why: string): Promise<void> {
   // (the orchestration as a tree as it runs (decision 0028): the split, each part under it, how it was made, ✓ or ✕, what
   // it was kept as; then the join and the check)
   const steps: ComposeStep[] = [], t0 = Date.now(), was = board; let note = 'Splitting it into its parts'; lastAsked = q.trim();
-  const paint = () => { live.html = `<div class="live"><span class="dots">${esc(note)}</span> · ${Math.round((Date.now() - t0) / 1000)} s</div><div class="note">${esc(why)}</div>${orchestrationHtml(orchestration(steps), 110)}`; drawChat(); };
+  const pipe = new Map<number, PipeEvent>(), pkey = `p${t0}`; let ptree: PipeNode[] = [], due = 0;
+  const heardPipe = (e: PipeEvent | { tree: PipeNode[] }) => { if ('tree' in e) ptree = e.tree; else pipe.set(e.id, e); if (!due) due = requestAnimationFrame(() => { due = 0; paint(); }); };
+  let finalOf: (() => string) | null = null;
+  const render = () => { live.html = finalOf ? finalOf() : `<div class="live"><span class="dots">${esc(note)}</span> · ${Math.round((Date.now() - t0) / 1000)} s</div><div class="note">${esc(why)}</div>${pipe.size || ptree.length ? pipeHtml([...pipe.values()], ptree, pkey) : orchestrationHtml(orchestration(steps), 110)}`; };
+  const paint = () => { render(); drawChat(); }; pipeRuns.set(pkey, render);
   const heard = (s: ComposeStep, b?: Board) => { steps.push(s); note = `${s.stage}: ${steps.length} step${steps.length === 1 ? '' : 's'}`; if (b && nodesOf(b).length) void use(b, false); paint(); };
   const tick = window.setInterval(paint, 1000); paint();
   try {
     let done: ComposeRun & { tokens?: Tok };
-    if (aiHere()) done = await composeBuild(q.trim(), { features: true, skeleton: true, ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: savedBlocks(), onStep: (s, b) => heard(s, structuredClone(b)) });
+    if (aiHere()) done = await composeBuild(q.trim(), { features: true, skeleton: true, ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: savedBlocks(), onStep: (s, b) => heard(s, structuredClone(b)), onPipe: heardPipe });
     else {
       const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'compose', request: q.trim(), blocks: savedBlocks() }) });
       if (res.status === 404 || res.status === 405) throw new Error('tap the key button (🔑) and paste your Anthropic API key to build with Claude here: this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand works without it; to build with Claude, open the app the session serves (npm run app), or the page on claude.ai.');
@@ -506,14 +532,14 @@ async function composeShown(q: string, why: string): Promise<void> {
       const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', got: (ComposeRun & { tokens?: Tok }) | null = null;
       for (;;) { const { value, done: end } = await reader.read(); if (value) buf += dec.decode(value, { stream: true });
         let k; while ((k = buf.indexOf('\n')) >= 0) { const l = buf.slice(0, k).trim(); buf = buf.slice(k + 1); if (!l) continue;
-          const o = JSON.parse(l) as { compose?: ComposeStep; board?: Board; done?: ComposeRun & { tokens?: Tok }; error?: string };
+          const o = JSON.parse(l) as { compose?: ComposeStep; pipe?: PipeEvent | { tree: PipeNode[] }; board?: Board; done?: ComposeRun & { tokens?: Tok }; error?: string }; if (o.pipe) heardPipe(o.pipe);
           if (o.error) throw new Error(o.error); if (o.compose) heard(o.compose, o.board); if (o.done) got = o.done; }
         if (end) break; }
       if (!got) throw new Error('the relay stopped before the build ended'); done = got;
     }
     if (done.tokens) spent(done.tokens);
     live.bad = !!done.unmet.length;
-    live.html = composedHtml(done, Math.round((Date.now() - t0) / 1000));
+    { const secs = Math.round((Date.now() - t0) / 1000); finalOf = () => (pipe.size ? `${md(done.answer)}<div class="tok">${secs} s</div>${pipeHtml([...pipe.values()], ptree, pkey)}${done.tokens ? tokLine(done.tokens) : '<div class="tok">on your claude.ai account</div>'}${nodesOf(done.board).length ? '<button class="keepb" data-keep="1">★ Keep this build</button>' : ''}` : composedHtml(done, secs)); render(); }
     if (nodesOf(done.board).length) { history.push(structuredClone(was)); await use(done.board); requestAnimationFrame(() => dock.fit()); }
   } catch (e) { live.bad = true; live.html = md(`Could not: ${inViewer ? whyNot(e) : (e as Error).message}`); }
   finally { clearInterval(tick); busy = false; ($('go') as HTMLButtonElement).disabled = false; keepChat(); drawChat(); }

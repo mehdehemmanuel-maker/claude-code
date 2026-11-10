@@ -60,6 +60,20 @@
     .msg details { margin-top: 6px; font-size: 12px; color: var(--dim); }
     .msg code { background: #ffffff12; padding: 0 4px; border-radius: 4px; font-size: 12px; }
     .msg .live { color: var(--wait); font-size: 12px; }
+    /* the pipeline, live: stage rows that open onto what was sent and what came back; the tree of what it is made of */
+    .pipe { margin-top: 8px; font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+    .pipe .ph { color: var(--dim); }
+    .pipe details { border: 1px solid #ffffff1a; border-radius: 8px; padding: 0 8px; background: #0000001f; }
+    .pipe summary { cursor: pointer; padding: 7px 0; list-style-position: inside; line-height: 1.35; }
+    .pipe .ps.run > summary .pi { color: var(--wait); } .pipe .ps.ok > summary .pi { color: #6fd08c; } .pipe .ps.fail > summary .pi, .pipe .pa.fail { color: var(--bad); }
+    .pipe .pm, .pipe .kd, .pipe .is { color: var(--dim); }
+    .pipe .pa { padding: 2px 8px; color: var(--dim); }
+    .pipe pre { white-space: pre-wrap; word-break: break-word; font: 11px/1.4 ui-monospace, Menlo, monospace; max-height: 260px; overflow: auto; background: #00000040; border-radius: 6px; padding: 6px; margin: 4px 0 8px; }
+    .pipe .io { padding-bottom: 6px; } .pipe .rl { border-style: dashed; }
+    .pipe .pn, .pipe .pl { margin-left: 10px; } .pipe .pl { padding: 4px 8px; }
+    .pipe .nm { text-decoration: underline dotted; cursor: pointer; }
+    .pipe .ns { font-size: 11px; padding: 0 5px; border-radius: 6px; background: #ffffff14; }
+    .pipe .ns.placed, .pipe .ns.pinned { color: #6fd08c; } .pipe .ns.failed { color: var(--bad); } .pipe .ns.waiting { color: var(--wait); }
     .dots::after { content: '…'; animation: d 1.2s steps(3) infinite; }
     @keyframes d { 0% { content: '.'; } 33% { content: '..'; } 66% { content: '…'; } }
     /* pieces and ideas: a row that scrolls sideways */
