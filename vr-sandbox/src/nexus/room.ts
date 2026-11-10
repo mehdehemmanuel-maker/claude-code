@@ -679,25 +679,15 @@ export class Block {
    *  placed is an input. Its solids carry their frames, its lines their directions; its rooms are kept under a turn about
    *  y and closed under any other. A block with a piece on a joint is refused (not made yet). */
   /** Blocks laid out where a layout says (the skeleton of a machine, before its real parts): each with the middle of its box
-   *  at (x, z) and its foot at y. The room then settles them so the layout is a thing that could stand: a block that
-   *  would sink into one laid before it is pushed out along the shortest way, one below the ground is lifted to it, and one
-   *  that touches nothing is let down onto what is under it (or the ground). The places are the layout's, said so in its
-   *  note; no faces are written (a layout joins nothing: the parts that replace its blocks are joined by the operations). */
+   *  at (x, z) and its foot at y, as the layout gives them; the whole is then stood on the ground (its lowest point at
+   *  y = 0). Nothing else is moved: a layout's solids may run into each other (a turned boom's box crosses its
+   *  neighbour's), and pushing them apart broke more layouts than it mended. No faces are written (a layout joins
+   *  nothing: the parts that replace its solids are joined by the operations). */
   static layout(name: string, items: { b: Block; at: P3 }[]): Block {
     if (!items.length) throw new Error(`${name}: a layout of nothing`);
-    const done: { lo: V3; hi: V3 }[] = [], pieces: Piece[] = [], faces: Face[] = [], rooms: RoomOf[] = [], E = 1e-6; let moved = 0;
-    for (const it of items) { Block.#is(it.b);
-      const d: V3 = [it.at[0] - (it.b.lo[0] + it.b.hi[0]) / 2, it.at[1] - it.b.lo[1], it.at[2] - (it.b.lo[2] + it.b.hi[2]) / 2], d0 = [...d];
-      const lo = (k: number) => it.b.lo[k]! + d[k]!, hi = (k: number) => it.b.hi[k]! + d[k]!, over = (q: { lo: V3; hi: V3 }, k: number) => Math.min(hi(k), q.hi[k]!) - Math.max(lo(k), q.lo[k]!);
-      for (let n = 0; n < 12; n++) { const q = done.find((x) => [0, 1, 2].every((k) => over(x, k) > E)); if (!q) break;
-        const k = [0, 1, 2].reduce((a, c) => (over(q, c) < over(q, a) ? c : a)), away = (lo(k) + hi(k)) / 2 >= (q.lo[k]! + q.hi[k]!) / 2 ? 1 : -1; d[k] = d[k]! + away * over(q, k); }
-      if (lo(1) < 0) d[1] = d[1]! - lo(1);
-      // (near enough counts as touching: a small solid a little off its neighbour (a tooth by a jaw) stays where it was laid)
-      const near = Math.max(0.002, 0.3 * Math.min(hi(0) - lo(0), hi(1) - lo(1), hi(2) - lo(2)));
-      const touches = lo(1) <= E || done.some((q) => { const o = [0, 1, 2].map((k) => over(q, k)); return o.every((x) => x > -near) && o.filter((x) => x > E).length >= 2; });
-      if (!touches) { const under = done.filter((q) => over(q, 0) > E && over(q, 2) > E && q.hi[1]! <= lo(1) + E).map((q) => q.hi[1]!); d[1] = d[1]! - (lo(1) - Math.max(0, ...under)); }
-      if (d.some((x, k) => Math.abs(x - d0[k]!) > E)) moved++;
-      const sft = Block.#shift(it.b, d); pieces.push(...sft.pieces); faces.push(...sft.faces); rooms.push(...sft.rooms); done.push({ lo: [lo(0), lo(1), lo(2)], hi: [hi(0), hi(1), hi(2)] }); }
+    const ds = items.map((it) => { Block.#is(it.b); return [it.at[0] - (it.b.lo[0] + it.b.hi[0]) / 2, it.at[1] - it.b.lo[1], it.at[2] - (it.b.lo[2] + it.b.hi[2]) / 2] as V3; });
+    const low = Math.min(...items.map((it, k) => it.b.lo[1] + ds[k]![1]!)), pieces: Piece[] = [], faces: Face[] = [], rooms: RoomOf[] = [];
+    items.forEach((it, k) => { const sft = Block.#shift(it.b, [ds[k]![0]!, ds[k]![1]! - low, ds[k]![2]!]); pieces.push(...sft.pieces); faces.push(...sft.faces); rooms.push(...sft.rooms); });
     return Block.#seal(name, pieces, faces, rooms);
   }
   static turn(b: Block, axis: Axis | P3, degrees: number, name = b.name): Block {

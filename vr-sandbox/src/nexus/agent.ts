@@ -788,12 +788,14 @@ export interface ComposeJoin { part: string; how: string; to: string }
 /** One step of the pipeline, a line for the chat. */
 /** The layout call: the whole as plain solids at places. */
 const LAYOUT_RULE = `## Here: lay the whole out as plain solids (one task: reply with one JSON object and nothing else)
-You are laying out a machine as a designer's first block model: 8 to 40 plain solids that together read, in silhouette and proportion, as exactly what is asked. Every feature a person must see gets its own solid or solids (each wheel, each leg segment, each track, the blade, the cab, the boom: separate solids, never one lump).
+You are laying out a machine as a designer's first block model: 15 to 60 plain solids that together read, in silhouette and proportion, as exactly what is asked. Every feature a person must see gets its own solid or solids (each wheel, each leg segment, each track, the blade, the cab, the boom: separate solids, never one lump).
 Reply compactly, one row a solid, no spaces or line breaks: {"solids":[["front left wheel","rod","z",sx,sy,sz,ax,ay,az,"rubber","#202020"],...]}
-- A row is [name, shape, axis, size x, size y, size z, at x, at y, at z, mat, color]; whole numbers.
+- A row is [name, shape, axis, size x, size y, size z, at x, at y, at z, mat, color, turn x, turn y, turn z]; whole numbers; the three turns (degrees, usually 0) may be left off.
 - Units mm. x is forward, y is up, z is to the right. The ground is y = 0; the machine stands on it and is centred on x = 0, z = 0.
 - The size is the solid's box: x long, y high, z wide. "at" is the middle of that box in x and z, and its FOOT (lowest point) in y.
-- shape: "box", "rod" (a cylinder along "axis": a wheel or roller across the machine has axis "z", a post has "y", a barrel or boom along it has "x"), "sphere", "cone" (along "axis").
+- shape: "box", "rod" (a cylinder along "axis": a wheel or roller across the machine has axis "z", a post has "y", a barrel or boom along it has "x"), "tube" (a hollow rod: a pipe, a duct, a tyre, a ring), "sphere", "dome" (a half sphere, flat side down), "cone" (along "axis"), "wedge" (a ramp: full height at its back, nothing at its front: a sloped bonnet, a blade, a nose, a roof slope).
+- The size is given BEFORE any turn. Turn a solid to slope or splay it (a raised boom turn z 30, a leg splayed out, a windscreen leaned back); a wedge faces forward and is turned about y to face elsewhere. Use turns and wedges wherever the real thing is not square: a model of only upright boxes is wrong.
+- Break long curved things into several turned segments (a neck, a tail, an arm, a curved blade).
 - Solids touch their neighbours (a wheel's inner face at the body's side, a cab's foot on the deck's top); they do not sink into each other and nothing floats.
 - Hold the overall size to the size asked. Real proportions: look at how the real machine is built and place every solid where it is on the real thing; left and right sides mirror in z.
 - "mat" one of: steel-low, al-6061, rubber, abs, glass, wood-pine. "color" the real thing's colour as #rrggbb (machine bodies painted, tyres and tracks near black, glass pale blue, bare metal grey).`;
@@ -1197,7 +1199,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
   // at once; the room settles it. Kept as the build where the parts' build below leaves something unmet)
   if (o.skeleton && recog) {
     try { const lo = firstJson(await call(`${LAYOUT_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${recognitionLines(recog)}${reqs.length ? `\n${requirementLines(reqs)}` : ''}`, 'quick'), 'layout') as { solids?: unknown };
-      const solids = (Array.isArray(lo.solids) ? lo.solids.slice(0, 60) : []).map((r) => (Array.isArray(r) ? { name: r[0], shape: r[1], axis: r[2], size: [r[3], r[4], r[5]], at: [r[6], r[7], r[8]], mat: r[9], color: r[10] } : r)); if (!solids.length) throw new Error('no solids in the reply');
+      const solids = (Array.isArray(lo.solids) ? lo.solids.slice(0, 60) : []).map((r) => (Array.isArray(r) ? { name: r[0], shape: r[1], axis: r[2], size: [r[3], r[4], r[5]], at: [r[6], r[7], r[8]], mat: r[9], color: r[10], rot: [r[11] ?? 0, r[12] ?? 0, r[13] ?? 0] } : r)); if (!solids.length) throw new Error('no solids in the reply');
       const b = emptyBoard(request.slice(0, 80)); placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify(solids) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
       const e = new Engine(b); await e.run(); const st = e.state.get('layout');
       if (st?.status !== 'ok') throw new Error(String(st?.error ?? 'the layout did not build').slice(0, 160));

@@ -1479,8 +1479,15 @@ const BUILT_THINGS: BlockDef[] = [
       const items = (rows as Record<string, unknown>[]).slice(0, 60).map((r, n) => { const nm = String(r.name || `solid ${n + 1}`), sz = [0, 1, 2].map((k) => Math.max(0.001, Math.abs(num(r.size, k, 'size', nm)))), at = [0, 1, 2].map((k) => num(r.at, k, 'place', nm)) as [number, number, number];
         const shape = String(r.shape || 'box'), axis = String(r.axis || 'y'), mat = String(r.mat || 'steel-low'), col = typeof r.color === 'string' && /^#[0-9a-f]{6}$/i.test(r.color) ? { color: parseInt(r.color.slice(1), 16) } : {};
         const [L, D] = axis === 'x' ? [sz[0]!, Math.min(sz[1]!, sz[2]!)] : axis === 'z' ? [sz[2]!, Math.min(sz[0]!, sz[1]!)] : [sz[1]!, Math.min(sz[0]!, sz[2]!)];
-        const upright = shape === 'rod' ? roomMade(nm, mat, { cyl: [D / 2, L] }, col) : shape === 'cone' ? roomMade(nm, mat, { cone: [D / 2, D * 0.15, L] }, col) : shape === 'sphere' ? roomMade(nm, mat, { sphere: [Math.min(...sz) / 2] }, col) : roomMade(nm, mat, { box: [sz[0]!, sz[1]!, sz[2]!] }, col);
-        const b = (shape === 'rod' || shape === 'cone') && axis !== 'y' ? roomTurn(upright, axis === 'x' ? 2 : 0, 90) : upright;
+        const round = shape === 'rod' || shape === 'cone' || shape === 'tube';
+        const upright = shape === 'rod' ? roomMade(nm, mat, { cyl: [D / 2, L] }, col) : shape === 'tube' ? roomMade(nm, mat, { tube: [D * 0.4, D / 2, L] }, col) : shape === 'cone' ? roomMade(nm, mat, { cone: [D / 2, D * 0.15, L] }, col)
+          : shape === 'sphere' ? roomMade(nm, mat, { sphere: [Math.min(...sz) / 2] }, col) : shape === 'dome' ? roomMade(nm, mat, { dome: [Math.min(sz[0]!, sz[2]!) / 2] }, col)
+          // (a wedge: full height at its back, down to nothing at its front, as wide as its z)
+          : shape === 'wedge' ? roomMade(nm, mat, { section: { pts: [[-sz[0]! / 2, 0], [sz[0]! / 2, 0], [-sz[0]! / 2, sz[1]!]], L: sz[2]! } }, col)
+          : roomMade(nm, mat, { box: [sz[0]!, sz[1]!, sz[2]!] }, col);
+        let b = round && axis !== 'y' ? roomTurn(upright, axis === 'x' ? 2 : 0, 90) : upright;
+        // (turned as the layout says, degrees about x, then y, then z; its place is still its box's middle and foot)
+        const rot = Array.isArray(r.rot) ? r.rot : []; for (const k of [0, 1, 2] as const) { const deg = Number(rot[k]) || 0; if (Math.abs(deg) > 0.5) b = roomTurn(b, k, deg); }
         return { b, at }; });
       return roomOut(roomLayout(String(c.set.name || 'layout'), items));
     },
