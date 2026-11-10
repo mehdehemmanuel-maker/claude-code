@@ -22,6 +22,15 @@ const relay = (): Plugin => {
     // (a thing of several things, built from its parts (decision 0027, composeBuild): a split call, a call a part that no
     // library assembly or starter board gives, a join call; each step's line streamed with the board as it stands, then
     // the run with what the calls cost)
+    // (a node of a build's tree taken apart to its single pieces, on demand (decomposeDeep): each call streamed)
+    if (mode === 'detail') {
+      res.setHeader('Content-Type', 'application/x-ndjson'); res.setHeader('Cache-Control', 'no-cache'); res.setHeader('X-Accel-Buffering', 'no');
+      const line = (o: unknown) => { if (!res.writableEnded) res.write(`${JSON.stringify(o)}\n`); };
+      try { const m = await load(agent); await m.decomposeDeep(String(request ?? ''), Array.isArray(asked.tree) ? asked.tree : [], Array.isArray(asked.path) ? asked.path.map(String) : [], { ask: m.sdkAsk({ model, signal: AbortSignal.timeout(240_000) }), onPipe: (e: unknown) => line({ pipe: e }), maxCalls: 150, idFrom: Number(asked.idFrom) || 100000 }); }
+      catch (e) { line({ error: (e as Error).message }); }
+      finally { res.end(); }
+      return;
+    }
     if (mode === 'compose') {
       res.setHeader('Content-Type', 'application/x-ndjson'); res.setHeader('Cache-Control', 'no-cache'); res.setHeader('X-Accel-Buffering', 'no');
       const line = (o: unknown) => { if (!res.writableEnded) res.write(`${JSON.stringify(o)}\n`); }, t0 = Date.now(), gone = new AbortController();

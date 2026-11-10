@@ -26,7 +26,7 @@ import { starterBoards } from '../starters';
 import { boundsOfAll, isAssembly, isPart, massOfAll, placedCount } from '../assembly';
 import { LIBRARY, block, defaultsOf, portsOf, register, show, type BlockDef, type SettingDef } from '../blocks';
 import { DENSITY } from '../mass';
-import { TOOLS, boardBrief, composeBuild, gateOf, guideOf, isCompound, joinPlan, nearMissesView, planOf, planRequest, runPlan, setGuideMd, toolsFor, type AgentBlock, type AgentPlan, type AgentRun, type ComposeRun, type ComposeStep, type PipeEvent, type PipeNode, type PlanRan, type PlanRun } from '../agent';
+import { TOOLS, boardBrief, composeBuild, decomposeDeep, gateOf, guideOf, isCompound, joinPlan, nearMissesView, planOf, planRequest, runPlan, setGuideMd, toolsFor, type AgentBlock, type AgentPlan, type AgentRun, type ComposeRun, type ComposeStep, type PipeEvent, type PipeNode, type PlanRan, type PlanRun } from '../agent';
 import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
 import { aiHere, askClaude, askForKey, inViewer, keyHere, sendReport, whyNot, type Report } from './viewer';
 // (the guide bundled, for the page on claude.ai, which builds Assist's call itself: decision 0027)
@@ -199,21 +199,41 @@ function drawChat(): void { const el = $('msgs'), atEnd = el.scrollHeight - el.s
 // app's own work as lines between them, and the tree of what the thing is made of with where each node stands. What is
 // open stays open while the build goes on (the chat is redrawn every second). Tokens are an estimate, said so: a quarter
 // of the characters sent and got.
-const pipeOpen = new Set<string>(), pipeRuns = new Map<string, () => void>();
+const pipeOpen = new Set<string>(), pipeRuns = new Map<string, { render: () => void; request: string; tree: () => PipeNode[]; events: Map<number, PipeEvent>; hear: (e: PipeEvent | { tree: PipeNode[] }) => void }>();
+let deepBusy = false;
 const PIPE_ICON = { run: '◌', ok: '✓', fail: '✕' } as const, NODE_SAYS: Record<PipeNode['state'], string> = { waiting: 'waiting', decomposed: 'decomposed', placed: 'placed', pinned: 'pinned', failed: 'failed' };
 function pipeHtml(events: PipeEvent[], tree: PipeNode[], key: string): string {
   const det = (k: string, cls: string, sum: string, body: string) => `<details class="${cls}" data-k="${esc(k)}"${pipeOpen.has(k) ? ' open' : ''}><summary>${sum}</summary>${pipeOpen.has(k) ? body : ''}</details>`;
-  const count = (ns: PipeNode[]): number => ns.reduce((t, n) => t + (n.kids.length ? count(n.kids) : 1), 0);
-  const node = (n: PipeNode, path: string): string => { const k = `${key}:t:${path}${n.name}`, line = `<span class="nm" data-focus="${esc(n.name)}">${esc(n.name)}</span>${n.n > 1 ? ` ×${n.n}` : ''} <span class="kd">${esc(n.kind)}</span> <span class="ns ${n.state}">${NODE_SAYS[n.state]}</span>`;
-    return n.kids.length ? det(k, 'pn', `${line} <span class="kd">${count(n.kids)} parts</span>`, `<div class="is">${esc(n.is)}</div>${n.kids.map((c) => node(c, `${path}${n.name} > `)).join('')}`) : `<div class="pl" title="${esc(n.is)}">${line}</div>`; };
+  const count = (ns: PipeNode[]): number => ns.reduce((t, n) => t + (n.kids.length ? count(n.kids) : 1), 0), all = (ns: PipeNode[], m: number): number => ns.reduce((t, n) => t + (n.kids.length ? all(n.kids, m * n.n) : m * n.n), 0);
+  const live = pipeRuns.has(key), apart = (path: string[], label: string) => (live ? ` <button class="dt" data-deep="${esc(JSON.stringify([key, path]))}"${deepBusy ? ' disabled' : ''}>${label}</button>` : '');
+  const badge = (n: PipeNode) => (n.leaf === 'piece' ? '<span class="ns placed">one piece</span>' : n.leaf === 'bought' ? '<span class="ns placed">bought part</span>' : n.leaf === 'failed' ? '<span class="ns failed">not split</span>' : `<span class="ns ${n.state}">${NODE_SAYS[n.state]}</span>`);
+  const open1 = (n: PipeNode): boolean => n.kind !== 'link' && n.leaf !== 'piece' && n.leaf !== 'bought' && (n.kids.length ? n.kids.some(open1) : true);
+  const node = (n: PipeNode, path: string): string => { const k = `${key}:t:${path}${n.name}`, here = [...(path ? path.slice(0, -3).split(' > ') : []), n.name], line = `<span class="nm" data-focus="${esc(n.name)}">${esc(n.name)}</span>${n.n > 1 ? ` ×${n.n}` : ''} <span class="kd">${esc(n.kind)}</span> ${badge(n)}${open1(n) ? apart(here, 'Take apart') : ''}`;
+    return n.kids.length ? det(k, 'pn', `${line} <span class="kd">${all(n.kids, 1)} pieces</span>`, `<div class="is">${esc(n.is)}</div>${n.kids.map((c) => node(c, `${path}${n.name} > `)).join('')}`) : `<div class="pl">${line}${n.is ? `<div class="is">${esc(n.is)}</div>` : ''}</div>`; };
   const calls = events.filter((e) => e.stage !== 'app'), tok = Math.round(calls.reduce((t, e) => t + (e.rule?.length ?? 0) + (e.sent?.length ?? 0) + (e.got?.length ?? 0), 0) / 4);
   const row = (e: PipeEvent): string => e.stage === 'app' ? `<div class="pa ${e.state}">${PIPE_ICON[e.state]} ${esc(e.label)}</div>`
     : det(`${key}:e:${e.id}`, `ps ${e.state}`, `<span class="pi">${PIPE_ICON[e.state]}</span> <b>${esc(e.stage)}</b> ${esc(e.label)}<span class="pm">${e.ms !== undefined ? ` · ${(e.ms / 1000).toFixed(1)} s` : ' · running'}${e.got ? ` · ≈${Math.round(((e.rule?.length ?? 0) + (e.sent?.length ?? 0) + e.got.length) / 4)} tokens` : ''}</span>`,
       `<div class="io"><b>Sent</b><pre>${esc(e.sent ?? '')}</pre>${e.got !== undefined ? `<b>${e.state === 'fail' ? 'Failed' : 'Came back'}</b><pre>${esc(e.got)}</pre>` : ''}<details class="rl" data-k="${esc(`${key}:r:${e.id}`)}"${pipeOpen.has(`${key}:r:${e.id}`) ? ' open' : ''}><summary>The stage's rule</summary><pre>${esc(e.rule ?? '')}</pre></details></div>`);
   if (!events.length && !tree.length) return '';
-  return `<div class="pipe"><div class="ph">Pipeline · ${calls.length} call${calls.length === 1 ? '' : 's'}${calls.some((e) => e.state === 'run') ? ` · ${calls.filter((e) => e.state === 'run').length} running` : ''} · ≈${tok} tokens (estimated)</div>${tree.length ? det(`${key}:tree`, 'pt', `What it is made of · ${count(tree)} parts · tap a name to find it in the view`, tree.map((n) => node(n, '')).join('')) : ''}${events.map(row).join('')}</div>`;
+  return `<div class="pipe"><div class="ph">Pipeline · ${calls.length} call${calls.length === 1 ? '' : 's'}${calls.some((e) => e.state === 'run') ? ` · ${calls.filter((e) => e.state === 'run').length} running` : ''} · ≈${tok} tokens (estimated)</div>${tree.length ? det(`${key}:tree`, 'pt', `What it is made of · ${count(tree)} kinds of part, ${all(tree, 1)} pieces in all${tree.some(open1) ? apart([], 'Take everything apart') : ''}`, `<div class="is">Tap a name to find it in the view. "Take apart" splits a part down to its single pieces and bought parts, bolts included: names and counts for now, a few seconds and some tokens a press.</div>${tree.map((n) => node(n, '')).join('')}`) : ''}${events.map(row).join('')}</div>`;
 }
-$('msgs').addEventListener('toggle', (ev) => { const d = ev.target as HTMLDetailsElement, k = d?.dataset?.k; if (!k) return; const had = pipeOpen.has(k); if (d.open) pipeOpen.add(k); else pipeOpen.delete(k); if (d.open !== had) { pipeRuns.get(k.split(':')[0]!)?.(); drawChat(); } }, true);
+$('msgs').addEventListener('toggle', (ev) => { const d = ev.target as HTMLDetailsElement, k = d?.dataset?.k; if (!k) return; const had = pipeOpen.has(k); if (d.open) pipeOpen.add(k); else pipeOpen.delete(k); if (d.open !== had) { pipeRuns.get(k.split(':')[0]!)?.render(); drawChat(); } }, true);
+$('msgs').addEventListener('click', (ev) => { const d = (ev.target as HTMLElement).closest?.('[data-deep]') as HTMLElement | null; if (!d) return; ev.preventDefault(); ev.stopPropagation();
+  const [key, path] = JSON.parse(d.dataset.deep!) as [string, string[]], run = pipeRuns.get(key); if (!run || deepBusy) return; void takeApart(run, key, path); });
+/** A node of a build's tree taken apart to its single pieces (decomposeDeep): on claude.ai and with a key each call from the
+ *  page, elsewhere through the relay; the tree and the calls shown as they come. A hundred and fifty calls a press. */
+async function takeApart(run: NonNullable<ReturnType<typeof pipeRuns.get>>, key: string, path: string[]): Promise<void> {
+  deepBusy = true; pipeOpen.add(`${key}:tree`); run.render(); drawChat(); const idFrom = Math.max(100000, ...run.events.keys()) + 1;
+  try {
+    if (aiHere()) await decomposeDeep(run.request, run.tree(), path, { ask: (prompt, tier) => askClaude(prompt, { tier }), onPipe: run.hear, maxCalls: 150, idFrom });
+    else { const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'detail', request: run.request, tree: run.tree(), path, idFrom }) });
+      if (!res.ok || !res.body) throw new Error(`the relay answered ${res.status}`); const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
+      for (;;) { const { value, done: end } = await reader.read(); if (value) buf += dec.decode(value, { stream: true });
+        let k; while ((k = buf.indexOf('\n')) >= 0) { const l = buf.slice(0, k).trim(); buf = buf.slice(k + 1); if (!l) continue; const o = JSON.parse(l) as { pipe?: PipeEvent | { tree: PipeNode[] }; error?: string }; if (o.error) throw new Error(o.error); if (o.pipe) run.hear(o.pipe); }
+        if (end) break; } }
+  } catch (e) { run.hear({ id: Math.max(100000, ...run.events.keys()) + 1, stage: 'app', label: `could not take it apart: ${(e as Error).message.slice(0, 160)}`, state: 'fail' }); }
+  finally { deepBusy = false; run.render(); keepChat(); drawChat(); }
+}
 $('msgs').addEventListener('click', (ev) => { const f = (ev.target as HTMLElement).closest?.('[data-focus]') as HTMLElement | null; if (!f) return; ev.preventDefault(); const n = dock.focus(new RegExp(f.dataset.focus!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')); if (!n) say(`Nothing in the view is named "${f.dataset.focus}" yet.`, true); });
 function say(text: string, bad = false): void { chat.push({ who: 'ai', html: md(text), ...(bad ? { bad: true } : {}) }); keepChat(); drawChat(); }
 const keepChat = () => store.set(CHAT_KEY, JSON.stringify(chat.slice(-30)));
@@ -519,7 +539,7 @@ async function composeShown(q: string, why: string): Promise<void> {
   const heardPipe = (e: PipeEvent | { tree: PipeNode[] }) => { if ('tree' in e) ptree = e.tree; else pipe.set(e.id, e); if (!due) due = requestAnimationFrame(() => { due = 0; paint(); }); };
   let finalOf: (() => string) | null = null;
   const render = () => { live.html = finalOf ? finalOf() : `<div class="live"><span class="dots">${esc(note)}</span> · ${Math.round((Date.now() - t0) / 1000)} s</div><div class="note">${esc(why)}</div>${pipe.size || ptree.length ? pipeHtml([...pipe.values()], ptree, pkey) : orchestrationHtml(orchestration(steps), 110)}`; };
-  const paint = () => { render(); drawChat(); }; pipeRuns.set(pkey, render);
+  const paint = () => { render(); drawChat(); }; pipeRuns.set(pkey, { render, request: q.trim(), tree: () => ptree, events: pipe, hear: (e) => heardPipe(e) });
   const heard = (s: ComposeStep, b?: Board) => { steps.push(s); note = `${s.stage}: ${steps.length} step${steps.length === 1 ? '' : 's'}`; if (b && nodesOf(b).length) void use(b, false); paint(); };
   const tick = window.setInterval(paint, 1000); paint();
   try {
