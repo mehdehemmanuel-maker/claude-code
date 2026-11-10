@@ -597,6 +597,9 @@ export function motionOf(b: Block): Motion {
     const hit = (A: Obb, B: Obb): boolean => { const d: V3 = [B.c[0] - A.c[0], B.c[1] - A.c[1], B.c[2] - A.c[2]], axes: V3[] = [...A.ax, ...B.ax]; for (const p of A.ax) for (const q of B.ax) { const c = cross(p, q); if (Math.hypot(...c) > 1e-9) axes.push(c); }
       for (const L of axes) { const n = Math.hypot(...L), ra = A.ax.reduce((t, u, k) => t + A.h[k]! * Math.abs(dot(u, L)), 0), rb = B.ax.reduce((t, u, k) => t + B.h[k]! * Math.abs(dot(u, L)), 0); if (Math.abs(dot(d, L)) > ra + rb + 1e-9 * n) return false; } return true; };
     const mv = (M: readonly number[], v: V3): V3 => [M[0]! * v[0] + M[1]! * v[1] + M[2]! * v[2], M[3]! * v[0] + M[4]! * v[1] + M[5]! * v[2], M[6]! * v[0] + M[7]! * v[1] + M[8]! * v[2]];
+    // (a pivot given its needed range of motion (degrees from where it stands, the way its pin's line turns) is limited to
+    // that: the range is the requirement, and what is built round it must leave it free)
+    for (const j of joints) { if (j.limits) continue; const m = j.by.map((t) => /^layout pivot.* range (-?\d+)\.\.(-?\d+)$/.exec(t)).find(Boolean); if (m) j.limits = { lo: (Math.min(Number(m[1]), Number(m[2])) * Math.PI) / 180, hi: (Math.max(Number(m[1]), Number(m[2])) * Math.PI) / 180, src: 'its needed range of motion, as asked' }; }
     for (const j of joints) { if (j.limits || !j.turns || j.slide || !j.by.some((t) => t.startsWith('layout pivot'))) continue;
       // (only what is big enough to stop it counts: a piece of at least a thirtieth of its body's volume, or one of its three
       // largest; small fittings laid close to the other body (a hose, a bracket) would lock every joint and are passed by)

@@ -1531,10 +1531,10 @@ const BUILT_THINGS: BlockDef[] = [
         return { b, at, ...(Number.isInteger(Number(r.body)) && r.body !== undefined && r.body !== null ? { body: Number(r.body) } : {}) }; }) as { b: Block; at: [number, number, number]; body?: number }[];
       // (the pivots: each a steel pin at its point along its axis, fixed in one body, the other turning on it)
       let pv: unknown = []; try { pv = JSON.parse(String(c.set.pivots || '[]')); } catch (e) { throw new Error(`the pivots are not JSON: ${(e as Error).message}`); }
-      const hinges: { pin: number; a: number; b: number; name: string }[] = [];
+      const hinges: { pin: number; a: number; b: number; name: string; range?: [number, number] }[] = [];
       for (const [n, h] of ((Array.isArray(pv) ? pv : []) as Record<string, unknown>[]).slice(0, 60).entries()) { const nm = String(h.name || `pivot ${n + 1}`), d = Math.abs(Number(h.d)) / 1000, l = Math.abs(Number(h.l)) / 1000; if (!(d > 0.001 && l > 0.001) || !Number.isInteger(Number(h.a)) || !Number.isInteger(Number(h.b))) continue;
         const up = roomMade(`${nm} pin`, 'steel-low', { cyl: [d / 2, l] }, { color: 0x9aa3ad }), pin = h.axis === 'x' ? roomTurn(up, 2, 90) : h.axis === 'y' ? up : roomTurn(up, 0, 90);
-        hinges.push({ pin: items.length, a: Number(h.a), b: Number(h.b), name: `${nm} pin` }); items.push({ b: pin, at: [num(h.at, 0, 'place', nm), num(h.at, 1, 'place', nm) - (pin.hi[1] - pin.lo[1]) / 2, num(h.at, 2, 'place', nm)] }); }
+        hinges.push({ pin: items.length, a: Number(h.a), b: Number(h.b), name: `${nm} pin`, ...(Array.isArray(h.range) && h.range.length === 2 && h.range.every((v) => Number.isFinite(Number(v))) ? { range: [Number(h.range[0]), Number(h.range[1])] as [number, number] } : {}) }); items.push({ b: pin, at: [num(h.at, 0, 'place', nm), num(h.at, 1, 'place', nm) - (pin.hi[1] - pin.lo[1]) / 2, num(h.at, 2, 'place', nm)] }); }
       return roomOut(roomLayout(String(c.set.name || 'layout'), items, hinges));
     },
     tests: [{ set: {}, inputs: {}, outputs: { pieces: 2 } }] }),
