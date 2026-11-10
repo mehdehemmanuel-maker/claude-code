@@ -21,6 +21,7 @@ import { certificatesOf, check, diffOf, type Certificate, type Verdict } from '.
 import { massOfAll, type Assembly } from './assembly';
 import { alternatives, badConnections, compatible, interference, missingInterfaces, revisions, piecesOfParts, roleOf, searchByFunction, variantsOf as variantsById, working, type Found, type Working } from './aitools';
 import type { Block } from './room';
+import { turnOf as roomTurnOf } from './room';
 import { FORMATS, FormatError, SPLIT_STAGE_RULE, applyGraph, graphOf, newReplies, replyOf, sizeFits, sizeKeys, sizeLine, type Format, type Graph, type Replies } from './stages';
 import { REQUIRE_RULE, engineeringOf, marginLine, needsLine, needsOf, qty, requirementLine, requirementLines, requirementsOf, settingsForNeeds, type Engineering, type Needs, type Requirement } from './lookat';
 import { FEATURE_RULE, LOOK_RULE, SEE_RULE, featureLine, longestOf, lookedOf, metres, recognitionLines, recognitionOf, sameFeature, sizeOff, type Feature, type Looked, type Recognition } from './lookat';
@@ -804,7 +805,8 @@ const DECOMPOSE_RULE = `## Here: DECOMPOSER (one task: what ONE thing is made of
 You are given one thing: a whole machine, or one of its subsystems. List what it is directly made of, one level down only, as a real one is built: 3 to 12 rows. Never skip a level and never summarise: a complex thing has many subsystems, and each is decomposed by a later call.
 Reply with one JSON object and nothing else, compact: {"rows":[[name, count, kind, "what it is, in a few words"],...]}
 - kind "system": only where it has six or more distinct visible parts of its own and must be decomposed further (a track unit, a cab, a robot station). A simple thing made of a few pieces is a "part".
-- kind "part": one made or bought piece that is not usefully split (a plate, a wheel, a cylinder, a motor, a pane, a bolt set).
+- kind "part": one made or bought piece that is not usefully split (a plate, a wheel, a motor, a pane, a bolt set).
+- kind "link": one straight piece that runs from one part to ANOTHER and is pinned to both, so its place follows theirs: only a slender actuator or rod (a hydraulic cylinder, a gas spring, a strut, a tie rod, a push rod, a drive shaft). Never a member that carries other parts (a boom, an arm, a frame, a leg, an axle), and never a hose, a belt or a cable: those are parts.
 - count: how many of it its parent has (2 tracks, 6 legs). Names short and plain, unique among the rows.`;
 /** Tool lines kept for the session (toolLine in composeBuild). */
 const TOOL_LINES = new Map<string, string>(), TOOL_SIZES = new Map<string, number[] | undefined>();
@@ -813,6 +815,13 @@ const SIZER_RULE = `## Here: SIZER (one task: where each subsystem is on the mac
 Given a machine and its subsystems, give each subsystem its zone: the box it occupies on the real machine at the size asked. Subsystems that run through others (hydraulics, wiring, electronics) get the zone where their visible parts are.
 Reply with one JSON object and nothing else, compact: {"whole":[x,y,z],"body":"#rrggbb","rows":[[name, size x, size y, size z, at x, at y, at z],...]}
 Whole numbers, mm. x is forward, y is up, z is to the right; the ground is y = 0; the machine is centred on x = 0, z = 0. "at" is the middle of the zone in x and z and its FOOT in y. "whole" is the machine's overall size; "body" its main painted colour on the real thing. One row for every subsystem, its name exactly as given.`;
+const JOINER_RULE = `## Here: JOINER (one task: the links, each pinned between the two solids it joins)
+The machine's solids are placed and numbered below. The links are the straight parts still missing: each runs from one solid to another and is pinned to both (a boom cylinder from the frame up to the boom's underside). Give each link its two end points, on the real mounting spots of the two solids it joins.
+Reply with one JSON object and nothing else, compact: {"rows":[[name, shape, thick, x1, y1, z1, a, x2, y2, z2, b, mat, color],...]}
+- One row for every link, named exactly as given; the same link listed twice under two subsystems is ONE row; a link listed x2 is two rows (add "left", "right"), mirrored or spaced as on the real machine.
+- a and b: the numbers of the two solids it is pinned to. End 1 is a point ON solid a, end 2 a point ON solid b: whole numbers, mm, on the machine's axes (x forward, y up, z right); here y is the point's true height. A solid's line gives its size x y z, then its place: the middle of its box in x and z and its FOOT in y; then its turns if it has any.
+- shape: where the menu has a real library part of the link's kind, the shape MUST be that part's id (every hydraulic cylinder is the menu's hydraulic cylinder, never a drawn rod); only otherwise "rod", "tube" or "box" (a drawn bar, thick mm across): the app makes it the length between the two points and lays it on their line. thick: its real thickness, mm.
+- mat one of steel-low, al-6061, rubber, abs; color "#rrggbb" (hydraulic cylinders dark with a bright rod; bare links grey).`;
 const PLACER_RULE = `## Here: PLACER (one task: one subsystem's parts as solids, in place)
 You model ONE branch of a machine (a subsystem, or one part of a subsystem): every part listed for it becomes one or more plain solids, placed and sized as on the real machine, in the machine's own coordinates. Your zone is where it sits; the real outline matters more than filling the zone: sloped and round where the real thing is, never one lump.
 Reply with one JSON object and nothing else, compact: {"rows":[[name, shape, axis, size x, size y, size z, at x, at y, at z, mat, color, turn x, turn y, turn z],...]}
@@ -1238,11 +1247,11 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
   if (o.skeleton) {
     // (the decomposition: the whole into subsystems, each subsystem handed to the decomposer again, level by level, until
     // only parts are left (four levels and about 160 items at most); one call a thing, a level's calls at once)
-    type Tree = { name: string; n: number; kind: 'part' | 'system'; is: string; kids: Tree[] };
+    type Tree = { name: string; n: number; kind: 'part' | 'system' | 'link'; is: string; kids: Tree[] };
     // (calls side by side, sixteen at a time at most: more than that and the service turns them away)
     const pooled = async <A, B>(xs: A[], f: (x: A) => Promise<B>): Promise<B[]> => { const out = new Array<B>(xs.length); let k = 0; await Promise.all(Array.from({ length: Math.min(16, xs.length) }, async () => { for (;;) { const i = k++; if (i >= xs.length) return; out[i] = await f(xs[i]!); } })); return out; };
     const split1 = async (path: string[], is: string): Promise<Tree[]> => { const r = firstJson(await call(`${DECOMPOSE_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nDecompose: ${path.length ? `${path.join(' > ')} (${is})` : 'the whole thing asked for'}`, 'quick'), 'decomposer') as { rows?: unknown };
-      return (Array.isArray(r.rows) ? r.rows : []).filter(Array.isArray).slice(0, 12).map((x) => ({ name: String(x[0]), n: Math.max(1, Math.round(Number(x[1]) || 1)), kind: x[2] === 'system' ? 'system' as const : 'part' as const, is: String(x[3] ?? ''), kids: [] })); };
+      return (Array.isArray(r.rows) ? r.rows : []).filter(Array.isArray).slice(0, 12).map((x) => ({ name: String(x[0]), n: Math.max(1, Math.round(Number(x[1]) || 1)), kind: x[2] === 'system' ? 'system' as const : x[2] === 'link' ? 'link' as const : 'part' as const, is: String(x[3] ?? ''), kids: [] })); };
     // (the tools a placer may use instead of drawing: library blocks found by its branch's words, each a line of its id,
     // what it is, its settings with their defaults or choices, and its size as built at its defaults; built once, kept)
     const toolLine = async (id: string): Promise<string> => { if (TOOL_LINES.has(id)) return TOOL_LINES.get(id)!; let line = '';
@@ -1258,7 +1267,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       TOOL_SIZES.set(key, dims); return dims; };
     const SWAPS: number[][] = [[], [0], [1], [2], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1]];
     const turnedDims = (dm: number[], seq: number[]) => { const v = [...dm]; for (const k of seq) { const [a, b] = k === 0 ? [1, 2] : k === 1 ? [0, 2] : [0, 1]; [v[a], v[b]] = [v[b]!, v[a]!]; } return v; };
-    const fitTool = async (id: string, target: number[]): Promise<{ set: Record<string, unknown>; pre: number[]; err: number; dims: number[] } | undefined> => {
+    const fitTool = async (id: string, target: number[], long?: number): Promise<{ set: Record<string, unknown>; pre: number[]; err: number; dims: number[] } | undefined> => {
       const d = LIBRARY.get(id); if (!d || target.some((x) => !(x > 0))) return undefined;
       const ts = [...target].sort((a, b) => a - b), err = (dm: number[]) => { const a = [...dm].sort((x, y) => x - y); return a.reduce((t, v, i) => t + Math.abs(Math.log(Math.max(v, 1e-3) / ts[i]!)), 0); };
       let set: Record<string, unknown> = {}, t0 = Date.now(), best = await sizeOf(id, set); if (!best) return undefined; let bestErr = err(best); const slow = Date.now() - t0 > 120;
@@ -1268,6 +1277,11 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         if (q.choices?.length && !slow) { const cs = q.choices, step = Math.max(1, Math.ceil(cs.length / 24)); for (let i = 0; i < cs.length; i += step) await tryIt({ ...set, [q.key]: cs[i] }); }
         else if (typeof q.default === 'number' && q.default > 0) { const cur = Number(set[q.key] ?? q.default), bs = [...best!].sort((a, b) => a - b);
           for (const k of [2, 1, 0]) { const v = cur * ts[k]! / Math.max(bs[k]!, 1e-3); if (Number.isFinite(v) && v > 0) await tryIt({ ...set, [q.key]: Number(v.toPrecision(3)) }); } } }
+      // (a part that must span a gap: the setting its length follows (a cylinder's stroke) is solved for that length)
+      if (long) for (const q of ps) { if (q.choices?.length || !(typeof q.default === 'number' && q.default > 0)) continue;
+        for (let it = 0; it < 5; it++) { const cur = Number(set[q.key] ?? q.default), L0 = Math.max(...best!); if (Math.abs(L0 / long - 1) < 0.01) break;
+          const d1 = await sizeOf(id, { ...set, [q.key]: Number((cur * 1.5).toPrecision(4)) }); if (!d1) break; const slope = (Math.max(...d1) - L0) / (cur * 0.5); if (!(Math.abs(slope) > 1e-6)) break;
+          const v = Number((cur + (long - L0) / slope).toPrecision(4)); if (!(v > 0)) break; const d2 = await sizeOf(id, { ...set, [q.key]: v }); if (!d2 || Math.abs(Math.max(...d2) - long) >= Math.abs(L0 - long)) break; best = d2; set = { ...set, [q.key]: v }; bestErr = err(d2); } }
       let pre: number[] = [], po = Infinity; for (const seq of SWAPS) { const v = turnedDims(best!, seq), e2 = v.reduce((t, x, i) => t + Math.abs(Math.log(Math.max(x, 1e-3) / target[i]!)), 0); if (e2 < po - 1e-9) { po = e2; pre = seq; } }
       return { set, pre, err: bestErr, dims: best! }; };
     const toolsFor = async (words: string): Promise<string> => { const ls: string[] = []; for (const f of searchByFunction(words, 6)) { const l = await toolLine(f.id); if (l) ls.push(l); } return ls.join('\n'); };
@@ -1292,7 +1306,10 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         const zones = new Map((Array.isArray(sz.rows) ? sz.rows as Row[] : []).filter(Array.isArray).map((r) => [String(r[0]), r] as const)), livery = `Main body colour ${String(sz.body ?? '#c8a200')}; the whole machine is ${JSON.stringify(sz.whole ?? [])} mm (x long, y high, z wide).`;
         const zoneText = [...zones.values()].map((r) => `${r[0]}: zone ${r[1]} x ${r[2]} x ${r[3]} mm at ${r[4]}, ${r[5]}, ${r[6]}`).join('\n');
         say('features', `sizer: ${zones.size} subsystem zones`);
-        const units = tree.flatMap((n) => { const subs = n.kids.filter((k) => k.kids.length), loose = n.kids.filter((k) => !k.kids.length);
+        // (links are left to the JOINER, which sees where everything else ended up; a system of nothing but links goes with them)
+        const strip = (ns: Tree[]): Tree[] => ns.flatMap((n) => { if (n.kind === 'link') return []; const kids = strip(n.kids); return n.kids.length && !kids.length ? [] : [{ ...n, kids }]; }), bare = strip(tree);
+        const links: { name: string; n: number; is: string }[] = []; const walk = (ns: Tree[], path: string[]) => { for (const n of ns) { if (n.kind === 'link') links.push({ name: [...path, n.name].join(' > '), n: n.n, is: n.is }); else walk(n.kids, [...path, n.name]); } }; walk(tree, []);
+        const units = bare.flatMap((n) => { const subs = n.kids.filter((k) => k.kids.length), loose = n.kids.filter((k) => !k.kids.length);
           return subs.length ? [...subs.map((k) => ({ path: [n.name, k.name], is: k.is, parts: k.kids })), ...(loose.length ? [{ path: [n.name], is: n.is, parts: loose }] : [])] : [{ path: [n.name], is: n.is, parts: n.kids.length ? n.kids : [n] }]; }).slice(0, 48);
         const placed = await pooled(units, async (u) => { const nm = u.path.join(' > '); try {
           const menu = await toolsFor(`${u.path.join(' ')} ${u.is} ${u.parts.map((q) => q.name).join(' ')}`);
@@ -1302,20 +1319,37 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
             : { name: `${nm} > ${String(x[0])}`, shape: x[1], axis: x[2], size: [x[3], x[4], x[5]], at: [x[6], x[7], x[8]], mat: x[9], color: x[10], rot: [x[11] ?? 0, x[12] ?? 0, x[13] ?? 0] }));
         } catch (e) { say('features', `placer (${nm}): ${(e as Error).message.slice(0, 100)}`, false); return []; } });
         solids = placed.flat().slice(0, 500); say('features', `placers: ${solids.length} solids from ${placed.filter((x) => x.length).length} of ${units.length} branches`);
+        if (links.length && solids.length) { try {
+          const N3 = (v: unknown) => [0, 1, 2].map((k) => Number((v as unknown[])?.[k]) || 0), vol = (x: Record<string, unknown>) => N3(x.size).reduce((a, v) => a * Math.abs(v), 1);
+          const anchors = [...solids].sort((p, q) => vol(q) - vol(p)).slice(0, 140);
+          const menu = await toolsFor(links.map((l) => `${l.name.split(' > ').pop()} ${l.is}`).join(' ').slice(0, 400));
+          const r = firstJson(await call(`${JOINER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${livery}\nThe solids placed:\n${anchors.map((x, k) => { const sz = N3(x.size), at = N3(x.at), rt = N3(x.rot); return `${k} ${String(x.name)} | ${sz.join(' ')} | ${at.join(' ')}${rt.some((v) => v) ? ` | turned ${rt.join(' ')}` : ''}`; }).join('\n')}\n\nThe links to place:\n${links.slice(0, 40).map((l) => `${l.name}${l.n > 1 ? ` x${l.n}` : ''} (${l.is})`).join('\n')}${menu ? `\n\nReal library parts (shape = the id):\n${menu}` : ''}`, 'quick'), 'joiner') as { rows?: unknown };
+          // (each end is brought onto the solid it names: the nearest point of that solid's box, turned as the solid is)
+          const mv = (M: readonly number[], v: number[]) => [0, 1, 2].map((i) => M[i * 3]! * v[0]! + M[i * 3 + 1]! * v[1]! + M[i * 3 + 2]! * v[2]!), mtv = (M: readonly number[], v: number[]) => [0, 1, 2].map((i) => M[i]! * v[0]! + M[3 + i]! * v[1]! + M[6 + i]! * v[2]!);
+          const onto = (p: number[], k: unknown): number[] => { const x = anchors[Number(k)]; if (!x || typeof x.use === 'string' || !Number.isInteger(Number(k))) return p; const sz = N3(x.size).map(Math.abs), at = N3(x.at), Rs = N3(x.rot).map((d, ax) => roomTurnOf(ax as 0 | 1 | 2, d));
+            const fwd = (v: number[]) => Rs.reduce((a, M) => mv(M, a), v), inv = (v: number[]) => [...Rs].reverse().reduce((a, M) => mtv(M, a), v);
+            const ys = [-1, 1].flatMap((i) => [-1, 1].flatMap((j) => [-1, 1].map((l) => fwd([i * sz[0]! / 2, j * sz[1]! / 2, l * sz[2]! / 2])[1]!))), h = Math.max(...ys) - Math.min(...ys), c = [at[0]!, at[1]! + h / 2, at[2]!];
+            const loc = inv(p.map((v, i) => v - c[i]!)).map((v, i) => Math.max(-sz[i]! / 2, Math.min(sz[i]! / 2, v))); return fwd(loc).map((v, i) => Math.round(v + c[i]!)); };
+          let nl = 0; for (const x of (Array.isArray(r.rows) ? r.rows as Row[] : []).filter(Array.isArray).slice(0, 60)) { const p1 = onto([Number(x[3]), Number(x[4]), Number(x[5])], x[6]), p2 = onto([Number(x[7]), Number(x[8]), Number(x[9])], x[10]);
+            const len = Math.hypot(p2[0]! - p1[0]!, p2[1]! - p1[1]!, p2[2]! - p1[2]!), thick = Math.abs(Number(x[2])) || len / 12; if (![...p1, ...p2].every(Number.isFinite) || !(len > 5)) continue; nl++;
+            const shape = String(x[1]), mid = [(p1[0]! + p2[0]!) / 2, (p1[1]! + p2[1]!) / 2, (p1[2]! + p2[2]!) / 2];
+            solids.push(LIBRARY.has(shape) ? { use: shape, name: String(x[0]), span: [p1, p2], thick, size: [thick, len, thick], at: mid, rot: [0, 0, 0] } : { name: String(x[0]), span: [p1, p2], thick, shape, size: [thick, len, thick], at: mid, mat: x[11], color: x[12], rot: [0, 0, 0] }); }
+          say('features', `joiner: ${nl} link${nl === 1 ? '' : 's'} pinned between the solids they join`);
+        } catch (e) { say('features', `joiner: ${(e as Error).message.slice(0, 120)}`, false); } }
       } catch (e) { say('features', `sizer: ${(e as Error).message.slice(0, 120)}; one layout call instead`, false); } }
       // (no tree, or nothing placed: the whole laid out by one call, as before)
       if (!solids.length) { const lo = firstJson(await call(`${LAYOUT_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}${treeText ? `\nWhat it is made of (place every part; name each solid by its path, as "subsystem > part"; x2 means two solids, mirrored or spaced as on the real thing):\n${treeText.slice(0, 6000)}` : ''}`, 'quick'), 'layout') as { solids?: unknown };
         solids = (Array.isArray(lo.solids) ? lo.solids.slice(0, 200) : []).map((r) => (Array.isArray(r) ? { name: r[0], shape: r[1], axis: r[2], size: [r[3], r[4], r[5]], at: [r[6], r[7], r[8]], mat: r[9], color: r[10], rot: [r[11] ?? 0, r[12] ?? 0, r[13] ?? 0] } : r)); if (!solids.length) throw new Error('no solids in the reply'); }
       { let poor = 0; const misfit: string[] = []; for (const x of solids) { if (typeof x.use !== 'string') continue; const target = (x.size as unknown[]).map((v) => Math.abs(Number(v)));
-          const f = LIBRARY.has(x.use) ? await fitTool(x.use, target) : undefined;
+          const spanLen = Array.isArray(x.span) ? Math.max(...target) : 0, f = LIBRARY.has(x.use) ? await fitTool(x.use, target, spanLen || undefined) : undefined;
           // (within about a third on each side, summed: else the part is not the thing for that place, and a box stands in)
-          if (f && f.err < 1.2) { x.set = f.set; x.pre = f.pre; } else { poor++; misfit.push(`${String(x.use)} asked ${target.map((v: number) => Math.round(v)).join('x')} nearest ${f ? f.dims.map((v) => Math.round(v)).join('x') : 'none'}`); delete x.use; x.shape = 'box'; x.axis = 'y'; x.mat = 'steel-low'; x.color = '#8a8f98'; } }
+          if (f && f.err < 1.2 && (!spanLen || Math.abs(Math.max(...f.dims) / spanLen - 1) < 0.08)) { x.set = f.set; x.pre = f.pre; } else { poor++; misfit.push(`${String(x.use)} asked ${target.map((v: number) => Math.round(v)).join('x')} nearest ${f ? f.dims.map((v) => Math.round(v)).join('x') : 'none'}`); delete x.use; x.shape = spanLen ? 'rod' : 'box'; x.axis = 'y'; x.mat = 'steel-low'; x.color = '#8a8f98'; } }
         if (poor) say('features', `${poor} library part${poor === 1 ? '' : 's'} could not be made the size asked: drawn as plain solids (${misfit.slice(0, 3).join('; ')})`, false); }
       let b = emptyBoard(request.slice(0, 80)), st: ReturnType<Engine['state']['get']>, used = 0;
       for (let pass = 0; pass < 2; pass++) { b = emptyBoard(request.slice(0, 80));
         const tools = solids.filter((x) => typeof x.use === 'string' && LIBRARY.has(String(x.use))).slice(0, 120), drawn = solids.filter((x) => x.use === undefined);
         const idOf = (k: number) => `t${String(k).padStart(3, '0')}`;
-        placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify([...drawn, ...tools.map((t, k) => ({ in: k, name: t.name, at: t.at, rot: t.rot, pre: t.pre }))]) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
+        placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify([...drawn, ...tools.map((t, k) => ({ in: k, name: t.name, at: t.at, rot: t.rot, pre: t.pre, span: t.span }))]) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
         tools.forEach((t, k) => { placeBlock(b, String(t.use), -330, k * 140, (t.set ?? {}) as Record<string, unknown>, idOf(k)); b.nodes[idOf(k)]!.label = String(t.name); wire(b, idOf(k), 'block', 'layout', 'blocks'); });
         const e = new Engine(b); await e.run(); st = e.state.get('layout'); used = tools.length;
         const bad = tools.filter((_t, k) => e.state.get(idOf(k))?.status !== 'ok');
