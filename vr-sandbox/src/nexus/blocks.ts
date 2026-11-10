@@ -1485,8 +1485,8 @@ const BUILT_THINGS: BlockDef[] = [
           const d = [p2[0]! - p1[0]!, p2[1]! - p1[1]!, p2[2]! - p1[2]!], len = Math.hypot(d[0]!, d[1]!, d[2]!); if (!(len > 0.001)) throw new Error(`${nm}: its two ends are at one point`);
           let sb: Block; if (r.in !== undefined) { const w = wired[Number(r.in)]; if (!w) throw new Error(`${nm}: no part wired in at ${String(r.in)}`); sb = w;
             for (const k of (Array.isArray(r.pre) ? r.pre : []) as number[]) { if (k === 0 || k === 1 || k === 2) { try { sb = roomTurn(sb, k, 90); } catch { sb = roomTurn(roomFrozen(sb), k, 90); } } } }
-          else { const D = Math.max(0.002, Math.abs(Number(r.thick) || 0) / 1000 || len / 12), mat = String(r.mat || 'steel-low'), col = typeof r.color === 'string' && /^#[0-9a-f]{6}$/i.test(r.color) ? { color: parseInt(r.color.slice(1), 16) } : {};
-            sb = String(r.shape) === 'tube' ? roomMade(nm, mat, { tube: [D * 0.4, D / 2, len] }, col) : String(r.shape) === 'box' ? roomMade(nm, mat, { box: [D, len, D] }, col) : roomMade(nm, mat, { cyl: [D / 2, len] }, col); }
+          else { const tk = Array.isArray(r.thick) ? r.thick : [r.thick, r.thick], D = Math.max(0.002, Math.abs(Number(tk[0]) || 0) / 1000 || len / 12), W = Math.max(0.002, Math.abs(Number(tk[1]) || 0) / 1000 || D), mat = String(r.mat || 'steel-low'), col = typeof r.color === 'string' && /^#[0-9a-f]{6}$/i.test(r.color) ? { color: parseInt(r.color.slice(1), 16) } : {};
+            sb = String(r.shape) === 'tube' ? roomMade(nm, mat, { tube: [D * 0.4, D / 2, len] }, col) : String(r.shape) === 'box' ? roomMade(nm, mat, { box: [D, len, W] }, col) : roomMade(nm, mat, { cyl: [D / 2, len] }, col); }
           const u = [d[0]! / len, d[1]! / len, d[2]! / len], ax: [number, number, number] = [u[2]!, 0, -u[0]!], sn = Math.hypot(ax[0], ax[2]);
           if (sn > 1e-6) { const deg = (Math.atan2(sn, u[1]!) * 180) / Math.PI; try { sb = roomTurn(sb, ax, deg); } catch { sb = roomTurn(roomFrozen(sb), ax, deg); } }
           return { b: sb, at: [(p1[0]! + p2[0]!) / 2, (p1[1]! + p2[1]!) / 2 - (sb.hi[1] - sb.lo[1]) / 2, (p1[2]! + p2[2]!) / 2] as [number, number, number] }; }
