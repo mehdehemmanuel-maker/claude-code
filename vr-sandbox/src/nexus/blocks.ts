@@ -1479,7 +1479,9 @@ const BUILT_THINGS: BlockDef[] = [
       const num = (v: unknown, k: number, what: string, at: string) => { const x = Number((v as unknown[])?.[k]); if (!Number.isFinite(x)) throw new Error(`${at}: its ${what} needs three numbers (mm)`); return x / 1000; };
       const items = (rows as Record<string, unknown>[]).slice(0, 600).map((r, n) => { const nm = String(r.name || `solid ${n + 1}`), at = [0, 1, 2].map((k) => num(r.at, k, 'place', nm)) as [number, number, number];
         // (a real part wired in, placed as the row says and turned as it says)
-        if (r.in !== undefined) { let pb = wired[Number(r.in)]; if (!pb) throw new Error(`${nm}: no part wired in at ${String(r.in)}`); const rot = Array.isArray(r.rot) ? r.rot : []; for (const k of [0, 1, 2] as const) { const deg = Number(rot[k]) || 0; if (Math.abs(deg) > 0.5) { try { pb = roomTurn(pb, k, deg); } catch { pb = roomTurn(roomFrozen(pb), k, deg); } } } return { b: pb, at }; }
+        if (r.in !== undefined) { let pb = wired[Number(r.in)]; if (!pb) throw new Error(`${nm}: no part wired in at ${String(r.in)}`); const rot = Array.isArray(r.rot) ? r.rot : [];
+          // (quarter turns first, to lay its long side along its box's, then the turns the row gives)
+          for (const k of (Array.isArray(r.pre) ? r.pre : []) as number[]) { if (k === 0 || k === 1 || k === 2) { try { pb = roomTurn(pb, k, 90); } catch { pb = roomTurn(roomFrozen(pb), k, 90); } } } for (const k of [0, 1, 2] as const) { const deg = Number(rot[k]) || 0; if (Math.abs(deg) > 0.5) { try { pb = roomTurn(pb, k, deg); } catch { pb = roomTurn(roomFrozen(pb), k, deg); } } } return { b: pb, at }; }
         const sz = [0, 1, 2].map((k) => Math.max(0.001, Math.abs(num(r.size, k, 'size', nm))));
         const shape = String(r.shape || 'box'), axis = String(r.axis || 'y'), mat = String(r.mat || 'steel-low'), col = typeof r.color === 'string' && /^#[0-9a-f]{6}$/i.test(r.color) ? { color: parseInt(r.color.slice(1), 16) } : {};
         const [L, D] = axis === 'x' ? [sz[0]!, Math.min(sz[1]!, sz[2]!)] : axis === 'z' ? [sz[2]!, Math.min(sz[0]!, sz[1]!)] : [sz[1]!, Math.min(sz[0]!, sz[2]!)];

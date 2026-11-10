@@ -659,7 +659,20 @@ export function firstJson(text: string, what = 'plan'): Record<string, unknown> 
     if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue; }
     if (c === '"') inStr = true; else if (c === '{') depth++; else if (c === '}' && --depth === 0) { j = k; break; } }
   if (j < 0) throw new Error(`no ${what} in the reply: its JSON object is not closed (the reply was cut short?)`);
-  try { return JSON.parse(s.slice(i, j + 1)) as Record<string, unknown>; } catch (e) { throw new Error(`no ${what} in the reply: ${(e as Error).message}`); }
+  const body = s.slice(i, j + 1);
+  try { return JSON.parse(body) as Record<string, unknown>; } catch (e) {
+    // (a row reply with slips a reader can mend without guessing: a bare word where a string belongs (box, abs), an empty
+    // place between two commas (taken as 0), a comma before a closing bracket)
+    try { const mended = splitOutside(body).map((seg) => (seg.q ? seg.t : seg.t.replace(/'([^'\n]*)'/g, '"$1"').replace(/([\[,]\s*)([A-Za-z#][\w#.-]*)(?=\s*[,\]])/g, (m, pre: string, w: string) => (/^(true|false|null)$/.test(w) ? m : `${pre}"${w}"`)).replace(/,(\s*),/g, ',0$1,').replace(/,(\s*)\]/g, '$1]'))).join('');
+      return JSON.parse(mended) as Record<string, unknown>; }
+    catch { throw new Error(`no ${what} in the reply: ${(e as Error).message}`); } }
+}
+/** A text cut into its quoted strings and what lies between them. */
+function splitOutside(t: string): { t: string; q: boolean }[] {
+  const out: { t: string; q: boolean }[] = []; let cur = '', q = false, es = false;
+  for (const c of t) { if (q) { cur += c; if (es) es = false; else if (c === '\\') es = true; else if (c === '"') { out.push({ t: cur, q: true }); cur = ''; q = false; } }
+    else if (c === '"') { if (cur) out.push({ t: cur, q: false }); cur = '"'; q = true; } else cur += c; }
+  if (cur) out.push({ t: cur, q }); return out;
 }
 export function planOf(text: string): AgentPlan {
   const o = firstJson(text);
@@ -794,7 +807,7 @@ Reply with one JSON object and nothing else, compact: {"rows":[[name, count, kin
 - kind "part": one made or bought piece that is not usefully split (a plate, a wheel, a cylinder, a motor, a pane, a bolt set).
 - count: how many of it its parent has (2 tracks, 6 legs). Names short and plain, unique among the rows.`;
 /** Tool lines kept for the session (toolLine in composeBuild). */
-const TOOL_LINES = new Map<string, string>();
+const TOOL_LINES = new Map<string, string>(), TOOL_SIZES = new Map<string, number[] | undefined>();
 /** The sizer: each subsystem's zone on the machine; and the placer: one subsystem's parts as solids. */
 const SIZER_RULE = `## Here: SIZER (one task: where each subsystem is on the machine, and how big)
 Given a machine and its subsystems, give each subsystem its zone: the box it occupies on the real machine at the size asked. Subsystems that run through others (hydraulics, wiring, electronics) get the zone where their visible parts are.
@@ -808,7 +821,7 @@ Reply with one JSON object and nothing else, compact: {"rows":[[name, shape, axi
 - Whole numbers, mm. x is forward, y is up, z is to the right; the ground is y = 0. "at" is the middle of the solid's box in x and z, and its FOOT in y, on the MACHINE's axes (not your zone's).
 - shape: "box", "rod" (a cylinder along "axis": across the machine "z", upright "y", along it "x"), "tube" (hollow rod: pipe, duct, tyre, ring), "sphere", "dome" (half sphere, flat down), "cone" (along "axis"), "wedge" (a ramp: full height at its back, nothing at its front).
 - The size is given before any turn; turns are degrees (usually 0). Slope and splay with turns and wedges (a raised boom, a leaned windscreen); long curved things are several turned segments.
-- Where a real library part is offered for a part of yours and one of its settings makes it the size you need, PLACE IT instead of drawing: a row ["use", id, name, "setting=value;setting=value", at x, at y, at z, turn x, turn y, turn z] (only settings from its line; its size comes from its settings; "at" as for a solid). It brings its own real pieces, bolts and all. Where none fits in kind or size, draw.
+- Where a real library part is offered for a part of yours, PLACE IT instead of drawing: a row ["use", id, name, size x, size y, size z, at x, at y, at z, turn x, turn y, turn z]: the box it must fill, its place and its turns exactly as you would give them for a solid drawn there (a cylinder lying along a boom: long in x, turned as the boom is). The app sizes the real part to that box and lays it along it. It brings its own real pieces, bolts and all. Where none fits in kind, draw.
 - Small hidden parts (bolts, seals, wiring inside) are left out; visible ones are placed on the surfaces they sit on. Solids touch their neighbours; nothing floats.
 - mat one of steel-low, al-6061, rubber, abs, glass, wood-pine; color "#rrggbb": painted body panels in the main body colour given, tyres and tracks near black, glass pale blue, hydraulic rods bright grey, bare metal grey, lights their colour.`;
 /** The layout call: the whole as plain solids at places. */
@@ -1235,9 +1248,28 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
     const toolLine = async (id: string): Promise<string> => { if (TOOL_LINES.has(id)) return TOOL_LINES.get(id)!; let line = '';
       try { const d = LIBRARY.get(id); if (d && portsOf(d).outputs.some((q) => q.name === 'block')) { const tb = emptyBoard('tool'); placeBlock(tb, id, 0, 0, {}, 't'); const te = new Engine(tb); await te.run(); const blk = te.state.get('t')?.out?.block as { lo: number[]; hi: number[]; pieces: unknown[] } | undefined;
         if (blk) { const sets = paramsOf(d).slice(0, 8).map((q) => `${q.key}=${q.choices?.length ? `${String(q.default)} (${q.choices.slice(0, 8).join('|')})` : String(q.default)}${q.unit ? ` ${q.unit}` : ''}`).join('; ');
-          line = `${id} | ${d.name} | ${String(d.says ?? '').slice(0, 110)} | ${blk.pieces.length} real pieces | as built ${[0, 1, 2].map((k) => Math.round((blk.hi[k]! - blk.lo[k]!) * 1000)).join(' x ')} mm | settings: ${sets || 'none'}`; } } }
+          line = `${id} | ${d.name} | ${String(d.says ?? '').slice(0, 110)} | ${blk.pieces.length} real pieces | adjustable: ${sets ? 'yes' : 'no'}`; } } }
       catch { /* a block that does not build at its defaults is not offered */ }
       TOOL_LINES.set(id, line); return line; };
+    // (a tool's size as built with some settings, mm, kept; and the fit: the settings that bring it nearest a box asked for,
+    // found by trying its choices and scaling its numbers, with the quarter turns that lay its long side along the box's)
+    const sizeOf = async (id: string, set: Record<string, unknown>): Promise<number[] | undefined> => { const key = `${id} ${JSON.stringify(set)}`; if (TOOL_SIZES.has(key)) return TOOL_SIZES.get(key);
+      let dims: number[] | undefined; try { const tb = emptyBoard('tool'); placeBlock(tb, id, 0, 0, set, 't'); const te = new Engine(tb); await te.run(); const blk = te.state.get('t')?.out?.block as { lo: number[]; hi: number[] } | undefined; if (blk) dims = [0, 1, 2].map((k) => (blk.hi[k]! - blk.lo[k]!) * 1000); } catch { /* not buildable so */ }
+      TOOL_SIZES.set(key, dims); return dims; };
+    const SWAPS: number[][] = [[], [0], [1], [2], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1]];
+    const turnedDims = (dm: number[], seq: number[]) => { const v = [...dm]; for (const k of seq) { const [a, b] = k === 0 ? [1, 2] : k === 1 ? [0, 2] : [0, 1]; [v[a], v[b]] = [v[b]!, v[a]!]; } return v; };
+    const fitTool = async (id: string, target: number[]): Promise<{ set: Record<string, unknown>; pre: number[]; err: number; dims: number[] } | undefined> => {
+      const d = LIBRARY.get(id); if (!d || target.some((x) => !(x > 0))) return undefined;
+      const ts = [...target].sort((a, b) => a - b), err = (dm: number[]) => { const a = [...dm].sort((x, y) => x - y); return a.reduce((t, v, i) => t + Math.abs(Math.log(Math.max(v, 1e-3) / ts[i]!)), 0); };
+      let set: Record<string, unknown> = {}, t0 = Date.now(), best = await sizeOf(id, set); if (!best) return undefined; let bestErr = err(best); const slow = Date.now() - t0 > 120;
+      const tryIt = async (st: Record<string, unknown>) => { const dm = await sizeOf(id, st); if (dm && err(dm) < bestErr - 1e-9) { bestErr = err(dm); best = dm; set = st; } };
+      const ps = paramsOf(d).filter((q) => q.from === 'setting' && !/^(name|mat|material|color|colour|finish)$/.test(q.key));
+      for (let pass = 0; pass < (slow ? 1 : 2); pass++) for (const q of ps) {
+        if (q.choices?.length && !slow) { const cs = q.choices, step = Math.max(1, Math.ceil(cs.length / 24)); for (let i = 0; i < cs.length; i += step) await tryIt({ ...set, [q.key]: cs[i] }); }
+        else if (typeof q.default === 'number' && q.default > 0) { const cur = Number(set[q.key] ?? q.default), bs = [...best!].sort((a, b) => a - b);
+          for (const k of [2, 1, 0]) { const v = cur * ts[k]! / Math.max(bs[k]!, 1e-3); if (Number.isFinite(v) && v > 0) await tryIt({ ...set, [q.key]: Number(v.toPrecision(3)) }); } } }
+      let pre: number[] = [], po = Infinity; for (const seq of SWAPS) { const v = turnedDims(best!, seq), e2 = v.reduce((t, x, i) => t + Math.abs(Math.log(Math.max(x, 1e-3) / target[i]!)), 0); if (e2 < po - 1e-9) { po = e2; pre = seq; } }
+      return { set, pre, err: bestErr, dims: best! }; };
     const toolsFor = async (words: string): Promise<string> => { const ls: string[] = []; for (const f of searchByFunction(words, 6)) { const l = await toolLine(f.id); if (l) ls.push(l); } return ls.join('\n'); };
     let tree: Tree[] = [], treeText = '', sizing: Promise<unknown> | undefined;
     try { tree = await split1([], '');
@@ -1266,7 +1298,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
           const menu = await toolsFor(`${u.path.join(' ')} ${u.is} ${u.parts.map((q) => q.name).join(' ')}`);
           const r = firstJson(await call(`${PLACER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${livery}\nEvery subsystem's zone:\n${zoneText}\n\nYour branch: ${nm} (${u.is}), inside the zone of ${u.path[0]}. Its parts:\n${lines1(u.parts, 0).join('\n').slice(0, 2000)}${menu ? `\n\nReal library parts you may place instead of drawing (a "use" row):\n${menu}` : ''}`, 'quick'), `placer (${nm})`) as { rows?: unknown };
           return (Array.isArray(r.rows) ? r.rows as Row[] : []).filter(Array.isArray).slice(0, 40).map((x): Record<string, unknown> => (x[0] === 'use'
-            ? { use: String(x[1]), name: `${nm} > ${String(x[2])}`, set: Object.fromEntries(String(x[3] ?? '').split(';').map((kv) => kv.split('=').map((t) => t.trim())).filter((kv) => kv.length === 2 && kv[0]).map(([k, v]) => [k, v !== '' && Number.isFinite(Number(v)) ? Number(v) : v])), at: [x[4], x[5], x[6]], rot: [x[7] ?? 0, x[8] ?? 0, x[9] ?? 0] }
+            ? { use: String(x[1]), name: `${nm} > ${String(x[2])}`, size: [x[3], x[4], x[5]], at: [x[6], x[7], x[8]], rot: [x[9] ?? 0, x[10] ?? 0, x[11] ?? 0] }
             : { name: `${nm} > ${String(x[0])}`, shape: x[1], axis: x[2], size: [x[3], x[4], x[5]], at: [x[6], x[7], x[8]], mat: x[9], color: x[10], rot: [x[11] ?? 0, x[12] ?? 0, x[13] ?? 0] }));
         } catch (e) { say('features', `placer (${nm}): ${(e as Error).message.slice(0, 100)}`, false); return []; } });
         solids = placed.flat().slice(0, 500); say('features', `placers: ${solids.length} solids from ${placed.filter((x) => x.length).length} of ${units.length} branches`);
@@ -1274,11 +1306,16 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       // (no tree, or nothing placed: the whole laid out by one call, as before)
       if (!solids.length) { const lo = firstJson(await call(`${LAYOUT_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}${treeText ? `\nWhat it is made of (place every part; name each solid by its path, as "subsystem > part"; x2 means two solids, mirrored or spaced as on the real thing):\n${treeText.slice(0, 6000)}` : ''}`, 'quick'), 'layout') as { solids?: unknown };
         solids = (Array.isArray(lo.solids) ? lo.solids.slice(0, 200) : []).map((r) => (Array.isArray(r) ? { name: r[0], shape: r[1], axis: r[2], size: [r[3], r[4], r[5]], at: [r[6], r[7], r[8]], mat: r[9], color: r[10], rot: [r[11] ?? 0, r[12] ?? 0, r[13] ?? 0] } : r)); if (!solids.length) throw new Error('no solids in the reply'); }
+      { let poor = 0; const misfit: string[] = []; for (const x of solids) { if (typeof x.use !== 'string') continue; const target = (x.size as unknown[]).map((v) => Math.abs(Number(v)));
+          const f = LIBRARY.has(x.use) ? await fitTool(x.use, target) : undefined;
+          // (within about a third on each side, summed: else the part is not the thing for that place, and a box stands in)
+          if (f && f.err < 1.2) { x.set = f.set; x.pre = f.pre; } else { poor++; misfit.push(`${String(x.use)} asked ${target.map((v: number) => Math.round(v)).join('x')} nearest ${f ? f.dims.map((v) => Math.round(v)).join('x') : 'none'}`); delete x.use; x.shape = 'box'; x.axis = 'y'; x.mat = 'steel-low'; x.color = '#8a8f98'; } }
+        if (poor) say('features', `${poor} library part${poor === 1 ? '' : 's'} could not be made the size asked: drawn as plain solids (${misfit.slice(0, 3).join('; ')})`, false); }
       let b = emptyBoard(request.slice(0, 80)), st: ReturnType<Engine['state']['get']>, used = 0;
       for (let pass = 0; pass < 2; pass++) { b = emptyBoard(request.slice(0, 80));
         const tools = solids.filter((x) => typeof x.use === 'string' && LIBRARY.has(String(x.use))).slice(0, 120), drawn = solids.filter((x) => x.use === undefined);
         const idOf = (k: number) => `t${String(k).padStart(3, '0')}`;
-        placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify([...drawn, ...tools.map((t, k) => ({ in: k, name: t.name, at: t.at, rot: t.rot }))]) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
+        placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify([...drawn, ...tools.map((t, k) => ({ in: k, name: t.name, at: t.at, rot: t.rot, pre: t.pre }))]) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
         tools.forEach((t, k) => { placeBlock(b, String(t.use), -330, k * 140, (t.set ?? {}) as Record<string, unknown>, idOf(k)); b.nodes[idOf(k)]!.label = String(t.name); wire(b, idOf(k), 'block', 'layout', 'blocks'); });
         const e = new Engine(b); await e.run(); st = e.state.get('layout'); used = tools.length;
         const bad = tools.filter((_t, k) => e.state.get(idOf(k))?.status !== 'ok');
