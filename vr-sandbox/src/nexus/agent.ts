@@ -793,6 +793,20 @@ Reply with one JSON object and nothing else, compact: {"rows":[[name, count, kin
 - kind "system": it is itself made of several things and must be decomposed further (a track unit, a cab, a hydraulic circuit, a robot station).
 - kind "part": one made or bought piece that is not usefully split (a plate, a wheel, a cylinder, a motor, a pane, a bolt set).
 - count: how many of it its parent has (2 tracks, 6 legs). Names short and plain, unique among the rows.`;
+/** The sizer: each subsystem's zone on the machine; and the placer: one subsystem's parts as solids. */
+const SIZER_RULE = `## Here: SIZER (one task: where each subsystem is on the machine, and how big)
+Given a machine and its subsystems, give each subsystem its zone: the box it occupies on the real machine at the size asked. Subsystems that run through others (hydraulics, wiring, electronics) get the zone where their visible parts are.
+Reply with one JSON object and nothing else, compact: {"whole":[x,y,z],"body":"#rrggbb","rows":[[name, size x, size y, size z, at x, at y, at z],...]}
+Whole numbers, mm. x is forward, y is up, z is to the right; the ground is y = 0; the machine is centred on x = 0, z = 0. "at" is the middle of the zone in x and z and its FOOT in y. "whole" is the machine's overall size; "body" its main painted colour on the real thing. One row for every subsystem, its name exactly as given.`;
+const PLACER_RULE = `## Here: PLACER (one task: one subsystem's parts as solids, in place)
+You model ONE subsystem of a machine: every part listed for it becomes one or more plain solids, placed and sized as on the real machine, in the machine's own coordinates. Your zone is where it sits; the real outline matters more than filling the zone: sloped and round where the real thing is, never one lump.
+Reply with one JSON object and nothing else, compact: {"rows":[[name, shape, axis, size x, size y, size z, at x, at y, at z, turn x, turn y, turn z, mat, color],...]}
+- One row or more for every part; "x2" means two solids, mirrored or spaced as on the real thing. Name each solid by its part's name (add "left", "right", "1", "2" where there are several). 5 to 50 rows.
+- Whole numbers, mm. x is forward, y is up, z is to the right; the ground is y = 0. "at" is the middle of the solid's box in x and z, and its FOOT in y, on the MACHINE's axes (not your zone's).
+- shape: "box", "rod" (a cylinder along "axis": across the machine "z", upright "y", along it "x"), "tube" (hollow rod: pipe, duct, tyre, ring), "sphere", "dome" (half sphere, flat down), "cone" (along "axis"), "wedge" (a ramp: full height at its back, nothing at its front).
+- The size is given before any turn; turns are degrees (usually 0). Slope and splay with turns and wedges (a raised boom, a leaned windscreen); long curved things are several turned segments.
+- Small hidden parts (bolts, seals, wiring inside) are left out; visible ones are placed on the surfaces they sit on. Solids touch their neighbours; nothing floats.
+- mat one of steel-low, al-6061, rubber, abs, glass, wood-pine; color "#rrggbb": painted body panels in the main body colour given, tyres and tracks near black, glass pale blue, hydraulic rods bright grey, bare metal grey, lights their colour.`;
 /** The layout call: the whole as plain solids at places. */
 const LAYOUT_RULE = `## Here: lay the whole out as plain solids (one task: reply with one JSON object and nothing else)
 You are laying out a machine as a designer's first block model: 15 to 150 plain solids that together read, in silhouette and proportion, as exactly what is asked. Every feature a person must see gets its own solid or solids (each wheel, each leg segment, each track, the blade, the cab, the boom: separate solids, never one lump).
@@ -1219,8 +1233,25 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       treeText = lines(tree, 0).join('\n'); const count = (ns: Tree[]): number => ns.reduce((a, n) => a + (n.kids.length ? count(n.kids) : 1), 0);
       say('features', `decomposed: ${tree.length} subsystems, ${count(tree)} parts, ${depth} level${depth === 1 ? '' : 's'} deep: ${tree.map((n) => n.name).join(', ')}`); }
     catch (e) { say('features', `not decomposed: ${(e as Error).message.slice(0, 140)}`, false); }
-    try { const lo = firstJson(await call(`${LAYOUT_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${recognitionLines(recog)}${reqs.length ? `\n${requirementLines(reqs)}` : ''}${treeText ? `\nWhat it is made of (place every part; name each solid by its path, as "subsystem > part"; x2 means two solids, mirrored or spaced as on the real thing):\n${treeText.slice(0, 6000)}` : ''}`, 'quick'), 'layout') as { solids?: unknown };
-      const solids = (Array.isArray(lo.solids) ? lo.solids.slice(0, 200) : []).map((r) => (Array.isArray(r) ? { name: r[0], shape: r[1], axis: r[2], size: [r[3], r[4], r[5]], at: [r[6], r[7], r[8]], mat: r[9], color: r[10], rot: [r[11] ?? 0, r[12] ?? 0, r[13] ?? 0] } : r)); if (!solids.length) throw new Error('no solids in the reply');
+    try {
+      type Row = (string | number)[]; let solids: Record<string, unknown>[] = [];
+      const lines1 = (ns: Tree[], d: number): string[] => ns.flatMap((n) => [`${'  '.repeat(d)}${n.name}${n.n > 1 ? ` x${n.n}` : ''}${n.kids.length ? ':' : ''} (${n.is})`, ...lines1(n.kids, d + 1)]);
+      // (the SIZER gives each subsystem its zone on the machine and the machine its livery; then a PLACER per subsystem, all
+      // at once, places every part of its own branch: each solid named by its path, so the whole comes apart by subsystem)
+      if (tree.length) { try {
+        const sz = firstJson(await call(`${SIZER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${recognitionLines(recog)}${reqs.length ? `\n${requirementLines(reqs)}` : ''}\nIts subsystems:\n${tree.map((n) => `${n.name}${n.n > 1 ? ` x${n.n}` : ''} (${n.is})`).join('\n')}`, 'quick'), 'sizer') as { rows?: unknown; body?: unknown; whole?: unknown };
+        const zones = new Map((Array.isArray(sz.rows) ? sz.rows as Row[] : []).filter(Array.isArray).map((r) => [String(r[0]), r] as const)), livery = `Main body colour ${String(sz.body ?? '#c8a200')}; the whole machine is ${JSON.stringify(sz.whole ?? [])} mm (x long, y high, z wide).`;
+        const zoneText = [...zones.values()].map((r) => `${r[0]}: zone ${r[1]} x ${r[2]} x ${r[3]} mm at ${r[4]}, ${r[5]}, ${r[6]}`).join('\n');
+        say('features', `sizer: ${zones.size} subsystem zones`);
+        const placed = await Promise.all(tree.map(async (n) => { try {
+          const r = firstJson(await call(`${PLACER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${livery}\nEvery subsystem's zone:\n${zoneText}\n\nYour subsystem: ${n.name} (${n.is}). Its parts:\n${lines1(n.kids.length ? n.kids : [n], 0).join('\n').slice(0, 3000)}`, 'quick'), `placer (${n.name})`) as { rows?: unknown };
+          return (Array.isArray(r.rows) ? r.rows as Row[] : []).filter(Array.isArray).slice(0, 60).map((x) => ({ name: `${n.name} > ${String(x[0])}`, shape: x[1], axis: x[2], size: [x[3], x[4], x[5]], at: [x[6], x[7], x[8]], rot: [x[9] ?? 0, x[10] ?? 0, x[11] ?? 0], mat: x[12], color: x[13] }));
+        } catch (e) { say('features', `placer (${n.name}): ${(e as Error).message.slice(0, 100)}`, false); return []; } }));
+        solids = placed.flat().slice(0, 500); say('features', `placers: ${solids.length} solids in ${placed.filter((x) => x.length).length} of ${tree.length} subsystems`);
+      } catch (e) { say('features', `sizer: ${(e as Error).message.slice(0, 120)}; one layout call instead`, false); } }
+      // (no tree, or nothing placed: the whole laid out by one call, as before)
+      if (!solids.length) { const lo = firstJson(await call(`${LAYOUT_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${recognitionLines(recog)}${reqs.length ? `\n${requirementLines(reqs)}` : ''}${treeText ? `\nWhat it is made of (place every part; name each solid by its path, as "subsystem > part"; x2 means two solids, mirrored or spaced as on the real thing):\n${treeText.slice(0, 6000)}` : ''}`, 'quick'), 'layout') as { solids?: unknown };
+        solids = (Array.isArray(lo.solids) ? lo.solids.slice(0, 200) : []).map((r) => (Array.isArray(r) ? { name: r[0], shape: r[1], axis: r[2], size: [r[3], r[4], r[5]], at: [r[6], r[7], r[8]], mat: r[9], color: r[10], rot: [r[11] ?? 0, r[12] ?? 0, r[13] ?? 0] } : r)); if (!solids.length) throw new Error('no solids in the reply'); }
       const b = emptyBoard(request.slice(0, 80)); placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify(solids) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
       const e = new Engine(b); await e.run(); const st = e.state.get('layout');
       if (st?.status !== 'ok') throw new Error(String(st?.error ?? 'the layout did not build').slice(0, 160));
