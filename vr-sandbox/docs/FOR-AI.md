@@ -86,6 +86,10 @@ Built part by part, never in one plan: each part from the assembly that is it (`
 node with its settings) or the starter board that is it (`open`), else from pieces; each part's board folded to one node
 whose `block` is its output; then the parts joined by operations only (`room.onto` face `-y` under, `+y` on top, `±x`/`±z`
 beside; `room.stack`; `mate.bolted`), never a new piece made in place of a part. Asked for one part, build only that part.
+A thing is what a person sees in it: where a recognition list comes with the task (5 to 8 features, each with its
+proportion and place, and the whole's size), every feature is shown by a part, each part is sized beside the whole's size
+(its settings, or the `a`/`b`/`c` of what you make), and the nearest assembly alone is never the thing when it shows only
+some of the list. The result is looked at: a feature not seen in the picture is added and joined in its place.
 
 ## How you answer
 

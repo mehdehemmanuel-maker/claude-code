@@ -21,6 +21,7 @@ import { certificatesOf, check, diffOf, type Certificate, type Verdict } from '.
 import { massOfAll, type Assembly } from './assembly';
 import { alternatives, badConnections, compatible, interference, missingInterfaces, revisions, searchByFunction, variantsOf as variantsById, working, type Found, type Working } from './aitools';
 import type { Block } from './room';
+import { FEATURE_RULE, LOOK_RULE, SEE_RULE, featureLine, longestOf, lookedOf, metres, recognitionLines, recognitionOf, sameFeature, sizeOff, type Feature, type Looked, type Recognition } from './lookat';
 
 /** The docs the agent may read, by topic: the router in CLAUDE.md, as files under docs/. */
 const DOCS: Record<string, string> = { wanted: 'WANTED.md', owners: 'OWNERS.md', reality: 'REALITY.md', compiler: 'COMPILER.md', life: 'LIFE.md', nodes: 'NODES.md', atlas: 'ATLAS.md' };
@@ -764,12 +765,15 @@ export async function agentPlan(request: string, o: { model?: string; effort?: '
 // The caller gives `ask` (the Node SDK in the relay, sdkAsk; the viewer's account on claude.ai, askClaude), so one pipeline
 // runs in both. A prompt's head before PROMPT_CUT is the same every call (the guide and its cards): cached where it can be.
 
-/** One call to a model: the whole prompt in, its text out. `tier` how hard the task is (quick for a split or a part). */
-export type Ask = (prompt: string, tier: 'quick' | 'default' | 'complex') => Promise<string>;
+/** One call to a model: the whole prompt in, its text out. `tier` how hard the task is (quick for a split or a part).
+ *  `images`: pictures (PNG bytes) the model is shown with the prompt (the look at what was built); an ask that cannot
+ *  show them answers from the words alone. */
+export type Ask = (prompt: string, tier: 'quick' | 'default' | 'complex', images?: readonly Uint8Array[]) => Promise<string>;
 /** Where a prompt's fixed head ends and its one-off tail begins. */
 export const PROMPT_CUT = '\n\n---\n\n';
 /** A part of a compound request: as the split said it, then what was made of it. */
 export interface ComposePart { name: string; is: string; from: string; set?: Record<string, unknown>;
+  /** the features of the request's recognition list this part makes visible (lookat.ts), as the split said */ shows?: string[];
   /** the split said it is several things itself: split again (decision 0028) */ split?: boolean;
   /** how it was made: placed from the library, a part remembered placed again, a starter board opened, a plan by one
    *  call, split into parts of its own (each made so, joined, folded), or not made */ by?: 'assembly' | 'remembered' | 'starter' | 'plan' | 'split' | 'none';
@@ -778,14 +782,16 @@ export interface ComposePart { name: string; is: string; from: string; set?: Rec
   /** the id it is kept under (remembered, decision 0028; or the remembered part it was placed from), and its own parts */ saved?: string; children?: ComposePart[] }
 export interface ComposeJoin { part: string; how: string; to: string }
 /** One step of the pipeline, a line for the chat. */
-export interface ComposeStep { stage: 'split' | 'part' | 'fold' | 'join' | 'gate' | 'remember' | 'check'; line: string; ok: boolean }
+export interface ComposeStep { stage: 'features' | 'split' | 'part' | 'fold' | 'join' | 'gate' | 'look' | 'remember' | 'check'; line: string; ok: boolean }
 /** The run's steps as a tree (decision 0028), for the pages to show: each part, how it was made, the id it is kept
  *  under, its pieces, what still fails, its own parts. */
 export interface ComposeNode { name: string; is: string; by: NonNullable<ComposePart['by']>; from: string; saved?: string; pieces: number; failing: string[]; children: ComposeNode[] }
 export interface ComposeRun { board: Board; parts: ComposePart[]; joins: ComposeJoin[]; steps: ComposeStep[]; unmet: string[]; answer: string; asks: number; plans: AgentPlan[];
   /** each part as a tree; the ids kept for later in this run; the remembered parts placed again; what the final check found missing */
   tree: ComposeNode[]; remembered: string[]; recalled: string[]; missing: string[];
-  /** the functional gate's last word (aitools.ts working: each driver joined to what it drives and to a supply) */ works?: Working }
+  /** the functional gate's last word (aitools.ts working: each driver joined to what it drives and to a supply) */ works?: Working;
+  /** the recognition list (lookat.ts): each feature, the part that shows it, what the eye last said of it; the whole's
+   *  longest side asked and built, in metres; how many times the result was looked at */ features?: Feature[]; size?: { asked?: number; built?: number }; looks?: number }
 
 /** A request that names two or more things (a drone and an arm, a crane and a truck): Assist hands it to composeBuild.
  *  Words of machines, each counted once; a singular arm only ("the arms of a cross frame" is one thing). A guess from the
@@ -825,16 +831,21 @@ a plate alone. name: one short word (letters, digits, _), each its own. is: what
 from. from: a part remembered (listed with the request, built before and checked) or the assembly or starter board that is
 that thing (as written in the lists), else the aisle its pieces come from. "split": true on a part that is itself several
 things with nothing to start from (it is split again). set: an assembly's settings only where asked. joins: each part but
-one goes onto, under, beside, through, into, around or bolted to another part.`;
+one goes onto, under, beside, through, into, around or bolted to another part.
+Where a recognition list comes with the request (what a person must see): "shows": ["<feature name>", …] on each part,
+the features that part makes visible; every feature is shown by a part. The nearest assembly is never the whole thing
+when it shows only some of the list: it is one part, and each feature it does not show is a part of its own (a walker is
+a dinosaur's legs and body; its neck with the head and its tail are parts from pieces, joined in front and behind).
+Where a size comes with the list, set each assembly's size settings (set, by its settings' names) so the whole comes to it.`;
 /** A part remembered, a line for the split: its id, name, what it says and offers, what it was made for, its uses. */
 const rememberedLine = (p: SavedPart): string => `${p.id}: ${p.name}: ${p.says.slice(0, 90)}${p.offers?.length ? `; offers [${p.offers.slice(0, 6).join('; ')}]` : ''} (made for "${p.from.slice(0, 60)}"; ${p.checked.pieces} pieces; used ${p.uses} time${p.uses === 1 ? '' : 's'})`;
 /** The split call's prompt: the menu, then the rule (the cached head), then the parts remembered for these words (they
  *  differ request by request), then the request. */
-export async function splitAsk(request: string, blocks?: AgentBlock[], recalled: readonly SavedPart[] = [], found: readonly Found[] = []): Promise<string> {
+export async function splitAsk(request: string, blocks?: AgentBlock[], recalled: readonly SavedPart[] = [], found: readonly Found[] = [], see = ''): Promise<string> {
   const by = found.length ? `Found by what they do (search, aitools.ts; from: the id):\n${found.map(foundLine).join('\n')}\n\n` : '';
   const mem = recalled.length ? `Parts remembered (built before, each checked to run with nothing failing and be one thing; from: the id, placed as one node like an assembly):\n${recalled.map(rememberedLine).join('\n')}\n\n` : '';
   // (the parts found by function go with the menu, which is the request's own already (composeMenu reads it))
-  return `${await composeMenu(blocks, request)}\n\n${by}${SPLIT_RULE}${PROMPT_CUT}${mem}Request: ${request.slice(0, 600)}`;
+  return `${await composeMenu(blocks, request)}\n\n${by}${SPLIT_RULE}${PROMPT_CUT}${mem}${see ? `${see}\n\n` : ''}Request: ${request.slice(0, 600)}`;
 }
 /** The split as a model answers it, held to its form: parts with names a wire can read, each once; joins between them. */
 export function splitOf(text: string): { parts: ComposePart[]; joins: ComposeJoin[] } {
@@ -844,7 +855,7 @@ export function splitOf(text: string): { parts: ComposePart[]; joins: ComposeJoi
     let name = String(x.name ?? `part${k + 1}`).toLowerCase().replace(/\W+/g, '_').replace(/^_+|_+$/g, '') || `part${k + 1}`; if (/^\d/.test(name)) name = `p${name}`;
     while (seen.has(name)) name = `${name}${k + 1}`; seen.add(name);
     const from = String(x.from ?? '').slice(0, 120);
-    return { name, is: String(x.is ?? x.what ?? name).slice(0, 300), from, ...(x.split === true || /^split$/i.test(from.trim()) ? { split: true } : {}), ...(x.set && typeof x.set === 'object' && !Array.isArray(x.set) ? { set: x.set as Record<string, unknown> } : {}), names: [], failing: [] }; });
+    return { name, is: String(x.is ?? x.what ?? name).slice(0, 300), from, ...(x.split === true || /^split$/i.test(from.trim()) ? { split: true } : {}), ...(x.set && typeof x.set === 'object' && !Array.isArray(x.set) ? { set: x.set as Record<string, unknown> } : {}), ...(Array.isArray(x.shows) && x.shows.length ? { shows: x.shows.slice(0, 8).map((f) => String(f).slice(0, 40)) } : {}), names: [], failing: [] }; });
   const named = (s: unknown) => { const t = String(s ?? '').toLowerCase().replace(/\W+/g, '_'); return parts.find((p) => p.name === t)?.name; };
   const joins = (Array.isArray(o.joins) ? o.joins : []).map((j) => { const x = (j ?? {}) as Record<string, unknown>; return { part: named(x.part ?? x.a), how: String(x.how ?? 'onto').slice(0, 40), to: named(x.to ?? x.b) }; })
     .filter((j): j is ComposeJoin => !!j.part && !!j.to && j.part !== j.to);
@@ -933,18 +944,27 @@ keep every part, replace only the joins, and end with a space.show of the last b
  *  it passes. `ask` makes each call; `onStep` hears each step's line and the board as it stands. A new board: what was
  *  open before is the caller's to keep (the page's Undo). `remember: false` keeps nothing (a test that must leave the
  *  library as it was). */
-export async function composeBuild(request: string, o: { ask: Ask; board?: Board; blocks?: AgentBlock[]; onStep?: (s: ComposeStep, board: Board) => void; remember?: boolean }): Promise<ComposeRun> {
+export async function composeBuild(request: string, o: { ask: Ask; board?: Board; blocks?: AgentBlock[]; onStep?: (s: ComposeStep, board: Board) => void; remember?: boolean;
+  /** the eye (decision 0029, wave 14): a picture of the board as the 3D view shows it (PNG bytes), or undefined where none
+   *  can be taken; given, the model is shown it with the recognition list after the build and its checks */ look?: (board: Board) => Promise<{ png: Uint8Array } | undefined>;
+  /** the recognition list written before the split (one call more); on where `look` is given, unless said */ features?: boolean }): Promise<ComposeRun> {
   const { starterBoards } = await import('./starters'), steps: ComposeStep[] = [], plans: AgentPlan[] = [], unmet: string[] = [], remembered: string[] = [], recalled: string[] = [], missing: string[] = [];
   let board: Board = emptyBoard(request.slice(0, 80)), asks = 0;
   const keep = o.remember !== false, three = limiter(3);
   const say = (stage: ComposeStep['stage'], line: string, ok = true) => { const s = { stage, line, ok }; steps.push(s); o.onStep?.(s, board); };
-  const call = async (prompt: string, tier: Parameters<Ask>[1]) => { asks++; return three(() => o.ask(prompt, tier)); };
+  const call = async (prompt: string, tier: Parameters<Ask>[1], images?: readonly Uint8Array[]) => { asks++; return three(() => (images?.length ? o.ask(prompt, tier, images) : o.ask(prompt, tier))); };
   const guideHead = `${await guideOf()}\n\n${PLAN_RULE}`, asPrompt = (r: Awaited<ReturnType<typeof planRequest>>) => `${guideHead}${PROMPT_CUT}${String((r.messages[0] as { content: unknown }).content)}`;
   const treeOf = (p: ComposePart): ComposeNode => ({ name: p.name, is: p.is, by: p.by ?? 'none', from: p.from, ...(p.saved ? { saved: p.saved } : {}), pieces: p.names.length, failing: p.failing, children: (p.children ?? []).map(treeOf) });
   let parts: ComposePart[] = [], joins: ComposeJoin[] = [];
   registerSaved(); // (parts kept in a store apart from this run, as blocks: placed like an assembly)
-  let works: Working | undefined;
-  const done = (answer: string): ComposeRun => ({ board, parts, joins, steps, unmet, answer, asks, plans, tree: parts.map(treeOf), remembered, recalled, missing, ...(works ? { works } : {}) });
+  let works: Working | undefined, recog: Recognition | undefined, looks = 0, builtSize: number | undefined;
+  const done = (answer: string): ComposeRun => ({ board, parts, joins, steps, unmet, answer, asks, plans, tree: parts.map(treeOf), remembered, recalled, missing, ...(works ? { works } : {}),
+    ...(recog ? { features: recog.features, size: { ...(recog.longest ? { asked: recog.longest } : {}), ...(builtSize ? { built: builtSize } : {}) } } : {}), ...(o.look ? { looks } : {}) });
+  /** Each feature held to the part that shows it (a part made before one not made); the features no part shows. */
+  const cover = (): Feature[] => { if (!recog) return []; for (const f of recog.features) { const ps = parts.filter((p) => p.shows?.some((s) => sameFeature(s, f.name))), p = ps.find((q) => q.node) ?? ps[0]; if (p) f.part = p.name; else delete f.part; } return recog.features.filter((f) => !f.part); };
+  /** What a part must show and the whole's size, said for its plan or its own split. */
+  const seeFor = (p: ComposePart): string => { if (!recog) return ''; const fs = recog.features.filter((f) => p.shows?.some((s) => sameFeature(s, f.name)));
+    return `${fs.length ? `\nA person must see in it: ${fs.map(featureLine).join('; ')}.` : ''}${recog.longest ? `\nThe whole thing is about ${metres(recog.longest)} on its longest side: size this part beside that.` : ''}`; };
 
   /** A part kept for later (built by a plan or a split, nothing failing, one group): its folded board, what it is, the
    *  request, its check and the split's words as tags. */
@@ -1005,7 +1025,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
 
   /** A part by one plan (asked again once where no plan could be read; once more with only what failed or was left loose). */
   const planPart = async (p: ComposePart, of: string) => {
-    const ask1 = `${p.name}: ${p.is} (one part of "${of.slice(0, 160)}")`;
+    const ask1 = `${p.name}: ${p.is} (one part of "${of.slice(0, 160)}")${seeFor(p)}`;
     let plan: AgentPlan | undefined, err = '';
     for (let t = 0; t < 2 && !plan; t++) { try { plan = planOf(await call(asPrompt(await planRequest(t ? `${ask1}\nYour reply before could not be read (${err.slice(0, 160)}): reply with one build plan, {"tool": "build", "nodes": {…}, "wires": […], "says": "…"}, at least one node, built from the pieces and the operations.` : ask1, { blocks: o.blocks })), 'quick')); } catch (e) { err = (e as Error).message; } }
     if (!plan) { p.by = 'none'; p.failing = [err]; say('part', `${p.name}: no plan could be read in two replies (${err.slice(0, 120)})`, false); return undefined; }
@@ -1051,7 +1071,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
    *  the split gives nothing (the part is then built by one plan). */
   const splitPart = async (p: ComposePart, depth: number, of: string) => {
     let sub: ReturnType<typeof splitOf>;
-    try { sub = splitOf(await call(await splitAsk(`${p.is} (the part "${p.name}" of "${of.slice(0, 160)}")`, o.blocks, recall(p.is, 6)), 'quick')); }
+    try { sub = splitOf(await call(await splitAsk(`${p.is} (the part "${p.name}" of "${of.slice(0, 160)}")`, o.blocks, recall(p.is, 6), [], seeFor(p).trim()), 'quick')); }
     catch (e) { say('split', `${p.name}: could not split it again (${(e as Error).message.slice(0, 120)}); built by one plan`, false); return undefined; }
     say('split', `${p.name} split again: ${sub.parts.map((c) => `${c.name} (from ${c.from || 'pieces'})`).join(', ')}${sub.joins.length ? `; ${sub.joins.map((j) => `${j.part} ${j.how} ${j.to}`).join(', ')}` : ''}`);
     p.children = sub.parts;
@@ -1068,8 +1088,23 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
 
   // (1. what was built before, recalled by the request's words; then the split)
   const mem = recall(request), found = searchByFunction(request, 8);
+  // (0. the recognition list: what a person must see to say "that is one", and the whole's size from the request's words;
+  // written before anything is chosen, so the split covers it and the checks hold the build to it)
+  if (o.features ?? !!o.look) {
+    try { recog = recognitionOf(firstJson(await call(`${FEATURE_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}`, 'quick'), 'features'));
+      say('features', `a person must see: ${recog.features.map(featureLine).join('; ')}${recog.longest ? `; the whole about ${metres(recog.longest)} on its longest side${recog.why ? ` (${recog.why})` : ''}` : ''}`); }
+    catch (e) { say('features', `no recognition list could be read: ${(e as Error).message.slice(0, 160)}`, false); }
+  }
+  const see = recog ? `${recognitionLines(recog)}\nEvery feature is shown by a part ("shows").` : '';
   if (found.length) say('split', `found by what they do: ${found.map((f) => f.id).join(', ')}`);
-  try { ({ parts, joins } = splitOf(await call(await splitAsk(request, o.blocks, mem, found), 'quick'))); }
+  try { ({ parts, joins } = splitOf(await call(await splitAsk(request, o.blocks, mem, found, see), 'quick')));
+    // (a feature no part shows: the split asked once more with those named; taken where it leaves fewer bare)
+    const bare = cover();
+    if (bare.length) { say('split', `no part shows: ${bare.map((f) => f.name).join(', ')}; the split asked again with those`, false);
+      const was = { parts, joins };
+      try { const again = splitOf(await call(await splitAsk(request, o.blocks, mem, found, `${see}\nYour split before: ${JSON.stringify({ parts: parts.map((p) => ({ name: p.name, is: p.is, from: p.from, ...(p.set ? { set: p.set } : {}), ...(p.shows ? { shows: p.shows } : {}) })), joins })}\nNo part of it shows: ${bare.map(featureLine).join('; ')}. Reply with the whole split again: a part added for each of these (from pieces where no assembly is it), or the feature named in the "shows" of the part that plainly shows it.`), 'quick'));
+        ({ parts, joins } = again); if (cover().length >= bare.length) { ({ parts, joins } = was); cover(); } }
+      catch (e) { say('split', `asked again: ${(e as Error).message.slice(0, 120)}`, false); } } }
   catch (e) { say('split', `Could not split it into parts: ${(e as Error).message}`, false); unmet.push('no parts: the split failed'); return done(`Nothing built: the split failed (${(e as Error).message}).`); }
   say('split', `${parts.length} part${parts.length === 1 ? '' : 's'}: ${parts.map((p) => `${p.name} (${p.is.slice(0, 50)}; from ${p.from || 'pieces'})`).join(', ')}${joins.length ? `; ${joins.map((j) => `${j.part} ${j.how} ${j.to}`).join(', ')}` : ''}${mem.length ? `; ${mem.length} part${mem.length === 1 ? '' : 's'} remembered offered` : ''}`);
   // (2 and 3. each part made and folded to one node, three side by side)
@@ -1085,10 +1120,10 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
     let e = new Engine(board); await e.run(); const top = biggest(board, e);
     const built = made().map((p) => `${p.node} (${p.is.slice(0, 70)}): ${p.names.length} pieces: ${counted(p.names)}`).join('\n');
     let want: (ComposePart & { joins: string })[] = [];
-    try { const o2 = firstJson(await call(`${GATE_RULE}\nAssemblies (from): ${ids.join(', ')}${PROMPT_CUT}${mem.length ? `Parts remembered (from): ${mem.map((x) => `${x.id} (${x.name})`).join(', ')}\n` : ''}Asked: ${request.slice(0, 600)}\nBuilt:\n${built}${top ? `\nThe whole: ${top[2].pieces.length} pieces` : ''}`, 'quick'), 'check');
+    try { const o2 = firstJson(await call(`${GATE_RULE}\nAssemblies (from): ${ids.join(', ')}${PROMPT_CUT}${mem.length ? `Parts remembered (from): ${mem.map((x) => `${x.id} (${x.name})`).join(', ')}\n` : ''}Asked: ${request.slice(0, 600)}\nBuilt:\n${built}${top ? `\nThe whole: ${top[2].pieces.length} pieces` : ''}${cover().length ? `\nA person must see, and no part built shows (missing, each by its name here): ${cover().map(featureLine).join('; ')}` : ''}`, 'quick'), 'check');
       const have = new Set([...parts.map((p) => p.name), ...Object.keys(board.nodes)]);
       want = (Array.isArray(o2.missing) ? o2.missing : []).slice(0, 3).map((m, k) => { const x = (m ?? {}) as Record<string, unknown>; let name = String(x.name ?? `missing${k + 1}`).toLowerCase().replace(/\W+/g, '_').replace(/^_+|_+$/g, '') || `missing${k + 1}`; if (/^\d/.test(name)) name = `p${name}`; const asked = name, instead = parts.find((q) => q.name === asked && !q.node)?.name; while (have.has(name)) name = `${name}2`; have.add(name);
-        return { name, is: String(x.is ?? name).slice(0, 300), from: String(x.from ?? '').slice(0, 120), names: [], failing: [], joins: String(x.joins ?? 'onto the whole').slice(0, 60), ...(instead ? { instead } : {}) }; }); }
+        return { name, is: String(x.is ?? name).slice(0, 300), from: String(x.from ?? '').slice(0, 120), names: [], failing: [], joins: String(x.joins ?? 'onto the whole').slice(0, 60), ...(instead ? { instead } : {}), ...(cover().some((f) => sameFeature(f.name, asked)) ? { shows: [asked] } : {}) }; }); }
     catch (x) { say('gate', `the final check could not be read: ${(x as Error).message.slice(0, 160)}`, false); break; }
     if (!want.length) { say('gate', `nothing missing${round ? ' now' : ''}: ${made().map((p) => p.name).join(', ')}`); break; }
     missing.push(...want.map((p) => p.name)); say('gate', `missing: ${want.map((p) => `${p.name} (${p.is.slice(0, 60)})`).join(', ')}; built and joined`, false);
@@ -1140,9 +1175,44 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
   }
   if (works && !works.ok) unmet.push(...works.reasons.map((r) => `not working: ${r}`));
   // (a show of the whole, where the plan put none)
-  let e = new Engine(board); await e.run();
-  const top = biggest(board, e);
-  if (top && !nodesOf(board).some((n) => board.nodes[n.id]!.block === 'space.show') && 'thing' in (e.state.get(top[0])?.out ?? {})) { const sh = board.nodes.show ? 'show_whole' : 'show'; placeBlock(board, 'space.show', 0, 0, {}, sh); wire(board, top[0], 'thing', sh, 'thing'); e = new Engine(board); await e.run(); }
+  const showWhole = async (): Promise<Engine> => { let x = new Engine(board); await x.run(); const top = biggest(board, x);
+    if (top && !nodesOf(board).some((n) => board.nodes[n.id]!.block === 'space.show') && 'thing' in (x.state.get(top[0])?.out ?? {})) { const sh = board.nodes.show ? 'show_whole' : 'show'; placeBlock(board, 'space.show', 0, 0, {}, sh); wire(board, top[0], 'thing', sh, 'thing'); x = new Engine(board); await x.run(); }
+    return x; };
+  let e = await showWhole();
+  // (5d. the eye, where the caller gives one (decision 0029, wave 14): the model is shown the picture of the build with
+  // the recognition list and says, feature by feature, seen, not seen or wrong; what is not seen is the reason for one
+  // mend (one change, run, taken where nothing fails, nothing falls apart, no piece is lost and the functional gate has no
+  // more to say), then it looks again; two mends at most; what is still not seen is unmet, below)
+  if (o.look && recog) {
+    const list = recog; let pic: Uint8Array | undefined;
+    const lookAt = async (): Promise<Looked | undefined> => {
+      try { pic = (await o.look!(board))?.png; } catch (x) { pic = undefined; say('look', `no picture: ${(x as Error).message.slice(0, 160)}`, false); return undefined; }
+      if (!pic) { say('look', 'no picture could be taken of the build', false); return undefined; }
+      try { const l = lookedOf(firstJson(await call(`${LOOK_RULE}${PROMPT_CUT}Asked: ${request.slice(0, 400)}\n${recognitionLines(list)}`, 'default', [pic]), 'look'), list.features); looks++;
+        for (const f of list.features) { const s = l.features.find((x) => x.name === f.name)!; f.seen = s.seen; if (s.note) f.note = s.note; else delete f.note; }
+        const off = l.features.filter((f) => f.seen !== 'seen');
+        say('look', `look ${looks}: ${l.features.map((f) => `${f.name} ${f.seen}${f.note ? ` (${f.note})` : ''}`).join('; ')}${l.proportions ? ` | ${l.proportions}` : ''}`, !off.length); return l; }
+      catch (x) { say('look', `the look could not be read: ${(x as Error).message.slice(0, 160)}`, false); return undefined; } };
+    let l = await lookAt();
+    for (let round = 0; round < 2 && l; round++) {
+      const off = list.features.filter((f) => f.seen && f.seen !== 'seen'); if (!off.length) break;
+      const x0 = new Engine(board); await x0.run(); const t0 = biggest(board, x0), w0 = t0?.[2], size = sizeOff(longestOf(w0), list.longest); let taken = false;
+      try { const plan = planOf(await call(`${guideHead}${PROMPT_CUT}${boardBrief(board)}\n\n${SEE_RULE}\nAsked: ${request.slice(0, 400)}\n${recognitionLines(list)}${t0 ? `\nThe whole now: ${t0[0]}.${t0[1]}: ${roomLine(t0[2])}` : ''}\nWhat a person does not see:\n${off.map((f) => `- ${f.seen}: ${featureLine(f)}${f.note ? `: ${f.note}` : ''}`).join('\n')}${size ? `\n- ${size}` : ''}`, 'default', pic ? [pic] : undefined)); plans.push(plan);
+        const ran = await runPlan(plan, board, o.blocks), x1 = new Engine(ran.board); await x1.run(); const t1 = biggest(ran.board, x1), w1 = t1?.[2];
+        const after = w1 ? await worksOn(ran.board) : undefined;
+        const why = ran.failing.length ? `${ran.failing.length} line(s) failed: ${ran.failing[0]!.slice(0, 120)}` : !w1 ? 'it made no block' : groupsOf(w1) > (w0 ? groupsOf(w0) : 1) ? `it fell in ${groupsOf(w1)} groups` : w1.pieces.length < (w0?.pieces.length ?? 0) ? `it lost ${(w0?.pieces.length ?? 0) - w1.pieces.length} piece(s)` : (after?.reasons.length ?? 0) > (works?.reasons.length ?? 0) ? `it no longer works: ${after!.reasons[0]}` : '';
+        if (!why && t1 && w1) { taken = true; board = ran.board; if (after) works = after;
+          const left = new Map<string, number>(); for (const nm of w0 ? namesOf(w0) : []) left.set(nm, (left.get(nm) ?? 0) + 1);
+          const added = namesOf(w1).filter((nm) => { const n = left.get(nm) ?? 0; if (n > 0) { left.set(nm, n - 1); return false; } return true; });
+          if (added.length) { let nm = `seen${round + 1}`; while (parts.some((p) => p.name === nm)) nm = `${nm}_`; parts.push({ name: nm, is: `added for what was not seen: ${off.map((f) => f.name).join(', ')}`, from: '', by: 'plan', node: t1[0], names: added, failing: [], shows: off.map((f) => f.name) }); }
+          say('look', `mended for what was not seen (${off.map((f) => f.name).join(', ')}): ${plan.says || 'a change'}; ${added.length} piece(s) added`); }
+        else say('look', `the mend for what was not seen not taken: ${why}`, false); }
+      catch (x) { say('look', `asked to mend what was not seen: ${(x as Error).message.slice(0, 160)}`, false); }
+      if (!taken) break;
+      e = await showWhole(); l = await lookAt();
+    }
+    e = await showWhole();
+  }
   // (6. check: nothing failing, every part's pieces in the whole, one group)
   const bad = nodesOf(board).filter((n) => e.state.get(n.id)?.status !== 'ok');
   if (bad.length) unmet.push(`${bad.length} node(s) not ok: ${bad.slice(0, 3).map((n) => `${n.id} ${e.state.get(n.id)?.status ?? '?'} ${(e.state.get(n.id)?.error ?? '').slice(0, 100)}`).join('; ')}`);
@@ -1157,6 +1227,18 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
   }
   const g = whole ? groupsOf(whole) : 0;
   if (!whole) unmet.push('no block made'); else if (g !== 1) unmet.push(`the build falls in ${g} groups, not one thing`);
+  // (6b. the recognition list: each feature held to a part that is in the build, by that part's pieces being in the whole;
+  // a feature no part shows is unmet by its name; what the eye still did not see; the build's bound beside the size asked)
+  if ((o.features ?? !!o.look) && !recog) unmet.push('no recognition list: what a person must see was not written, so nothing was held to it');
+  if (recog) { cover(); builtSize = longestOf(whole);
+    for (const f of recog.features) { const p = parts.find((q) => q.name === f.part);
+      if (!p) { unmet.push(`feature with no part: ${featureLine(f)}`); continue; }
+      const left = new Map<string, number>(); for (const nm of whole ? namesOf(whole) : []) left.set(nm, (left.get(nm) ?? 0) + 1);
+      const miss = p.names.filter((nm) => { const n = left.get(nm) ?? 0; if (n > 0) { left.set(nm, n - 1); return false; } return true; }).length;
+      if (!p.node || !p.names.length || miss) unmet.push(`feature not in the build: ${f.name}: its part ${p.name} ${!p.node || !p.names.length ? 'was not made' : `has ${miss} of its ${p.names.length} pieces missing from the whole`}`);
+      if (f.seen && f.seen !== 'seen') unmet.push(`not seen: ${f.name}${f.seen === 'wrong' ? ' (wrong)' : ''}${f.note ? `: ${f.note}` : ''}`); }
+    const off = sizeOff(builtSize, recog.longest); if (off) unmet.push(off);
+    if (o.look && !looks) unmet.push('not looked at: no picture of the build could be taken or read'); }
   // (the whole kept for later when it passes and is more than one library block placed)
   const before = savedParts().find((x) => x.tags.includes('whole') && x.from === request);
   if (keep && !unmet.length && whole && before) { used(before.id); say('remember', `the whole as kept before for this request, ${before.id}: used ${before.uses + 1} time${before.uses ? 's' : ''}`); }
@@ -1174,11 +1256,11 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
 /** An Ask by the Node SDK (the relay): the prompt's head before PROMPT_CUT one cached system block, its tail the message;
  *  each call's tokens added to `tokens`. Under Node, where ANTHROPIC_API_KEY is. */
 export function sdkAsk(o: { model?: string; signal?: AbortSignal; tokens?: AgentRun['tokens'] } = {}): Ask {
-  return async (prompt, tier) => {
+  return async (prompt, tier, images) => {
     if (typeof process === 'undefined' || !process.env?.ANTHROPIC_API_KEY) throw new Error('no ANTHROPIC_API_KEY where this runs: the relay runs under Node with it set (the environment\'s secrets); a page holds no keys');
     const { default: Sdk } = await import('@anthropic-ai/sdk'), client = new Sdk({ baseURL: 'https://api.anthropic.com' }), k = prompt.indexOf(PROMPT_CUT);
     const head = k >= 0 ? prompt.slice(0, k) : '', tail = k >= 0 ? prompt.slice(k + PROMPT_CUT.length) : prompt;
-    const r = await client.messages.create({ model: o.model ?? AGENT_MODEL, max_tokens: 6000, ...(head ? { system: cachedSystem(head) } : {}), output_config: { effort: tier === 'quick' ? 'low' : 'medium' }, messages: [{ role: 'user', content: tail }] }, { signal: o.signal ?? AbortSignal.timeout(90_000) });
+    const r = await client.messages.create({ model: o.model ?? AGENT_MODEL, max_tokens: 6000, ...(head ? { system: cachedSystem(head) } : {}), output_config: { effort: tier === 'quick' ? 'low' : 'medium' }, messages: [{ role: 'user', content: images?.length ? [...images.map((png) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/png' as const, data: Buffer.from(png).toString('base64') } })), { type: 'text' as const, text: tail }] : tail }] }, { signal: o.signal ?? AbortSignal.timeout(90_000) });
     if (o.tokens) { o.tokens.in += r.usage.input_tokens; o.tokens.out += r.usage.output_tokens; o.tokens.cached += r.usage.cache_read_input_tokens ?? 0; o.tokens.written += r.usage.cache_creation_input_tokens ?? 0; }
     const turn = turnOf(r); return turn.ends ? turn.answer : '';
   };
