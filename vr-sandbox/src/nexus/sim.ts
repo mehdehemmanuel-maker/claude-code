@@ -24,7 +24,7 @@ import { boundsOfAll, flatten, isAssembly, massOfAll, matrixOf, place, type Asse
 import { massOf } from './mass';
 import type { Part } from './kits';
 import type { Material } from '../data/materials';
-import { FITS, boundOf, gearOf, partOfBlock, primBox, rackOf, teethOf, type Block } from './room';
+import { FITS, boundOf, gearOf, partOfBlock, primBox, rackOf, teethOf, turnOf, type Block } from './room';
 import { SERVOS } from './families';
 import { servoRangeOf } from './parts/motion';
 
@@ -586,6 +586,30 @@ export function motionOf(b: Block): Motion {
   // fitted at the servo's middle, as arm kits are put together: typical, an assumption); none known for the rest)
   for (const j of joints) { if (!j.turns || j.ball || j.motor?.kind !== 'servo') continue; const r = servoRangeOf([...bodies[j.b]!.pieces.map((i) => b.pieces[i]!.name), ...j.by].join(' ')); if (!r) continue;
     const h = (r.deg * Math.PI) / 360; j.limits = { lo: -h, hi: h, src: `${r.src}, drawn at its middle (typical)` }; }
+  // (a layout pivot's travel: the body on the pin is turned about it, two degrees at a time each way, until a piece of it
+  // meets a piece of the body the pin is fixed in; it stops there. Pieces that already overlap as built (the two members'
+  // own ends round the pin) are not counted. The two bodies are rigid, so this stop holds at every pose of the rest;
+  // bodies not joined to each other are kept apart by the engine's own collisions. Each piece is read as its box)
+  { type Obb = { c: V3; ax: V3[]; h: V3 };
+    const obbOf = (i: number): Obb => { const P = b.pieces[i]!.solid.base as unknown as { c: V3; frame?: number[]; size?: V3; r?: number; h?: number }, F = P.frame ?? [1, 0, 0, 0, 1, 0, 0, 0, 1];
+      const h: V3 = P.size ? [P.size[0] / 2, P.size[1] / 2, P.size[2] / 2] : P.r !== undefined && P.h !== undefined ? [P.r, P.h / 2, P.r] : P.r !== undefined ? [P.r, P.r, P.r] : (() => { const [lo, hi] = primBox(b.pieces[i]!.solid.base); return [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, (hi[2] - lo[2]) / 2] as V3; })();
+      return { c: [P.c[0], P.c[1], P.c[2]], ax: [[F[0]!, F[3]!, F[6]!], [F[1]!, F[4]!, F[7]!], [F[2]!, F[5]!, F[8]!]], h: [h[0] * 0.98, h[1] * 0.98, h[2] * 0.98] }; };
+    const hit = (A: Obb, B: Obb): boolean => { const d: V3 = [B.c[0] - A.c[0], B.c[1] - A.c[1], B.c[2] - A.c[2]], axes: V3[] = [...A.ax, ...B.ax]; for (const p of A.ax) for (const q of B.ax) { const c = cross(p, q); if (Math.hypot(...c) > 1e-9) axes.push(c); }
+      for (const L of axes) { const n = Math.hypot(...L), ra = A.ax.reduce((t, u, k) => t + A.h[k]! * Math.abs(dot(u, L)), 0), rb = B.ax.reduce((t, u, k) => t + B.h[k]! * Math.abs(dot(u, L)), 0); if (Math.abs(dot(d, L)) > ra + rb + 1e-9 * n) return false; } return true; };
+    const mv = (M: readonly number[], v: V3): V3 => [M[0]! * v[0] + M[1]! * v[1] + M[2]! * v[2], M[3]! * v[0] + M[4]! * v[1] + M[5]! * v[2], M[6]! * v[0] + M[7]! * v[1] + M[8]! * v[2]];
+    for (const j of joints) { if (j.limits || !j.turns || j.slide || !j.by.some((t) => t.startsWith('layout pivot'))) continue;
+      // (only what is big enough to stop it counts: a piece of at least a thirtieth of its body's volume, or one of its three
+      // largest; small fittings laid close to the other body (a hose, a bracket) would lock every joint and are passed by)
+      const vol = (i: number) => { const o = obbOf(i); return o.h[0] * o.h[1] * o.h[2]; }, big = (ps: number[]) => { const vs = ps.map(vol), tot = vs.reduce((t, v) => t + v, 0), third = [...vs].sort((p, q) => q - p)[2] ?? 0; return ps.filter((_i, k) => vs[k]! >= tot / 30 || vs[k]! >= third); };
+      const kp = big(bodies[j.a]!.pieces), pp = big(bodies[j.b]!.pieces), kid = kp.map(obbOf), par = pp.map(obbOf), pairs: [number, number][] = [];
+      for (let x = 0; x < kid.length; x++) for (let y = 0; y < par.length; y++) if (!hit(kid[x]!, par[y]!)) pairs.push([x, y]);
+      if (pairs.length > 40000) continue;
+      const stop = (sg: number): { deg: number; on?: string } => { for (let deg = 2; deg <= 178; deg += 2) { const M = turnOf(j.dir, sg * deg), at = kid.map((o): Obb => ({ c: (() => { const r = mv(M, [o.c[0] - j.point[0], o.c[1] - j.point[1], o.c[2] - j.point[2]]); return [r[0] + j.point[0], r[1] + j.point[1], r[2] + j.point[2]] as V3; })(), ax: o.ax.map((u) => mv(M, u)), h: o.h }));
+          const p = pairs.find(([x, y]) => hit(at[x]!, par[y]!)); if (p) return { deg: deg - 2, on: `the ${b.pieces[kp[p[0]]!]!.name} meets the ${b.pieces[pp[p[1]]!]!.name}` }; } return { deg: 180 }; };
+      const up = stop(1), dn = stop(-1); if (up.deg >= 180 && dn.deg >= 180) continue;
+      // (the engine counts the hinge's angle the same way round its line as the turn made here: tried on a slew joint, where
+      // the piece stood where this turn puts it to within a millimetre)
+      j.limits = { lo: (-Math.min(dn.deg, 178) * Math.PI) / 180, hi: (Math.min(up.deg, 178) * Math.PI) / 180, src: `where it is stopped: ${[up.on, dn.on].filter(Boolean).join('; ')} (found by turning it, 2° a step)` }; } }
   // (a rack meshed by a gear: it slides along its length, on what its gear turns on, the gear driving it)
   const racks: MoveRack[] = [];
   for (const f of b.faces) { if (!/ meshes /.test(f.by)) continue; const [ri, gi] = rackOf(b.pieces[f.a]!) ? [f.a, f.b] : rackOf(b.pieces[f.b]!) ? [f.b, f.a] : [-1, -1]; if (ri < 0) continue;
@@ -645,7 +669,8 @@ export class LiveMotion {
   private readonly screws: { a: number; b: number; k: number; u: V3 }[] = [];
   private readonly grav: V3 = [0, -9.81, 0];
   constructor(J: Jolt, readonly block: Block, frozen?: boolean[]) {
-    this.J = J; this.floor = block.lo[1] - 0.5 * Math.max(block.hi[0] - block.lo[0], block.hi[1] - block.lo[1], block.hi[2] - block.lo[2]); const m0 = motionOf(block); this.motion = { ...m0, bodies: m0.bodies.map((x, i) => (frozen && frozen[i] !== undefined ? { ...x, frozen: frozen[i]!, why: frozen[i] ? 'held: frozen by hand' : 'loose: set by hand' } : x)) };
+    this.J = J; // (a laid-out machine stands on the ground: its floor is where it stands; anything else has its floor well under it)
+    this.floor = block.faces.some((f) => f.by.startsWith('layout pivot')) ? block.lo[1] : block.lo[1] - 0.5 * Math.max(block.hi[0] - block.lo[0], block.hi[1] - block.lo[1], block.hi[2] - block.lo[2]); const m0 = motionOf(block); this.motion = { ...m0, bodies: m0.bodies.map((x, i) => (frozen && frozen[i] !== undefined ? { ...x, frozen: frozen[i]!, why: frozen[i] ? 'held: frozen by hand' : 'loose: set by hand' } : x)) };
     const STATIC = 0, MOVING = 1, s = new J.JoltSettings(), pairs = new J.ObjectLayerPairFilterTable(2); pairs.EnableCollision(STATIC, MOVING); pairs.EnableCollision(MOVING, MOVING);
     const bp = new J.BroadPhaseLayerInterfaceTable(2, 2); bp.MapObjectToBroadPhaseLayer(STATIC, new J.BroadPhaseLayer(0)); bp.MapObjectToBroadPhaseLayer(MOVING, new J.BroadPhaseLayer(1));
     s.mObjectLayerPairFilter = pairs; s.mBroadPhaseLayerInterface = bp; s.mObjectVsBroadPhaseLayerFilter = new J.ObjectVsBroadPhaseLayerFilterTable(bp, 2, pairs, 2);

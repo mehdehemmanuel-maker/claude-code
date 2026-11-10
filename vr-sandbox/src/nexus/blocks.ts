@@ -1477,7 +1477,7 @@ const BUILT_THINGS: BlockDef[] = [
       let rows: unknown; try { rows = JSON.parse(String(c.set.boxes || '[]')); } catch (e) { throw new Error(`the solids are not JSON: ${(e as Error).message}`); }
       if (!Array.isArray(rows) || !rows.length) throw new Error('a layout needs at least one solid');
       const num = (v: unknown, k: number, what: string, at: string) => { const x = Number((v as unknown[])?.[k]); if (!Number.isFinite(x)) throw new Error(`${at}: its ${what} needs three numbers (mm)`); return x / 1000; };
-      const items = (rows as Record<string, unknown>[]).slice(0, 600).map((r, n) => { const nm = String(r.name || `solid ${n + 1}`), at = (Array.isArray(r.span) ? [0, 0, 0] : [0, 1, 2].map((k) => num(r.at, k, 'place', nm))) as [number, number, number];
+      const items = (rows as Record<string, unknown>[]).slice(0, 600).flatMap((r, n) => { const nm = String(r.name || `solid ${n + 1}`), at = (Array.isArray(r.span) ? [0, 0, 0] : [0, 1, 2].map((k) => num(r.at, k, 'place', nm))) as [number, number, number];
         // (a span: a straight part pinned between two points, mm. It is made upright, as long as the points are apart (a
         // wired part: laid long side up by its quarter turns), turned from upright to the line between them, and put with
         // its middle on the line's middle)
@@ -1486,6 +1486,12 @@ const BUILT_THINGS: BlockDef[] = [
           let sb: Block; if (r.in !== undefined) { const w = wired[Number(r.in)]; if (!w) throw new Error(`${nm}: no part wired in at ${String(r.in)}`); sb = w;
             for (const k of (Array.isArray(r.pre) ? r.pre : []) as number[]) { if (k === 0 || k === 1 || k === 2) { try { sb = roomTurn(sb, k, 90); } catch { sb = roomTurn(roomFrozen(sb), k, 90); } } } }
           else { const tk = Array.isArray(r.thick) ? r.thick : [r.thick, r.thick], D = Math.max(0.002, Math.abs(Number(tk[0]) || 0) / 1000 || len / 12), W = Math.max(0.002, Math.abs(Number(tk[1]) || 0) / 1000 || D), mat = String(r.mat || 'steel-low'), col = typeof r.color === 'string' && /^#[0-9a-f]{6}$/i.test(r.color) ? { color: parseInt(r.color.slice(1), 16) } : {};
+            // (a member with pin ends: its box stops half its depth short of each end, and a round boss as deep as it and as
+            // wide stands on each end point, its line across the member, so two members on one pin meet round to round)
+            if (r.ends && String(r.shape) === 'box' && len > 1.6 * D) { const bx = roomMade(nm, mat, { box: [D, len - D, W] }, col), boss = (k: number) => roomTurn(roomMade(`${nm} end ${k}`, mat, { cyl: [D / 2, W] }, col), 0, 90);
+              const u = [d[0]! / len, d[1]! / len, d[2]! / len], ax: [number, number, number] = [u[2]!, 0, -u[0]!], sn = Math.hypot(ax[0], ax[2]), deg = (Math.atan2(sn, u[1]!) * 180) / Math.PI, lay = (q: Block) => (sn > 1e-6 ? roomTurn(q, ax, deg) : q);
+              const body = Number.isInteger(Number(r.body)) && r.body !== undefined && r.body !== null ? { body: Number(r.body) } : {}, put = (q: Block, c: number[]) => ({ b: q, at: [c[0]!, c[1]! - (q.hi[1] - q.lo[1]) / 2, c[2]!] as [number, number, number], ...body });
+              return [put(lay(bx), [(p1[0]! + p2[0]!) / 2, (p1[1]! + p2[1]!) / 2, (p1[2]! + p2[2]!) / 2]), put(lay(boss(1)), p1), put(lay(boss(2)), p2)]; }
             sb = String(r.shape) === 'tube' ? roomMade(nm, mat, { tube: [D * 0.4, D / 2, len] }, col) : String(r.shape) === 'box' ? roomMade(nm, mat, { box: [D, len, W] }, col) : roomMade(nm, mat, { cyl: [D / 2, len] }, col); }
           const u = [d[0]! / len, d[1]! / len, d[2]! / len], ax: [number, number, number] = [u[2]!, 0, -u[0]!], sn = Math.hypot(ax[0], ax[2]);
           if (sn > 1e-6) { const deg = (Math.atan2(sn, u[1]!) * 180) / Math.PI; try { sb = roomTurn(sb, ax, deg); } catch { sb = roomTurn(roomFrozen(sb), ax, deg); } }
