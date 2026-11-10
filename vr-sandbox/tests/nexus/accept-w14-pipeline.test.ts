@@ -90,6 +90,13 @@ describe('wave 14, the pipeline: features first, and an eye on the result', () =
     expect(big.size).toMatchObject({ asked: built! * 3, built });
     const near = await composeBuild('A rover with a mast and a lamp on it', { ask: scripted({ shows, size: built! * 1.5 }).ask, features: true, remember: false });
     expect(near.unmet, lines(near)).toEqual([]);
+    // (the part made from pieces is told the size of the part the library gave, to be in proportion beside it)
+    const s1 = scripted({ shows, size: built! * 1.5 }); await composeBuild('A rover with a mast and a lamp on it', { ask: s1.ask, features: true, remember: false });
+    expect(s1.prompts.find((p) => tail(p).includes('mast: a mast: a pole on a foot plate (one part of'))).toMatch(/The part "rover" \(a wheeled robot base\) is already built: \d+ x \d+ x \d+ mm \(x by y by z\)\. Size this part beside THAT/);
+    // (an assembly more than twice the whole asked is not taken as a part: said, and that part built from pieces)
+    const tiny = await composeBuild('A miniature rover with a mast and a lamp on it', { ask: scripted({ shows, size: built! / 10 }).ask, features: true, remember: false });
+    expect(tiny.steps.find((x) => x.stage === 'part' && !x.ok)?.line, lines(tiny)).toMatch(/^rover: seed\.wheeled-base is .* more than twice the whole asked \(.*\): not taken; built from pieces at the size asked$/);
+    expect(tiny.parts.find((p) => p.name === 'rover')?.by).toBe('plan');
   }, 90_000);
 
   it('the readers hold a model\'s answers to their form', () => {

@@ -957,14 +957,14 @@ export async function composeBuild(request: string, o: { ask: Ask; board?: Board
   const treeOf = (p: ComposePart): ComposeNode => ({ name: p.name, is: p.is, by: p.by ?? 'none', from: p.from, ...(p.saved ? { saved: p.saved } : {}), pieces: p.names.length, failing: p.failing, children: (p.children ?? []).map(treeOf) });
   let parts: ComposePart[] = [], joins: ComposeJoin[] = [];
   registerSaved(); // (parts kept in a store apart from this run, as blocks: placed like an assembly)
-  let works: Working | undefined, recog: Recognition | undefined, looks = 0, builtSize: number | undefined;
+  let works: Working | undefined, recog: Recognition | undefined, looks = 0, builtSize: number | undefined, anchor = '';
   const done = (answer: string): ComposeRun => ({ board, parts, joins, steps, unmet, answer, asks, plans, tree: parts.map(treeOf), remembered, recalled, missing, ...(works ? { works } : {}),
     ...(recog ? { features: recog.features, size: { ...(recog.longest ? { asked: recog.longest } : {}), ...(builtSize ? { built: builtSize } : {}) } } : {}), ...(o.look ? { looks } : {}) });
   /** Each feature held to the part that shows it (a part made before one not made); the features no part shows. */
   const cover = (): Feature[] => { if (!recog) return []; for (const f of recog.features) { const ps = parts.filter((p) => p.shows?.some((s) => sameFeature(s, f.name))), p = ps.find((q) => q.node) ?? ps[0]; if (p) f.part = p.name; else delete f.part; } return recog.features.filter((f) => !f.part); };
   /** What a part must show and the whole's size, said for its plan or its own split. */
   const seeFor = (p: ComposePart): string => { if (!recog) return ''; const fs = recog.features.filter((f) => p.shows?.some((s) => sameFeature(s, f.name)));
-    return `${fs.length ? `\nA person must see in it: ${fs.map(featureLine).join('; ')}.` : ''}${recog.longest ? `\nThe whole thing is about ${metres(recog.longest)} on its longest side: size this part beside that.` : ''}`; };
+    return `${fs.length ? `\nA person must see in it: ${fs.map(featureLine).join('; ')}.` : ''}${anchor ? `\n${anchor}` : recog.longest ? `\nThe whole thing is about ${metres(recog.longest)} on its longest side: size this part beside that.` : ''}`; };
 
   /** A part kept for later (built by a plan or a split, nothing failing, one group): its folded board, what it is, the
    *  request, its check and the split's words as tags. */
@@ -1109,7 +1109,21 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
   say('split', `${parts.length} part${parts.length === 1 ? '' : 's'}: ${parts.map((p) => `${p.name} (${p.is.slice(0, 50)}; from ${p.from || 'pieces'})`).join(', ')}${joins.length ? `; ${joins.map((j) => `${j.part} ${j.how} ${j.to}`).join(', ')}` : ''}${mem.length ? `; ${mem.length} part${mem.length === 1 ? '' : 's'} remembered offered` : ''}`);
   // (2 and 3. each part made and folded to one node, three side by side)
   const place = (p: ComposePart, f: { node: Board['nodes'][string] } | undefined, k: number, y = 0) => { if (!f) return; let nm = p.name; while (board.nodes[nm]) nm = `${nm}_${k + 2}`; board.nodes[nm] = { ...f.node, label: nm, x: k * 420, y }; p.node = nm; };
-  (await eachAtMost(parts, 3, (p) => makePart(p, 0, request))).forEach((f, k) => place(parts[k]!, f, k));
+  // (with a recognition list, the parts the library gives are placed first (no call): the biggest is what the parts made
+  // from pieces are sized beside, so the thing is in proportion; the size asked is held by the check, not by a guess here)
+  const fromLibrary = (p: ComposePart) => { const d = block(p.from.trim().replace(/^["'`]|["'`:]$/g, '')); return !!d && buildsInSpace(d) && !OLD_BUILD.test(d.id); };
+  const got: ({ node: Board['nodes'][string]; block: RoomOut } | undefined)[] = new Array(parts.length), firstK = recog ? parts.map((_, k) => k).filter((k) => fromLibrary(parts[k]!)) : [];
+  for (const k of [...firstK]) { const p = parts[k]!, f = await makePart(p, 0, request), L = f ? longestOf(f.block) : undefined;
+    // (an assembly more than twice the size of the whole asked cannot be a part of it: that part is built from pieces, at the size asked)
+    if (f && L && recog?.longest && L > 2 * recog.longest) { say('part', `${p.name}: ${p.from} is ${metres(L)} on its longest side, more than twice the whole asked (${metres(recog.longest)}): not taken; built from pieces at the size asked`, false);
+      p.is = `${p.is} (as ${p.from.replace(/^(seed|piece)\./, '').replace(/-/g, ' ')}, but small)`.slice(0, 300); p.from = 'aisle'; delete p.by; delete p.saved; p.names = []; firstK.splice(firstK.indexOf(k), 1); continue; }
+    got[k] = f; }
+  const big = firstK.filter((k) => got[k]).sort((a, b) => (longestOf(got[b]!.block) ?? 0) - (longestOf(got[a]!.block) ?? 0))[0];
+  if (big !== undefined && firstK.length < parts.length) { const b = got[big]!.block, L = longestOf(b);
+    if (L) { anchor = `The part "${parts[big]!.name}" (${parts[big]!.is.slice(0, 80)}) is already built: ${[0, 1, 2].map((k) => Math.round((b.hi![k]! - b.lo![k]!) * 1000)).join(' x ')} mm (x by y by z). Size this part beside THAT, in the proportion said, whatever size the whole was asked.`; say('part', `${parts[big]!.name} is ${metres(L)} on its longest side: the parts made from pieces are sized beside it`); } }
+  const restK = parts.map((_, k) => k).filter((k) => !firstK.includes(k));
+  (await eachAtMost(restK, 3, (k) => makePart(parts[k]!, 0, request))).forEach((f, i) => { got[restK[i]!] = f; });
+  got.forEach((f, k) => place(parts[k]!, f, k));
   const made = () => parts.filter((p) => p.node);
   if (!made().length) { unmet.push('no part was made'); return done(`Nothing built: no part was made (${parts.map((p) => `${p.name}: ${p.failing[0] ?? 'not made'}`).join('; ').slice(0, 300)}).`); }
   // (4. join: each part's block said as runPlan's engine gives it, then one change that joins them; what is loose, again)
@@ -1197,7 +1211,11 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
     for (let round = 0; round < 2 && l; round++) {
       const off = list.features.filter((f) => f.seen && f.seen !== 'seen'); if (!off.length) break;
       const x0 = new Engine(board); await x0.run(); const t0 = biggest(board, x0), w0 = t0?.[2], size = sizeOff(longestOf(w0), list.longest); let taken = false;
-      try { const plan = planOf(await call(`${guideHead}${PROMPT_CUT}${boardBrief(board)}\n\n${SEE_RULE}\nAsked: ${request.slice(0, 400)}\n${recognitionLines(list)}${t0 ? `\nThe whole now: ${t0[0]}.${t0[1]}: ${roomLine(t0[2])}` : ''}\nWhat a person does not see:\n${off.map((f) => `- ${f.seen}: ${featureLine(f)}${f.note ? `: ${f.note}` : ''}`).join('\n')}${size ? `\n- ${size}` : ''}`, 'default', pic ? [pic] : undefined)); plans.push(plan);
+      try { const mendAsk = `${guideHead}${PROMPT_CUT}${boardBrief(board)}\n\n${SEE_RULE}\nAsked: ${request.slice(0, 400)}\n${recognitionLines(list)}${t0 ? `\nThe whole now: ${t0[0]}.${t0[1]}: ${roomLine(t0[2])}` : ''}\nWhat a person does not see:\n${off.map((f) => `- ${f.seen}: ${featureLine(f)}${f.note ? `: ${f.note}` : ''}`).join('\n')}${size ? `\n- ${size}` : ''}`;
+        let plan: AgentPlan;
+        try { plan = planOf(await call(mendAsk, 'default', pic ? [pic] : undefined)); }
+        catch (x) { plan = planOf(await call(`${mendAsk}\nYour reply before could not be read (${(x as Error).message.slice(0, 120)}): reply with the one JSON change and nothing else, no words before it.`, 'default', pic ? [pic] : undefined)); }
+        plans.push(plan);
         const ran = await runPlan(plan, board, o.blocks), x1 = new Engine(ran.board); await x1.run(); const t1 = biggest(ran.board, x1), w1 = t1?.[2];
         const after = w1 ? await worksOn(ran.board) : undefined;
         const why = ran.failing.length ? `${ran.failing.length} line(s) failed: ${ran.failing[0]!.slice(0, 120)}` : !w1 ? 'it made no block' : groupsOf(w1) > (w0 ? groupsOf(w0) : 1) ? `it fell in ${groupsOf(w1)} groups` : w1.pieces.length < (w0?.pieces.length ?? 0) ? `it lost ${(w0?.pieces.length ?? 0) - w1.pieces.length} piece(s)` : (after?.reasons.length ?? 0) > (works?.reasons.length ?? 0) ? `it no longer works: ${after!.reasons[0]}` : '';
@@ -1260,7 +1278,7 @@ export function sdkAsk(o: { model?: string; signal?: AbortSignal; tokens?: Agent
     if (typeof process === 'undefined' || !process.env?.ANTHROPIC_API_KEY) throw new Error('no ANTHROPIC_API_KEY where this runs: the relay runs under Node with it set (the environment\'s secrets); a page holds no keys');
     const { default: Sdk } = await import('@anthropic-ai/sdk'), client = new Sdk({ baseURL: 'https://api.anthropic.com' }), k = prompt.indexOf(PROMPT_CUT);
     const head = k >= 0 ? prompt.slice(0, k) : '', tail = k >= 0 ? prompt.slice(k + PROMPT_CUT.length) : prompt;
-    const r = await client.messages.create({ model: o.model ?? AGENT_MODEL, max_tokens: 6000, ...(head ? { system: cachedSystem(head) } : {}), output_config: { effort: tier === 'quick' ? 'low' : 'medium' }, messages: [{ role: 'user', content: images?.length ? [...images.map((png) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/png' as const, data: Buffer.from(png).toString('base64') } })), { type: 'text' as const, text: tail }] : tail }] }, { signal: o.signal ?? AbortSignal.timeout(90_000) });
+    const r = await client.messages.create({ model: o.model ?? AGENT_MODEL, max_tokens: images?.length ? 12_000 : 6000, ...(head ? { system: cachedSystem(head) } : {}), output_config: { effort: tier === 'quick' ? 'low' : 'medium' }, messages: [{ role: 'user', content: images?.length ? [...images.map((png) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/png' as const, data: Buffer.from(png).toString('base64') } })), { type: 'text' as const, text: tail }] : tail }] }, { signal: o.signal ?? AbortSignal.timeout(90_000) });
     if (o.tokens) { o.tokens.in += r.usage.input_tokens; o.tokens.out += r.usage.output_tokens; o.tokens.cached += r.usage.cache_read_input_tokens ?? 0; o.tokens.written += r.usage.cache_creation_input_tokens ?? 0; }
     const turn = turnOf(r); return turn.ends ? turn.answer : '';
   };
