@@ -90,6 +90,10 @@ A thing is what a person sees in it: where a recognition list comes with the tas
 proportion and place, and the whole's size), every feature is shown by a part, each part is sized beside the whole's size
 (its settings, or the `a`/`b`/`c` of what you make), and the nearest assembly alone is never the thing when it shows only
 some of the list. The result is looked at: a feature not seen in the picture is added and joined in its place.
+An engineered machine, never a toy: where requirements come with the task (envelope, payload or force, speed, power
+source, each from the request or assumed), each part is chosen to meet the requirement that falls on it ("It must give"),
+by a component whose row gives it; "RC" is remotely controlled, not small. After the build each margin is checked with no
+model (what the row gives against what is needed, the drivers against the supply, a part's own report's safety factor).
 
 ## How you answer
 

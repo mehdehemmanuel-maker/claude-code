@@ -19,8 +19,9 @@ import type { Board } from './boards';
 import { edgesOf, nodesOf } from './boards';
 import { certificatesOf, check, diffOf, type Certificate, type Verdict } from './certify';
 import { massOfAll, type Assembly } from './assembly';
-import { alternatives, badConnections, compatible, interference, missingInterfaces, revisions, searchByFunction, variantsOf as variantsById, working, type Found, type Working } from './aitools';
+import { alternatives, badConnections, compatible, interference, missingInterfaces, revisions, piecesOfParts, roleOf, searchByFunction, variantsOf as variantsById, working, type Found, type Working } from './aitools';
 import type { Block } from './room';
+import { REQUIRE_RULE, engineeringOf, marginLine, needsLine, needsOf, qty, requirementLine, requirementLines, requirementsOf, settingsForNeeds, type Engineering, type Needs, type Requirement } from './lookat';
 import { FEATURE_RULE, LOOK_RULE, SEE_RULE, featureLine, longestOf, lookedOf, metres, recognitionLines, recognitionOf, sameFeature, sizeOff, type Feature, type Looked, type Recognition } from './lookat';
 
 /** The docs the agent may read, by topic: the router in CLAUDE.md, as files under docs/. */
@@ -774,6 +775,7 @@ export const PROMPT_CUT = '\n\n---\n\n';
 /** A part of a compound request: as the split said it, then what was made of it. */
 export interface ComposePart { name: string; is: string; from: string; set?: Record<string, unknown>;
   /** the features of the request's recognition list this part makes visible (lookat.ts), as the split said */ shows?: string[];
+  /** the requirement that falls on this part (lookat.ts Needs, SI), as the split said */ needs?: Needs;
   /** the split said it is several things itself: split again (decision 0028) */ split?: boolean;
   /** how it was made: placed from the library, a part remembered placed again, a starter board opened, a plan by one
    *  call, split into parts of its own (each made so, joined, folded), or not made */ by?: 'assembly' | 'remembered' | 'starter' | 'plan' | 'split' | 'none';
@@ -791,7 +793,9 @@ export interface ComposeRun { board: Board; parts: ComposePart[]; joins: Compose
   tree: ComposeNode[]; remembered: string[]; recalled: string[]; missing: string[];
   /** the functional gate's last word (aitools.ts working: each driver joined to what it drives and to a supply) */ works?: Working;
   /** the recognition list (lookat.ts): each feature, the part that shows it, what the eye last said of it; the whole's
-   *  longest side asked and built, in metres; how many times the result was looked at */ features?: Feature[]; size?: { asked?: number; built?: number }; looks?: number }
+   *  longest side asked and built, in metres; how many times the result was looked at */ features?: Feature[]; size?: { asked?: number; built?: number }; looks?: number;
+  /** the design's requirements (each from the request or assumed), the engineering check's last word (each margin, what
+   *  failed, what no row carried), and the whole's mass from its geometry, kg */ requirements?: Requirement[]; engineering?: Engineering; mass?: number }
 
 /** A request that names two or more things (a drone and an arm, a crane and a truck): Assist hands it to composeBuild.
  *  Words of machines, each counted once; a singular arm only ("the arms of a cross frame" is one thing). A guess from the
@@ -836,7 +840,12 @@ Where a recognition list comes with the request (what a person must see): "shows
 the features that part makes visible; every feature is shown by a part. The nearest assembly is never the whole thing
 when it shows only some of the list: it is one part, and each feature it does not show is a part of its own (a walker is
 a dinosaur's legs and body; its neck with the head and its tail are parts from pieces, joined in front and behind).
-Where a size comes with the list, set each assembly's size settings (set, by its settings' names) so the whole comes to it.`;
+Where a size comes with the list, set each assembly's size settings (set, by its settings' names) so the whole comes to it.
+Where requirements come with the request: "needs": {"force_N": 14700, "payload_kg": 500, "span_m": 2, "speed_m_s": 0.5, "torque_Nm": 40, "power_W": 7350}
+on each part the requirement falls on, only the ones that do (the mast or the arm lifts the payload: its force; each of n
+legs carries payload/n × 9.81 × 1.5; a span carries the rolling load over its length; a driver gives force × speed as
+power, and force × its arm or wheel radius as torque). A part is chosen to meet its needs: an industrial drive, a
+hydraulic cylinder, a geared motor; never a hobby servo or a small stepper where the need exceeds it.`;
 /** A part remembered, a line for the split: its id, name, what it says and offers, what it was made for, its uses. */
 const rememberedLine = (p: SavedPart): string => `${p.id}: ${p.name}: ${p.says.slice(0, 90)}${p.offers?.length ? `; offers [${p.offers.slice(0, 6).join('; ')}]` : ''} (made for "${p.from.slice(0, 60)}"; ${p.checked.pieces} pieces; used ${p.uses} time${p.uses === 1 ? '' : 's'})`;
 /** The split call's prompt: the menu, then the rule (the cached head), then the parts remembered for these words (they
@@ -855,7 +864,7 @@ export function splitOf(text: string): { parts: ComposePart[]; joins: ComposeJoi
     let name = String(x.name ?? `part${k + 1}`).toLowerCase().replace(/\W+/g, '_').replace(/^_+|_+$/g, '') || `part${k + 1}`; if (/^\d/.test(name)) name = `p${name}`;
     while (seen.has(name)) name = `${name}${k + 1}`; seen.add(name);
     const from = String(x.from ?? '').slice(0, 120);
-    return { name, is: String(x.is ?? x.what ?? name).slice(0, 300), from, ...(x.split === true || /^split$/i.test(from.trim()) ? { split: true } : {}), ...(x.set && typeof x.set === 'object' && !Array.isArray(x.set) ? { set: x.set as Record<string, unknown> } : {}), ...(Array.isArray(x.shows) && x.shows.length ? { shows: x.shows.slice(0, 8).map((f) => String(f).slice(0, 40)) } : {}), names: [], failing: [] }; });
+    return { name, is: String(x.is ?? x.what ?? name).slice(0, 300), from, ...(x.split === true || /^split$/i.test(from.trim()) ? { split: true } : {}), ...(x.set && typeof x.set === 'object' && !Array.isArray(x.set) ? { set: x.set as Record<string, unknown> } : {}), ...(Array.isArray(x.shows) && x.shows.length ? { shows: x.shows.slice(0, 8).map((f) => String(f).slice(0, 40)) } : {}), ...(needsOf(x.needs) ? { needs: needsOf(x.needs)! } : {}), names: [], failing: [] }; });
   const named = (s: unknown) => { const t = String(s ?? '').toLowerCase().replace(/\W+/g, '_'); return parts.find((p) => p.name === t)?.name; };
   const joins = (Array.isArray(o.joins) ? o.joins : []).map((j) => { const x = (j ?? {}) as Record<string, unknown>; return { part: named(x.part ?? x.a), how: String(x.how ?? 'onto').slice(0, 40), to: named(x.to ?? x.b) }; })
     .filter((j): j is ComposeJoin => !!j.part && !!j.to && j.part !== j.to);
@@ -935,6 +944,14 @@ The build runs, but a part does not act on what it should (below). Reply with on
 (room.over the driven part on the shaft's line, room.through, or a coupling between them) and its power line to a supply;
 keep every part, replace only the joins, and end with a space.show of the last block's thing.`;
 
+/** The engineering check's mend rule (one task: make what is built strong enough, nothing else). */
+const ENG_RULE = `## Here: make it strong enough (one task)
+The build runs, but the engineering check fails (below: what a component gives against what its requirement needs). Reply
+with one JSON object and nothing else, a change: {"tool": "change", "set": {...}, "remove": [...], "add": {...}, "wires": [...], "says": "..."}.
+Set the failing part to a larger size of its settings' choices (a larger bore, a bigger frame, a higher rating), or replace
+the component by a larger one of its kind joined the same way, or add a gear stage between; keep every other part and
+every join, and end with a space.show of the last block's thing.`;
+
 /** A compound request built from its parts by small calls, each one task (decisions 0027, 0028): the parts remembered
  *  recalled first; split (a part of several things split again, two levels at most); each part placed from the library
  *  (an assembly or a part remembered), a starter board, or one plan (never skipped: asked again once where no plan could
@@ -957,14 +974,16 @@ export async function composeBuild(request: string, o: { ask: Ask; board?: Board
   const treeOf = (p: ComposePart): ComposeNode => ({ name: p.name, is: p.is, by: p.by ?? 'none', from: p.from, ...(p.saved ? { saved: p.saved } : {}), pieces: p.names.length, failing: p.failing, children: (p.children ?? []).map(treeOf) });
   let parts: ComposePart[] = [], joins: ComposeJoin[] = [];
   registerSaved(); // (parts kept in a store apart from this run, as blocks: placed like an assembly)
-  let works: Working | undefined, recog: Recognition | undefined, looks = 0, builtSize: number | undefined, anchor = '';
+  let works: Working | undefined, recog: Recognition | undefined, looks = 0, builtSize: number | undefined, anchor = '', reqs: Requirement[] = [], eng: Engineering | undefined, mass: number | undefined;
   const done = (answer: string): ComposeRun => ({ board, parts, joins, steps, unmet, answer, asks, plans, tree: parts.map(treeOf), remembered, recalled, missing, ...(works ? { works } : {}),
+    ...(reqs.length ? { requirements: reqs } : {}), ...(eng ? { engineering: eng } : {}), ...(mass !== undefined ? { mass } : {}),
     ...(recog ? { features: recog.features, size: { ...(recog.longest ? { asked: recog.longest } : {}), ...(builtSize ? { built: builtSize } : {}) } } : {}), ...(o.look ? { looks } : {}) });
   /** Each feature held to the part that shows it (a part made before one not made); the features no part shows. */
   const cover = (): Feature[] => { if (!recog) return []; for (const f of recog.features) { const ps = parts.filter((p) => p.shows?.some((s) => sameFeature(s, f.name))), p = ps.find((q) => q.node) ?? ps[0]; if (p) f.part = p.name; else delete f.part; } return recog.features.filter((f) => !f.part); };
   /** What a part must show and the whole's size, said for its plan or its own split. */
   const seeFor = (p: ComposePart): string => { if (!recog) return ''; const fs = recog.features.filter((f) => p.shows?.some((s) => sameFeature(s, f.name)));
-    return `${fs.length ? `\nA person must see in it: ${fs.map(featureLine).join('; ')}.` : ''}${anchor ? `\n${anchor}` : recog.longest ? `\nThe whole thing is about ${metres(recog.longest)} on its longest side: size this part beside that.` : ''}`; };
+    const src = reqs.find((r) => r.name === 'power'), need = p.needs ? `\nIt must give: ${needsLine(p.needs)}${src ? ` (power: ${src.value})` : ''}. Choose components whose rows give that (an industrial drive, a cylinder, a geared motor of the size it takes); never a hobby servo or a small motor where the need exceeds it.` : '';
+    return `${fs.length ? `\nA person must see in it: ${fs.map(featureLine).join('; ')}.` : ''}${need}${anchor ? `\n${anchor}` : recog.longest ? `\nThe whole thing is about ${metres(recog.longest)} on its longest side: size this part beside that.` : ''}`; };
 
   /** A part kept for later (built by a plan or a split, nothing failing, one group): its folded board, what it is, the
    *  request, its check and the split's words as tags. */
@@ -1056,6 +1075,8 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
     if (d && buildsInSpace(d) && !OLD_BUILD.test(d.id)) {
       // (a library assembly, a part remembered, or a piece: one node, its settings as the split gave them where it has them)
       const b = emptyBoard(p.name), keys = new Set([...(d.settings ?? []).map((x) => x.key), ...portsOf(d, defaultsOf(d)).inputs.map((x) => x.name)]), set: Record<string, unknown> = {};
+      // (the requirement that falls on the part into the settings that take one, read by their keys and units, whatever the block)
+      if (p.needs) { const sn = settingsForNeeds(d.settings ?? [], p.needs); Object.assign(set, sn.set); if (sn.lines.length) say('part', `${p.name}: its requirement into ${d.id}: ${sn.lines.join('; ')}`, !sn.lines.some((x) => x.includes('not set'))); }
       for (const [key, v] of Object.entries(p.set ?? {})) { const r = readSetting(d, keys, key, v); if (r.key) set[r.key] = r.value; }
       placeBlock(b, d.id, 0, 0, { ...defaultsOf(d), ...set }, p.name);
       const mine = savedParts().find((x) => x.id === d.id); p.by = mine ? 'remembered' : 'assembly'; used(d.id);
@@ -1091,18 +1112,21 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
   // (0. the recognition list: what a person must see to say "that is one", and the whole's size from the request's words;
   // written before anything is chosen, so the split covers it and the checks hold the build to it)
   if (o.features ?? !!o.look) {
-    try { recog = recognitionOf(firstJson(await call(`${FEATURE_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}`, 'quick'), 'features'));
+    try { const fo = firstJson(await call(`${FEATURE_RULE}\n${REQUIRE_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}`, 'quick'), 'features'); recog = recognitionOf(fo); reqs = requirementsOf(fo);
+      // (the envelope is the size asked where the list gave no size of its own)
+      const env = reqs.find((r) => r.name === 'envelope'); if (!recog.longest && env && typeof env.value === 'number' && env.value > 0) recog.longest = env.value * (env.unit === 'mm' ? 0.001 : 1);
       say('features', `a person must see: ${recog.features.map(featureLine).join('; ')}${recog.longest ? `; the whole about ${metres(recog.longest)} on its longest side${recog.why ? ` (${recog.why})` : ''}` : ''}`); }
     catch (e) { say('features', `no recognition list could be read: ${(e as Error).message.slice(0, 160)}`, false); }
+    if (recog) say('features', reqs.length ? `requirements: ${reqs.map(requirementLine).join('; ')}` : 'no requirements were written: nothing to size the parts to', !!reqs.length);
   }
-  const see = recog ? `${recognitionLines(recog)}\nEvery feature is shown by a part ("shows").` : '';
+  const see = recog ? `${recognitionLines(recog)}\nEvery feature is shown by a part ("shows").${reqs.length ? `\n${requirementLines(reqs)}\nEach part the requirement falls on says it ("needs").` : ''}` : '';
   if (found.length) say('split', `found by what they do: ${found.map((f) => f.id).join(', ')}`);
   try { ({ parts, joins } = splitOf(await call(await splitAsk(request, o.blocks, mem, found, see), 'quick')));
     // (a feature no part shows: the split asked once more with those named; taken where it leaves fewer bare)
     const bare = cover();
     if (bare.length) { say('split', `no part shows: ${bare.map((f) => f.name).join(', ')}; the split asked again with those`, false);
       const was = { parts, joins };
-      try { const again = splitOf(await call(await splitAsk(request, o.blocks, mem, found, `${see}\nYour split before: ${JSON.stringify({ parts: parts.map((p) => ({ name: p.name, is: p.is, from: p.from, ...(p.set ? { set: p.set } : {}), ...(p.shows ? { shows: p.shows } : {}) })), joins })}\nNo part of it shows: ${bare.map(featureLine).join('; ')}. Reply with the whole split again: a part added for each of these (from pieces where no assembly is it), or the feature named in the "shows" of the part that plainly shows it.`), 'quick'));
+      try { const again = splitOf(await call(await splitAsk(request, o.blocks, mem, found, `${see}\nYour split before: ${JSON.stringify({ parts: parts.map((p) => ({ name: p.name, is: p.is, from: p.from, ...(p.set ? { set: p.set } : {}), ...(p.shows ? { shows: p.shows } : {}), ...(p.needs ? { needs: p.needs } : {}) })), joins })}\nNo part of it shows: ${bare.map(featureLine).join('; ')}. Reply with the whole split again: a part added for each of these (from pieces where no assembly is it), or the feature named in the "shows" of the part that plainly shows it.`), 'quick'));
         ({ parts, joins } = again); if (cover().length >= bare.length) { ({ parts, joins } = was); cover(); } }
       catch (e) { say('split', `asked again: ${(e as Error).message.slice(0, 120)}`, false); } } }
   catch (e) { say('split', `Could not split it into parts: ${(e as Error).message}`, false); unmet.push('no parts: the split failed'); return done(`Nothing built: the split failed (${(e as Error).message}).`); }
@@ -1188,6 +1212,24 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
     catch (e) { say('gate', `${d.name}: no supply added: ${(e as Error).message.slice(0, 160)}`, false); }
   }
   if (works && !works.ok) unmet.push(...works.reasons.map((r) => `not working: ${r}`));
+  // (5e. the engineering check, with no model (lookat.ts engineeringOf): the mass from the geometry; each part with a
+  // requirement on it, what its components' rows give against what it needs; the drivers against the supply; each part's
+  // own report held to the minimum it states. A failed margin is the reason for one mend, taken where nothing fails and
+  // fewer margins fail; what still fails is unmet, below)
+  const engOn = async (b: Board): Promise<{ eng: Engineering; mass?: number } | undefined> => { const x = new Engine(b); await x.run(); const t = biggest(b, x); if (!t) return undefined;
+    const w = t[2] as unknown as Block, own = piecesOfParts(w, made().map((p) => ({ name: p.name, is: p.is, names: p.names, ...(p.node ? { node: p.node } : {}) })));
+    const outs = (id?: string) => Object.fromEntries(Object.entries((id ? x.state.get(id)?.out : undefined) ?? {}).filter(([k, v]) => k !== 'thing' && !isRoom(v)));
+    const r = engineeringOf(made().map((p) => ({ name: p.name, role: roleOf(p), ...(p.needs ? { needs: p.needs } : {}), pieces: (own.get(p.name) ?? []).map((i) => w.pieces[i]!), outputs: outs(p.node) })));
+    let m: number | undefined; try { const th = x.state.get(t[0])?.out?.thing; if (th) { const v = massOfAll(th as Assembly); if (Number.isFinite(v) && v > 0) m = v; } } catch { /* a thing that cannot be weighed: the mass is said as not measured */ }
+    return { eng: r, ...(m !== undefined ? { mass: m } : {}) }; };
+  if (recog) { const first = await engOn(board); eng = first?.eng; mass = first?.mass;
+    if (eng?.reasons.length) { say('gate', `engineering: ${eng.reasons.join('; ')}`, false);
+      try { const plan = planOf(await call(`${guideHead}${PROMPT_CUT}${boardBrief(board)}\n\n${ENG_RULE}\nAsked: ${request.slice(0, 400)}\n${requirementLines(reqs)}\nWhat fails:\n${eng.reasons.map((r) => `- ${r}`).join('\n')}`, 'default')); plans.push(plan);
+        const ran = await runPlan(plan, board, o.blocks), after = ran.failing.length ? undefined : await engOn(ran.board);
+        if (after && after.eng.reasons.length < eng.reasons.length) { board = ran.board; eng = after.eng; mass = after.mass; works = await worksOn(board) ?? works; }
+        say('gate', eng.reasons.length ? `engineering, after the mend${after ? '' : ` (not taken: ${ran.failing[0]?.slice(0, 120) ?? 'it made no block'})`}: ${eng.reasons.join('; ')}` : `engineering now holds: ${eng.margins.map(marginLine).join('; ')}`, !eng.reasons.length); }
+      catch (x) { say('gate', `asked to mend the engineering: ${(x as Error).message.slice(0, 160)}`, false); } }
+    else if (eng) say('check', `engineering: ${eng.margins.length ? eng.margins.map(marginLine).join('; ') : 'no margin to hold (no part has a requirement its rows carry)'}${eng.notes.length ? `; not checked: ${eng.notes.join('; ')}` : ''}`); }
   // (a show of the whole, where the plan put none)
   const showWhole = async (): Promise<Engine> => { let x = new Engine(board); await x.run(); const top = biggest(board, x);
     if (top && !nodesOf(board).some((n) => board.nodes[n.id]!.block === 'space.show') && 'thing' in (x.state.get(top[0])?.out ?? {})) { const sh = board.nodes.show ? 'show_whole' : 'show'; placeBlock(board, 'space.show', 0, 0, {}, sh); wire(board, top[0], 'thing', sh, 'thing'); x = new Engine(board); await x.run(); }
@@ -1256,7 +1298,11 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       if (!p.node || !p.names.length || miss) unmet.push(`feature not in the build: ${f.name}: its part ${p.name} ${!p.node || !p.names.length ? 'was not made' : `has ${miss} of its ${p.names.length} pieces missing from the whole`}`);
       if (f.seen && f.seen !== 'seen') unmet.push(`not seen: ${f.name}${f.seen === 'wrong' ? ' (wrong)' : ''}${f.note ? `: ${f.note}` : ''}`); }
     const off = sizeOff(builtSize, recog.longest); if (off) unmet.push(off);
-    if (o.look && !looks) unmet.push('not looked at: no picture of the build could be taken or read'); }
+    if (o.look && !looks) unmet.push('not looked at: no picture of the build could be taken or read');
+    // (6c. the engineering check on the build as it now stands (the eye's mends may have changed it): what fails is unmet)
+    const last = await engOn(board); if (last) { eng = last.eng; mass = last.mass; } if (eng) unmet.push(...eng.reasons.map((r) => `engineering: ${r}`)); }
+  // (the design summary the answer ends with: envelope, mass, payload, the drivers and their margins, what was assumed)
+  const reqOf = (n: string) => reqs.find((r) => r.name === n), design = recog ? `\nDesign: envelope ${builtSize ? metres(builtSize) : 'not measured'} on its longest side${recog.longest ? ` (asked about ${metres(recog.longest)})` : ''}; mass ${mass !== undefined ? `${qty(mass, 'kg')} (from the geometry)` : 'not measured'}; ${reqOf('payload') ? requirementLine(reqOf('payload')!) : reqOf('force') ? requirementLine(reqOf('force')!) : 'no payload or working force stated'}; ${reqOf('power') ? `power ${reqOf('power')!.value}; ` : ''}margins: ${eng?.margins.length ? eng.margins.map((m) => `${marginLine(m)}${m.ok ? '' : ' FAILS'}`).join('; ') : 'none held (no part has a requirement its components\' rows carry)'}${eng?.notes.length ? `; not checked: ${eng.notes.join('; ')}` : ''}; assumed: ${reqs.filter((r) => r.from === 'assumed').map((r) => `${r.name} ${r.value}${r.unit ? ` ${r.unit}` : ''}`).join(', ') || 'nothing'}.` : '';
   // (the whole kept for later when it passes and is more than one library block placed)
   const before = savedParts().find((x) => x.tags.includes('whole') && x.from === request);
   if (keep && !unmet.length && whole && before) { used(before.id); say('remember', `the whole as kept before for this request, ${before.id}: used ${before.uses + 1} time${before.uses ? 's' : ''}`); }
@@ -1268,7 +1314,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
   say('check', unmet.length ? `Not met: ${unmet.join('; ')}` : `Checked: ${made().length} part${made().length === 1 ? '' : 's'} in one thing of ${whole!.pieces.length} pieces, nothing failing`, !unmet.length);
   const how = (p: ComposePart) => (p.by === 'assembly' ? 'a library assembly' : p.by === 'remembered' ? `remembered, ${p.saved}` : p.by === 'starter' ? 'a starter board' : p.by === 'split' ? `split into ${p.children?.filter((c) => c.node).length ?? 0} parts` : 'one plan');
   board.title = request.replace(/^./, (c) => c.toUpperCase()).slice(0, 80);
-  return done(`${unmet.length ? 'Built in part' : 'Built'}: ${request.slice(0, 120)}, from ${made().map((p) => `${p.name} (${how(p)}, ${p.names.length} pieces)`).join(', ')}${whole ? `; the whole ${whole.pieces.length} pieces${g === 1 ? ', one thing' : ''}` : ''}.${remembered.length ? ` Kept for later: ${remembered.join(', ')}.` : ''}${unmet.length ? `\nNot met: ${unmet.join('; ')}` : ''}`);
+  return done(`${unmet.length ? 'Built in part' : 'Built'}: ${request.slice(0, 120)}, from ${made().map((p) => `${p.name} (${how(p)}, ${p.names.length} pieces)`).join(', ')}${whole ? `; the whole ${whole.pieces.length} pieces${g === 1 ? ', one thing' : ''}` : ''}.${remembered.length ? ` Kept for later: ${remembered.join(', ')}.` : ''}${unmet.length ? `\nNot met: ${unmet.join('; ')}` : ''}${design}`);
 }
 
 /** An Ask by the Node SDK (the relay): the prompt's head before PROMPT_CUT one cached system block, its tail the message;
