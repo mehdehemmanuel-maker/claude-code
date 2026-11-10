@@ -817,7 +817,9 @@ const KINDS: Record<string, string> = { cylinder: 'piece.hydcylinder', aircylind
   motor: 'piece.dcmotor', gearmotor: 'piece.gearmotor', stepper: 'piece.stepper', servo: 'piece.servo', fan: 'piece.fan', pump: 'piece.pump', valve: 'piece.ballvalve', tank: 'piece.tank', fueltank: 'piece.fueltank',
   hose: 'piece.hydhose', pipe: 'piece.pipe', radiator: 'piece.carradiator', muffler: 'piece.muffler', exhaust: 'piece.exhaustpipe', enginemount: 'piece.enginemount', seat: 'piece.seatframe', mirror: 'piece.carmirror', lamp: 'piece.headlamp',
   hinge: 'piece.hinge', handle: 'piece.handle', eyebolt: 'piece.eyebolt', shackle: 'piece.shackle', towball: 'piece.towball', propeller: 'piece.marineprop', leadscrew: 'piece.leadscrew', ballscrew: 'piece.ballscrew', rail: 'piece.mgn',
-  pin: 'piece.clevispin', bolt: 'piece.bolt', cab: 'seed.cab' };
+  pin: 'piece.clevispin', bolt: 'piece.bolt', cab: 'seed.cab',
+  nut: 'piece.nut', washer: 'piece.washer', screw: 'piece.panhead', setscrew: 'piece.setscrew', circlip: 'piece.circlip', oring: 'piece.oring', key: 'piece.key', dowel: 'piece.dowel', rivet: 'piece.rivet', splitpin: 'piece.splitpin',
+  stud: 'piece.threadedrod', grommet: 'piece.grommet', hoseclamp: 'piece.hoseclamp', fitting: 'piece.gfitting', gauge: 'piece.gauge', switch: 'piece.rocker', knob: 'piece.controlknob', cable: 'piece.flexcable', battery: 'piece.battery', magnet: 'piece.magnet', foot: 'piece.foot' };
 /** A row's name split into its kind (if it names one) and its plain name. */
 function kindOf(raw: unknown): { kind?: string; name: string } { const t = String(raw ?? '').trim(), m = /^([a-z]+)\s*:\s*(.+)$/i.exec(t); const k = m?.[1]?.toLowerCase(); return m && k && KINDS[k] ? { kind: k, name: m[2]! } : { name: m && k && /^(beam|bar|box|rod|tube)$/.test(k) ? m[2]! : t }; }
 const TOOL_SIZES = new Map<string, number[] | undefined>();
@@ -865,7 +867,8 @@ Reply compactly, one row a solid, no spaces or line breaks: {"solids":[["front l
  *  is made of, each node with where it stands. */
 export interface PipeEvent { id: number; stage: string; label: string; state: 'run' | 'ok' | 'fail'; ms?: number; rule?: string; sent?: string; got?: string }
 export interface PipeNode { name: string; n: number; kind: string; is: string; state: 'waiting' | 'decomposed' | 'placed' | 'pinned' | 'failed'; kids: PipeNode[];
-  /** set by the deep decomposer: this is ONE made piece or ONE bought part, split no further; or its split failed */ leaf?: 'piece' | 'bought' | 'failed' }
+  /** set by the deep decomposer: this is ONE made piece or ONE bought part, split no further; or its split failed */ leaf?: 'piece' | 'bought' | 'failed';
+  /** set by the part builder: its own pieces stand in the model in place of the rough solids */ built?: boolean }
 /** The deep decomposer (the user, 2026-11-10: "every tiny components and its components needs to be decomposed"): a thing
  *  is split until every leaf is one made piece or one bought part, fasteners included. Asked for on demand, a node at a
  *  time or the whole tree, so nothing is spent on what is not looked at. */
@@ -878,6 +881,77 @@ Reply with one JSON object and nothing else, compact: {"rows":[[name, count, kin
 - kind "link": one slender piece pinned between two others (a cylinder, a strut, a rod).
 - 2 to 14 rows; names short, plain, unique among the rows. Never repeat the thing itself as a row, and never summarise ("hardware", "internals", "fittings" are not rows: name the bolts, the seals, the pins).
 - If the thing given is itself ONE made piece or ONE bought part, reply {"rows":[],"is":"piece"} or {"rows":[],"is":"bought"}.`;
+/** The part builder (the user, 2026-11-10: "each part even tires and screws and everything need to be built and or placed"):
+ *  an assembly that has been taken apart is built from its own pieces, in place of the rough solids that stood for it. */
+const BUILDER_RULE = `## Here: PART BUILDER (one task: one assembly's own pieces, each in its real shape and place)
+You are given ONE assembly of a machine: the box it occupies, the rough solids that stand for it now, and the pieces it is really made of. Give every piece its real shape, size and place inside that box, as the real thing is built: a plate is a plate of its real thickness, never a block; round things are round; fasteners sit where they really go, through the pieces they hold.
+Reply with one JSON object and nothing else, compact: {"rows":[[name, shape, axis, size x, size y, size z, at x, at y, at z, mat, color, turn x, turn y, turn z],...],"outlines":{"name":[[u,v],...]},"holes":{"name":[[u,v,d],...]}}
+- Whole numbers, mm, on the MACHINE's axes: x forward, y up, z to the right, the ground y = 0. "at" is the middle of the piece's box in x and z and its FOOT in y. Leave the three turns off where they are 0.
+- Every piece listed gets its rows, named by its name; "x4" is four rows (add 1 to 4, or left, right, front, rear), each where the real one is. More than 12 of one thing: give 12, spread as the real ones are.
+- A piece marked [assembly] gets exactly ONE row, shape "box": the box it occupies. Its own pieces are built by a later call.
+- A piece marked [bought]: begin its name with its kind and a colon where it is one of these ("bolt: Cover bolt 1"): ${Object.keys(KINDS).join(', ')}. Give its row as if drawn (a bolt is a "rod" of its diameter and length along its axis): the app puts the real part there at that size.
+- A piece marked [piece]: shape "box", "rod" (a cylinder along "axis": "x", "y" or "z"), "tube" (hollow), "sphere", "dome", "cone", "wedge"; or a long member as [name, "beam", depth, x1, y1, z1, x2, y2, z2, mat, color, width] (its two end points, y the true height; "bar" for a round one).
+- outlines (for a flat or extruded piece that is not a rectangle: a side plate, a bracket, a gusset, a cheek, a lever): its row is shape "box" and its axis the direction it is thin along; its outline is 3 to 12 points [u,v] going round it, in percent of the box's face seen along that axis (axis z: u along x, v up y; axis y: u along x, v along z; axis x: u along z, v up y).
+- holes: [u,v,d] is a round hole of d mm through the piece along its axis at u,v percent of the same face (bolt holes, pin bores, lightening holes). Where a bolt passes through a piece, the piece has a hole there.
+- The keys of "outlines" and "holes" are row names exactly as in "rows". Both may be left out.
+- mat one of steel-low, al-6061, rubber, abs, glass, wood-pine; color "#rrggbb": painted panels in the body colour of the rough solids, bare steel grey, rubber near black, glass pale blue.`;
+/** Build the assembly at `path` of a tree from its own pieces (it must have been taken apart): one call for it and one for
+ *  each assembly under it, each given the box its parent gave it. The rough solids named under the path leave the board's
+ *  layout and the built pieces take their place, of the same body, so what moved still moves. Sixty calls a press. */
+export async function buildDeep(request: string, tree: PipeNode[], path: string[], board: Board, o: { ask: Ask; onPipe?: (e: PipeEvent | { tree: PipeNode[] }) => void; maxCalls?: number; idFrom?: number }): Promise<{ board: Board; calls: number; pieces: number; real: number; says: string }> {
+  let id = o.idFrom ?? 200000, calls = 0; const max = o.maxCalls ?? 60, P = path.join(' > ');
+  const at = (ns: PipeNode[], p: string[]): PipeNode | undefined => { const n = ns.find((x) => x.name === p[0]); return !n || p.length === 1 ? n : at(n.kids, p.slice(1)); }, node = at(tree, path);
+  if (!node || !node.kids.length) throw new Error(`${P}: take it apart first, then build it`);
+  const lay = board.nodes.layout; if (!lay || lay.block !== 'room.layout') throw new Error('the board has no layout to build into');
+  type Sol = Record<string, unknown>; const N3 = (v: unknown) => [0, 1, 2].map((k) => Number((v as unknown[])?.[k]) || 0);
+  const all: Sol[] = (JSON.parse(String(lay.set?.boxes ?? '[]')) as Sol[]).map((r) => { if (r.in === undefined) return r; const tn = board.nodes[`t${String(r.in).padStart(3, '0')}`], { in: _i, ...rest } = r; return { ...rest, use: tn?.block, set: tn?.set ?? {} }; });
+  const under = (nm: unknown) => { const t = String(nm).toLowerCase(), q = P.toLowerCase(); return t === q || t.startsWith(`${q} > `); }, mine = all.filter((x) => under(x.name)), rest = all.filter((x) => !under(x.name));
+  if (!mine.length) throw new Error(`${P}: nothing in the model stands for it yet`);
+  const boxOf = (xs: Sol[]): { lo: number[]; hi: number[] } => { const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (const x of xs) { const pts = Array.isArray(x.span) ? (x.span as number[][]) : (() => { const a = N3(x.at), z = N3(x.size).map(Math.abs); return [[a[0]! - z[0]! / 2, a[1]!, a[2]! - z[2]! / 2], [a[0]! + z[0]! / 2, a[1]! + z[1]!, a[2]! + z[2]! / 2]]; })();
+      for (const q of pts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k]!, q[k]!); hi[k] = Math.max(hi[k]!, q[k]!); } } return { lo, hi }; };
+  const cnt = new Map<number, number>(); for (const x of mine) if (typeof x.body === 'number') cnt.set(x.body, (cnt.get(x.body) ?? 0) + 1); const body = [...cnt.entries()].sort((p, q) => q[1] - p[1])[0]?.[0];
+  const boxText = (b: { lo: number[]; hi: number[] }) => `${Math.round(b.hi[0]! - b.lo[0]!)} x ${Math.round(b.hi[1]! - b.lo[1]!)} x ${Math.round(b.hi[2]! - b.lo[2]!)} mm, its middle at x ${Math.round((b.lo[0]! + b.hi[0]!) / 2)}, z ${Math.round((b.lo[2]! + b.hi[2]!) / 2)}, its foot at y ${Math.round(b.lo[1]!)}`;
+  const roughText = (xs: Sol[]) => xs.slice(0, 14).map((x) => (Array.isArray(x.span) ? `${String(x.name).split(' > ').pop()}: a member from ${(x.span as number[][])[0]!.map(Math.round).join(' ')} to ${(x.span as number[][])[1]!.map(Math.round).join(' ')}` : `${String(x.name).split(' > ').pop()}: ${String(x.shape ?? 'part')} ${N3(x.size).map(Math.round).join(' x ')} at ${N3(x.at).map(Math.round).join(', ')}${typeof x.color === 'string' ? ` ${x.color}` : ''}`)).join('\n');
+  let free = 12; const waiters: (() => void)[] = [], take = async () => { if (free > 0) { free--; return; } await new Promise<void>((ok) => waiters.push(ok)); }, give = () => { const w = waiters.shift(); if (w) w(); else free++; };
+  const built: Sol[] = []; let skipped = 0;
+  const one = async (n: PipeNode, pth: string[], box: { lo: number[]; hi: number[] }, rough: Sol[]): Promise<void> => { const label = pth.join(' > '), myId = id++, t0 = Date.now();
+    if (calls >= max) { skipped++; built.push(...rough.map((x) => ({ ...x }))); return; } calls++;
+    const prompt = `${BUILDER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 400)}\nBuild: ${label} (${n.is})\nIts box: ${boxText(box)}\nThe rough solids standing for it now:\n${roughText(rough)}\n\nIts pieces:\n${n.kids.map((k) => `${k.name}${k.n > 1 ? ` x${k.n}` : ''} [${k.kids.length ? 'assembly' : k.leaf === 'bought' || k.kind === 'bought' ? 'bought' : k.kind === 'link' ? 'piece' : 'piece'}] ${k.is}`).join('\n').slice(0, 5000)}`, sent = prompt.slice(BUILDER_RULE.length + PROMPT_CUT.length);
+    o.onPipe?.({ id: myId, stage: 'part builder', label, state: 'run', rule: BUILDER_RULE, sent }); await take();
+    try { let got: string; try { const r0 = await o.ask(prompt, 'quick'); got = typeof r0 === 'string' ? r0 : JSON.stringify(r0); } finally { give(); }
+      const r = firstJson(got, `part builder (${label})`) as { rows?: unknown; outlines?: Record<string, unknown>; holes?: Record<string, unknown> }, rows = (Array.isArray(r.rows) ? r.rows : []).filter(Array.isArray).slice(0, 160) as unknown[][];
+      if (!rows.length) throw new Error('no rows in the reply');
+      const subs = n.kids.filter((k) => k.kids.length), jobs: Promise<void>[] = [], usedSub = new Set<PipeNode>();
+      for (const x of rows) { const raw = String(x[0] ?? ''), kn = kindOf(raw), beam = x[1] === 'beam' || x[1] === 'bar';
+        const sub = beam ? undefined : subs.find((k) => !usedSub.has(k) && kn.name.toLowerCase().startsWith(k.name.toLowerCase()));
+        const sol: Sol = beam ? (() => { const p1 = [Number(x[3]), Number(x[4]), Number(x[5])], p2 = [Number(x[6]), Number(x[7]), Number(x[8])], len = Math.hypot(p2[0]! - p1[0]!, p2[1]! - p1[1]!, p2[2]! - p1[2]!), dp = Math.abs(Number(x[2])) || len / 10, wd = Math.abs(Number(x[11])) || dp;
+            return { name: `${label} > ${kn.name}`, span: [p1, p2], thick: [dp, wd], ends: true, shape: x[1] === 'bar' ? 'rod' : 'box', size: [dp, len, wd], at: [(p1[0]! + p2[0]!) / 2, (p1[1]! + p2[1]!) / 2, (p1[2]! + p2[2]!) / 2], mat: x[9], color: x[10], rot: [0, 0, 0], bad: ![...p1, ...p2].every(Number.isFinite) || !(len > 2) }; })()
+          : { name: `${label} > ${kn.name}`, kind: kn.kind, shape: x[1], axis: x[2], size: [x[3], x[4], x[5]], at: [x[6], x[7], x[8]], mat: x[9], color: x[10], rot: [x[11] ?? 0, x[12] ?? 0, x[13] ?? 0], ...(Array.isArray(r.outlines?.[raw]) ? { outline: r.outlines![raw] } : Array.isArray(r.outlines?.[kn.name]) ? { outline: r.outlines![kn.name] } : {}), ...(Array.isArray(r.holes?.[raw]) ? { holes: r.holes![raw] } : Array.isArray(r.holes?.[kn.name]) ? { holes: r.holes![kn.name] } : {}) };
+        const fin = (v: unknown) => Array.isArray(v) && [0, 1, 2].every((k) => v[k] !== null && v[k] !== '' && Number.isFinite(Number(v[k])));
+        if (sol.bad || !fin(sol.size) || !fin(sol.at) || (sol.size as unknown[]).some((v) => Math.abs(Number(v)) < 0.5)) continue; delete sol.bad;
+        if (!Array.isArray(sol.span) && Number((sol.at as unknown[])[1]) < 0) (sol.at as unknown[])[1] = 0;
+        if (sub) { usedSub.add(sub); jobs.push(one(sub, [...pth, sub.name], boxOf([sol]), [{ ...sol, name: `${label} > ${sub.name}` }])); } else built.push(sol); }
+      n.built = true; o.onPipe?.({ id: myId, stage: 'part builder', label, state: 'ok', ms: Date.now() - t0, rule: BUILDER_RULE, sent, got: got.slice(0, 8000) }); o.onPipe?.({ tree });
+      await Promise.all(jobs); }
+    catch (e) { built.push(...rough.map((x) => ({ ...x }))); o.onPipe?.({ id: myId, stage: 'part builder', label, state: 'fail', ms: Date.now() - t0, rule: BUILDER_RULE, sent, got: (e as Error).message.slice(0, 600) }); } };
+  await one(node, path, boxOf(mine), mine);
+  for (const x of built) if (body !== undefined) x.body = body;
+  // (a piece of a kind becomes that kind's library part, fitted to its box; one that will not fit stays as drawn. No more
+  // than 250 library parts in one layout: each is a node of its own, and a phone must still draw it)
+  let real = 0, asDrawn = 0; const had = rest.filter((x) => typeof x.use === 'string').length;
+  for (const x of built) { const lib = typeof x.kind === 'string' ? KINDS[x.kind] : undefined; if (!lib || !LIBRARY.has(lib) || Array.isArray(x.span)) continue; if (had + real >= 250) { asDrawn++; continue; }
+    const f = await fitTool(lib, N3(x.size).map(Math.abs)); if (f && f.err < 1.2) { x.use = lib; x.set = f.set; x.pre = f.pre; real++; } else asDrawn++; }
+  let solids = [...rest, ...built], out = board;
+  for (let pass = 0; pass < 2; pass++) { const nb = emptyBoard(board.title ?? request.slice(0, 80)), tools = solids.filter((x) => typeof x.use === 'string' && LIBRARY.has(String(x.use))), drawn = solids.filter((x) => typeof x.use !== 'string' || !LIBRARY.has(String(x.use))).map((x) => { const { use: _u, set: _s, pre: _p, ...d } = x; return d; }), idOf = (k: number) => `t${String(k).padStart(3, '0')}`;
+    placeBlock(nb, 'room.layout', 0, 0, { name: String(lay.set?.name ?? request.slice(0, 60)), boxes: JSON.stringify([...drawn, ...tools.map((t, k) => ({ in: k, name: t.name, at: t.at, rot: t.rot, pre: t.pre, span: t.span, body: t.body }))]), pivots: String(lay.set?.pivots ?? '[]') }, 'layout'); placeBlock(nb, 'space.show', 330, 0, {}, 'show'); wire(nb, 'layout', 'thing', 'show', 'thing');
+    tools.forEach((t, k) => { placeBlock(nb, String(t.use), -330, k * 140, (t.set ?? {}) as Record<string, unknown>, idOf(k)); nb.nodes[idOf(k)]!.label = String(t.name); wire(nb, idOf(k), 'block', 'layout', 'blocks'); });
+    const e = new Engine(nb); await e.run(); const bad = tools.filter((_t, k) => e.state.get(idOf(k))?.status !== 'ok'), st = e.state.get('layout');
+    if (!bad.length) { if (st?.status !== 'ok') throw new Error(String(st?.error ?? 'the layout did not build').slice(0, 200)); out = nb; break; }
+    if (pass) throw new Error(`${bad.length} library parts did not build`); for (const t of bad) { delete t.use; delete t.set; delete t.pre; real--; asDrawn++; } solids = [...solids]; }
+  const says = `built ${P}: ${built.length} pieces in place of ${mine.length} rough solids, ${real} of them real library parts${asDrawn ? `, ${asDrawn} bought parts drawn plain (no library part of that size, or over the limit)` : ''}; ${calls} call${calls === 1 ? '' : 's'}${skipped ? `; ${skipped} assemblies left rough (press Build on them to go on)` : ''}`;
+  o.onPipe?.({ id: id++, stage: 'app', label: says, state: 'ok' }); o.onPipe?.({ tree });
+  return { board: out, calls, pieces: built.length, real, says };
+}
 /** Split the node at `path` of a tree (the whole tree with an empty path) until every leaf under it is one piece or one
  *  bought part. The tree is changed in place and sent on as it grows; each call is shown. It stops at `maxCalls` calls or
  *  eight levels down, and says how many nodes it left unsplit. */
@@ -1086,6 +1160,30 @@ Set the failing part to a larger size of its settings' choices (a larger bore, a
 the component by a larger one of its kind joined the same way, or add a gear stage between; keep every other part and
 every join, and end with a space.show of the last block's thing.`;
 
+    // (a tool's size as built with some settings, mm, kept; and the fit: the settings that bring it nearest a box asked for,
+    // found by trying its choices and scaling its numbers, with the quarter turns that lay its long side along the box's)
+    const sizeOf = async (id: string, set: Record<string, unknown>): Promise<number[] | undefined> => { const key = `${id} ${JSON.stringify(set)}`; if (TOOL_SIZES.has(key)) return TOOL_SIZES.get(key);
+      let dims: number[] | undefined; try { const tb = emptyBoard('tool'); placeBlock(tb, id, 0, 0, set, 't'); const te = new Engine(tb); await te.run(); const blk = te.state.get('t')?.out?.block as { lo: number[]; hi: number[] } | undefined; if (blk) dims = [0, 1, 2].map((k) => (blk.hi[k]! - blk.lo[k]!) * 1000); } catch { /* not buildable so */ }
+      TOOL_SIZES.set(key, dims); return dims; };
+    const SWAPS: number[][] = [[], [0], [1], [2], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1]];
+    const turnedDims = (dm: number[], seq: number[]) => { const v = [...dm]; for (const k of seq) { const [a, b] = k === 0 ? [1, 2] : k === 1 ? [0, 2] : [0, 1]; [v[a], v[b]] = [v[b]!, v[a]!]; } return v; };
+    const fitTool = async (id: string, target: number[], long?: number): Promise<{ set: Record<string, unknown>; pre: number[]; err: number; dims: number[] } | undefined> => {
+      const d = LIBRARY.get(id); if (!d || target.some((x) => !(x > 0))) return undefined;
+      const ts = [...target].sort((a, b) => a - b), err = (dm: number[]) => { const a = [...dm].sort((x, y) => x - y); return a.reduce((t, v, i) => t + Math.abs(Math.log(Math.max(v, 1e-3) / ts[i]!)), 0); };
+      let set: Record<string, unknown> = {}, t0 = Date.now(), best = await sizeOf(id, set); if (!best) return undefined; let bestErr = err(best); const slow = Date.now() - t0 > 120;
+      const tryIt = async (st: Record<string, unknown>) => { const dm = await sizeOf(id, st); if (dm && err(dm) < bestErr - 1e-9) { bestErr = err(dm); best = dm; set = st; } };
+      const ps = paramsOf(d).filter((q) => q.from === 'setting' && !/^(name|mat|material|color|colour|finish)$/.test(q.key));
+      for (let pass = 0; pass < (slow ? 1 : 2); pass++) for (const q of ps) {
+        if (q.choices?.length && !slow) { const cs = q.choices, step = Math.max(1, Math.ceil(cs.length / 24)); for (let i = 0; i < cs.length; i += step) await tryIt({ ...set, [q.key]: cs[i] }); }
+        else if (typeof q.default === 'number' && q.default > 0) { const cur = Number(set[q.key] ?? q.default), bs = [...best!].sort((a, b) => a - b);
+          for (const k of [2, 1, 0]) { const v = cur * ts[k]! / Math.max(bs[k]!, 1e-3); if (Number.isFinite(v) && v > 0) await tryIt({ ...set, [q.key]: Number(v.toPrecision(3)) }); } } }
+      // (a part that must span a gap: the setting its length follows (a cylinder's stroke) is solved for that length)
+      if (long) for (const q of ps) { if (q.choices?.length || !(typeof q.default === 'number' && q.default > 0)) continue;
+        for (let it = 0; it < 5; it++) { const cur = Number(set[q.key] ?? q.default), L0 = Math.max(...best!); if (Math.abs(L0 / long - 1) < 0.01) break;
+          const d1 = await sizeOf(id, { ...set, [q.key]: Number((cur * 1.5).toPrecision(4)) }); if (!d1) break; const slope = (Math.max(...d1) - L0) / (cur * 0.5); if (!(Math.abs(slope) > 1e-6)) break;
+          const v = Number((cur + (long - L0) / slope).toPrecision(4)); if (!(v > 0)) break; const d2 = await sizeOf(id, { ...set, [q.key]: v }); if (!d2 || Math.abs(Math.max(...d2) - long) >= Math.abs(L0 - long)) break; best = d2; set = { ...set, [q.key]: v }; bestErr = err(d2); } }
+      let pre: number[] = [], po = Infinity; for (const seq of SWAPS) { const v = turnedDims(best!, seq), e2 = v.reduce((t, x, i) => t + Math.abs(Math.log(Math.max(x, 1e-3) / target[i]!)), 0); if (e2 < po - 1e-9) { po = e2; pre = seq; } }
+      return { set, pre, err: bestErr, dims: best! }; };
 /** A compound request built from its parts by small calls, each one task (decisions 0027, 0028): the parts remembered
  *  recalled first; split (a part of several things split again, two levels at most); each part placed from the library
  *  (an assembly or a part remembered), a starter board, or one plan (never skipped: asked again once where no plan could
@@ -1319,30 +1417,6 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
     const mark = (ns: Tree[], path: string[], st: PipeNode['state']) => { for (const n of ns) { const k = [...path, n.name].join(' > '); if (n.kind !== 'link') stateOf.set(k, st); mark(n.kids, [...path, n.name], st); } };
     const split1 = async (path: string[], is: string): Promise<Tree[]> => { const r = firstJson(await tcall('decomposer', path.length ? path.join(' > ') : 'the whole thing', `${DECOMPOSE_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nDecompose: ${path.length ? `${path.join(' > ')} (${is})` : 'the whole thing asked for'}`), 'decomposer') as { rows?: unknown };
       return (Array.isArray(r.rows) ? r.rows : []).filter(Array.isArray).slice(0, 12).map((x) => ({ name: String(x[0]), n: Math.max(1, Math.round(Number(x[1]) || 1)), kind: x[2] === 'system' ? 'system' as const : x[2] === 'link' ? 'link' as const : 'part' as const, is: String(x[3] ?? ''), kids: [] })); };
-    // (a tool's size as built with some settings, mm, kept; and the fit: the settings that bring it nearest a box asked for,
-    // found by trying its choices and scaling its numbers, with the quarter turns that lay its long side along the box's)
-    const sizeOf = async (id: string, set: Record<string, unknown>): Promise<number[] | undefined> => { const key = `${id} ${JSON.stringify(set)}`; if (TOOL_SIZES.has(key)) return TOOL_SIZES.get(key);
-      let dims: number[] | undefined; try { const tb = emptyBoard('tool'); placeBlock(tb, id, 0, 0, set, 't'); const te = new Engine(tb); await te.run(); const blk = te.state.get('t')?.out?.block as { lo: number[]; hi: number[] } | undefined; if (blk) dims = [0, 1, 2].map((k) => (blk.hi[k]! - blk.lo[k]!) * 1000); } catch { /* not buildable so */ }
-      TOOL_SIZES.set(key, dims); return dims; };
-    const SWAPS: number[][] = [[], [0], [1], [2], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1]];
-    const turnedDims = (dm: number[], seq: number[]) => { const v = [...dm]; for (const k of seq) { const [a, b] = k === 0 ? [1, 2] : k === 1 ? [0, 2] : [0, 1]; [v[a], v[b]] = [v[b]!, v[a]!]; } return v; };
-    const fitTool = async (id: string, target: number[], long?: number): Promise<{ set: Record<string, unknown>; pre: number[]; err: number; dims: number[] } | undefined> => {
-      const d = LIBRARY.get(id); if (!d || target.some((x) => !(x > 0))) return undefined;
-      const ts = [...target].sort((a, b) => a - b), err = (dm: number[]) => { const a = [...dm].sort((x, y) => x - y); return a.reduce((t, v, i) => t + Math.abs(Math.log(Math.max(v, 1e-3) / ts[i]!)), 0); };
-      let set: Record<string, unknown> = {}, t0 = Date.now(), best = await sizeOf(id, set); if (!best) return undefined; let bestErr = err(best); const slow = Date.now() - t0 > 120;
-      const tryIt = async (st: Record<string, unknown>) => { const dm = await sizeOf(id, st); if (dm && err(dm) < bestErr - 1e-9) { bestErr = err(dm); best = dm; set = st; } };
-      const ps = paramsOf(d).filter((q) => q.from === 'setting' && !/^(name|mat|material|color|colour|finish)$/.test(q.key));
-      for (let pass = 0; pass < (slow ? 1 : 2); pass++) for (const q of ps) {
-        if (q.choices?.length && !slow) { const cs = q.choices, step = Math.max(1, Math.ceil(cs.length / 24)); for (let i = 0; i < cs.length; i += step) await tryIt({ ...set, [q.key]: cs[i] }); }
-        else if (typeof q.default === 'number' && q.default > 0) { const cur = Number(set[q.key] ?? q.default), bs = [...best!].sort((a, b) => a - b);
-          for (const k of [2, 1, 0]) { const v = cur * ts[k]! / Math.max(bs[k]!, 1e-3); if (Number.isFinite(v) && v > 0) await tryIt({ ...set, [q.key]: Number(v.toPrecision(3)) }); } } }
-      // (a part that must span a gap: the setting its length follows (a cylinder's stroke) is solved for that length)
-      if (long) for (const q of ps) { if (q.choices?.length || !(typeof q.default === 'number' && q.default > 0)) continue;
-        for (let it = 0; it < 5; it++) { const cur = Number(set[q.key] ?? q.default), L0 = Math.max(...best!); if (Math.abs(L0 / long - 1) < 0.01) break;
-          const d1 = await sizeOf(id, { ...set, [q.key]: Number((cur * 1.5).toPrecision(4)) }); if (!d1) break; const slope = (Math.max(...d1) - L0) / (cur * 0.5); if (!(Math.abs(slope) > 1e-6)) break;
-          const v = Number((cur + (long - L0) / slope).toPrecision(4)); if (!(v > 0)) break; const d2 = await sizeOf(id, { ...set, [q.key]: v }); if (!d2 || Math.abs(Math.max(...d2) - long) >= Math.abs(L0 - long)) break; best = d2; set = { ...set, [q.key]: v }; bestErr = err(d2); } }
-      let pre: number[] = [], po = Infinity; for (const seq of SWAPS) { const v = turnedDims(best!, seq), e2 = v.reduce((t, x, i) => t + Math.abs(Math.log(Math.max(x, 1e-3) / target[i]!)), 0); if (e2 < po - 1e-9) { po = e2; pre = seq; } }
-      return { set, pre, err: bestErr, dims: best! }; };
     let tree: Tree[] = [], treeText = '', sizing: Promise<unknown> | undefined;
     try { tree = await split1([], ''); showTree();
       const size1 = () => tcall('sizer', 'zones and pivots', `${SIZER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nIts subsystems (and under each, what it is made of):\n${tree.map((n) => `${n.name}${n.n > 1 ? ` x${n.n}` : ''} (${n.is})${n.kids.map((k) => `\n  ${k.name}${k.n > 1 ? ` x${k.n}` : ''}`).join('')}`).join('\n').slice(0, 5000)}`).then((t) => firstJson(t, 'sizer'), (e: unknown) => e);

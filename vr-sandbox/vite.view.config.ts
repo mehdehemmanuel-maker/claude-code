@@ -31,6 +31,15 @@ const relay = (): Plugin => {
       finally { res.end(); }
       return;
     }
+    // (a node that has been taken apart, built from its pieces (buildDeep): each call streamed, then the board)
+    if (mode === 'build') {
+      res.setHeader('Content-Type', 'application/x-ndjson'); res.setHeader('Cache-Control', 'no-cache'); res.setHeader('X-Accel-Buffering', 'no');
+      const line = (o: unknown) => { if (!res.writableEnded) res.write(`${JSON.stringify(o)}\n`); };
+      try { await load(seeds); const m = await load(agent); const r = await m.buildDeep(String(request ?? ''), Array.isArray(asked.tree) ? asked.tree : [], Array.isArray(asked.path) ? asked.path.map(String) : [], board, { ask: m.sdkAsk({ model, signal: AbortSignal.timeout(240_000) }), onPipe: (e: unknown) => line({ pipe: e }), idFrom: Number(asked.idFrom) || 200000 }); line({ board: r.board }); }
+      catch (e) { line({ error: (e as Error).message }); }
+      finally { res.end(); }
+      return;
+    }
     if (mode === 'compose') {
       res.setHeader('Content-Type', 'application/x-ndjson'); res.setHeader('Cache-Control', 'no-cache'); res.setHeader('X-Accel-Buffering', 'no');
       const line = (o: unknown) => { if (!res.writableEnded) res.write(`${JSON.stringify(o)}\n`); }, t0 = Date.now(), gone = new AbortController();

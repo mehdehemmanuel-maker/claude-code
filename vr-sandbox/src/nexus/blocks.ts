@@ -1477,7 +1477,7 @@ const BUILT_THINGS: BlockDef[] = [
       let rows: unknown; try { rows = JSON.parse(String(c.set.boxes || '[]')); } catch (e) { throw new Error(`the solids are not JSON: ${(e as Error).message}`); }
       if (!Array.isArray(rows) || !rows.length) throw new Error('a layout needs at least one solid');
       const num = (v: unknown, k: number, what: string, at: string) => { const x = Number((v as unknown[])?.[k]); if (!Number.isFinite(x)) throw new Error(`${at}: its ${what} needs three numbers (mm)`); return x / 1000; };
-      const items = (rows as Record<string, unknown>[]).slice(0, 600).flatMap((r, n) => { const nm = String(r.name || `solid ${n + 1}`), at = (Array.isArray(r.span) ? [0, 0, 0] : [0, 1, 2].map((k) => num(r.at, k, 'place', nm))) as [number, number, number];
+      const items = (rows as Record<string, unknown>[]).slice(0, 1500).flatMap((r, n) => { const nm = String(r.name || `solid ${n + 1}`), at = (Array.isArray(r.span) ? [0, 0, 0] : [0, 1, 2].map((k) => num(r.at, k, 'place', nm))) as [number, number, number];
         // (a span: a straight part pinned between two points, mm. It is made upright, as long as the points are apart (a
         // wired part: laid long side up by its quarter turns), turned from upright to the line between them, and put with
         // its middle on the line's middle)
@@ -1504,6 +1504,22 @@ const BUILT_THINGS: BlockDef[] = [
         const shape = String(r.shape || 'box'), axis = String(r.axis || 'y'), mat = String(r.mat || 'steel-low'), col = typeof r.color === 'string' && /^#[0-9a-f]{6}$/i.test(r.color) ? { color: parseInt(r.color.slice(1), 16) } : {};
         const [L, D] = axis === 'x' ? [sz[0]!, Math.min(sz[1]!, sz[2]!)] : axis === 'z' ? [sz[2]!, Math.min(sz[0]!, sz[1]!)] : [sz[1]!, Math.min(sz[0]!, sz[2]!)];
         const round = shape === 'rod' || shape === 'cone' || shape === 'tube';
+        // (a made piece in its real outline, with its holes: a plate, a bracket, a gusset. Its row is its box and the axis
+        // it is thin (or extruded) along; the outline is points round the box's face seen along that axis, and the holes
+        // points on the same face with their diameters, all in percent of the face (axis z: u along x, v up y; axis y: u
+        // along x, v along z; axis x: u along z, v up y). It is made lying in x and y, drilled, then stood the way its
+        // axis says. An outline or a hole that cannot be made is left off, and the piece stands as its box)
+        if (Array.isArray(r.outline) || Array.isArray(r.holes)) { const ax = axis === 'x' ? 0 : axis === 'z' ? 2 : 1, [A, B] = ax === 2 ? [sz[0]!, sz[1]!] : ax === 1 ? [sz[0]!, sz[2]!] : [sz[2]!, sz[1]!], T = sz[ax]!;
+          const pts = (Array.isArray(r.outline) ? r.outline as unknown[] : []).filter((q) => Array.isArray(q) && Number.isFinite(Number(q[0])) && Number.isFinite(Number(q[1]))).slice(0, 24).map((q) => [(Math.max(0, Math.min(100, Number((q as number[])[0]))) / 100 - 0.5) * A, (Math.max(0, Math.min(100, Number((q as number[])[1]))) / 100 - 0.5) * B] as [number, number]);
+          const cx = pts.length >= 3 ? (Math.min(...pts.map((q) => q[0])) + Math.max(...pts.map((q) => q[0]))) / 2 : 0, cy = pts.length >= 3 ? (Math.min(...pts.map((q) => q[1])) + Math.max(...pts.map((q) => q[1]))) / 2 : 0;
+          const hs = (Array.isArray(r.holes) ? r.holes as unknown[] : []).filter((q) => Array.isArray(q) && Number(q[2]) > 0).slice(0, 40).map((q) => ({ at: [(Number((q as number[])[0]) / 100 - 0.5) * A - cx, (Number((q as number[])[1]) / 100 - 0.5) * B - cy] as [number, number], rad: Math.abs(Number((q as number[])[2])) / 2000 }));
+          const byRad = new Map<number, [number, number][]>(); for (const h of hs) byRad.set(h.rad, [...(byRad.get(h.rad) ?? []), h.at]);
+          const pats = [...byRad.entries()].map(([rad, points], k) => ({ name: `hole ${k + 1}`, points, hole: rad, face: '+z' as const })), sh = pts.length >= 3 ? { section: { pts, L: T } } : { box: [A, B, T] as [number, number, number] };
+          let flat: Block | undefined; for (const o2 of [{ ...col, patterns: pats }, col]) { try { flat = roomMade(nm, mat, sh, pats.length && 'patterns' in o2 ? o2 : col); break; } catch { /* without its holes, then */ } }
+          flat ??= roomMade(nm, mat, { box: [A, B, T] }, col);
+          let pb2 = ax === 1 ? roomTurn(flat, 0, 90) : ax === 0 ? roomTurn(flat, 1, -90) : flat;
+          const rot2 = Array.isArray(r.rot) ? r.rot : []; for (const k of [0, 1, 2] as const) { const deg = Number(rot2[k]) || 0; if (Math.abs(deg) > 0.5) pb2 = roomTurn(pb2, k, deg); }
+          return { b: pb2, at, ...(Number.isInteger(Number(r.body)) && r.body !== undefined && r.body !== null ? { body: Number(r.body) } : {}) }; }
         const upright = shape === 'rod' ? roomMade(nm, mat, { cyl: [D / 2, L] }, col) : shape === 'tube' ? roomMade(nm, mat, { tube: [D * 0.4, D / 2, L] }, col) : shape === 'cone' ? roomMade(nm, mat, { cone: [D / 2, D * 0.15, L] }, col)
           : shape === 'sphere' ? roomMade(nm, mat, { sphere: [Math.min(...sz) / 2] }, col) : shape === 'dome' ? roomMade(nm, mat, { dome: [Math.min(sz[0]!, sz[2]!) / 2] }, col)
           // (a wedge: full height at its back, down to nothing at its front, as wide as its z)
