@@ -28,7 +28,7 @@ import { LIBRARY, block, defaultsOf, portsOf, register, show, type BlockDef, typ
 import { DENSITY } from '../mass';
 import { TOOLS, boardBrief, composeBuild, gateOf, guideOf, isCompound, joinPlan, nearMissesView, planOf, planRequest, runPlan, setGuideMd, toolsFor, type AgentBlock, type AgentPlan, type AgentRun, type ComposeRun, type ComposeStep, type PlanRan, type PlanRun } from '../agent';
 import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
-import { askClaude, inViewer, sendReport, whyNot, type Report } from './viewer';
+import { aiHere, askClaude, askForKey, inViewer, keyHere, sendReport, whyNot, type Report } from './viewer';
 // (the guide bundled, for the page on claude.ai, which builds Assist's call itself: decision 0027)
 setGuideMd(GUIDE_MD);
 import { YOURS, askName, keepBuild, mountParts, orchestration, orchestrationHtml, startRemembered } from './parts';
@@ -154,6 +154,7 @@ function drawRep(): void {
   repEl.hidden = !reporting; $('report').classList.toggle('on', reporting);
   $('repWhere').textContent = repSpot ? `At ${repSpot.piece || 'a spot'} (${repSpot.point.map((v) => v.toFixed(0)).join(', ')} mm). Tap again to move it.` : 'Tap the spot in the view it is about, or just write.';
 }
+{ const kb = $('key'); kb.hidden = inViewer; const mark = () => kb.classList.toggle('hot', !!keyHere()); mark(); kb.onclick = () => { askForKey(); mark(); }; }
 $('report').onclick = () => { reporting = !reporting; if (!reporting) repSpot = null; $('repSays').textContent = ''; drawRep(); if (reporting) repText.focus(); };
 $('repX').onclick = () => { reporting = false; repSpot = null; drawRep(); };
 $('repGo').onclick = async () => {
@@ -429,12 +430,12 @@ async function askPlan(q: string, failing: string[] = []): Promise<void> {
   const live: Said = { who: 'ai', html: '<div class="live"><span class="dots">One call: writing a plan</span></div>' }; chat.push(live); drawChat();
   try {
     let r: PlanRun & { error?: string; sent?: string[] }, status = 200;
-    if (inViewer) {
+    if (aiHere()) {
       try { r = await planByViewer(failing.length ? q : before() + q.trim(), failing); } catch (e) { throw new Error(whyNot(e)); }
       if (!r.plan && r.sent?.length) { live.html = md(`Sent to the developer: "${r.sent.join(' / ').slice(0, 240)}"`); return; }
     } else {
       const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'plan', request: failing.length ? q : before() + q.trim(), board: nodesOf(board).length ? board : undefined, blocks: savedBlocks(), ...(failing.length ? { failing } : {}) }) });
-      if (res.status === 404 || res.status === 405) throw new Error('this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand works without it; to plan with Claude, open the app the session serves (npm run app).');
+      if (res.status === 404 || res.status === 405) throw new Error('tap the key button (🔑) and paste your Anthropic API key to build with Claude here: this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand works without it; to plan with Claude, open the app the session serves (npm run app).');
       status = res.status; r = await res.json() as PlanRun & { error?: string };
     }
     if (r.tokens && !inViewer) spent(r.tokens);
@@ -497,10 +498,10 @@ async function composeShown(q: string, why: string): Promise<void> {
   const tick = window.setInterval(paint, 1000); paint();
   try {
     let done: ComposeRun & { tokens?: Tok };
-    if (inViewer) done = await composeBuild(q.trim(), { ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: savedBlocks(), onStep: (s, b) => heard(s, structuredClone(b)) });
+    if (aiHere()) done = await composeBuild(q.trim(), { features: true, ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: savedBlocks(), onStep: (s, b) => heard(s, structuredClone(b)) });
     else {
       const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'compose', request: q.trim(), blocks: savedBlocks() }) });
-      if (res.status === 404 || res.status === 405) throw new Error('this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand works without it; to build with Claude, open the app the session serves (npm run app), or the page on claude.ai.');
+      if (res.status === 404 || res.status === 405) throw new Error('tap the key button (🔑) and paste your Anthropic API key to build with Claude here: this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand works without it; to build with Claude, open the app the session serves (npm run app), or the page on claude.ai.');
       if (!res.ok || !res.body) throw new Error(`the relay answered ${res.status}`);
       const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', got: (ComposeRun & { tokens?: Tok }) | null = null;
       for (;;) { const { value, done: end } = await reader.read(); if (value) buf += dec.decode(value, { stream: true });
@@ -547,7 +548,7 @@ async function ask(q: string): Promise<void> {
   if (mode === 'assist') return isCompound(q) ? composeShown(q, 'It names two or more things: built from its parts (a call to split it, a call a part, a call to join them), not one plan.') : askPlan(q);
   // (Auto: a new thing, or one of several things, from its parts; a change to the board open by the tool loop)
   if (!nodesOf(board).length || isCompound(q)) return composeShown(q, 'Built from its parts: a call to split it, then each part, then a call to join them.');
-  if (inViewer) return autoByViewer(q);
+  if (aiHere()) return autoByViewer(q);
   if (busy || !q.trim()) return; busy = true; ($('go') as HTMLButtonElement).disabled = true; $('sheet').classList.remove('low');
   const request = before() + q.trim();
   chat.push({ who: 'me', html: esc(q.trim()) }); keepChat();
@@ -557,7 +558,7 @@ async function ask(q: string): Promise<void> {
   const tick = window.setInterval(paint, 1000); paint();
   try {
     const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ request, board: nodesOf(board).length ? board : undefined, blocks: savedBlocks(), stream: true, check: checkBox.checked }) });
-    if (res.status === 404 || res.status === 405) throw new Error('this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand and the pieces below work without it; to talk to Claude, open the app the session serves (npm run app).');
+    if (res.status === 404 || res.status === 405) throw new Error('tap the key button (🔑) and paste your Anthropic API key to build with Claude here: this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand and the pieces below work without it; to talk to Claude, open the app the session serves (npm run app).');
     if (!res.ok || !res.body) throw new Error(`the relay answered ${res.status}`);
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', done: AgentRun | null = null;
     for (;;) {

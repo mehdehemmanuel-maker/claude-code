@@ -547,3 +547,12 @@ Moved here word for word from `CLAUDE.md` on 2026-10-31 (the user: "we need targ
   real 3D space; one shared physics framework; the AI able to search, decompose, generate, assemble, check and save;
   a library UI where every control does what it says; ten acceptance tests that must actually work; nothing claimed
   that is not; build rough whole first, then integrate, test, fix, repeat, report.
+
+- **2026-11-09, the app link:** "don't sacrifice my quality why are we on a artifact instead of the real app if there limits
+  on it"; and, asked whether it should have its own website: "Yes but it's just for me".
+- **2026-11-10, the user's twenty requests, in their words** (the set in `tests/evals/user20.eval.ts`, judged by eye from
+  pictures): One-Cubic-Meter Foam 3D Printer; Robotic Arm RC Car; Turret Go-Kart; Miniature RC Forklift; Transforming
+  Furniture; RC Bulldozer; Kinetic Sculpture Machine; Giant Robotic Spider; Industrial Giant Claw; Personal Hovercraft;
+  RC Excavator Factory; Robotic Paint Booth; Mechanical Dinosaur; Automatic Sorting Machine; Wearable Third Arm;
+  Follow-Me Cargo Robot; Rolling Robot Sphere; Portable Deployable Bridge; Modular RC Utility Vehicle; Pneumatic Walking
+  Machine. First run (2026-11-10, by eye): 1 recognisable, 7 part-way, 12 not what was asked.
