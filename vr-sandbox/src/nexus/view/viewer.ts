@@ -11,6 +11,15 @@ type Use = (name: string) => Promise<unknown>;
 const own = (globalThis as { claude?: { use?: Use } }).claude;
 const above = (() => { try { return window.parent !== window ? (window.parent as unknown as { claude?: { use?: Use } }).claude : undefined; } catch { return undefined; } })();
 const host = typeof above?.use === 'function' ? above : own;
+/** A value remade as the main page's own plain objects and arrays where the call goes through it: an object made in this
+ *  frame is not "plain" to the page above (another realm), and its runtime refuses it. Functions and signals pass as they are. */
+const W = host === above && host !== own ? (window.parent as unknown as { Object: ObjectConstructor; Array: ArrayConstructor }) : undefined;
+function forHost<T>(v: T): T {
+  if (!W || v === null || typeof v !== 'object') return v;
+  if (Array.isArray(v)) { const a = new W.Array(); for (const x of v) a.push(forHost(x)); return a as unknown as T; }
+  if (Object.getPrototypeOf(v) !== Object.prototype) return v;
+  const o = new W.Object() as Record<string, unknown>; for (const [k, x] of Object.entries(v as Record<string, unknown>)) o[k] = forHost(x); return o as T;
+}
 let lastWhy = '';
 /** The page is shown by a claude.ai viewer (its runtime is there before any script runs). */
 export const inViewer = typeof host?.use === 'function';
@@ -74,7 +83,7 @@ async function askByKey(prompt: string, o: { tier?: 'quick' | 'default' | 'compl
 export async function askClaude(prompt: string, o: { tier?: 'quick' | 'default' | 'complex'; tools?: SampleTool[]; onText?: (t: string) => void; signal?: AbortSignal } = {}): Promise<string> {
   if (!inViewer && keyHere()) return askByKey(prompt, o);
   const sample = await cap<Sample>('sample'); if (!sample) throw new Error(`Claude is not reachable from this view${lastWhy ? ` (${lastWhy})` : ''}`);
-  const r = await sample(prompt, { modelTier: o.tier ?? 'quick', ...(o.tools ? { tools: o.tools } : { cache: false }), ...(o.onText ? { onText: (u) => o.onText!(u.text) } : {}), ...(o.signal ? { signal: o.signal } : {}) });
+  const r = await sample(prompt, forHost({ modelTier: o.tier ?? 'quick', ...(o.tools ? { tools: o.tools } : { cache: false }), ...(o.onText ? { onText: (u) => o.onText!(u.text) } : {}), ...(o.signal ? { signal: o.signal } : {}) }));
   return r.text;
 }
 
@@ -89,7 +98,7 @@ export async function partsStore(): Promise<PartsStore | null> {
   return {
     all: async () => (await parts.get()).docs.filter((d) => d.exists).flatMap((d) => { const x = d.data() ?? {};
       try { const graph = typeof x.graph === 'string' ? JSON.parse(x.graph) as unknown : x.graph; return graph && typeof graph === 'object' ? [{ ...x, id: String(x.id ?? d.id), graph } as import('../memory').SavedPart] : []; } catch { return []; } }),
-    put: async (p) => { await parts.doc(p.id).set({ ...p, graph: JSON.stringify(p.graph) } as unknown as Record<string, unknown>); },
+    put: async (p) => { await parts.doc(p.id).set(forHost({ ...p, graph: JSON.stringify(p.graph) } as unknown as Record<string, unknown>)); },
     drop: async (id) => { await parts.doc(id).delete(); },
   };
 }
@@ -100,12 +109,12 @@ export interface Report { text: string; piece?: string; point?: [number, number,
 export async function sendReport(r: Report): Promise<{ saved: boolean; sent: boolean; why?: string }> {
   const at = new Date().toISOString(), out: { saved: boolean; sent: boolean; why?: string } = { saved: false, sent: false };
   const db = await cap<Db>('db'), user = await cap<User>('user');
-  if (db) { try { const by = await user?.id?.().catch(() => undefined); await db.collection('reports').add({ ...r, at, ...(by ? { by } : {}) }); out.saved = true; } catch (e) { out.why = whyNot(e); } }
+  if (db) { try { const by = await user?.id?.().catch(() => undefined); await db.collection('reports').add(forHost({ ...r, at, ...(by ? { by } : {}) })); out.saved = true; } catch (e) { out.why = whyNot(e); } }
   const mcp = await cap<Mcp>('mcp');
   if (mcp) {
     const where = r.piece || r.point ? `\nWhere: ${r.piece || 'a spot'}${r.point ? ` at (${r.point.map((v) => v.toFixed(1)).join(', ')}) mm` : ''}` : '';
     const message = `Report from the Nexus page, ${r.from === 'person' ? 'typed by the person using it' : 'sent by the in-app AI for the person using it'}, ${at}:\n${r.text}${where}${r.title ? `\nBoard: ${r.title}` : ''}${r.board ? `\n${r.board.slice(0, 3000)}` : ''}`;
-    try { await mcp.callTool('Claude Code Remote', 'send_message', { session_id: SESSION, message }); out.sent = true; } catch (e) { out.why = whyNot(e); }
+    try { await mcp.callTool('Claude Code Remote', 'send_message', forHost({ session_id: SESSION, message })); out.sent = true; } catch (e) { out.why = whyNot(e); }
   }
   if (!db && !mcp) out.why = 'reports go out from the page on claude.ai; this copy has no store';
   return out;
