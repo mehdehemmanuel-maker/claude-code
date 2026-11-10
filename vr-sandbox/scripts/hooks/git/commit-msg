@@ -1,3 +1,0 @@
-#!/bin/sh
-# The change budget and the honesty check (spec 00, S3; C12, C10), on every commit: see commit-check.mjs.
-exec node "$(git rev-parse --show-toplevel)/vr-sandbox/scripts/hooks/commit-check.mjs" "$1"

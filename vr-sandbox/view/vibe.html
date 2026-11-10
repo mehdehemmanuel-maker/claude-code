@@ -144,6 +144,8 @@
     html.embed #msgs { max-height: none; }
     html.embed .panel { max-height: 40vh; }
     html.embed #board { left: 0; width: auto; border-left: 0; }
+    @media (max-width: 899px) { #app { height: 100%; } #sheet { max-height: 62%; } #msgs { max-height: none; } #report, #tok, #checkL, #cut { display: none !important; } #chips { flex-wrap: nowrap; } #top button { min-width: 40px; min-height: 36px; } }
+    html.embed #report, html.embed #tok, html.embed #checkL { display: none !important; }
   </style>
 </head>
 <body>
@@ -154,6 +156,7 @@
       <div class="gap"></div>
       <button id="undo" title="Undo the last step" aria-label="Undo">↶</button>
       <button id="fresh" title="Start again: an empty board and a new chat" aria-label="New">＋</button>
+      <button id="key" title="Your Anthropic API key, kept only in this browser" aria-label="Key" hidden>🔑</button>
       <button id="report" title="Report something to the developer: tap the spot in the view, then say what is wrong or wanted" aria-label="Report">⚑</button>
       <button id="fit" title="See it all">Fit</button>
       <button id="cut" title="Cut it open: across x, then z, then y, then whole again">Cut</button>

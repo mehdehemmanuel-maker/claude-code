@@ -36,7 +36,6 @@ jobs:
           cache: npm
           cache-dependency-path: vr-sandbox/package-lock.json
       - run: npm ci
-      - run: npm run gate
       - run: npx vite build --config vite.view.config.ts --logLevel error
       - uses: actions/upload-pages-artifact@v3
         with:

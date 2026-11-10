@@ -33,7 +33,41 @@ export function whyNot(e: unknown): string {
 }
 
 /** One call to Claude on the viewer's account: the whole prompt in, its text out (streamed to onText). */
+// ---- the person's own key, on their own site (the static site has no relay and no claude.ai host) ---------------------
+// Kept only in this browser's storage, sent only to api.anthropic.com; never in the repo, never in the page's code.
+const KEY_AT = 'nexus.anthropic.key';
+export const keyHere = (): string => { try { return localStorage.getItem(KEY_AT) ?? ''; } catch { return ''; } };
+/** Ask once for the key (a prompt box); an empty answer forgets it. True when a key is held after. */
+export function askForKey(): boolean {
+  const k = window.prompt('Your Anthropic API key (kept only in this browser, sent only to api.anthropic.com). Leave empty to forget it.', keyHere());
+  if (k === null) return !!keyHere();
+  try { if (k.trim()) localStorage.setItem(KEY_AT, k.trim()); else localStorage.removeItem(KEY_AT); } catch { /* no storage */ }
+  return !!keyHere();
+}
+/** Claude is reachable from this page: the claude.ai host, or the person's own key. */
+export const aiHere = (): boolean => inViewer || !!keyHere();
+const KEY_MODEL = { quick: 'claude-haiku-5-5', default: 'claude-sonnet-5-5', complex: 'claude-sonnet-5-5' } as const;
+type Block = { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> };
+async function askByKey(prompt: string, o: { tier?: 'quick' | 'default' | 'complex'; tools?: SampleTool[]; onText?: (t: string) => void; signal?: AbortSignal }): Promise<string> {
+  const messages: { role: 'user' | 'assistant'; content: unknown }[] = [{ role: 'user', content: prompt }]; let said = '';
+  for (let turn = 0; turn < 40; turn++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', ...(o.signal ? { signal: o.signal } : {}),
+      headers: { 'content-type': 'application/json', 'x-api-key': keyHere(), 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: KEY_MODEL[o.tier ?? 'quick'], max_tokens: 8000, messages, ...(o.tools ? { tools: o.tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema ?? { type: 'object', properties: {} } })) } : {}) }) });
+    if (!res.ok) throw new Error(res.status === 401 ? 'the key was refused (tap the key button to change it)' : `Claude answered ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const body = await res.json() as { content: Block[]; stop_reason: string };
+    const text = body.content.filter((b) => b.type === 'text').map((b) => b.text ?? '').join(''); if (text) { said += text; o.onText?.(said); }
+    const uses = body.content.filter((b) => b.type === 'tool_use'); if (body.stop_reason !== 'tool_use' || !uses.length || !o.tools) return said;
+    messages.push({ role: 'assistant', content: body.content });
+    const results = []; for (const u of uses) { let out: unknown; try { out = await o.tools.find((t) => t.name === u.name)?.execute(u.input ?? {}); } catch (e) { out = `failed: ${(e as Error).message}`; }
+      results.push({ type: 'tool_result', tool_use_id: u.id, content: typeof out === 'string' ? out : JSON.stringify(out ?? null) }); }
+    messages.push({ role: 'user', content: results });
+  }
+  return said;
+}
+
 export async function askClaude(prompt: string, o: { tier?: 'quick' | 'default' | 'complex'; tools?: SampleTool[]; onText?: (t: string) => void; signal?: AbortSignal } = {}): Promise<string> {
+  if (!inViewer && keyHere()) return askByKey(prompt, o);
   const sample = await cap<Sample>('sample'); if (!sample) throw new Error('Claude is not reachable from this view');
   const r = await sample(prompt, { modelTier: o.tier ?? 'quick', ...(o.tools ? { tools: o.tools } : { cache: false }), ...(o.onText ? { onText: (u) => o.onText!(u.text) } : {}), ...(o.signal ? { signal: o.signal } : {}) });
   return r.text;
