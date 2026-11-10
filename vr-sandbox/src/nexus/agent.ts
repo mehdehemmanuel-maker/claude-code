@@ -786,9 +786,16 @@ export interface ComposePart { name: string; is: string; from: string; set?: Rec
   /** the id it is kept under (remembered, decision 0028; or the remembered part it was placed from), and its own parts */ saved?: string; children?: ComposePart[] }
 export interface ComposeJoin { part: string; how: string; to: string }
 /** One step of the pipeline, a line for the chat. */
+/** The decomposer: one system into what it is made of, one level down (called again on each subsystem, to the parts). */
+const DECOMPOSE_RULE = `## Here: DECOMPOSER (one task: what ONE thing is made of, one level down)
+You are given one thing: a whole machine, or one of its subsystems. List what it is directly made of, one level down only, as a real one is built: 3 to 12 rows. Never skip a level and never summarise: a complex thing has many subsystems, and each is decomposed by a later call.
+Reply with one JSON object and nothing else, compact: {"rows":[[name, count, kind, "what it is, in a few words"],...]}
+- kind "system": it is itself made of several things and must be decomposed further (a track unit, a cab, a hydraulic circuit, a robot station).
+- kind "part": one made or bought piece that is not usefully split (a plate, a wheel, a cylinder, a motor, a pane, a bolt set).
+- count: how many of it its parent has (2 tracks, 6 legs). Names short and plain, unique among the rows.`;
 /** The layout call: the whole as plain solids at places. */
 const LAYOUT_RULE = `## Here: lay the whole out as plain solids (one task: reply with one JSON object and nothing else)
-You are laying out a machine as a designer's first block model: 15 to 60 plain solids that together read, in silhouette and proportion, as exactly what is asked. Every feature a person must see gets its own solid or solids (each wheel, each leg segment, each track, the blade, the cab, the boom: separate solids, never one lump).
+You are laying out a machine as a designer's first block model: 15 to 150 plain solids that together read, in silhouette and proportion, as exactly what is asked. Every feature a person must see gets its own solid or solids (each wheel, each leg segment, each track, the blade, the cab, the boom: separate solids, never one lump).
 Reply compactly, one row a solid, no spaces or line breaks: {"solids":[["front left wheel","rod","z",sx,sy,sz,ax,ay,az,"rubber","#202020"],...]}
 - A row is [name, shape, axis, size x, size y, size z, at x, at y, at z, mat, color, turn x, turn y, turn z]; whole numbers; the three turns (degrees, usually 0) may be left off.
 - Units mm. x is forward, y is up, z is to the right. The ground is y = 0; the machine stands on it and is centred on x = 0, z = 0.
@@ -1198,8 +1205,22 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
   // (0b. the layout skeleton: the whole as plain solids at places, one call, built by the room's own layout node and shown
   // at once; the room settles it. Kept as the build where the parts' build below leaves something unmet)
   if (o.skeleton && recog) {
-    try { const lo = firstJson(await call(`${LAYOUT_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${recognitionLines(recog)}${reqs.length ? `\n${requirementLines(reqs)}` : ''}`, 'quick'), 'layout') as { solids?: unknown };
-      const solids = (Array.isArray(lo.solids) ? lo.solids.slice(0, 60) : []).map((r) => (Array.isArray(r) ? { name: r[0], shape: r[1], axis: r[2], size: [r[3], r[4], r[5]], at: [r[6], r[7], r[8]], mat: r[9], color: r[10], rot: [r[11] ?? 0, r[12] ?? 0, r[13] ?? 0] } : r)); if (!solids.length) throw new Error('no solids in the reply');
+    // (the decomposition: the whole into subsystems, each subsystem handed to the decomposer again, level by level, until
+    // only parts are left (four levels and about 160 items at most); one call a thing, a level's calls at once)
+    type Tree = { name: string; n: number; kind: 'part' | 'system'; is: string; kids: Tree[] };
+    const split1 = async (path: string[], is: string): Promise<Tree[]> => { const r = firstJson(await call(`${DECOMPOSE_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nDecompose: ${path.length ? `${path.join(' > ')} (${is})` : 'the whole thing asked for'}`, 'quick'), 'decomposer') as { rows?: unknown };
+      return (Array.isArray(r.rows) ? r.rows : []).filter(Array.isArray).slice(0, 12).map((x) => ({ name: String(x[0]), n: Math.max(1, Math.round(Number(x[1]) || 1)), kind: x[2] === 'system' ? 'system' as const : 'part' as const, is: String(x[3] ?? ''), kids: [] })); };
+    let tree: Tree[] = [], treeText = '';
+    try { tree = await split1([], ''); let level = tree.map((n) => ({ n, path: [n.name] })), total = tree.length, depth = 1;
+      for (; depth < 4 && total < 160; depth++) { const sys = level.filter((x) => x.n.kind === 'system').slice(0, 24); if (!sys.length) break;
+        const next = await Promise.all(sys.map(async (x) => { try { x.n.kids = await split1(x.path, x.n.is); } catch { x.n.kids = []; } return x.n.kids.map((k) => ({ n: k, path: [...x.path, k.name] })); }));
+        level = next.flat(); total += level.length; }
+      const lines = (ns: Tree[], d: number): string[] => ns.flatMap((n) => [`${'  '.repeat(d)}${n.name}${n.n > 1 ? ` x${n.n}` : ''}${n.kids.length ? ':' : ''} (${n.is})`, ...lines(n.kids, d + 1)]);
+      treeText = lines(tree, 0).join('\n'); const count = (ns: Tree[]): number => ns.reduce((a, n) => a + (n.kids.length ? count(n.kids) : 1), 0);
+      say('features', `decomposed: ${tree.length} subsystems, ${count(tree)} parts, ${depth} level${depth === 1 ? '' : 's'} deep: ${tree.map((n) => n.name).join(', ')}`); }
+    catch (e) { say('features', `not decomposed: ${(e as Error).message.slice(0, 140)}`, false); }
+    try { const lo = firstJson(await call(`${LAYOUT_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${recognitionLines(recog)}${reqs.length ? `\n${requirementLines(reqs)}` : ''}${treeText ? `\nWhat it is made of (place every part; name each solid by its path, as "subsystem > part"; x2 means two solids, mirrored or spaced as on the real thing):\n${treeText.slice(0, 6000)}` : ''}`, 'quick'), 'layout') as { solids?: unknown };
+      const solids = (Array.isArray(lo.solids) ? lo.solids.slice(0, 200) : []).map((r) => (Array.isArray(r) ? { name: r[0], shape: r[1], axis: r[2], size: [r[3], r[4], r[5]], at: [r[6], r[7], r[8]], mat: r[9], color: r[10], rot: [r[11] ?? 0, r[12] ?? 0, r[13] ?? 0] } : r)); if (!solids.length) throw new Error('no solids in the reply');
       const b = emptyBoard(request.slice(0, 80)); placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify(solids) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
       const e = new Engine(b); await e.run(); const st = e.state.get('layout');
       if (st?.status !== 'ok') throw new Error(String(st?.error ?? 'the layout did not build').slice(0, 160));

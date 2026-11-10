@@ -1476,7 +1476,7 @@ const BUILT_THINGS: BlockDef[] = [
       let rows: unknown; try { rows = JSON.parse(String(c.set.boxes || '[]')); } catch (e) { throw new Error(`the solids are not JSON: ${(e as Error).message}`); }
       if (!Array.isArray(rows) || !rows.length) throw new Error('a layout needs at least one solid');
       const num = (v: unknown, k: number, what: string, at: string) => { const x = Number((v as unknown[])?.[k]); if (!Number.isFinite(x)) throw new Error(`${at}: its ${what} needs three numbers (mm)`); return x / 1000; };
-      const items = (rows as Record<string, unknown>[]).slice(0, 60).map((r, n) => { const nm = String(r.name || `solid ${n + 1}`), sz = [0, 1, 2].map((k) => Math.max(0.001, Math.abs(num(r.size, k, 'size', nm)))), at = [0, 1, 2].map((k) => num(r.at, k, 'place', nm)) as [number, number, number];
+      const items = (rows as Record<string, unknown>[]).slice(0, 300).map((r, n) => { const nm = String(r.name || `solid ${n + 1}`), sz = [0, 1, 2].map((k) => Math.max(0.001, Math.abs(num(r.size, k, 'size', nm)))), at = [0, 1, 2].map((k) => num(r.at, k, 'place', nm)) as [number, number, number];
         const shape = String(r.shape || 'box'), axis = String(r.axis || 'y'), mat = String(r.mat || 'steel-low'), col = typeof r.color === 'string' && /^#[0-9a-f]{6}$/i.test(r.color) ? { color: parseInt(r.color.slice(1), 16) } : {};
         const [L, D] = axis === 'x' ? [sz[0]!, Math.min(sz[1]!, sz[2]!)] : axis === 'z' ? [sz[2]!, Math.min(sz[0]!, sz[1]!)] : [sz[1]!, Math.min(sz[0]!, sz[2]!)];
         const round = shape === 'rod' || shape === 'cone' || shape === 'tube';
