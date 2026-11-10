@@ -1470,7 +1470,7 @@ const BUILT_THINGS: BlockDef[] = [
   // where places are given, and the room settles them: nothing sunk into another, nothing below ground, nothing floating)
   def({ id: 'room.layout', name: 'Lay out (skeleton)', spec: { gloss: 'A machine laid out as plain solids at places, settled by the room', ...ROOM_SPEC }, kind: 'generator', ability: 'generate', domains: ['mechanical', 'manufacturing', 'everyday'],
     says: 'A whole laid out as plain solids, each named for what it stands for: its shape (box, rod, sphere, cone), its size x, y, z in mm (y is up, x is forward), where its middle is in x and z and its foot in y (mm), a rod\'s or cone\'s axis (x, y, z), its material and its colour. The room settles them: one that would sink into another is pushed out, one that floats is let down. It is the first whole of a build; each solid is then made of real parts',
-    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'layout' }, { key: 'boxes', label: 'The solids, as JSON: [{"name","shape","size":[x,y,z],"at":[x,y,z],"axis","mat","color"}] (mm)', type: 'code', default: '[{"name":"body","shape":"box","size":[400,200,300],"at":[0,100,0],"mat":"steel-low","color":"#c8a200"},{"name":"wheel","shape":"rod","axis":"z","size":[200,200,60],"at":[0,0,180],"mat":"rubber","color":"#202020"}]' }],
+    settings: [{ key: 'name', label: 'Name', type: 'text', default: 'layout' }, { key: 'boxes', label: 'The solids, as JSON: [{"name","shape","size":[x,y,z],"at":[x,y,z],"axis","mat","color"}] (mm)', type: 'code', default: '[{"name":"body","shape":"box","size":[400,200,300],"at":[0,100,0],"mat":"steel-low","color":"#c8a200"},{"name":"wheel","shape":"rod","axis":"z","size":[200,200,60],"at":[0,0,180],"mat":"rubber","color":"#202020"}]' }, { key: 'pivots', label: 'The pivots, as JSON: [{"name","at":[x,y,z],"axis":"x|y|z","a":body,"b":body,"d":mm,"l":mm}]: a pin at a point (y its true height), fixed in body a, body b turning on it; a solid says its body by "body": n', type: 'code', default: '[]' }],
     ports: { inputs: [P('blocks', 'block', { many: true, optional: true, label: 'real parts to place (a row names one by "in": its place in the order of their nodes\' names)' })], outputs: ROOM_OUT },
     run: (i, c) => {
       const wired = (Array.isArray(i.blocks) ? i.blocks : i.blocks ? [i.blocks] : []) as Block[];
@@ -1489,11 +1489,11 @@ const BUILT_THINGS: BlockDef[] = [
             sb = String(r.shape) === 'tube' ? roomMade(nm, mat, { tube: [D * 0.4, D / 2, len] }, col) : String(r.shape) === 'box' ? roomMade(nm, mat, { box: [D, len, W] }, col) : roomMade(nm, mat, { cyl: [D / 2, len] }, col); }
           const u = [d[0]! / len, d[1]! / len, d[2]! / len], ax: [number, number, number] = [u[2]!, 0, -u[0]!], sn = Math.hypot(ax[0], ax[2]);
           if (sn > 1e-6) { const deg = (Math.atan2(sn, u[1]!) * 180) / Math.PI; try { sb = roomTurn(sb, ax, deg); } catch { sb = roomTurn(roomFrozen(sb), ax, deg); } }
-          return { b: sb, at: [(p1[0]! + p2[0]!) / 2, (p1[1]! + p2[1]!) / 2 - (sb.hi[1] - sb.lo[1]) / 2, (p1[2]! + p2[2]!) / 2] as [number, number, number] }; }
+          return { b: sb, at: [(p1[0]! + p2[0]!) / 2, (p1[1]! + p2[1]!) / 2 - (sb.hi[1] - sb.lo[1]) / 2, (p1[2]! + p2[2]!) / 2] as [number, number, number], ...(Number.isInteger(Number(r.body)) && r.body !== undefined && r.body !== null ? { body: Number(r.body) } : {}) }; }
         // (a real part wired in, placed as the row says and turned as it says)
         if (r.in !== undefined) { let pb = wired[Number(r.in)]; if (!pb) throw new Error(`${nm}: no part wired in at ${String(r.in)}`); const rot = Array.isArray(r.rot) ? r.rot : [];
           // (quarter turns first, to lay its long side along its box's, then the turns the row gives)
-          for (const k of (Array.isArray(r.pre) ? r.pre : []) as number[]) { if (k === 0 || k === 1 || k === 2) { try { pb = roomTurn(pb, k, 90); } catch { pb = roomTurn(roomFrozen(pb), k, 90); } } } for (const k of [0, 1, 2] as const) { const deg = Number(rot[k]) || 0; if (Math.abs(deg) > 0.5) { try { pb = roomTurn(pb, k, deg); } catch { pb = roomTurn(roomFrozen(pb), k, deg); } } } return { b: pb, at }; }
+          for (const k of (Array.isArray(r.pre) ? r.pre : []) as number[]) { if (k === 0 || k === 1 || k === 2) { try { pb = roomTurn(pb, k, 90); } catch { pb = roomTurn(roomFrozen(pb), k, 90); } } } for (const k of [0, 1, 2] as const) { const deg = Number(rot[k]) || 0; if (Math.abs(deg) > 0.5) { try { pb = roomTurn(pb, k, deg); } catch { pb = roomTurn(roomFrozen(pb), k, deg); } } } return { b: pb, at, ...(Number.isInteger(Number(r.body)) && r.body !== undefined && r.body !== null ? { body: Number(r.body) } : {}) }; }
         const sz = [0, 1, 2].map((k) => Math.max(0.001, Math.abs(num(r.size, k, 'size', nm))));
         const shape = String(r.shape || 'box'), axis = String(r.axis || 'y'), mat = String(r.mat || 'steel-low'), col = typeof r.color === 'string' && /^#[0-9a-f]{6}$/i.test(r.color) ? { color: parseInt(r.color.slice(1), 16) } : {};
         const [L, D] = axis === 'x' ? [sz[0]!, Math.min(sz[1]!, sz[2]!)] : axis === 'z' ? [sz[2]!, Math.min(sz[0]!, sz[1]!)] : [sz[1]!, Math.min(sz[0]!, sz[2]!)];
@@ -1506,8 +1506,14 @@ const BUILT_THINGS: BlockDef[] = [
         let b = round && axis !== 'y' ? roomTurn(upright, axis === 'x' ? 2 : 0, 90) : upright;
         // (turned as the layout says, degrees about x, then y, then z; its place is still its box's middle and foot)
         const rot = Array.isArray(r.rot) ? r.rot : []; for (const k of [0, 1, 2] as const) { const deg = Number(rot[k]) || 0; if (Math.abs(deg) > 0.5) b = roomTurn(b, k, deg); }
-        return { b, at }; });
-      return roomOut(roomLayout(String(c.set.name || 'layout'), items));
+        return { b, at, ...(Number.isInteger(Number(r.body)) && r.body !== undefined && r.body !== null ? { body: Number(r.body) } : {}) }; }) as { b: Block; at: [number, number, number]; body?: number }[];
+      // (the pivots: each a steel pin at its point along its axis, fixed in one body, the other turning on it)
+      let pv: unknown = []; try { pv = JSON.parse(String(c.set.pivots || '[]')); } catch (e) { throw new Error(`the pivots are not JSON: ${(e as Error).message}`); }
+      const hinges: { pin: number; a: number; b: number; name: string }[] = [];
+      for (const [n, h] of ((Array.isArray(pv) ? pv : []) as Record<string, unknown>[]).slice(0, 60).entries()) { const nm = String(h.name || `pivot ${n + 1}`), d = Math.abs(Number(h.d)) / 1000, l = Math.abs(Number(h.l)) / 1000; if (!(d > 0.001 && l > 0.001) || !Number.isInteger(Number(h.a)) || !Number.isInteger(Number(h.b))) continue;
+        const up = roomMade(`${nm} pin`, 'steel-low', { cyl: [d / 2, l] }, { color: 0x9aa3ad }), pin = h.axis === 'x' ? roomTurn(up, 2, 90) : h.axis === 'y' ? up : roomTurn(up, 0, 90);
+        hinges.push({ pin: items.length, a: Number(h.a), b: Number(h.b), name: `${nm} pin` }); items.push({ b: pin, at: [num(h.at, 0, 'place', nm), num(h.at, 1, 'place', nm) - (pin.hi[1] - pin.lo[1]) / 2, num(h.at, 2, 'place', nm)] }); }
+      return roomOut(roomLayout(String(c.set.name || 'layout'), items, hinges));
     },
     tests: [{ set: {}, inputs: {}, outputs: { pieces: 2 } }] }),
   def({ id: 'room.turn', name: 'Turn', spec: { gloss: 'A whole block turned about its middle by any angle about x, y, z or any direction', ...ROOM_SPEC }, kind: 'logic', ability: 'transform', domains: ['mechanical', 'manufacturing', 'structural', 'everyday'], says: 'A whole block turned rigidly about its bound\'s middle, by any angle about x, y, z or a direction ("1,1,0"): a plate tilted, a pipe laid across. A rigid turn of what was valid stays valid, so it cannot put one piece in another; its lines turn with it (a coupling then slides along a turned pipe), its rooms kept under a turn about y. A block with a moving joint is refused (not made yet)',

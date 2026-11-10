@@ -687,11 +687,21 @@ export class Block {
    *  y = 0). Nothing else is moved: a layout's solids may run into each other (a turned boom's box crosses its
    *  neighbour's), and pushing them apart broke more layouts than it mended. No faces are written (a layout joins
    *  nothing: the parts that replace its solids are joined by the operations). */
-  static layout(name: string, items: { b: Block; at: P3 }[]): Block {
+  /** With bodies and hinges (the user, 2026-11-10: "I want every part to be able to move and interact with anything"): an
+   *  item may say which body it is of (a number); the pieces of one body are written fixed to each other (one face each to
+   *  the body's first piece: "layout: held as one body", not a real fastening yet). A hinge names an item that is a round
+   *  pin, the body it is fixed in (a) and the body that turns on it (b): the pin joins a's body, and one face says b turns
+   *  on it, so what reads the faces for motion (sim.ts motionOf) finds a turn about the pin's own line. */
+  static layout(name: string, items: { b: Block; at: P3; body?: number }[], hinges: { pin: number; a: number; b: number; name?: string }[] = []): Block {
     if (!items.length) throw new Error(`${name}: a layout of nothing`);
     const ds = items.map((it) => { Block.#is(it.b); return [it.at[0] - (it.b.lo[0] + it.b.hi[0]) / 2, it.at[1] - it.b.lo[1], it.at[2] - (it.b.lo[2] + it.b.hi[2]) / 2] as V3; });
-    const low = Math.min(...items.map((it, k) => it.b.lo[1] + ds[k]![1]!)), pieces: Piece[] = [], faces: Face[] = [], rooms: RoomOf[] = [];
-    items.forEach((it, k) => { const sft = Block.#shift(it.b, [ds[k]![0]!, ds[k]![1]! - low, ds[k]![2]!]); pieces.push(...sft.pieces); faces.push(...sft.faces); rooms.push(...sft.rooms); });
+    const low = Math.min(...items.map((it, k) => it.b.lo[1] + ds[k]![1]!)), pieces: Piece[] = [], faces: Face[] = [], rooms: RoomOf[] = [], first: number[] = [], bodies = new Map<number, number[]>();
+    items.forEach((it, k) => { const sft = Block.#shift(it.b, [ds[k]![0]!, ds[k]![1]! - low, ds[k]![2]!]), n0 = pieces.length; first.push(n0); pieces.push(...sft.pieces); faces.push(...sft.faces.map((f) => ({ ...f, a: f.a + n0, b: f.b + n0 }))); rooms.push(...sft.rooms);
+      if (it.body !== undefined) bodies.set(it.body, [...(bodies.get(it.body) ?? []), ...sft.pieces.map((_p, i) => n0 + i)]); });
+    for (const h of hinges) { const it = items[h.pin]; if (!it || !bodies.has(h.a) || !bodies.has(h.b) || h.a === h.b) continue; bodies.set(h.a, [...bodies.get(h.a)!, ...it.b.pieces.map((_p, i) => first[h.pin]! + i)]); }
+    for (const ps of bodies.values()) for (const i of ps.slice(1)) faces.push({ a: ps[0]!, b: i, kind: 'contact', patch: 'area', area: 0, at: pieces[i]!.solid.base.c, normal: [0, 1, 0], gap: 0, by: 'layout: held as one body', joint: 'fixed' });
+    for (const h of hinges) { const it = items[h.pin]; if (!it || !bodies.has(h.a) || !bodies.has(h.b) || h.a === h.b) continue; const pin = first[h.pin]!, P = pieces[pin]!.solid.base; if (P.k === 'box' || P.k === 'bend') continue;
+      faces.push({ a: bodies.get(h.b)![0]!, b: pin, kind: 'gap', patch: 'area', area: 0, at: P.c, normal: [1, 0, 0], gap: 1e-4, by: `layout pivot: the ${pieces[bodies.get(h.b)![0]!]!.name} turns on the ${h.name ?? pieces[pin]!.name} through it`, joint: 'turns' }); }
     return Block.#seal(name, pieces, faces, rooms);
   }
   static turn(b: Block, axis: Axis | P3, degrees: number, name = b.name): Block {

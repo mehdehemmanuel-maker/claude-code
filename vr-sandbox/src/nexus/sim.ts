@@ -452,7 +452,7 @@ function mPlace(of: Part | Assembly, m: THREE.Matrix4): Assembly['items'][number
 export interface MoveBody { name: string; pieces: number[]; frozen: boolean; why: string }
 /** What drives a joint: a hobby servo (its stall torque, vendor figures, typical) or a gear motor or stepper (its torque
  *  not known here: held stiff), and whether it holds where it is put by default. */
-export interface MoveMotor { kind: 'servo' | 'gear motor' | 'stepper'; torque?: number; from: string }
+export interface MoveMotor { kind: 'servo' | 'gear motor' | 'stepper' | 'held pivot'; torque?: number; from: string }
 /** A body that turns (a) on another (b, the shaft's) about a line through `point` along `dir`, from the faces that say so;
  *  with `slide`, it slides along that line too (a slide fit), within `range` (m from where it stands: its ends' room on the
  *  shaft); with `turns` false, it only slides (two parallel lines, a carriage on its rods; a rack); a motor where one
@@ -577,6 +577,11 @@ export function motionOf(b: Block): Motion {
     if (!j.slide && !j.turns) j.turns = true; }
   // (a motor where one drives the joint: the shaft's body a servo's or a gear motor's)
   for (const j of joints) { const m = motorOf([...bodies[j.b]!.pieces.map((i) => b.pieces[i]!.name), ...j.by].join(' ')); if (m) j.motor = m; }
+  // (a layout's pivot: held where it is put, as the cylinder or the drive that holds it on the real machine would, which is
+  // not modelled yet. Its hold is derived from the thing itself: enough to carry all of its mass at the far end of its
+  // longest side, three times over, so no pose of it sags; the factor of three is a margin, typical, not a rating)
+  if (joints.some((j) => !j.motor && j.by.some((t) => t.startsWith('layout pivot')))) { const parts = partOfBlock(b).parts ?? [], all = b.pieces.reduce((t, _p, i) => t + (parts[i] ? massOfAll(parts[i]!) : 0), 0), reach = Math.max(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]);
+    const torque = 3 * 9.80665 * Math.max(all, 1e-3) * reach; for (const j of joints) if (!j.motor && j.by.some((t) => t.startsWith('layout pivot'))) j.motor = { kind: 'held pivot', torque, from: 'held where it is put: enough to carry the whole thing at its full reach three times over (derived from its own mass and size; what holds it on the real machine is not modelled yet)' }; }
   // (P3: a turn's travel from the piece that has one: a servo's from its row, centred on the angle it is drawn at (a horn
   // fitted at the servo's middle, as arm kits are put together: typical, an assumption); none known for the rest)
   for (const j of joints) { if (!j.turns || j.ball || j.motor?.kind !== 'servo') continue; const r = servoRangeOf([...bodies[j.b]!.pieces.map((i) => b.pieces[i]!.name), ...j.by].join(' ')); if (!r) continue;
@@ -601,7 +606,10 @@ export function motionOf(b: Block): Motion {
   if (joints.some((j) => j.motor)) { const parts = partOfBlock(b).parts ?? [], mass = bodies.map((x) => x.pieces.reduce((t, i) => t + (parts[i] ? massOfAll(parts[i]!) : 0), 0));
     const driven = new Set(joints.filter((j) => j.motor).flatMap((j) => [j.a, j.b])), low = bodies.map((x) => Math.min(...x.pieces.map((i) => boxes[i]![0][1]!)));
     // (what it stands on: the lowest of them (an arm's base plate), the heavier where two are as low)
-    const root = [...driven].sort((p, q) => (Math.abs(low[p]! - low[q]!) > 1e-6 ? low[p]! - low[q]! : mass[q]! - mass[p]!))[0]!;
+    // (as low within a fiftieth of the whole's height: the one with more of its pieces on the ground stands on it (a machine's
+    // tracks or wheels, not the house whose slew ring hangs as low))
+    const tol = Math.max(1e-6, (b.hi[1] - b.lo[1]) / 50), ground = bodies.map((x) => x.pieces.filter((i) => boxes[i]![0][1]! < b.lo[1] + tol).length);
+    const root = [...driven].sort((p, q) => (Math.abs(low[p]! - low[q]!) > tol ? low[p]! - low[q]! : ground[q]! !== ground[p]! ? ground[q]! - ground[p]! : mass[q]! - mass[p]!))[0]!;
     for (const k of driven) { const j = joints.find((x) => x.a === k && x.motor) ?? joints.find((x) => x.b === k && x.motor)!; bodies[k]!.frozen = k === root; bodies[k]!.why = k === root ? 'held: what it stands on (its lowest), its motors holding the rest' : `loose: held by its ${j.motor!.kind}`; } }
   const meshes: MoveMesh[] = [], gears = b.pieces.map((p) => gearOf(p));
   for (let i = 0; i < n; i++) for (let k = i + 1; k < n; k++) { const A = gears[i], B = gears[k]; if (!A || !B || Math.abs(A.m - B.m) > 1e-9 || find(i) === find(k)) continue;
