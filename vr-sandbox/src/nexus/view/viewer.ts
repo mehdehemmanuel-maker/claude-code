@@ -6,14 +6,19 @@
 // Outside claude.ai none of this is present: every call answers null and the app runs on its relay as before.
 
 type Use = (name: string) => Promise<unknown>;
-const host = (globalThis as { claude?: { use?: Use } }).claude;
+// (the chat runs in a frame inside the main page: the main page's runtime is the one granted the capabilities, so the
+// frame asks through it where it can reach it; its own otherwise)
+const own = (globalThis as { claude?: { use?: Use } }).claude;
+const above = (() => { try { return window.parent !== window ? (window.parent as unknown as { claude?: { use?: Use } }).claude : undefined; } catch { return undefined; } })();
+const host = typeof above?.use === 'function' ? above : own;
+let lastWhy = '';
 /** The page is shown by a claude.ai viewer (its runtime is there before any script runs). */
 export const inViewer = typeof host?.use === 'function';
 const memo = new Map<string, Promise<unknown>>();
 /** A capability's namespace, or null where this view cannot run it (asked once, kept). */
 export function cap<T>(name: string): Promise<T | null> {
   if (!inViewer) return Promise.resolve(null);
-  if (!memo.has(name)) memo.set(name, host!.use!(name).catch(() => null));
+  if (!memo.has(name)) memo.set(name, host!.use!(name).catch((e: unknown) => { memo.delete(name); lastWhy = `${(e as { code?: string })?.code ?? ''} ${(e as Error)?.message ?? String(e)}`.trim(); return null; }));
   return memo.get(name)! as Promise<T | null>;
 }
 /** The session that builds the app: where reports and the AI's requests go. */
@@ -68,7 +73,7 @@ async function askByKey(prompt: string, o: { tier?: 'quick' | 'default' | 'compl
 
 export async function askClaude(prompt: string, o: { tier?: 'quick' | 'default' | 'complex'; tools?: SampleTool[]; onText?: (t: string) => void; signal?: AbortSignal } = {}): Promise<string> {
   if (!inViewer && keyHere()) return askByKey(prompt, o);
-  const sample = await cap<Sample>('sample'); if (!sample) throw new Error('Claude is not reachable from this view');
+  const sample = await cap<Sample>('sample'); if (!sample) throw new Error(`Claude is not reachable from this view${lastWhy ? ` (${lastWhy})` : ''}`);
   const r = await sample(prompt, { modelTier: o.tier ?? 'quick', ...(o.tools ? { tools: o.tools } : { cache: false }), ...(o.onText ? { onText: (u) => o.onText!(u.text) } : {}), ...(o.signal ? { signal: o.signal } : {}) });
   return r.text;
 }
