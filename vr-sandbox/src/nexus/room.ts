@@ -678,6 +678,10 @@ export class Block {
    *  direction), right-handed. A rigid turn of a valid block is valid: nothing it does can write an overlap, and nothing
    *  placed is an input. Its solids carry their frames, its lines their directions; its rooms are kept under a turn about
    *  y and closed under any other. A block with a piece on a joint is refused (not made yet). */
+  /** The same block with its joints frozen: every piece as it stands, none on a joint (a cylinder's rod no longer slides).
+   *  For a layout that must lay a jointed part at an angle, which a joint about an upright line cannot yet follow: the
+   *  part is whole and in place, and does not move. */
+  static frozen(b: Block): Block { Block.#is(b); return Block.#seal(b.name, b.pieces.map((p) => { const { joint: _j, axis: _a, ...rest } = p; return rest as Piece; }), [...b.faces], [...b.rooms]); }
   /** Blocks laid out where a layout says (the skeleton of a machine, before its real parts): each with the middle of its box
    *  at (x, z) and its foot at y, as the layout gives them; the whole is then stood on the ground (its lowest point at
    *  y = 0). Nothing else is moved: a layout's solids may run into each other (a turned boom's box crosses its
@@ -1746,7 +1750,7 @@ function boxSide(s: Piece, q: Piece, g: number): { area: number; length: number;
     for (let a = 0; a < M; a++) for (let k = 0; k < M; k++) { const o: V3 = [0, y0 + ((k + 0.5) * (y1 - y0)) / M, 0]; o[ax] = B.c[ax] + sg * (B.size[ax] / 2 + g + EPS); o[w] = B.c[w] - L / 2 + ((a + 0.5) * L) / M; tot++; if (inPiece(s, ...o)) n++; } }
   return n ? { area: (n / tot) * 2 * (B.size[0] + B.size[2]) * (y1 - y0), length: 0, at: [B.c[0], (y0 + y1) / 2, B.c[2]] } : { area: 0, length: 0, at: [0, 0, 0] };
 }
-export const made = Block.made, stack = Block.stack, around = Block.around, through = Block.through, into = Block.into, onto = Block.onto, ring = Block.ring, over = Block.over, turn = Block.turn, run = Block.run, branch = Block.branch, layout = Block.layout;
+export const made = Block.made, stack = Block.stack, around = Block.around, through = Block.through, into = Block.into, onto = Block.onto, ring = Block.ring, over = Block.over, turn = Block.turn, run = Block.run, branch = Block.branch, layout = Block.layout, frozen = Block.frozen;
 export const mesh = Block.mesh, rack = Block.rack, belt = Block.belt, between = Block.between, along = Block.along, key = Block.key;
 export const jointed = Block.jointed, limited = Block.limited;
 /** Whether a piece's line is held from moving along itself (its travel limit none: a UC insert's set screws), so a round

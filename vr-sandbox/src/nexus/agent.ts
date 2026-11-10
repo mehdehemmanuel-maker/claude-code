@@ -10,7 +10,7 @@
 // refuses (a block that does not exist, a port a block lacks: said back to it, so it can correct itself), where it runs
 // out of steps or time (said, with the board as far as it got), or where the service refuses (said as it said it).
 import type Anthropic from '@anthropic-ai/sdk';
-import { LIBRARY, block, defaultsOf, portsOf, register, type BlockDef, type PortDef, type SettingDef, type Type } from './blocks';
+import { LIBRARY, block, defaultsOf, paramsOf, portsOf, register, type BlockDef, type PortDef, type SettingDef, type Type } from './blocks';
 import { aisleOf, splitAisle, tradeRank } from './parts/aisles';
 import { Engine, collapse, emptyBoard, groupBlock, makeBlock, placeBlock, wire } from './dataflow';
 // (navigation and the starter boards are loaded when the agent runs, not when the library does: imported at the top they
@@ -793,6 +793,8 @@ Reply with one JSON object and nothing else, compact: {"rows":[[name, count, kin
 - kind "system": only where it has six or more distinct visible parts of its own and must be decomposed further (a track unit, a cab, a robot station). A simple thing made of a few pieces is a "part".
 - kind "part": one made or bought piece that is not usefully split (a plate, a wheel, a cylinder, a motor, a pane, a bolt set).
 - count: how many of it its parent has (2 tracks, 6 legs). Names short and plain, unique among the rows.`;
+/** Tool lines kept for the session (toolLine in composeBuild). */
+const TOOL_LINES = new Map<string, string>();
 /** The sizer: each subsystem's zone on the machine; and the placer: one subsystem's parts as solids. */
 const SIZER_RULE = `## Here: SIZER (one task: where each subsystem is on the machine, and how big)
 Given a machine and its subsystems, give each subsystem its zone: the box it occupies on the real machine at the size asked. Subsystems that run through others (hydraulics, wiring, electronics) get the zone where their visible parts are.
@@ -806,6 +808,7 @@ Reply with one JSON object and nothing else, compact: {"rows":[[name, shape, axi
 - Whole numbers, mm. x is forward, y is up, z is to the right; the ground is y = 0. "at" is the middle of the solid's box in x and z, and its FOOT in y, on the MACHINE's axes (not your zone's).
 - shape: "box", "rod" (a cylinder along "axis": across the machine "z", upright "y", along it "x"), "tube" (hollow rod: pipe, duct, tyre, ring), "sphere", "dome" (half sphere, flat down), "cone" (along "axis"), "wedge" (a ramp: full height at its back, nothing at its front).
 - The size is given before any turn; turns are degrees (usually 0). Slope and splay with turns and wedges (a raised boom, a leaned windscreen); long curved things are several turned segments.
+- Where a real library part is offered for a part of yours and one of its settings makes it the size you need, PLACE IT instead of drawing: a row ["use", id, name, "setting=value;setting=value", at x, at y, at z, turn x, turn y, turn z] (only settings from its line; its size comes from its settings; "at" as for a solid). It brings its own real pieces, bolts and all. Where none fits in kind or size, draw.
 - Small hidden parts (bolts, seals, wiring inside) are left out; visible ones are placed on the surfaces they sit on. Solids touch their neighbours; nothing floats.
 - mat one of steel-low, al-6061, rubber, abs, glass, wood-pine; color "#rrggbb": painted body panels in the main body colour given, tyres and tracks near black, glass pale blue, hydraulic rods bright grey, bare metal grey, lights their colour.`;
 /** The layout call: the whole as plain solids at places. */
@@ -1227,6 +1230,15 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
     const pooled = async <A, B>(xs: A[], f: (x: A) => Promise<B>): Promise<B[]> => { const out = new Array<B>(xs.length); let k = 0; await Promise.all(Array.from({ length: Math.min(16, xs.length) }, async () => { for (;;) { const i = k++; if (i >= xs.length) return; out[i] = await f(xs[i]!); } })); return out; };
     const split1 = async (path: string[], is: string): Promise<Tree[]> => { const r = firstJson(await call(`${DECOMPOSE_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nDecompose: ${path.length ? `${path.join(' > ')} (${is})` : 'the whole thing asked for'}`, 'quick'), 'decomposer') as { rows?: unknown };
       return (Array.isArray(r.rows) ? r.rows : []).filter(Array.isArray).slice(0, 12).map((x) => ({ name: String(x[0]), n: Math.max(1, Math.round(Number(x[1]) || 1)), kind: x[2] === 'system' ? 'system' as const : 'part' as const, is: String(x[3] ?? ''), kids: [] })); };
+    // (the tools a placer may use instead of drawing: library blocks found by its branch's words, each a line of its id,
+    // what it is, its settings with their defaults or choices, and its size as built at its defaults; built once, kept)
+    const toolLine = async (id: string): Promise<string> => { if (TOOL_LINES.has(id)) return TOOL_LINES.get(id)!; let line = '';
+      try { const d = LIBRARY.get(id); if (d && portsOf(d).outputs.some((q) => q.name === 'block')) { const tb = emptyBoard('tool'); placeBlock(tb, id, 0, 0, {}, 't'); const te = new Engine(tb); await te.run(); const blk = te.state.get('t')?.out?.block as { lo: number[]; hi: number[]; pieces: unknown[] } | undefined;
+        if (blk) { const sets = paramsOf(d).slice(0, 8).map((q) => `${q.key}=${q.choices?.length ? `${String(q.default)} (${q.choices.slice(0, 8).join('|')})` : String(q.default)}${q.unit ? ` ${q.unit}` : ''}`).join('; ');
+          line = `${id} | ${d.name} | ${String(d.says ?? '').slice(0, 110)} | ${blk.pieces.length} real pieces | as built ${[0, 1, 2].map((k) => Math.round((blk.hi[k]! - blk.lo[k]!) * 1000)).join(' x ')} mm | settings: ${sets || 'none'}`; } } }
+      catch { /* a block that does not build at its defaults is not offered */ }
+      TOOL_LINES.set(id, line); return line; };
+    const toolsFor = async (words: string): Promise<string> => { const ls: string[] = []; for (const f of searchByFunction(words, 6)) { const l = await toolLine(f.id); if (l) ls.push(l); } return ls.join('\n'); };
     let tree: Tree[] = [], treeText = '', sizing: Promise<unknown> | undefined;
     try { tree = await split1([], '');
       sizing = call(`${SIZER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nIts subsystems:\n${tree.map((n) => `${n.name}${n.n > 1 ? ` x${n.n}` : ''} (${n.is})`).join('\n')}`, 'quick').then((t) => firstJson(t, 'sizer'), (e: unknown) => e);
@@ -1251,16 +1263,29 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         const units = tree.flatMap((n) => { const subs = n.kids.filter((k) => k.kids.length), loose = n.kids.filter((k) => !k.kids.length);
           return subs.length ? [...subs.map((k) => ({ path: [n.name, k.name], is: k.is, parts: k.kids })), ...(loose.length ? [{ path: [n.name], is: n.is, parts: loose }] : [])] : [{ path: [n.name], is: n.is, parts: n.kids.length ? n.kids : [n] }]; }).slice(0, 48);
         const placed = await pooled(units, async (u) => { const nm = u.path.join(' > '); try {
-          const r = firstJson(await call(`${PLACER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${livery}\nEvery subsystem's zone:\n${zoneText}\n\nYour branch: ${nm} (${u.is}), inside the zone of ${u.path[0]}. Its parts:\n${lines1(u.parts, 0).join('\n').slice(0, 2000)}`, 'quick'), `placer (${nm})`) as { rows?: unknown };
-          return (Array.isArray(r.rows) ? r.rows as Row[] : []).filter(Array.isArray).slice(0, 40).map((x) => ({ name: `${nm} > ${String(x[0])}`, shape: x[1], axis: x[2], size: [x[3], x[4], x[5]], at: [x[6], x[7], x[8]], mat: x[9], color: x[10], rot: [x[11] ?? 0, x[12] ?? 0, x[13] ?? 0] }));
+          const menu = await toolsFor(`${u.path.join(' ')} ${u.is} ${u.parts.map((q) => q.name).join(' ')}`);
+          const r = firstJson(await call(`${PLACER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${livery}\nEvery subsystem's zone:\n${zoneText}\n\nYour branch: ${nm} (${u.is}), inside the zone of ${u.path[0]}. Its parts:\n${lines1(u.parts, 0).join('\n').slice(0, 2000)}${menu ? `\n\nReal library parts you may place instead of drawing (a "use" row):\n${menu}` : ''}`, 'quick'), `placer (${nm})`) as { rows?: unknown };
+          return (Array.isArray(r.rows) ? r.rows as Row[] : []).filter(Array.isArray).slice(0, 40).map((x): Record<string, unknown> => (x[0] === 'use'
+            ? { use: String(x[1]), name: `${nm} > ${String(x[2])}`, set: Object.fromEntries(String(x[3] ?? '').split(';').map((kv) => kv.split('=').map((t) => t.trim())).filter((kv) => kv.length === 2 && kv[0]).map(([k, v]) => [k, v !== '' && Number.isFinite(Number(v)) ? Number(v) : v])), at: [x[4], x[5], x[6]], rot: [x[7] ?? 0, x[8] ?? 0, x[9] ?? 0] }
+            : { name: `${nm} > ${String(x[0])}`, shape: x[1], axis: x[2], size: [x[3], x[4], x[5]], at: [x[6], x[7], x[8]], mat: x[9], color: x[10], rot: [x[11] ?? 0, x[12] ?? 0, x[13] ?? 0] }));
         } catch (e) { say('features', `placer (${nm}): ${(e as Error).message.slice(0, 100)}`, false); return []; } });
         solids = placed.flat().slice(0, 500); say('features', `placers: ${solids.length} solids from ${placed.filter((x) => x.length).length} of ${units.length} branches`);
       } catch (e) { say('features', `sizer: ${(e as Error).message.slice(0, 120)}; one layout call instead`, false); } }
       // (no tree, or nothing placed: the whole laid out by one call, as before)
       if (!solids.length) { const lo = firstJson(await call(`${LAYOUT_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}${treeText ? `\nWhat it is made of (place every part; name each solid by its path, as "subsystem > part"; x2 means two solids, mirrored or spaced as on the real thing):\n${treeText.slice(0, 6000)}` : ''}`, 'quick'), 'layout') as { solids?: unknown };
         solids = (Array.isArray(lo.solids) ? lo.solids.slice(0, 200) : []).map((r) => (Array.isArray(r) ? { name: r[0], shape: r[1], axis: r[2], size: [r[3], r[4], r[5]], at: [r[6], r[7], r[8]], mat: r[9], color: r[10], rot: [r[11] ?? 0, r[12] ?? 0, r[13] ?? 0] } : r)); if (!solids.length) throw new Error('no solids in the reply'); }
-      const b = emptyBoard(request.slice(0, 80)); placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify(solids) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
-      const e = new Engine(b); await e.run(); const st = e.state.get('layout');
+      let b = emptyBoard(request.slice(0, 80)), st: ReturnType<Engine['state']['get']>, used = 0;
+      for (let pass = 0; pass < 2; pass++) { b = emptyBoard(request.slice(0, 80));
+        const tools = solids.filter((x) => typeof x.use === 'string' && LIBRARY.has(String(x.use))).slice(0, 120), drawn = solids.filter((x) => x.use === undefined);
+        const idOf = (k: number) => `t${String(k).padStart(3, '0')}`;
+        placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify([...drawn, ...tools.map((t, k) => ({ in: k, name: t.name, at: t.at, rot: t.rot }))]) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
+        tools.forEach((t, k) => { placeBlock(b, String(t.use), -330, k * 140, (t.set ?? {}) as Record<string, unknown>, idOf(k)); b.nodes[idOf(k)]!.label = String(t.name); wire(b, idOf(k), 'block', 'layout', 'blocks'); });
+        const e = new Engine(b); await e.run(); st = e.state.get('layout'); used = tools.length;
+        const bad = tools.filter((_t, k) => e.state.get(idOf(k))?.status !== 'ok');
+        if (!bad.length) break;
+        say('features', `${bad.length} library part${bad.length === 1 ? '' : 's'} did not build as asked and ${bad.length === 1 ? 'was' : 'were'} left out: ${bad.slice(0, 4).map((t) => `${String(t.use)} (${String(t.name)})`).join(', ')}`, false);
+        solids = solids.filter((x) => !bad.includes(x)); }
+      if (used) say('features', `${used} real library part${used === 1 ? '' : 's'} placed`);
       if (st?.status !== 'ok') throw new Error(String(st?.error ?? 'the layout did not build').slice(0, 160));
       skeleton = b; board = b; say('features', `laid out as ${solids.length} solids`);
       return done1(`Built: ${solids.length} solids${tree.length ? ` in ${tree.length} subsystems (${tree.map((n) => n.name).join(', ')})` : ''}. A model of plain solids placed as on the real thing: not yet real engineered parts.`); }
