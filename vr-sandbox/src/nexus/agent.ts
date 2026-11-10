@@ -786,6 +786,17 @@ export interface ComposePart { name: string; is: string; from: string; set?: Rec
   /** the id it is kept under (remembered, decision 0028; or the remembered part it was placed from), and its own parts */ saved?: string; children?: ComposePart[] }
 export interface ComposeJoin { part: string; how: string; to: string }
 /** One step of the pipeline, a line for the chat. */
+/** The layout call: the whole as plain solids at places. */
+const LAYOUT_RULE = `## Here: lay the whole out as plain solids (one task: reply with one JSON object and nothing else)
+You are laying out a machine as a designer's first block model: 8 to 40 plain solids that together read, in silhouette and proportion, as exactly what is asked. Every feature a person must see gets its own solid or solids (each wheel, each leg segment, each track, the blade, the cab, the boom: separate solids, never one lump).
+Reply compactly, one row a solid, no spaces or line breaks: {"solids":[["front left wheel","rod","z",sx,sy,sz,ax,ay,az,"rubber","#202020"],...]}
+- A row is [name, shape, axis, size x, size y, size z, at x, at y, at z, mat, color]; whole numbers.
+- Units mm. x is forward, y is up, z is to the right. The ground is y = 0; the machine stands on it and is centred on x = 0, z = 0.
+- The size is the solid's box: x long, y high, z wide. "at" is the middle of that box in x and z, and its FOOT (lowest point) in y.
+- shape: "box", "rod" (a cylinder along "axis": a wheel or roller across the machine has axis "z", a post has "y", a barrel or boom along it has "x"), "sphere", "cone" (along "axis").
+- Solids touch their neighbours (a wheel's inner face at the body's side, a cab's foot on the deck's top); they do not sink into each other and nothing floats.
+- Hold the overall size to the size asked. Real proportions: look at how the real machine is built and place every solid where it is on the real thing; left and right sides mirror in z.
+- "mat" one of: steel-low, al-6061, rubber, abs, glass, wood-pine. "color" the real thing's colour as #rrggbb (machine bodies painted, tyres and tracks near black, glass pale blue, bare metal grey).`;
 export interface ComposeStep { stage: 'features' | 'split' | 'part' | 'fold' | 'join' | 'gate' | 'look' | 'remember' | 'check'; line: string; ok: boolean }
 /** The run's steps as a tree (decision 0028), for the pages to show: each part, how it was made, the id it is kept
  *  under, its pieces, what still fails, its own parts. */
@@ -980,6 +991,7 @@ export async function composeBuild(request: string, o: { ask: Ask; board?: Board
   /** the eye (decision 0029, wave 14): a picture of the board as the 3D view shows it (PNG bytes), or undefined where none
    *  can be taken; given, the model is shown it with the recognition list after the build and its checks */ look?: (board: Board) => Promise<{ png: Uint8Array } | undefined>;
   /** the recognition list written before the split (one call more); on where `look` is given, unless said */ features?: boolean;
+  /** a layout skeleton first (one call more): the whole as plain solids at places, shown at once, and kept as the build where the parts' build leaves something unmet */ skeleton?: boolean;
   /** every call answers in one closed format (stages.ts FORMATS), forced where the model is called and read from the tool's input, never text; a graph reply is checked by the wall (applyGraph) before it is a plan, returned once with what is wrong; the app turns it on, a test with a scripted text ask leaves it off */ formats?: boolean;
   /** the wall-clock budget, ms (default 240 000): when it is spent the run asks nothing more, returns what it has and says in unmet what was not reached */ budgetMs?: number }): Promise<ComposeRun> {
   const { starterBoards } = await import('./starters'), steps: ComposeStep[] = [], plans: AgentPlan[] = [], unmet: string[] = [], remembered: string[] = [], recalled: string[] = [], missing: string[] = [];
@@ -1025,7 +1037,11 @@ export async function composeBuild(request: string, o: { ask: Ask; board?: Board
   let parts: ComposePart[] = [], joins: ComposeJoin[] = [];
   registerSaved(); // (parts kept in a store apart from this run, as blocks: placed like an assembly)
   let works: Working | undefined, recog: Recognition | undefined, looks = 0, builtSize: number | undefined, anchor = '', reqs: Requirement[] = [], eng: Engineering | undefined, mass: number | undefined;
-  const done = (answer: string): ComposeRun => ({ ...(o.formats ? { replies } : {}), ...(notReached.length ? { spent: true } : {}), board, parts, joins, steps, unmet, answer, asks, plans, tree: parts.map(treeOf), remembered, recalled, missing, ...(works ? { works } : {}),
+  let skeleton: Board | undefined;
+  const done = (answer0: string): ComposeRun => { let answer = answer0;
+    if (skeleton && (unmet.length || !nodesOf(board).length)) { board = skeleton; answer = `Shown as a layout (its parts' build was not finished: ${unmet.length ? unmet[0]!.slice(0, 140) : 'nothing was built'}). ${answer0}`; }
+    return done1(answer); };
+  const done1 = (answer: string): ComposeRun => ({ ...(o.formats ? { replies } : {}), ...(notReached.length ? { spent: true } : {}), board, parts, joins, steps, unmet, answer, asks, plans, tree: parts.map(treeOf), remembered, recalled, missing, ...(works ? { works } : {}),
     ...(reqs.length ? { requirements: reqs } : {}), ...(eng ? { engineering: eng } : {}), ...(mass !== undefined ? { mass } : {}),
     ...(recog ? { features: recog.features, size: { ...(recog.longest ? { asked: recog.longest } : {}), ...(builtSize ? { built: builtSize } : {}) } } : {}), ...(o.look ? { looks } : {}) });
   /** Each feature held to the part that shows it (a part made before one not made); the features no part shows. */
@@ -1176,6 +1192,17 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       say('features', `a person must see: ${recog.features.map(featureLine).join('; ')}${recog.longest ? `; the whole about ${metres(recog.longest)} on its longest side${recog.why ? ` (${recog.why})` : ''}` : ''}`); }
     catch (e) { say('features', `no recognition list could be read: ${(e as Error).message.slice(0, 160)}`, false); }
     if (recog) say('features', reqs.length ? `requirements: ${reqs.map(requirementLine).join('; ')}` : 'no requirements were written: nothing to size the parts to', !!reqs.length);
+  }
+  // (0b. the layout skeleton: the whole as plain solids at places, one call, built by the room's own layout node and shown
+  // at once; the room settles it. Kept as the build where the parts' build below leaves something unmet)
+  if (o.skeleton && recog) {
+    try { const lo = firstJson(await call(`${LAYOUT_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${recognitionLines(recog)}${reqs.length ? `\n${requirementLines(reqs)}` : ''}`, 'quick'), 'layout') as { solids?: unknown };
+      const solids = (Array.isArray(lo.solids) ? lo.solids.slice(0, 60) : []).map((r) => (Array.isArray(r) ? { name: r[0], shape: r[1], axis: r[2], size: [r[3], r[4], r[5]], at: [r[6], r[7], r[8]], mat: r[9], color: r[10] } : r)); if (!solids.length) throw new Error('no solids in the reply');
+      const b = emptyBoard(request.slice(0, 80)); placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify(solids) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
+      const e = new Engine(b); await e.run(); const st = e.state.get('layout');
+      if (st?.status !== 'ok') throw new Error(String(st?.error ?? 'the layout did not build').slice(0, 160));
+      skeleton = b; board = structuredClone(b); say('features', `laid out as ${solids.length} solids: ${(solids as { name?: string }[]).map((x) => String(x.name ?? '?')).slice(0, 14).join(', ')}`); board = emptyBoard(request.slice(0, 80)); }
+    catch (e) { say('features', `no layout: ${(e as Error).message.slice(0, 160)}`, false); }
   }
   const see = recog ? `${recognitionLines(recog)}\nEvery feature is shown by a part ("shows").${reqs.length ? `\n${requirementLines(reqs)}\nEach part the requirement falls on says it ("needs").` : ''}` : '';
   if (found.length) say('split', `found by what they do: ${found.map((f) => f.id).join(', ')}`);
@@ -1398,7 +1425,7 @@ export function sdkAsk(o: { model?: string; signal?: AbortSignal; tokens?: Agent
       if (!use || !use.input || typeof use.input !== 'object') throw new FormatError(format.name, `no ${format.name} in the reply (stop: ${rf.stop_reason})`);
       return use.input as Record<string, unknown>;
     }
-    const r = await client.messages.create({ model: o.model ?? AGENT_MODEL, max_tokens: images?.length ? 12_000 : 6000, ...(head ? { system: cachedSystem(head) } : {}), output_config: { effort: tier === 'quick' ? 'low' : 'medium' }, messages: [{ role: 'user', content: images?.length ? [...images.map((png) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/png' as const, data: Buffer.from(png).toString('base64') } })), { type: 'text' as const, text: tail }] : tail }] }, { signal: o.signal ?? AbortSignal.timeout(90_000) });
+    const r = await client.messages.create({ model: o.model ?? AGENT_MODEL, max_tokens: 12_000, ...(head ? { system: cachedSystem(head) } : {}), output_config: { effort: tier === 'quick' ? 'low' : 'medium' }, messages: [{ role: 'user', content: images?.length ? [...images.map((png) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/png' as const, data: Buffer.from(png).toString('base64') } })), { type: 'text' as const, text: tail }] : tail }] }, { signal: o.signal ?? AbortSignal.timeout(90_000) });
     if (o.tokens) { o.tokens.in += r.usage.input_tokens; o.tokens.out += r.usage.output_tokens; o.tokens.cached += r.usage.cache_read_input_tokens ?? 0; o.tokens.written += r.usage.cache_creation_input_tokens ?? 0; }
     const turn = turnOf(r); return turn.ends ? turn.answer : '';
   };

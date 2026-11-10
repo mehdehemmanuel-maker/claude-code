@@ -678,6 +678,28 @@ export class Block {
    *  direction), right-handed. A rigid turn of a valid block is valid: nothing it does can write an overlap, and nothing
    *  placed is an input. Its solids carry their frames, its lines their directions; its rooms are kept under a turn about
    *  y and closed under any other. A block with a piece on a joint is refused (not made yet). */
+  /** Blocks laid out where a layout says (the skeleton of a machine, before its real parts): each with the middle of its box
+   *  at (x, z) and its foot at y. The room then settles them so the layout is a thing that could stand: a block that
+   *  would sink into one laid before it is pushed out along the shortest way, one below the ground is lifted to it, and one
+   *  that touches nothing is let down onto what is under it (or the ground). The places are the layout's, said so in its
+   *  note; no faces are written (a layout joins nothing: the parts that replace its blocks are joined by the operations). */
+  static layout(name: string, items: { b: Block; at: P3 }[]): Block {
+    if (!items.length) throw new Error(`${name}: a layout of nothing`);
+    const done: { lo: V3; hi: V3 }[] = [], pieces: Piece[] = [], faces: Face[] = [], rooms: RoomOf[] = [], E = 1e-6; let moved = 0;
+    for (const it of items) { Block.#is(it.b);
+      const d: V3 = [it.at[0] - (it.b.lo[0] + it.b.hi[0]) / 2, it.at[1] - it.b.lo[1], it.at[2] - (it.b.lo[2] + it.b.hi[2]) / 2], d0 = [...d];
+      const lo = (k: number) => it.b.lo[k]! + d[k]!, hi = (k: number) => it.b.hi[k]! + d[k]!, over = (q: { lo: V3; hi: V3 }, k: number) => Math.min(hi(k), q.hi[k]!) - Math.max(lo(k), q.lo[k]!);
+      for (let n = 0; n < 12; n++) { const q = done.find((x) => [0, 1, 2].every((k) => over(x, k) > E)); if (!q) break;
+        const k = [0, 1, 2].reduce((a, c) => (over(q, c) < over(q, a) ? c : a)), away = (lo(k) + hi(k)) / 2 >= (q.lo[k]! + q.hi[k]!) / 2 ? 1 : -1; d[k] = d[k]! + away * over(q, k); }
+      if (lo(1) < 0) d[1] = d[1]! - lo(1);
+      // (near enough counts as touching: a small solid a little off its neighbour (a tooth by a jaw) stays where it was laid)
+      const near = Math.max(0.002, 0.3 * Math.min(hi(0) - lo(0), hi(1) - lo(1), hi(2) - lo(2)));
+      const touches = lo(1) <= E || done.some((q) => { const o = [0, 1, 2].map((k) => over(q, k)); return o.every((x) => x > -near) && o.filter((x) => x > E).length >= 2; });
+      if (!touches) { const under = done.filter((q) => over(q, 0) > E && over(q, 2) > E && q.hi[1]! <= lo(1) + E).map((q) => q.hi[1]!); d[1] = d[1]! - (lo(1) - Math.max(0, ...under)); }
+      if (d.some((x, k) => Math.abs(x - d0[k]!) > E)) moved++;
+      const sft = Block.#shift(it.b, d); pieces.push(...sft.pieces); faces.push(...sft.faces); rooms.push(...sft.rooms); done.push({ lo: [lo(0), lo(1), lo(2)], hi: [hi(0), hi(1), hi(2)] }); }
+    return Block.#seal(name, pieces, faces, rooms);
+  }
   static turn(b: Block, axis: Axis | P3, degrees: number, name = b.name): Block {
     Block.#is(b); const R = turnOf(axis, degrees), RtR = mul(tr(R), R), det = R[0] * (R[4] * R[8] - R[5] * R[7]) - R[1] * (R[3] * R[8] - R[5] * R[6]) + R[2] * (R[3] * R[7] - R[4] * R[6]);
     if (!RtR.every((x, i) => Math.abs(x - I3[i]!) < 1e-12) || Math.abs(det - 1) > 1e-12) throw new Error(`turn: not a rotation (a scaling or a mirror would put pieces in each other): refused`);
@@ -1734,7 +1756,7 @@ function boxSide(s: Piece, q: Piece, g: number): { area: number; length: number;
     for (let a = 0; a < M; a++) for (let k = 0; k < M; k++) { const o: V3 = [0, y0 + ((k + 0.5) * (y1 - y0)) / M, 0]; o[ax] = B.c[ax] + sg * (B.size[ax] / 2 + g + EPS); o[w] = B.c[w] - L / 2 + ((a + 0.5) * L) / M; tot++; if (inPiece(s, ...o)) n++; } }
   return n ? { area: (n / tot) * 2 * (B.size[0] + B.size[2]) * (y1 - y0), length: 0, at: [B.c[0], (y0 + y1) / 2, B.c[2]] } : { area: 0, length: 0, at: [0, 0, 0] };
 }
-export const made = Block.made, stack = Block.stack, around = Block.around, through = Block.through, into = Block.into, onto = Block.onto, ring = Block.ring, over = Block.over, turn = Block.turn, run = Block.run, branch = Block.branch;
+export const made = Block.made, stack = Block.stack, around = Block.around, through = Block.through, into = Block.into, onto = Block.onto, ring = Block.ring, over = Block.over, turn = Block.turn, run = Block.run, branch = Block.branch, layout = Block.layout;
 export const mesh = Block.mesh, rack = Block.rack, belt = Block.belt, between = Block.between, along = Block.along, key = Block.key;
 export const jointed = Block.jointed, limited = Block.limited;
 /** Whether a piece's line is held from moving along itself (its travel limit none: a UC insert's set screws), so a round
