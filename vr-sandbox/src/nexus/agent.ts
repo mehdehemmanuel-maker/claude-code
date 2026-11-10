@@ -840,7 +840,8 @@ const PLACER_RULE = `## Here: PLACER (one task: one subsystem's parts as solids,
 You model ONE branch of a machine (a subsystem, or one part of a subsystem): every part listed for it becomes one or more plain solids, placed and sized as on the real machine, in the machine's own coordinates. Your zone is where it sits; the real outline matters more than filling the zone: sloped and round where the real thing is, never one lump.
 Reply with one JSON object and nothing else, compact: {"rows":[[name, shape, axis, size x, size y, size z, at x, at y, at z, mat, color, turn x, turn y, turn z],...]}
 - Leave the three turns off a row where they are all 0 (most rows). Names two or three words.
-- One row or more for every part; "x2" means two solids, mirrored or spaced as on the real thing. Name each solid by its part's name (add "left", "right", "1", "2" where there are several). 3 to 30 rows.
+- One row or more for every part. A part there are SEVERAL of, evenly spaced (rollers, shoes, teeth, steps, a left and a right one): give its row ONCE, then a row ["=", count, step x, step y, step z]: the app makes count of them in all, each one step (mm) further than the last. A mirrored pair is ["=", 2, 0, 0, step z]. Never write the same solid out again and again. Name each solid by its part's name. 3 to 30 rows.
+- mat and color may be "" for a painted steel piece in the main body colour: write them only where they differ.
 - Whole numbers, mm. x is forward, y is up, z is to the right; the ground is y = 0. "at" is the middle of the solid's box in x and z, and its FOOT in y, on the MACHINE's axes (not your zone's).
 - shape: "box", "rod" (a cylinder along "axis": across the machine "z", upright "y", along it "x"), "tube" (hollow rod: pipe, duct, tyre, ring), "sphere", "dome" (half sphere, flat down), "cone" (along "axis"), "wedge" (a ramp: full height at its back, nothing at its front).
 - The size is given before any turn; turns are degrees (usually 0). Slope and splay with turns and wedges (a raised boom, a leaned windscreen); long curved things are several turned segments.
@@ -918,13 +919,14 @@ function connectParts(solids: Record<string, unknown>[], o: { small?: number; fi
  *  an assembly that has been taken apart is built from its own pieces, in place of the rough solids that stood for it. */
 const BUILDER_RULE = `## Here: MATER (one task: one assembly's pieces, each sized, and how each is fastened to another)
 You are given ONE assembly of a machine: the box it occupies, the rough solids that stand for it now, and the pieces it is really made of. Size every piece, and say what each is fastened onto. You give NO positions: a piece's place comes only from its join, face to face, so everything is connected by construction.
-Reply with one JSON object and nothing else, compact: {"pieces":[[name, shape, axis, size x, size y, size z, mat, color],...],"joins":[[piece, onto, face, u, v, kind, fastener, count],...],"outlines":{"name":[[u,v],...]}}
-- pieces: every made piece and every bought part listed, except the fasteners that hold two listed pieces together (see joins). Sizes in whole mm on the MACHINE's axes as the piece sits in the machine: x forward, y up, z to the right. shape "box", "rod" (a cylinder along "axis"), "tube", "sphere", "dome", "cone" or "wedge"; for a plate, axis is the direction it is thin along. "x4" in the list is four pieces (add 1 to 4, or left, right). More than 12 of one thing: give 12.
+Reply with one JSON object and nothing else, compact: {"pieces":[[name, shape, axis, size x, size y, size z, mat, color],...],"joins":[[piece, onto, face, u, v, kind, fastener, count, copies, du, dv],...],"outlines":{"name":[[u,v],...]}}
+- pieces: every made piece and every bought part listed, except the fasteners that hold two listed pieces together (see joins). Sizes in whole mm on the MACHINE's axes as the piece sits in the machine: x forward, y up, z to the right. shape "box", "rod" (a cylinder along "axis"), "tube", "sphere", "dome", "cone" or "wedge"; for a plate, axis is the direction it is thin along. A piece there are SEVERAL of ("x4", "x12") is given ONCE here and ONCE in joins; its join says how many and how they are spaced.
 - The FIRST piece is the base: the main structural piece the rest is built onto. It has no join.
 - A piece marked [assembly] is one piece here: shape "box", its overall size. Its own pieces are built by a later call.
 - A piece marked [bought]: begin its name with its kind and a colon where it is one of these: ${Object.keys(KINDS).join(', ')}.
 - joins: exactly ONE row for every piece but the base, in an order that builds outward: the piece; the piece it is fastened ONTO (the base, or a piece joined in an earlier row); the FACE of that piece it sits against: "+x" its front, "-x" its back, "+y" its top, "-y" its underside, "+z" its right side, "-z" its left side, or "in" (inside it, at its middle: a pin in its bore, a bearing in its housing); u and v: where on that face the piece's middle is, in percent across the face, 50 and 50 its middle (on a x face u runs along z and v up y; on a y face u along x and v along z; on a z face u along x and v up y); and the kind: "weld", "bolt", "pin" (it turns on a pin through both), "press", "clip", "glue" or "rest".
-- fastener and count: for "bolt", the bolt's size ("M12") and how many hold this piece; for "pin", the pin's diameter in mm and 1. Leave them off for the other kinds.
+- fastener and count: for "bolt", the bolt's size ("M12") and how many hold this piece; for "pin", the pin's diameter in mm and 1; for the other kinds "" and 0.
+- copies, du, dv (after count, only for a piece there are several of): how many of it in all, and how far each next one stands from the last across the face, in percent of the face (five teeth along a front edge: 5, 20, 0). u and v are then the FIRST one's place.
 - The app makes what a join calls for: a bolt calls for its hole through both pieces, a washer and a nut (or a thread in a thick piece); a pin calls for its bore through both. So do NOT give the bolts, nuts, washers and pins of these joins as pieces, even where the list given names them.
 - outlines (optional, for a flat piece that is not a rectangle: a side plate, a gusset, a cheek): 3 to 12 points [u,v] going round it, in percent of the piece's face seen along its thin axis (axis z: u along x, v up y; axis y: u along x, v along z; axis x: u along z, v up y). The keys are piece names exactly as given.
 - mat one of steel-low, al-6061, rubber, abs, glass, wood-pine; color "#rrggbb": painted pieces in the body colour of the rough solids, bare steel grey, rubber near black, glass pale blue.`;
@@ -947,8 +949,8 @@ export async function buildDeep(request: string, tree: PipeNode[], path: string[
   const roughText = (xs: Sol[]) => xs.slice(0, 14).map((x) => (Array.isArray(x.span) ? `${String(x.name).split(' > ').pop()}: a member from ${(x.span as number[][])[0]!.map(Math.round).join(' ')} to ${(x.span as number[][])[1]!.map(Math.round).join(' ')}` : `${String(x.name).split(' > ').pop()}: ${String(x.shape ?? 'part')} ${N3(x.size).map(Math.round).join(' x ')} at ${N3(x.at).map(Math.round).join(', ')}${typeof x.color === 'string' ? ` ${x.color}` : ''}`)).join('\n');
   let free = 12; const waiters: (() => void)[] = [], take = async () => { if (free > 0) { free--; return; } await new Promise<void>((ok) => waiters.push(ok)); }, give = () => { const w = waiters.shift(); if (w) w(); else free++; };
   const built: Sol[] = [], called = { bolts: 0, nuts: 0, washers: 0, pins: 0, holes: 0, unmet: [] as string[] }; let skipped = 0;
-  const one = async (n: PipeNode, pth: string[], box: { lo: number[]; hi: number[] }, rough: Sol[]): Promise<void> => { const label = pth.join(' > '), myId = id++, t0 = Date.now();
-    if (calls >= max) { skipped++; built.push(...rough.map((x) => ({ ...x }))); return; } calls++;
+  const one = async (n: PipeNode, pth: string[], box: { lo: number[]; hi: number[] }, rough: Sol[], out: Sol[]): Promise<void> => { const label = pth.join(' > '), myId = id++, t0 = Date.now();
+    if (calls >= max) { skipped++; out.push(...rough.map((x) => ({ ...x }))); return; } calls++;
     const prompt = `${BUILDER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 400)}\nBuild: ${label} (${n.is})\nIts box: ${boxText(box)}\nThe rough solids standing for it now:\n${roughText(rough)}\n\nIts pieces:\n${n.kids.map((k) => `${k.name}${k.n > 1 ? ` x${k.n}` : ''} [${k.kids.length ? 'assembly' : k.leaf === 'bought' || k.kind === 'bought' ? 'bought' : k.kind === 'link' ? 'piece' : 'piece'}] ${k.is}`).join('\n').slice(0, 5000)}`, sent = prompt.slice(BUILDER_RULE.length + PROMPT_CUT.length);
     o.onPipe?.({ id: myId, stage: 'mater', label, state: 'run', rule: BUILDER_RULE, sent }); await take();
     try { let got: string; try { const r0 = await o.ask(prompt, 'quick'); got = typeof r0 === 'string' ? r0 : JSON.stringify(r0); } finally { give(); }
@@ -959,9 +961,14 @@ export async function buildDeep(request: string, tree: PipeNode[], path: string[
       type Pc = { raw: string; name: string; kind?: string; shape: string; axis: string; size: number[]; mat: unknown; color: unknown; lo?: number[]; outline?: unknown; holes: number[][]; holeAxis?: number };
       const pcs: Pc[] = []; for (const x of prs) { const raw = String(x[0] ?? ''), kn = kindOf(raw), size = [Math.abs(Number(x[3])), Math.abs(Number(x[4])), Math.abs(Number(x[5]))]; if (!size.every((v) => Number.isFinite(v) && v >= 0.5)) continue; pcs.push({ raw, name: kn.name, kind: kn.kind, shape: String(x[1] ?? 'box'), axis: /^[xyz]$/.test(String(x[2])) ? String(x[2]) : 'y', size, mat: x[6], color: x[7], holes: [], ...(Array.isArray(r.outlines?.[raw]) ? { outline: r.outlines![raw] } : Array.isArray(r.outlines?.[kn.name]) ? { outline: r.outlines![kn.name] } : {}) }); }
       if (!pcs.length) throw new Error('no piece with a size in the reply');
-      const byName = (nm: unknown) => { const t = kindOf(nm).name.toLowerCase(); return pcs.find((q) => q.name.toLowerCase() === t) ?? pcs.find((q) => q.raw.toLowerCase() === String(nm).toLowerCase()); };
+      const byName = (nm: unknown) => { const t = kindOf(nm).name.toLowerCase(), w = String(nm).toLowerCase(); return pcs.find((q) => q.raw.toLowerCase() === w) ?? pcs.find((q) => q.name.toLowerCase() === t); };
+      // (a piece there are several of: its join's copies, du, dv make the rest, each its own piece with its own join, a step
+      // further across the face; they are named 1, 2, 3 … and the first of them is remembered as the one the rest copy)
+      const copyOf = new Map<Pc, Pc>(), jrs2: unknown[][] = [];
+      for (const x of jrs) { const c = byName(x[0]), n2 = Math.max(1, Math.min(40, Math.round(Number(x[8]) || 1))); if (!c || c === pcs[0] || n2 < 2) { jrs2.push(x); continue; } const du = Number(x[9]) || 0, dv = Number(x[10]) || 0, nm0 = c.name, raw0 = c.raw; c.name = `${nm0} 1`; c.raw = `${raw0} 1`; jrs2.push([c.raw, ...x.slice(1)]);
+        for (let i = 1; i < n2; i++) { const q: Pc = { ...c, name: `${nm0} ${i + 1}`, raw: `${raw0} ${i + 1}`, holes: [], size: [...c.size] }; pcs.push(q); copyOf.set(q, c); jrs2.push([q.raw, x[1], x[2], (Number(x[3]) || 50) + du * i, (Number(x[4]) || 50) + dv * i, x[5], x[6], x[7]]); } }
       const base = pcs[0]!, mid = [(box.lo[0]! + box.hi[0]!) / 2, box.lo[1]!, (box.lo[2]! + box.hi[2]!) / 2]; base.lo = [mid[0]! - base.size[0]! / 2, mid[1]!, mid[2]! - base.size[2]! / 2];
-      const extras: Sol[] = [], unmet: string[] = []; let pending = jrs.map((x) => ({ x, c: byName(x[0]), h: byName(x[1]) })).filter((q) => q.c && q.c !== base);
+      const extras: Sol[] = [], unmet: string[] = []; let pending = jrs2.map((x) => ({ x, c: byName(x[0]), h: byName(x[1]) })).filter((q) => q.c && q.c !== base);
       const FACES: Record<string, [number, number]> = { '+x': [0, 1], '-x': [0, -1], '+y': [1, 1], '-y': [1, -1], '+z': [2, 1], '-z': [2, -1] }, AX = ['x', 'y', 'z'];
       // (ISO 273 medium clearance holes, ISO 7089 washers (outside diameter, thickness), mm, as recalled; a nut about 0.8 d
       // high and 1.7 d across (ISO 4032, about); a bolt's hole no nearer an edge than 1.5 d (typical, Eurocode 3 asks 1.2 d0))
@@ -995,14 +1002,19 @@ export async function buildDeep(request: string, tree: PipeNode[], path: string[
         for (const q of pcs) q.lo = q.lo!.map((v2, k) => v2 + sh[k]!); for (const e of extras) e.at = (e.at as number[]).map((v2, k) => v2 + sh[k]!); }
       const subs = n.kids.filter((k) => k.kids.length), jobs: Promise<void>[] = [], usedSub = new Set<PipeNode>();
       for (const q of pcs) { const sol: Sol = { name: `${label} > ${q.name}`, kind: q.kind, shape: q.shape, axis: q.axis, size: q.size, at: [q.lo![0]! + q.size[0]! / 2, q.lo![1]!, q.lo![2]! + q.size[2]! / 2], mat: q.mat, color: q.color, rot: [0, 0, 0], ...(q.outline ? { outline: q.outline } : {}), ...(q.holes.length ? { holes: q.holes } : {}) };
-        const sub = subs.find((k) => !usedSub.has(k) && q.name.toLowerCase().startsWith(k.name.toLowerCase()));
-        if (sub) { usedSub.add(sub); jobs.push(one(sub, [...pth, sub.name], boxOf([sol]), [{ ...sol, name: `${label} > ${sub.name}` }])); } else built.push(sol); }
-      built.push(...extras); called.bolts += extras.filter((e) => e.kind === 'bolt').length; called.nuts += extras.filter((e) => e.kind === 'nut').length; called.washers += extras.filter((e) => e.kind === 'washer').length; called.pins += extras.filter((e) => e.kind === 'pin').length; called.holes += pcs.reduce((t, q) => t + q.holes.length, 0); called.unmet.push(...unmet);
+        const sub = subs.find((k) => q.name.toLowerCase().startsWith(k.name.toLowerCase()));
+        // (an assembly there are several of is built once, in the first one's box, and its pieces copied to the others' places)
+        if (sub && !usedSub.has(sub)) { usedSub.add(sub); const first = q, mineOut: Sol[] = [], pre = `${label} > ${sub.name}`;
+          jobs.push(one(sub, [...pth, sub.name], boxOf([sol]), [{ ...sol, name: pre }], mineOut).then(() => { out.push(...mineOut); let ci = 1;
+            for (const q2 of pcs) { if (q2 === first || !q2.name.toLowerCase().startsWith(sub.name.toLowerCase())) continue; ci++; const sh = [0, 1, 2].map((k2) => q2.lo![k2]! - first.lo![k2]!);
+              out.push(...mineOut.map((m) => ({ ...m, name: String(m.name).startsWith(pre) ? `${pre} #${ci}${String(m.name).slice(pre.length)}` : `${String(m.name)} #${ci}`, at: (m.at as number[]).map((v2, k2) => Number(v2) + sh[k2]!), ...(Array.isArray(m.span) ? { span: (m.span as number[][]).map((e) => e.map((v2, k2) => v2 + sh[k2]!)) } : {}), ...(Array.isArray(m.holes) ? { holes: (m.holes as number[][]).map((hh) => [...hh]) } : {}) }))); } })); }
+        else if (!sub) out.push(sol); }
+      out.push(...extras); called.bolts += extras.filter((e) => e.kind === 'bolt').length; called.nuts += extras.filter((e) => e.kind === 'nut').length; called.washers += extras.filter((e) => e.kind === 'washer').length; called.pins += extras.filter((e) => e.kind === 'pin').length; called.holes += pcs.reduce((t, q) => t + q.holes.length, 0); called.unmet.push(...unmet);
       o.onPipe?.({ id: id++, stage: 'app', label: `mated ${label}: ${pcs.length} pieces joined face to face; its joins called for ${extras.filter((e) => e.kind === 'bolt').length} bolts, ${pcs.reduce((t, q) => t + q.holes.length, 0)} holes, ${extras.filter((e) => e.kind === 'washer').length} washers, ${extras.filter((e) => e.kind === 'nut').length} nuts, ${extras.filter((e) => e.kind === 'pin').length} pins; ${unmet.length} unmet${unmet.length ? `: ${unmet.slice(0, 3).join('; ')}` : ''}`, state: unmet.length ? 'fail' : 'ok' });
       n.built = true; o.onPipe?.({ id: myId, stage: 'mater', label, state: 'ok', ms: Date.now() - t0, rule: BUILDER_RULE, sent, got: got.slice(0, 8000) }); o.onPipe?.({ tree });
       await Promise.all(jobs); }
-    catch (e) { built.push(...rough.map((x) => ({ ...x }))); o.onPipe?.({ id: myId, stage: 'mater', label, state: 'fail', ms: Date.now() - t0, rule: BUILDER_RULE, sent, got: (e as Error).message.slice(0, 600) }); } };
-  await one(node, path, boxOf(mine), mine);
+    catch (e) { out.push(...rough.map((x) => ({ ...x }))); o.onPipe?.({ id: myId, stage: 'mater', label, state: 'fail', ms: Date.now() - t0, rule: BUILDER_RULE, sent, got: (e as Error).message.slice(0, 600) }); } };
+  await one(node, path, boxOf(mine), mine, built);
   // (every piece connects to another: among themselves first, then the whole to the rest of the machine if it stands clear)
   const joined = connectParts(built); connectParts(built, { fixed: rest.filter((x) => !Array.isArray(x.span) || Array.isArray(x.thick)).slice(0, 400), small: 1.01 });
   for (const x of built) if (body !== undefined) x.body = body;
@@ -1237,11 +1249,17 @@ every join, and end with a space.show of the last block's thing.`;
       TOOL_SIZES.set(key, dims); return dims; };
     const SWAPS: number[][] = [[], [0], [1], [2], [0, 1], [0, 2], [1, 0], [1, 2], [2, 0], [2, 1]];
     const turnedDims = (dm: number[], seq: number[]) => { const v = [...dm]; for (const k of seq) { const [a, b] = k === 0 ? [1, 2] : k === 1 ? [0, 2] : [0, 1]; [v[a], v[b]] = [v[b]!, v[a]!]; } return v; };
+    // (a fit is kept for its part and its box to the nearest twentieth, so forty track rollers are fitted once; and it is
+    // given a second at most: trying a part's settings builds it each time, and a slow part must not hold the build)
+    const FITS_KEPT = new Map<string, { set: Record<string, unknown>; pre: number[]; err: number; dims: number[] } | undefined>();
     const fitTool = async (id: string, target: number[], long?: number): Promise<{ set: Record<string, unknown>; pre: number[]; err: number; dims: number[] } | undefined> => {
-      const d = LIBRARY.get(id); if (!d || target.some((x) => !(x > 0))) return undefined;
+      const fk = `${id}|${target.map((v) => Math.round(Math.log(Math.max(v, 1e-3)) * 20)).join(',')}|${long ? Math.round(Math.log(long) * 40) : ''}`; if (FITS_KEPT.has(fk)) return FITS_KEPT.get(fk);
+      const r = await fitTool1(id, target, long); FITS_KEPT.set(fk, r); return r; };
+    const fitTool1 = async (id: string, target: number[], long?: number): Promise<{ set: Record<string, unknown>; pre: number[]; err: number; dims: number[] } | undefined> => {
+      const d = LIBRARY.get(id), until = Date.now() + 1000; if (!d || target.some((x) => !(x > 0))) return undefined;
       const ts = [...target].sort((a, b) => a - b), err = (dm: number[]) => { const a = [...dm].sort((x, y) => x - y); return a.reduce((t, v, i) => t + Math.abs(Math.log(Math.max(v, 1e-3) / ts[i]!)), 0); };
       let set: Record<string, unknown> = {}, t0 = Date.now(), best = await sizeOf(id, set); if (!best) return undefined; let bestErr = err(best); const slow = Date.now() - t0 > 120;
-      const tryIt = async (st: Record<string, unknown>) => { const dm = await sizeOf(id, st); if (dm && err(dm) < bestErr - 1e-9) { bestErr = err(dm); best = dm; set = st; } };
+      const tryIt = async (st: Record<string, unknown>) => { if (Date.now() > until) return; const dm = await sizeOf(id, st); if (dm && err(dm) < bestErr - 1e-9) { bestErr = err(dm); best = dm; set = st; } };
       const ps = paramsOf(d).filter((q) => q.from === 'setting' && !/^(name|mat|material|color|colour|finish)$/.test(q.key));
       for (let pass = 0; pass < (slow ? 1 : 2); pass++) for (const q of ps) {
         if (q.choices?.length && !slow) { const cs = q.choices, step = Math.max(1, Math.ceil(cs.length / 24)); for (let i = 0; i < cs.length; i += step) await tryIt({ ...set, [q.key]: cs[i] }); }
@@ -1249,7 +1267,7 @@ every join, and end with a space.show of the last block's thing.`;
           for (const k of [2, 1, 0]) { const v = cur * ts[k]! / Math.max(bs[k]!, 1e-3); if (Number.isFinite(v) && v > 0) await tryIt({ ...set, [q.key]: Number(v.toPrecision(3)) }); } } }
       // (a part that must span a gap: the setting its length follows (a cylinder's stroke) is solved for that length)
       if (long) for (const q of ps) { if (q.choices?.length || !(typeof q.default === 'number' && q.default > 0)) continue;
-        for (let it = 0; it < 5; it++) { const cur = Number(set[q.key] ?? q.default), L0 = Math.max(...best!); if (Math.abs(L0 / long - 1) < 0.01) break;
+        for (let it = 0; it < 5; it++) { if (Date.now() > until + 500) break; const cur = Number(set[q.key] ?? q.default), L0 = Math.max(...best!); if (Math.abs(L0 / long - 1) < 0.01) break;
           const d1 = await sizeOf(id, { ...set, [q.key]: Number((cur * 1.5).toPrecision(4)) }); if (!d1) break; const slope = (Math.max(...d1) - L0) / (cur * 0.5); if (!(Math.abs(slope) > 1e-6)) break;
           const v = Number((cur + (long - L0) / slope).toPrecision(4)); if (!(v > 0)) break; const d2 = await sizeOf(id, { ...set, [q.key]: v }); if (!d2 || Math.abs(Math.max(...d2) - long) >= Math.abs(L0 - long)) break; best = d2; set = { ...set, [q.key]: v }; bestErr = err(d2); } }
       let pre: number[] = [], po = Infinity; for (const seq of SWAPS) { const v = turnedDims(best!, seq), e2 = v.reduce((t, x, i) => t + Math.abs(Math.log(Math.max(x, 1e-3) / target[i]!)), 0); if (e2 < po - 1e-9) { po = e2; pre = seq; } }
@@ -1515,15 +1533,29 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         const strip = (ns: Tree[]): Tree[] => ns.flatMap((n) => { if (n.kind === 'link') return []; const kids = strip(n.kids); return n.kids.length && !kids.length ? [] : [{ ...n, kids }]; }), bare = strip(tree);
         const links: { name: string; n: number; is: string }[] = []; const walk = (ns: Tree[], path: string[]) => { for (const n of ns) { if (n.kind === 'link') links.push({ name: [...path, n.name].join(' > '), n: n.n, is: n.is }); else walk(n.kids, [...path, n.name]); } }; walk(tree, []);
         const units = bare.flatMap((n) => { const subs = n.kids.filter((k) => k.kids.length), loose = n.kids.filter((k) => !k.kids.length);
-          return subs.length ? [...subs.map((k) => ({ path: [n.name, k.name], is: k.is, parts: k.kids })), ...(loose.length ? [{ path: [n.name], is: n.is, parts: loose }] : [])] : [{ path: [n.name], is: n.is, parts: n.kids.length ? n.kids : [n] }]; }).slice(0, 48);
+          return subs.length ? [...subs.map((k) => ({ path: [n.name, k.name], is: k.is, parts: k.kids })), ...(loose.length ? [{ path: [n.name], is: n.is, parts: loose }] : [])] : [{ path: [n.name], is: n.is, parts: n.kids.length ? n.kids : [n] }]; })
+          // (no call writes more than ten parts' rows: a long reply is what takes the time, and the calls run side by side)
+          .flatMap((u) => { const n = Math.ceil(u.parts.length / 10); return n <= 1 ? [{ ...u, of: '' }] : Array.from({ length: n }, (_x, k) => ({ ...u, parts: u.parts.slice(k * 10, k * 10 + 10), of: ` (${k + 1} of ${n})` })); }).slice(0, 64);
+        const bodyCol = String(sz.body ?? '#c8a200'); let lastShown = 0; const soFar: Record<string, unknown>[] = [];
         const placed = await pooled(units, async (u) => { const nm = u.path.join(' > '); try {
-          const r = firstJson(await tcall('placer', nm, `${PLACER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${livery}\nEvery subsystem's zone:\n${zoneText}\n${pivotText}\nYour branch: ${nm} (${u.is}), inside the zone of ${u.path[0]}. Its parts:\n${lines1(u.parts, 0).join('\n').slice(0, 2000)}`), `placer (${nm})`) as { rows?: unknown }; mark(u.parts, u.parts.length === 1 && u.parts[0]!.name === u.path[u.path.length - 1] ? u.path.slice(0, -1) : u.path, Array.isArray(r.rows) && r.rows.length ? 'placed' : 'failed'); showTree();
-          return (Array.isArray(r.rows) ? r.rows as Row[] : []).filter(Array.isArray).slice(0, 40).map((x): Record<string, unknown> => (x[1] === 'beam' || x[1] === 'bar'
+          const r = firstJson(await tcall('placer', `${nm}${u.of}`, `${PLACER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\n${livery}\nEvery subsystem's zone:\n${zoneText}\n${pivotText}\nYour branch: ${nm} (${u.is}), inside the zone of ${u.path[0]}. Its parts:\n${lines1(u.parts, 0).join('\n').slice(0, 2000)}`), `placer (${nm})`) as { rows?: unknown }; mark(u.parts, u.parts.length === 1 && u.parts[0]!.name === u.path[u.path.length - 1] ? u.path.slice(0, -1) : u.path, Array.isArray(r.rows) && r.rows.length ? 'placed' : 'failed'); showTree();
+          const one1 = (x: Row): Record<string, unknown> => (x[1] === 'beam' || x[1] === 'bar'
             ? (() => { const p1 = [Number(x[3]), Number(x[4]), Number(x[5])], p2 = [Number(x[6]), Number(x[7]), Number(x[8])], len = Math.hypot(p2[0]! - p1[0]!, p2[1]! - p1[1]!, p2[2]! - p1[2]!), dp = Math.abs(Number(x[2])) || len / 10, wd = Math.abs(Number(x[11])) || dp;
                 return [...p1, ...p2].every(Number.isFinite) && len > 5 ? { name: `${nm} > ${kindOf(x[0]).name}`, kind: kindOf(x[0]).kind, span: [p1, p2], thick: [dp, wd], ends: true, shape: x[1] === 'bar' ? 'rod' : 'box', size: [dp, len, wd], at: [(p1[0]! + p2[0]!) / 2, (p1[1]! + p2[1]!) / 2, (p1[2]! + p2[2]!) / 2], mat: x[9], color: x[10], rot: [0, 0, 0] } : { name: `${nm} > ${String(x[0])}`, shape: 'box', size: [1, 1, 1], at: [0, 0, 0], skip: true }; })()
             : x[0] === 'use'
             ? { use: String(x[1]), name: `${nm} > ${String(x[2])}`, size: [x[3], x[4], x[5]], at: [x[6], x[7], x[8]], rot: [x[9] ?? 0, x[10] ?? 0, x[11] ?? 0] }
-            : { name: `${nm} > ${kindOf(x[0]).name}`, kind: kindOf(x[0]).kind, shape: x[1], axis: x[2], size: [x[3], x[4], x[5]], at: [x[6], x[7], x[8]], mat: x[9], color: x[10], rot: [x[11] ?? 0, x[12] ?? 0, x[13] ?? 0] }));
+            : { name: `${nm} > ${kindOf(x[0]).name}`, kind: kindOf(x[0]).kind, shape: x[1], axis: x[2], size: [x[3], x[4], x[5]], at: [x[6], x[7], x[8]], mat: x[9], color: x[10], rot: [x[11] ?? 0, x[12] ?? 0, x[13] ?? 0] });
+          // (a row ["=", count, step x, step y, step z] repeats the solid before it: count in all, each a step further)
+          const out: Record<string, unknown>[] = [];
+          for (const x of (Array.isArray(r.rows) ? r.rows as Row[] : []).filter(Array.isArray).slice(0, 40)) {
+            if (x[0] === '=') { const prev = out[out.length - 1], cnt = Math.max(1, Math.min(60, Math.round(Number(x[1]) || 1))), st = [Number(x[2]) || 0, Number(x[3]) || 0, Number(x[4]) || 0]; if (!prev || prev.skip || cnt < 2) continue; const nm0 = String(prev.name); prev.name = `${nm0} 1`;
+              for (let i = 1; i < cnt; i++) out.push({ ...prev, name: `${nm0} ${i + 1}`, at: (prev.at as unknown[]).map((v, q) => Number(v) + st[q]! * i), ...(Array.isArray(prev.span) ? { span: (prev.span as number[][]).map((e) => e.map((v, q) => v + st[q]! * i)) } : {}) }); continue; }
+            const sol = one1(x); if (typeof sol.color !== 'string' || !sol.color) sol.color = bodyCol; if (typeof sol.mat !== 'string' || !sol.mat) sol.mat = 'steel-low'; out.push(sol); }
+          // (what is placed so far is shown as it comes, no more often than every four seconds: plain solids, before the
+          // links, the library parts and the joints, which the finished build brings)
+          { const fin = (v: unknown) => Array.isArray(v) && [0, 1, 2].every((q) => v[q] !== null && v[q] !== '' && Number.isFinite(Number(v[q]))); soFar.push(...out.filter((x) => !x.skip && fin(x.size) && fin(x.at) && (x.size as unknown[]).every((v) => Math.abs(Number(v)) >= 1)).map((x) => { const { kind: _k, ...d } = x; return d; }));
+            if (o.onStep && soFar.length && Date.now() - lastShown > 4000) { lastShown = Date.now(); const pb = emptyBoard(request.slice(0, 80)); placeBlock(pb, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify(soFar.slice(0, 600)) }, 'layout'); placeBlock(pb, 'space.show', 330, 0, {}, 'show'); wire(pb, 'layout', 'thing', 'show', 'thing'); board = pb; say('features', `shown so far: ${soFar.length} solids`); } }
+          return out;
         } catch (e) { mark(u.parts, u.parts.length === 1 && u.parts[0]!.name === u.path[u.path.length - 1] ? u.path.slice(0, -1) : u.path, 'failed'); showTree(); say('features', `placer (${nm}): ${(e as Error).message.slice(0, 100)}`, false); return []; } });
         // (a row whose size or place is not three numbers is left out, and said: one bad row must not lose the whole machine)
         { const all = placed.flat().filter((x) => !x.skip), fin = (v: unknown) => Array.isArray(v) && [0, 1, 2].every((k) => v[k] !== null && v[k] !== '' && Number.isFinite(Number(v[k])));
@@ -1554,13 +1586,19 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         solids = (Array.isArray(lo.solids) ? lo.solids.slice(0, 200) : []).map((r) => (Array.isArray(r) ? { name: r[0], shape: r[1], axis: r[2], size: [r[3], r[4], r[5]], at: [r[6], r[7], r[8]], mat: r[9], color: r[10], rot: [r[11] ?? 0, r[12] ?? 0, r[13] ?? 0] } : r)); if (!solids.length) throw new Error('no solids in the reply'); }
       // (a row of a kind becomes that kind's library part; where the part cannot be made to fit, the row stays as drawn)
       for (const x of solids) { const id = typeof x.kind === 'string' ? KINDS[x.kind] : undefined; if (id && LIBRARY.has(id) && x.use === undefined && !(Array.isArray(x.span) && Array.isArray(x.thick))) x.use = id; }
-      { let poor = 0; const misfit: string[] = []; for (const x of solids) { if (typeof x.use !== 'string') continue; const target = (x.size as unknown[]).map((v) => Math.abs(Number(v)));
+      const tApp = Date.now();
+      { let poor = 0, late = 0; const misfit: string[] = []; for (const x of solids) { if (typeof x.use !== 'string') continue;
+          // (ten seconds for fitting in all: what is left after that stays as drawn, and is said)
+          if (Date.now() - tApp > 10_000) { late++; delete x.use; if (typeof x.shape !== 'string') { x.shape = 'box'; x.axis = 'y'; } continue; }
+          const target = (x.size as unknown[]).map((v) => Math.abs(Number(v)));
           const spanLen = Array.isArray(x.span) ? Math.max(...target) : 0, f = LIBRARY.has(x.use) ? await fitTool(x.use, target, spanLen || undefined) : undefined;
           // (within about a third on each side, summed: else the part is not the thing for that place, and a box stands in)
           if (f && f.err < 1.2 && (!spanLen || Math.abs(Math.max(...f.dims) / spanLen - 1) < 0.08)) { x.set = f.set; x.pre = f.pre; } else { poor++; misfit.push(`${String(x.use)} asked ${target.map((v: number) => Math.round(v)).join('x')} nearest ${f ? f.dims.map((v) => Math.round(v)).join('x') : 'none'}`); delete x.use; if (typeof x.shape !== 'string') { x.shape = spanLen ? 'rod' : 'box'; x.axis = 'y'; x.mat = 'steel-low'; x.color = '#8a8f98'; } } }
+        if (late) say('features', `${late} library part${late === 1 ? '' : 's'} left as drawn: fitting had used its ten seconds`, false);
         if (poor) say('features', `${poor} library part${poor === 1 ? '' : 's'} could not be made the size asked and stay as drawn (${misfit.slice(0, 3).join('; ')})`, false); }
       // (nothing is below the ground: a foot or a member's end given under y = 0 is brought up to it)
       for (const x of solids) { if (Array.isArray(x.span)) { for (const e of x.span as number[][]) if (e[1]! < 0) e[1] = 0; } else if (Array.isArray(x.at) && Number(x.at[1]) < 0) (x.at as unknown[])[1] = 0; }
+      const tFit = Date.now();
       // (every part connects to another: small things given standing clear of everything are moved to touch what is nearest;
       // the big parts are held by their pivots and are not moved here)
       { const mv2 = connectParts(solids, { small: 0.05 }); if (mv2) say('features', `${mv2} part${mv2 === 1 ? ' was' : 's were'} touching nothing and moved to touch the nearest part`); }
@@ -1602,6 +1640,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
           if (moved) say('features', `${moved} bod${moved === 1 ? 'y was' : 'ies were'} off its pin and moved onto it`); }
         say('features', `movement: ${used2.size} bod${used2.size === 1 ? 'y' : 'ies'}, ${pivotsOut.length} pin joint${pivotsOut.length === 1 ? '' : 's'} (${pivotsOut.slice(0, 6).map((q) => String(q.name)).join(', ')})`, pivotsOut.length > 0); }
       for (const x of solids) delete x.rides;
+      const tLay = Date.now();
       let b = emptyBoard(request.slice(0, 80)), st: ReturnType<Engine['state']['get']>, used = 0;
       for (let pass = 0; pass < 2; pass++) { b = emptyBoard(request.slice(0, 80));
         const tools = solids.filter((x) => typeof x.use === 'string' && LIBRARY.has(String(x.use))).slice(0, 120), drawn = solids.filter((x) => x.use === undefined);
@@ -1615,7 +1654,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         solids = solids.filter((x) => !bad.includes(x)); }
       if (used) say('features', `${used} real library part${used === 1 ? '' : 's'} placed`);
       if (st?.status !== 'ok') throw new Error(String(st?.error ?? 'the layout did not build').slice(0, 160));
-      skeleton = b; board = b; say('features', `laid out as ${solids.length} solids`);
+      skeleton = b; board = b; say('features', `laid out as ${solids.length} solids (the app's own work: fitting library parts ${((tFit - tApp) / 1000).toFixed(1)} s, connecting and bodies ${((tLay - tFit) / 1000).toFixed(1)} s, laying out ${((Date.now() - tLay) / 1000).toFixed(1)} s)`);
       return done1(`Built: ${solids.length} solids${tree.length ? ` in ${tree.length} subsystems (${tree.map((n) => n.name).join(', ')})` : ''}. A model of plain solids placed as on the real thing: not yet real engineered parts.`); }
     catch (e) { say('features', `no layout: ${(e as Error).message.slice(0, 160)}`, false); }
   }
@@ -1840,7 +1879,13 @@ export function sdkAsk(o: { model?: string; signal?: AbortSignal; tokens?: Agent
       if (!use || !use.input || typeof use.input !== 'object') throw new FormatError(format.name, `no ${format.name} in the reply (stop: ${rf.stop_reason})`);
       return use.input as Record<string, unknown>;
     }
-    const r = await client.messages.create({ model: o.model ?? AGENT_MODEL, max_tokens: 12_000, ...(head ? { system: cachedSystem(head) } : {}), output_config: { effort: tier === 'quick' ? 'low' : 'medium' }, messages: [{ role: 'user', content: images?.length ? [...images.map((png) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/png' as const, data: Buffer.from(png).toString('base64') } })), { type: 'text' as const, text: tail }] : tail }] }, { signal: o.signal ?? AbortSignal.timeout(90_000) });
+    // (the model reasons before it answers unless told not to. Measured 2026-11-10 on an excavator: with its reasoning off
+    // everywhere a build's calls took 26 s where they had taken 99 s, and what it built was wrong (no tracks, a slab for a
+    // body, a part's joins without their bolts): the stages that give sizes and places need it. So it is off only for the
+    // decomposers, which write a list of names; on the models that allow it at this effort (the claude-api skill, read
+    // 2026-11-10: Haiku 5.5 and Opus 5 at high or below, Opus 4.8 and 4.7, Sonnet 5))
+    const model0 = o.model ?? AGENT_MODEL, noThink = tier === 'quick' && /^## Here: (DEEP )?DECOMPOSER/m.test(head) && /(haiku-5-5|opus-5$|opus-4-[78]|sonnet-5$)/.test(model0);
+    const r = await client.messages.create({ model: model0, max_tokens: 12_000, ...(head ? { system: cachedSystem(head) } : {}), ...(noThink ? { thinking: { type: 'disabled' as const } } : {}), output_config: { effort: tier === 'quick' ? 'low' : 'medium' }, messages: [{ role: 'user', content: images?.length ? [...images.map((png) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/png' as const, data: Buffer.from(png).toString('base64') } })), { type: 'text' as const, text: tail }] : tail }] }, { signal: o.signal ?? AbortSignal.timeout(90_000) });
     if (o.tokens) { o.tokens.in += r.usage.input_tokens; o.tokens.out += r.usage.output_tokens; o.tokens.cached += r.usage.cache_read_input_tokens ?? 0; o.tokens.written += r.usage.cache_creation_input_tokens ?? 0; }
     const turn = turnOf(r); return turn.ends ? turn.answer : '';
   };
