@@ -664,8 +664,9 @@ export function motionOf(b: Block): Motion {
     const root = [...driven].sort((p, q) => (Math.abs(low[p]! - low[q]!) > tol ? low[p]! - low[q]! : ground[q]! !== ground[p]! ? ground[q]! - ground[p]! : mass[q]! - mass[p]!))[0]!;
     for (const k of driven) { const j = joints.find((x) => x.a === k && x.motor) ?? joints.find((x) => x.b === k && x.motor); bodies[k]!.frozen = k === root; bodies[k]!.why = k === root ? 'held: what it stands on (its lowest), its motors holding the rest' : j ? `loose: held by its ${j.motor!.kind}` : 'loose: on its joints'; } }
   // (a laid-out machine: only what it stands on is held; every other body is loose on its joints, a cylinder's barrel and
-  // rod among them, which no motor holds and which follow the joint they span)
-  if (b.faces.some((f) => f.by.startsWith('layout pivot'))) { const held = bodies.findIndex((x) => x.frozen && x.why.startsWith('held: what it stands on')); if (held >= 0) bodies.forEach((x, k) => { if (k !== held && x.frozen && joints.some((j) => j.a === k || j.b === k)) { x.frozen = false; x.why = 'loose: on its joints'; } }); }
+  // rod among them, which no motor holds and which follow the joint they span; a body joined to nothing (a second thing
+  // beside it, a load lying on it) is loose too, and stays where it is by its weight)
+  if (b.faces.some((f) => f.by.startsWith('layout pivot'))) { const held = bodies.findIndex((x) => x.frozen && x.why.startsWith('held: what it stands on')); if (held >= 0) bodies.forEach((x, k) => { if (k !== held && x.frozen) { const jn = joints.some((j) => j.a === k || j.b === k); x.frozen = false; x.why = jn ? 'loose: on its joints' : 'loose: a separate thing, joined to nothing: it stands or lies there by its weight'; } }); }
   const meshes: MoveMesh[] = [], gears = b.pieces.map((p) => gearOf(p));
   for (let i = 0; i < n; i++) for (let k = i + 1; k < n; k++) { const A = gears[i], B = gears[k]; if (!A || !B || Math.abs(A.m - B.m) > 1e-9 || find(i) === find(k)) continue;
     const d = Math.hypot(A.at[0] - B.at[0], A.at[1] - B.at[1]), a0 = (A.m * (A.z + B.z)) / 2;
