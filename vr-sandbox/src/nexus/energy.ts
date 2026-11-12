@@ -73,6 +73,6 @@ export function energyOf(partsIn: readonly { name: string; kind: string }[], fee
     for (let hop = 0; hop < 20; hop++) { const f = feeds.find((x) => x.to === cur.name && !seen.has(x.from)); if (!f) break; const g = find(f.from)!; chain.push(`${f.by}${f.called ? '*' : ''}`, g.name); seen.add(g.name); cur = g; if (K(g).role === 'store') { closed = true; break; } }
     chains.push(chain); if (!closed) unmet.push(`${p.name}: its energy does not reach back to anything that holds energy (${chain.join(' < ')})`); }
   const n = (k: Role) => parts.filter((q) => K(q).role === k).length;
-  const says = `energy: ${n('actuator')} thing${n('actuator') === 1 ? '' : 's'} worked by it, ${n('control')} control${n('control') === 1 ? '' : 's'}, ${n('converter')} converter${n('converter') === 1 ? '' : 's'}, ${n('store')} store${n('store') === 1 ? '' : 's'}, joined by ${feeds.length} conductor${feeds.length === 1 ? '' : 's'}; ${called.length} called for by rule and not yet in the machine as solids, ${unmet.length} unmet`;
+  const says = `energy: ${n('actuator')} thing${n('actuator') === 1 ? '' : 's'} worked by it, ${n('control')} control${n('control') === 1 ? '' : 's'}, ${n('converter')} converter${n('converter') === 1 ? '' : 's'}, ${n('store')} store${n('store') === 1 ? '' : 's'}, joined by ${feeds.length} conductor${feeds.length === 1 ? '' : 's'}; ${called.length} called for by rule, ${unmet.length} unmet`;
   return { parts, feeds, chains, called, unmet, says };
 }
