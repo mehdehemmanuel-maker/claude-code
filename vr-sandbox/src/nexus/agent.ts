@@ -961,6 +961,22 @@ Reply with one JSON object and nothing else, compact: {"pieces":[[name, shape, a
 /** Build the assembly at `path` of a tree from its own pieces (it must have been taken apart): one call for it and one for
  *  each assembly under it, each given the box its parent gave it. The rough solids named under the path leave the board's
  *  layout and the built pieces take their place, of the same body, so what moved still moves. Sixty calls a press. */
+/** A part KEPT by the person (the user, 2026-11-12: nothing flawed is reused, so nothing is kept by itself: a part is
+ *  built down to its pieces, looked at and moved, and only then kept, by a press). It is the part's own pieces as they
+ *  stood, measured from the low corner of the box they fill, with that box's size. A later build that has a main part of
+ *  the same name puts these pieces in its place, scaled to the size asked, with no call. */
+export interface KeptPart { name: string; box: number[]; rows: Record<string, unknown>[] }
+/** The pieces standing in a board's layout for the part named, as a kept part; null where it is not built from its own. */
+export function keptFrom(board: Board, name: string): KeptPart | null {
+  const lay = board.nodes.layout; if (!lay || lay.block !== 'room.layout') return null; type Sol = Record<string, unknown>; const N3 = (v: unknown) => [0, 1, 2].map((k) => Number((v as unknown[])?.[k]) || 0);
+  let all: Sol[] = []; try { all = (JSON.parse(String(lay.set?.boxes ?? '[]')) as Sol[]).map((r) => { if (r.in === undefined) return r; const tn = board.nodes[`t${String(r.in).padStart(3, '0')}`], { in: _i, ...rest } = r; return { ...rest, use: tn?.block, set: tn?.set ?? {} }; }); } catch { return null; }
+  const q = name.trim().toLowerCase(), mine = all.filter((x) => String(x.name).toLowerCase().startsWith(`${q} > `)); if (mine.length < 2) return null;
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const x of mine) { const pts = Array.isArray(x.span) ? (x.span as number[][]) : (() => { const a = N3(x.at), z = N3(x.size).map(Math.abs); return [[a[0]! - z[0]! / 2, a[1]!, a[2]! - z[2]! / 2], [a[0]! + z[0]! / 2, a[1]! + z[1]!, a[2]! + z[2]! / 2]]; })(); for (const p of pts) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k]!, p[k]!); hi[k] = Math.max(hi[k]!, p[k]!); } }
+  const box = hi.map((v, k) => v - lo[k]!); if (!box.every((v) => v > 0.5)) return null;
+  const rows = mine.map((x) => { const { body: _b, name: nm, ...d } = x, out: Sol = { ...d, name: String(nm).slice(name.trim().length + 3) }; if (Array.isArray(x.span)) out.span = (x.span as number[][]).map((e) => e.map((v, k) => v - lo[k]!)); out.at = N3(x.at).map((v, k) => v - lo[k]!); return out; });
+  return { name: name.trim(), box, rows };
+}
 export async function buildDeep(request: string, tree: PipeNode[], path: string[] | string[][], board: Board, o: { ask: Ask; onPipe?: (e: PipeEvent | { tree: PipeNode[] }) => void; maxCalls?: number; idFrom?: number;
   /** the model as it stands each time one of the parts asked for is finished: its real pieces in, the parts not yet built
    *  still as their rough solids (library parts drawn plain until the end) */ onBoard?: (b: Board, done: string) => void; /** each main part's interfaces with the parts round it, by its name in lower case: fixed before it is designed */ contracts?: Record<string, string[]>; /** advanced: every library part fitted, however many */ noCap?: boolean }): Promise<{ board: Board; calls: number; pieces: number; real: number; says: string }> {
@@ -1321,6 +1337,7 @@ export async function composeBuild(request: string, o: { ask: Ask; board?: Board
   /** the recognition list written before the split (one call more); on where `look` is given, unless said */ features?: boolean;
   /** a layout skeleton first (one call more): the whole as plain solids at places, shown at once, and kept as the build where the parts' build leaves something unmet */ skeleton?: boolean;
   /** ADVANCED (the user, 2026-11-12: "each part to be built separately in advanced mode down to its bolts"): NO CAP (the user, 2026-11-12: "on advanced there needs to be no cap and go through and just upgrade everything"): every system is split until only parts are left, every assembly is built from its own pieces, every library part is fitted and every conductor run, however many. The one stop left is twelve levels of splitting: a thing that is still called a system twelve levels down is a reply going round in a circle, not a machine. Many more calls, so it is asked for, never the default */ advanced?: boolean;
+  /** parts the person has kept: a main part of the same name is made of these, to the size asked, with no call */ kept?: KeptPart[];
   /** every call answers in one closed format (stages.ts FORMATS), forced where the model is called and read from the tool's input, never text; a graph reply is checked by the wall (applyGraph) before it is a plan, returned once with what is wrong; the app turns it on, a test with a scripted text ask leaves it off */ formats?: boolean;
   /** the wall-clock budget, ms (default 240 000): when it is spent the run asks nothing more, returns what it has and says in unmet what was not reached */ budgetMs?: number }): Promise<ComposeRun> {
   const { starterBoards } = await import('./starters'), steps: ComposeStep[] = [], plans: AgentPlan[] = [], unmet: string[] = [], remembered: string[] = [], recalled: string[] = [], missing: string[] = [];
@@ -1738,6 +1755,18 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         catch (e) { say('features', `energy: ${(e as Error).message.slice(0, 140)}`, false); return null; } })();
       let pre: Awaited<ReturnType<typeof assemble>> | null = null;
       if (tree.length) { try { pre = await assemble(); solids = pre.solids;
+          // (KEPT PARTS: a main part the person has kept under this name is not designed again. Its kept pieces take the
+          // rough box's place, each scaled along x, y and z by the size asked over the size kept (a member's thickness by
+          // the mean of the three), and it is taken off the list of parts to build: no call is made for it. A part asked
+          // for at very different proportions comes out stretched, and how far it was scaled is said)
+          if (o.kept?.length) { const lcK = (v: unknown) => String(v ?? '').trim().toLowerCase(), N3k = (v: unknown) => [0, 1, 2].map((k) => Number((v as unknown[])?.[k]) || 0), used: string[] = [];
+            for (const K of o.kept) { const idx = pre.solids.findIndex((x) => !Array.isArray(x.span) && x.shape === 'box' && lcK(x.name) === lcK(K.name)); if (idx < 0 || !Array.isArray(K.rows) || !K.rows.length || !Array.isArray(K.box)) continue;
+              const rough = pre.solids[idx]!, a = N3k(rough.at), z = N3k(rough.size).map(Math.abs), lo = [a[0]! - z[0]! / 2, a[1]!, a[2]! - z[2]! / 2], s = [0, 1, 2].map((k) => z[k]! / Math.max(1e-6, Number(K.box[k]) || 1)), g = Math.cbrt(s[0]! * s[1]! * s[2]!);
+              const rows = K.rows.map((r) => { const out: Record<string, unknown> = { ...r, name: `${String(rough.name)} > ${String(r.name)}`, body: rough.body };
+                if (Array.isArray(r.span)) { const sp = (r.span as number[][]).map((e) => e.map((v, k) => lo[k]! + v * s[k]!)); out.span = sp; out.thick = Array.isArray(r.thick) ? (r.thick as number[]).map((v) => Number(v) * g) : Number(r.thick) * g; out.at = [0, 1, 2].map((k) => (sp[0]![k]! + sp[1]![k]!) / 2); out.size = N3k(r.size).map((v) => v * g); }
+                else { out.at = N3k(r.at).map((v, k) => lo[k]! + v * s[k]!); out.size = N3k(r.size).map((v, k) => v * s[k]!); } return out; });
+              pre.solids.splice(idx, 1, ...rows); pre.paths = pre.paths.filter((p) => lcK(p[0]) !== lcK(K.name)); used.push(`${K.name} (${rows.length} pieces, scaled ${s.map((v) => v.toFixed(2)).join(' x ')})`); }
+            if (used.length) say('features', `kept parts used, no call made for them: ${used.join('; ')}`.slice(0, 700)); }
           // (SEEN AS IT IS BUILT (the user, 2026-11-12: "I wanna see the building process in 3d real not mock"): the main
           // parts stand in the view the moment they are joined, as the solids they really are at that point)
           if (o.onStep) { const pb = emptyBoard(request.slice(0, 80)); placeBlock(pb, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify(solids.map((x) => { const { use: _u, kind: _k, ...d } = x; return d; })), pivots: JSON.stringify(pre.pivots), slides: JSON.stringify(pre.slides) }, 'layout'); placeBlock(pb, 'space.show', 330, 0, {}, 'show'); wire(pb, 'layout', 'thing', 'show', 'thing'); board = pb; say('features', `in the view now: the ${solids.length} main solids, joined; their own pieces follow`); } } catch (e) { say('features', `assembler: ${(e as Error).message.slice(0, 140)}; placed by the older stages instead`, false); } }

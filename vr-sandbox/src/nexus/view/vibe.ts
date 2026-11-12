@@ -26,7 +26,7 @@ import { starterBoards } from '../starters';
 import { boundsOfAll, isAssembly, isPart, massOfAll, placedCount } from '../assembly';
 import { LIBRARY, block, defaultsOf, portsOf, register, show, type BlockDef, type SettingDef } from '../blocks';
 import { DENSITY } from '../mass';
-import { TOOLS, boardBrief, buildDeep, composeBuild, decomposeDeep, gateOf, guideOf, isCompound, joinPlan, nearMissesView, planOf, planRequest, runPlan, setGuideMd, toolsFor, type AgentBlock, type AgentPlan, type AgentRun, type ComposeRun, type ComposeStep, type PipeEvent, type PipeNode, type PlanRan, type PlanRun } from '../agent';
+import { TOOLS, boardBrief, buildDeep, composeBuild, decomposeDeep, keptFrom, type KeptPart, gateOf, guideOf, isCompound, joinPlan, nearMissesView, planOf, planRequest, runPlan, setGuideMd, toolsFor, type AgentBlock, type AgentPlan, type AgentRun, type ComposeRun, type ComposeStep, type PipeEvent, type PipeNode, type PlanRan, type PlanRun } from '../agent';
 import GUIDE_MD from '../../../docs/FOR-AI.md?raw';
 import { aiHere, askClaude, askForKey, inViewer, keyHere, sendReport, whyNot, type Report } from './viewer';
 // (the guide bundled, for the page on claude.ai, which builds Assist's call itself: decision 0027)
@@ -209,7 +209,7 @@ function pipeHtml(events: PipeEvent[], tree: PipeNode[], key: string): string {
   const anyLeaf = (n: PipeNode): boolean => !!n.leaf || n.kids.some(anyLeaf), build = (path: string[]) => (live ? ` <button class="dt bd" data-build="${esc(JSON.stringify([key, path]))}"${deepBusy ? ' disabled' : ''}>Build it</button>` : '');
   const badge = (n: PipeNode) => (n.built ? '<span class="ns placed">built</span>' : n.leaf === 'piece' ? '<span class="ns placed">one piece</span>' : n.leaf === 'bought' ? '<span class="ns placed">bought part</span>' : n.leaf === 'failed' ? '<span class="ns failed">not split</span>' : `<span class="ns ${n.state}">${NODE_SAYS[n.state]}</span>`);
   const open1 = (n: PipeNode): boolean => n.kind !== 'link' && n.leaf !== 'piece' && n.leaf !== 'bought' && (n.kids.length ? n.kids.some(open1) : true);
-  const node = (n: PipeNode, path: string): string => { const k = `${key}:t:${path}${n.name}`, here = [...(path ? path.slice(0, -3).split(' > ') : []), n.name], line = `<span class="nm" data-focus="${esc(n.name)}">${esc(n.name)}</span>${n.n > 1 ? ` ×${n.n}` : ''} <span class="kd">${esc(n.kind)}</span> ${badge(n)}${open1(n) ? apart(here, 'Take apart') : ''}${n.kids.length && !n.built && n.kids.some(anyLeaf) ? build(here) : ''}`;
+  const node = (n: PipeNode, path: string): string => { const k = `${key}:t:${path}${n.name}`, here = [...(path ? path.slice(0, -3).split(' > ') : []), n.name], line = `<span class="nm" data-focus="${esc(n.name)}">${esc(n.name)}</span>${n.n > 1 ? ` ×${n.n}` : ''} <span class="kd">${esc(n.kind)}</span> ${badge(n)}${open1(n) ? apart(here, 'Take apart') : ''}${n.kids.length && !n.built && n.kids.some(anyLeaf) ? build(here) : ''}${n.built && here.length === 1 ? ` <button class="dt kp" data-keep="${esc(n.name)}" title="Keep this part as it is built now: a later build with a part of this name uses these pieces, sized to fit, with no AI call. Keep only what you have looked at and are happy with">${keptParts().some((k) => k.name.toLowerCase() === n.name.toLowerCase()) ? 'Kept ✓' : 'Keep'}</button>` : ''}`;
     return n.kids.length ? det(k, 'pn', `${line} <span class="kd">${all(n.kids, 1)} pieces</span>`, `<div class="is">${esc(n.is)}</div>${n.kids.map((c) => node(c, `${path}${n.name} > `)).join('')}`) : `<div class="pl">${line}${n.is ? `<div class="is">${esc(n.is)}</div>` : ''}</div>`; };
   const calls = events.filter((e) => e.stage !== 'app'), tok = Math.round(calls.reduce((t, e) => t + (e.rule?.length ?? 0) + (e.sent?.length ?? 0) + (e.got?.length ?? 0), 0) / 4);
   const row = (e: PipeEvent): string => e.stage === 'app' ? `<div class="pa ${e.state}">${PIPE_ICON[e.state]} ${esc(e.label)}</div>`
@@ -219,6 +219,12 @@ function pipeHtml(events: PipeEvent[], tree: PipeNode[], key: string): string {
   return `<div class="pipe"><div class="ph">Pipeline · ${calls.length} call${calls.length === 1 ? '' : 's'}${calls.some((e) => e.state === 'run') ? ` · ${calls.filter((e) => e.state === 'run').length} running` : ''} · ≈${tok} tokens (estimated)</div>${tree.length ? det(`${key}:tree`, 'pt', `What it is made of · ${count(tree)} kinds of part, ${all(tree, 1)} pieces in all${tree.some(open1) ? apart([], 'Take everything apart') : ''}`, `<div class="is">Tap a name to find it in the view. "Take apart" splits a part down to its single pieces and bought parts, bolts included: names and counts for now, a few seconds and some tokens a press.</div>${tree.map((n) => node(n, '')).join('')}`) : ''}${events.map(row).join('')}</div>`;
 }
 $('msgs').addEventListener('toggle', (ev) => { const d = ev.target as HTMLDetailsElement, k = d?.dataset?.k; if (!k) return; const had = pipeOpen.has(k); if (d.open) pipeOpen.add(k); else pipeOpen.delete(k); if (d.open !== had) { pipeRuns.get(k.split(':')[0]!)?.render(); drawChat(); } }, true);
+// (KEEP: the part as it stands in the model now, kept under its name on this device; nothing is kept without this press)
+function keptParts(): KeptPart[] { try { const v = JSON.parse(localStorage.getItem('nexus.kept') ?? '[]') as KeptPart[]; return Array.isArray(v) ? v : []; } catch { return []; } }
+$('msgs').addEventListener('click', (ev) => { const d = (ev.target as HTMLElement).closest?.('[data-keep]') as HTMLElement | null; if (!d) return; ev.preventDefault(); ev.stopPropagation();
+  const nm = d.dataset.keep!, k = keptFrom(board, nm); if (!k) { say(`${nm}: it is not built from its own pieces in the model shown, so there is nothing to keep yet.`, true); return; }
+  try { localStorage.setItem('nexus.kept', JSON.stringify([...keptParts().filter((x) => x.name.toLowerCase() !== nm.toLowerCase()), k])); d.textContent = 'Kept ✓'; say(`Kept: ${nm}, ${k.rows.length} pieces. A later build with a part of this name uses it, sized to fit, with no AI call.`); }
+  catch (e) { say(`${nm} could not be kept: ${(e as Error).message}`, true); } });
 $('msgs').addEventListener('click', (ev) => { const d = (ev.target as HTMLElement).closest?.('[data-build]') as HTMLElement | null; if (!d) return; ev.preventDefault(); ev.stopPropagation();
   const [key, path] = JSON.parse(d.dataset.build!) as [string, string[]], run = pipeRuns.get(key); if (!run || deepBusy || busy) return; void buildApart(run, key, path); });
 /** A node that has been taken apart, built from its own pieces in place of its rough solids (buildDeep); the board that
@@ -567,9 +573,9 @@ async function composeShown(q: string, why: string): Promise<void> {
   const tick = window.setInterval(paint, 1000); paint();
   try {
     let done: ComposeRun & { tokens?: Tok };
-    if (aiHere()) done = await composeBuild(q.trim(), { features: true, skeleton: true, advanced, ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: savedBlocks(), onStep: (s, b) => heard(s, structuredClone(b)), onPipe: heardPipe });
+    if (aiHere()) done = await composeBuild(q.trim(), { features: true, skeleton: true, advanced, kept: keptParts(), ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: savedBlocks(), onStep: (s, b) => heard(s, structuredClone(b)), onPipe: heardPipe });
     else {
-      const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'compose', request: q.trim(), blocks: savedBlocks(), advanced }) });
+      const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'compose', request: q.trim(), blocks: savedBlocks(), advanced, kept: keptParts() }) });
       if (res.status === 404 || res.status === 405) throw new Error('tap the key button (🔑) and paste your Anthropic API key to build with Claude here: this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand works without it; to build with Claude, open the app the session serves (npm run app), or the page on claude.ai.');
       if (!res.ok || !res.body) throw new Error(`the relay answered ${res.status}`);
       const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', got: (ComposeRun & { tokens?: Tok }) | null = null;
