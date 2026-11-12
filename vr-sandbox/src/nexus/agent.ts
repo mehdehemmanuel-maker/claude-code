@@ -23,6 +23,7 @@ import { alternatives, badConnections, compatible, interference, missingInterfac
 import type { Block } from './room';
 import { turnOf as roomTurnOf } from './room';
 import { CONDUCTORS, ENERGY_KINDS, energyOf } from './energy';
+import { cylinder as smartCylinder } from './smart';
 import { FORMATS, FormatError, SPLIT_STAGE_RULE, applyGraph, graphOf, newReplies, replyOf, sizeFits, sizeKeys, sizeLine, type Format, type Graph, type Replies } from './stages';
 import { REQUIRE_RULE, engineeringOf, marginLine, needsLine, needsOf, qty, requirementLine, requirementLines, requirementsOf, settingsForNeeds, type Engineering, type Needs, type Requirement } from './lookat';
 import { FEATURE_RULE, LOOK_RULE, SEE_RULE, featureLine, longestOf, lookedOf, metres, recognitionLines, recognitionOf, sameFeature, sizeOff, type Feature, type Looked, type Recognition } from './lookat';
@@ -1674,7 +1675,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         // A stroke no real cylinder could have (its closed length less than the stroke and 2.2 of its bore: the barrel must
         // hold the whole rod, typical) is said, not hidden. Between two parts of one body it is a fixed strut. Mounts and
         // pins lie across the machine: a mechanism working in another plane is not made yet)
-        let nl = 0; const slides: Record<string, unknown>[] = [], linkSays: string[] = [];
+        let nl = 0; const slides: Record<string, unknown>[] = [], linkSays: string[] = [], smartSays: string[] = [];
         const outOf = (h: TP, face: string): number[] => { if (h.beam) { const d = [h.p2![0]! - h.p1![0]!, h.p2![1]! - h.p1![1]!], L = Math.hypot(d[0]!, d[1]!) || 1; return face === '-y' ? [d[1]! / L, -d[0]! / L, 0] : face === '+z' ? [0, 0, 1] : face === '-z' ? [0, 0, -1] : face === 'end' ? [d[0]! / L, d[1]! / L, 0] : [-d[1]! / L, d[0]! / L, 0]; } const f = FACES3[face] ?? [1, 1], n = [0, 0, 0]; n[f[0]] = f[1]; return n; };
         const turnZ = (p: number[], c: number[], deg: number): number[] => { const t = (deg * Math.PI) / 180, x = p[0]! - c[0]!, y = p[1]! - c[1]!; return [c[0]! + x * Math.cos(t) - y * Math.sin(t), c[1]! + x * Math.sin(t) + y * Math.cos(t), p[2]!]; };
         for (const x of rowsOf(r.links).slice(0, o.advanced ? Infinity : 40)) { const kn = kindOf(x[0]), A = find(x[1]), B = find(x[4]); if (!A || !B || !placed(A) || !placed(B)) { unmet.push(`${kn.name}: one of its two parts is not placed`); continue; }
@@ -1701,19 +1702,21 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
           if (!clears(h)) unmet.push(`${kn.name}: at some angle of its joint its line enters the ${A.name} or the ${B.name}, whatever the height of its mounts up to 6 of its bores: its mounts are in the wrong place (as a solid it will be held off, and will bind)`);
           // (its two mounts: a lug from the surface out past the pin, on its part's own body)
           for (const [P0, n0, H, tag] of [[sA, nA, A, 'A'], [sB, nB, B, 'B']] as [number[], number[], TP, string][]) solids.push({ name: `${H.name} > ${kn.name} mount ${tag}`, span: [P0, P0.map((v, k) => v + n0[k]! * (h + 0.6 * t0))], thick: [1.3 * t0, 0.5 * t0], shape: 'box', size: [1.3 * t0, h + 0.6 * t0, 0.5 * t0], at: P0.map((v, k) => v + (n0[k]! * (h + 0.6 * t0)) / 2), mat: 'steel-low', color: bodyCol, rot: [0, 0, 0], body: H.body });
-          const u = [0, 1, 2].map((k) => (eB[k]! - eA[k]!) / L0), pv = pivots.find((q) => (q.a === A.body && q.b === B.body) || (q.a === B.body && q.b === A.body));
+          const pv = pivots.find((q) => (q.a === A.body && q.b === B.body) || (q.a === B.body && q.b === A.body));
           if (A.body === B.body || !pv || pv.axis !== 'z') { solids.push({ name: kn.name, span: [eA, eB], thick: t0, shape: 'rod', size: [t0, L0, t0], at: [0, 1, 2].map((k) => (eA[k]! + eB[k]!) / 2), mat: 'steel-low', color: '#3a3f47', rot: [0, 0, 0], body: A.body }); linkSays.push(`${kn.name}: a fixed strut ${Math.round(L0)} mm on its two mounts${A.body !== B.body ? ' (no joint across the machine lies between its two parts: it would lock them)' : ''}`); continue; }
           // (the distance between its pins over the joint's needed range, every 5°; 30° each way where no range was asked)
           const rg = (Array.isArray(pv.range) ? pv.range : [-30, 30]) as number[], kidIsB = pv.b === B.body, c = pv.at as number[]; let Lmin = L0, Lmax = L0;
           for (let a = Math.min(rg[0]!, 0); a <= Math.max(rg[1]!, 0) + 1e-9; a += 5) { const pa = kidIsB ? eA : turnZ(eA, c, a), pb = kidIsB ? turnZ(eB, c, a) : eB, L = Math.hypot(pb[0]! - pa[0]!, pb[1]! - pa[1]!, pb[2]! - pa[2]!); Lmin = Math.min(Lmin, L); Lmax = Math.max(Lmax, L); }
           const stroke = Lmax - Lmin, real = Lmin >= stroke + 2.2 * t0, Lb = Math.max(2 * t0, Lmin - t0), Lr = Math.min(stroke + 2 * t0, Math.max(t0, Lmin - 0.2 * t0)), bb = nb++, rb = nb++;
-          solids.push({ name: `${kn.name} barrel`, span: [eA, eA.map((v, k) => v + u[k]! * Lb)], thick: t0, shape: 'tube', size: [t0, Lb, t0], at: eA.map((v, k) => v + (u[k]! * Lb) / 2), mat: 'steel-low', color: '#3a3f47', rot: [0, 0, 0], body: bb });
-          solids.push({ name: `${kn.name} rod`, span: [eB.map((v, k) => v - u[k]! * Lr), eB], thick: 0.5 * t0, shape: 'rod', size: [0.5 * t0, Lr, 0.5 * t0], at: eB.map((v, k) => v - (u[k]! * Lr) / 2), mat: 'steel-low', color: '#c9d1d9', rot: [0, 0, 0], body: rb });
+          // (the cylinder itself is a SMART PART (smart.ts): its pieces, its travel, its bore, forces and ports come from its
+          // own definition, from the two pins and the stroke worked out here; no model is asked for any of it)
+          const sm = smartCylinder({ name: kn.name, eyeA: eA, eyeB: eB, od: t0, barrel: Lb, rod: Lr, closed: Lmin, open: Lmax, bodyBarrel: bb, bodyRod: rb }); solids.push(...sm.rows); smartSays.push(sm.says);
           pivots.push({ name: `${kn.name} pin A`, at: [...eA], axis: 'z', a: A.body, b: bb, d: Math.max(2, Math.round(0.45 * t0)), l: Math.max(2, Math.round(1.6 * t0)), range: [-170, 170], free: true }, { name: `${kn.name} pin B`, at: [...eB], axis: 'z', a: B.body, b: rb, d: Math.max(2, Math.round(0.45 * t0)), l: Math.max(2, Math.round(1.6 * t0)), range: [-170, 170], free: true });
-          slides.push({ rod: `${kn.name} rod`, a: bb, b: rb, range: [Math.round(L0 - Lmax), Math.round(L0 - Lmin)] });
+          slides.push(sm.slide);
           linkSays.push(`${kn.name}: on a mount on the ${A.name} and one on the ${B.name}; over the ${String(pv.name)}'s range its pins are ${Math.round(Lmin)} to ${Math.round(Lmax)} mm apart, so its stroke is ${Math.round(stroke)} mm${Array.isArray(pv.range) ? '' : ' (no range was asked: 30° each way taken)'}`);
           if (!real) unmet.push(`${kn.name}: no real cylinder does this: it must be ${Math.round(Lmin)} mm closed and have a ${Math.round(stroke)} mm stroke (its mounts must move, or the range be less)`); }
         if (linkSays.length) say('features', `links made by rule: ${linkSays.join('; ')}`.slice(0, 900));
+        if (smartSays.length) say('features', `smart parts (made from their own definition, no call): ${smartSays.join(' | ')}`.slice(0, 900));
         say('features', 'weights: each main part not yet built from its pieces weighs a share of its outline (a body 15%, a box member 20%, a tank 10%, a wheel 50%; typical, not measured); a ball is solid');
         { const nC = Object.values(contracts).reduce((t, v) => t + v.length, 0); if (nC) say('features', `interfaces fixed before any part is designed: ${nC} between ${Object.keys(contracts).length} parts, ${bolted} of them bolted (4 bolts each, placed by rule; their size a proportion of the patch, typical: not a strength calculation)`); }
         if (axles) say('features', `wheels: ${axles} on axles, each its own body turning on its pin; every one is driven and none steers (steering is not made yet)`);
@@ -1836,7 +1839,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       // a third more length than the gap, bowed out to the side, so the joint between them is not tied by it. A shaft
       // between two bodies that move on each other needs a joint of its own, which is not made yet: said, not drawn)
       if (pre && chain) { const lc = (v: unknown) => String(v ?? '').trim().toLowerCase(), N3e = (v: unknown) => [0, 1, 2].map((k) => Number((v as unknown[])?.[k]) || 0), bare = (nm: string) => nm.replace(/\s*\(called for\)\s*$/, '');
-        const last = (x: Record<string, unknown>) => lc(String(x.name).split(' > ').pop()), solidOf = (nm: string) => { const t = lc(bare(nm)); return solids.find((x) => last(x) === t) ?? solids.find((x) => last(x) === `${t} barrel`) ?? solids.find((x) => lc(x.name).includes(t)); };
+        const last = (x: Record<string, unknown>) => lc(String(x.name).split(' > ').pop()), solidOf = (nm: string) => { const t = lc(bare(nm)); return solids.find((x) => last(x) === t) ?? solids.find((x) => last(x) === `${t} port a`) ?? solids.find((x) => last(x) === `${t} barrel`) ?? solids.find((x) => lc(x.name).includes(t)); };
         const boxes = solids.filter((x) => !Array.isArray(x.span) && x.shape === 'box' && !String(x.name).includes(' > ')), vol = (x: Record<string, unknown>) => N3e(x.size).reduce((a, v) => a * Math.abs(v), 1), host = [...boxes].sort((p, q) => vol(q) - vol(p))[0];
         const COL: Record<string, string> = { fluid: '#1f2328', fuel: '#92400e', air: '#2563eb', electric: '#b91c1c', shaft: '#9aa3ad' }; let stood = 0, stiff = 0, flex = 0; const notRun: string[] = [];
         if (host) { const hz = N3e(host.size).map(Math.abs), ha = N3e(host.at), s0 = Math.max(40, Math.round(0.1 * Math.min(hz[0]!, hz[2]!))), per = Math.max(1, Math.floor((hz[0]! - 0.6 * s0) / (1.4 * s0)));
