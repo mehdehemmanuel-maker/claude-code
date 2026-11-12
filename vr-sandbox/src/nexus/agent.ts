@@ -948,6 +948,7 @@ You are given ONE assembly of a machine: the box it occupies, the rough solids t
 Reply with one JSON object and nothing else, compact: {"pieces":[[name, shape, axis, size x, size y, size z, mat, color],...],"joins":[[piece, onto, face, u, v, kind, fastener, count, copies, du, dv],...],"outlines":{"name":[[u,v],...]}}
 - pieces: every made piece and every bought part listed, except the fasteners that hold two listed pieces together (see joins). Sizes in whole mm on the MACHINE's axes as the piece sits in the machine: x forward, y up, z to the right. shape "box", "rod" (a cylinder along "axis"), "tube", "sphere", "dome", "cone" or "wedge"; for a plate, axis is the direction it is thin along. A piece there are SEVERAL of ("x4", "x12") is given ONCE here and ONCE in joins; its join says how many and how they are spaced.
 - The FIRST piece is the base: the main structural piece the rest is built onto. It has no join.
+- INTERFACES. Where the task lists the assembly's interfaces with the parts around it, they were fixed BEFORE this assembly was designed, and the part on the other side is designed to the same ones. Design to them: where a part is bolted on, a flat pad or flange of at least the size given, clear of everything else; where it turns on a pin, lugs or a boss with that bore at that place; where a ring or an axle is carried, its seat. The app puts in the bolts, pins and rings themselves: never list them.
 - A piece marked [assembly] is one piece here: shape "box", its overall size. Its own pieces are built by a later call.
 - A piece marked [bought]: begin its name with its kind and a colon where it is one of these: ${Object.keys(KINDS).join(', ')}.
 - joins: exactly ONE row for every piece but the base, in an order that builds outward: the piece; the piece it is fastened ONTO (the base, or a piece joined in an earlier row); the FACE of that piece it sits against: "+x" its front, "-x" its back, "+y" its top, "-y" its underside, "+z" its right side, "-z" its left side, or "in" (inside it, at its middle: a pin in its bore, a bearing in its housing); u and v: where on that face the piece's middle is, in percent across the face, 50 and 50 its middle (on a x face u runs along z and v up y; on a y face u along x and v along z; on a z face u along x and v up y); and the kind: "weld", "bolt", "pin" (it turns on a pin through both), "press", "clip", "glue" or "rest".
@@ -961,7 +962,7 @@ Reply with one JSON object and nothing else, compact: {"pieces":[[name, shape, a
  *  layout and the built pieces take their place, of the same body, so what moved still moves. Sixty calls a press. */
 export async function buildDeep(request: string, tree: PipeNode[], path: string[] | string[][], board: Board, o: { ask: Ask; onPipe?: (e: PipeEvent | { tree: PipeNode[] }) => void; maxCalls?: number; idFrom?: number;
   /** the model as it stands each time one of the parts asked for is finished: its real pieces in, the parts not yet built
-   *  still as their rough solids (library parts drawn plain until the end) */ onBoard?: (b: Board, done: string) => void }): Promise<{ board: Board; calls: number; pieces: number; real: number; says: string }> {
+   *  still as their rough solids (library parts drawn plain until the end) */ onBoard?: (b: Board, done: string) => void; /** each main part's interfaces with the parts round it, by its name in lower case: fixed before it is designed */ contracts?: Record<string, string[]> }): Promise<{ board: Board; calls: number; pieces: number; real: number; says: string }> {
   let id = o.idFrom ?? 200000, calls = 0; const max = o.maxCalls ?? 60, paths = (Array.isArray(path[0]) ? path : [path]) as string[][], P = paths.map((q) => q.join(' > ')).join(', ');
   const at = (ns: PipeNode[], p: string[]): PipeNode | undefined => { const n = ns.find((x) => x.name === p[0]); return !n || p.length === 1 ? n : at(n.kids, p.slice(1)); };
   const groups = paths.map((q) => ({ p: q, P: q.join(' > '), node: at(tree, q) })).filter((g): g is { p: string[]; P: string; node: PipeNode } => !!g.node && g.node.kids.length > 0);
@@ -980,7 +981,7 @@ export async function buildDeep(request: string, tree: PipeNode[], path: string[
   const built: Sol[] = [], called = { bolts: 0, nuts: 0, washers: 0, pins: 0, holes: 0, unmet: [] as string[] }; let skipped = 0;
   const one = async (n: PipeNode, pth: string[], box: { lo: number[]; hi: number[] }, rough: Sol[], out: Sol[]): Promise<void> => { const label = pth.join(' > '), myId = id++, t0 = Date.now();
     if (calls >= max) { skipped++; out.push(...rough.map((x) => ({ ...x }))); return; } calls++;
-    const prompt = `${BUILDER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 400)}\nBuild: ${label} (${n.is})\nIts box: ${boxText(box)}\nThe rough solids standing for it now:\n${roughText(rough)}\n\nIts pieces:\n${n.kids.map((k) => `${k.name}${k.n > 1 ? ` x${k.n}` : ''} [${k.kids.length ? 'assembly' : k.leaf === 'bought' || k.kind === 'bought' ? 'bought' : k.kind === 'link' ? 'piece' : 'piece'}] ${k.is}`).join('\n').slice(0, 5000)}`, sent = prompt.slice(BUILDER_RULE.length + PROMPT_CUT.length);
+    const prompt = `${BUILDER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 400)}\nBuild: ${label} (${n.is})\nIts box: ${boxText(box)}\nThe rough solids standing for it now:\n${roughText(rough)}${(() => { const cs = pth.length === 1 ? o.contracts?.[pth[0]!.toLowerCase()] : undefined; return cs?.length ? `\n\nIts interfaces with the parts around it (fixed before it is designed):\n${cs.slice(0, 12).map((t) => `- ${t}`).join('\n')}` : ''; })()}\n\nIts pieces:\n${n.kids.map((k) => `${k.name}${k.n > 1 ? ` x${k.n}` : ''} [${k.kids.length ? 'assembly' : k.leaf === 'bought' || k.kind === 'bought' ? 'bought' : k.kind === 'link' ? 'piece' : 'piece'}] ${k.is}`).join('\n').slice(0, 5000)}`, sent = prompt.slice(BUILDER_RULE.length + PROMPT_CUT.length);
     o.onPipe?.({ id: myId, stage: 'mater', label, state: 'run', rule: BUILDER_RULE, sent }); await take();
     try { let got: string; try { const r0 = await o.ask(prompt, 'quick'); got = typeof r0 === 'string' ? r0 : JSON.stringify(r0); } finally { give(); }
       const r = firstJson(got, `mater (${label})`) as { pieces?: unknown; joins?: unknown; outlines?: Record<string, unknown> }, prs = (Array.isArray(r.pieces) ? r.pieces : []).filter(Array.isArray).slice(0, 120) as unknown[][], jrs = (Array.isArray(r.joins) ? r.joins : []).filter(Array.isArray).slice(0, 160) as unknown[][];
@@ -1560,7 +1561,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       // middle of its top. A "slew" or a "pin" makes a new body and a pin joint with its needed range; "fixed" rides with
       // what it is on. A link runs between a point on each of its two pieces. The whole is then stood on the ground)
       const FACES3: Record<string, [number, number]> = { '+x': [0, 1], '-x': [0, -1], '+y': [1, 1], '-y': [1, -1], '+z': [2, 1], '-z': [2, -1] };
-      const assemble = async (): Promise<{ solids: Record<string, unknown>[]; pivots: Record<string, unknown>[]; slides: Record<string, unknown>[]; paths: string[][]; bodies: number }> => {
+      const assemble = async (): Promise<{ solids: Record<string, unknown>[]; pivots: Record<string, unknown>[]; slides: Record<string, unknown>[]; paths: string[][]; bodies: number; contracts: Record<string, string[]> }> => {
         const linkNames: string[] = [], walkL = (ns: Tree[]) => { for (const n of ns) { if (n.kind === 'link') linkNames.push(`${n.name}${n.n > 1 ? ` x${n.n}` : ''} (${n.is})`); else walkL(n.kids); } }; walkL(tree);
         const subs = tree.filter((n) => n.kind !== 'link'), rowsOf = (v: unknown) => (Array.isArray(v) ? v : []).filter(Array.isArray) as unknown[][];
         const r = firstJson(await tcall('assembler', 'sizes and joins, no coordinates', `${ASSEMBLER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nIts subsystems (and under each, what it is made of):\n${subs.map((n) => `${n.name} (${n.is})${n.kids.filter((k) => k.kind !== 'link').slice(0, 8).map((k) => `\n  ${k.name}`).join('')}`).join('\n').slice(0, 4000)}\n\nIts links:\n${linkNames.slice(0, 30).join('\n') || 'none'}`), 'assembler') as { body?: unknown; pieces?: unknown; joins?: unknown; links?: unknown };
@@ -1608,6 +1609,13 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
           for (let k = 0; k <= n; k++) pivots.push({ name: `${name} link ${k}`, at: at(k), axis: k % 2 ? 'x' : 'z', a: k === 0 ? bodyA : ids[k - 1]!, b: k === n ? bodyB : ids[k]!, d: Math.max(2, Math.round(0.6 * thick)), l: Math.max(2, Math.round(1.4 * thick)), range: [-120, 120], free: true });
           return n; };
         const hangSays: string[] = [], apartSays: string[] = []; let axles = 0;
+        // (INTERFACES FIRST (the user, 2026-11-12: "while designing the rim it somehow begins with the end in mind"): what two
+        // main parts share is fixed here, by rule, from the join between them, BEFORE either is designed from its own
+        // pieces. Each part is then designed alone against the same contract, so they fit without one seeing the other. A
+        // bolted join's pattern: four bolts at the corners of a rectangle 0.8 of the patch the two faces share, of the
+        // standard size nearest a twelfth of that patch's smaller side (a proportion, typical: not a strength calculation).
+        // The fasteners are the app's, placed here from the contract)
+        const contracts: Record<string, string[]> = {}, agree = (nm: string, t: string) => { (contracts[nm.toLowerCase()] ??= []).push(t); }, boltRows: Record<string, unknown>[] = [], STD = [6, 8, 10, 12, 16, 20, 24, 30, 36]; let bolted = 0;
         for (let again = true; again && pending.length;) { again = false; const next: unknown[][] = [];
           for (const j of pending) { const c = find(j[0]), h = find(j[1]); if (!c || c === base || placed(c)) continue; if (!h || !placed(h)) { next.push(j); continue; } again = true;
             const face = String(j[2] ?? '+y'), kind = String(j[5] ?? 'fixed'), axis = /^[xyz]$/.test(String(j[6])) ? String(j[6]) : kind === 'slew' ? 'y' : 'z', ang = Number(j[7]) || 0, rl = Number(j[8]), rh = Number(j[9]);
@@ -1630,11 +1638,20 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
             if (c.beam) { const th = (ang * Math.PI) / 180; c.p1 = [...H]; c.p2 = [H[0]! + c.size[0]! * Math.cos(th), H[1]! + c.size[0]! * Math.sin(th), H[2]!]; }
             else if (kind === 'pin' || h.beam) { c.lo = [H[0]! - c.size[0]! / 2, kind !== 'pin' && face === '+y' ? H[1]! : H[1]! - c.size[1]!, H[2]! - c.size[2]! / 2]; }
             else { const [k, sg] = FACES3[face] ?? [1, 1], lo = [H[0]! - c.size[0]! / 2, H[1]! - c.size[1]! / 2, H[2]! - c.size[2]! / 2]; lo[k] = sg > 0 ? H[k]! : H[k]! - c.size[k]!; c.lo = lo; }
-            if (kind !== 'slew' && kind !== 'pin') { c.body = h.body; continue; } c.body = nb++;
+            if (kind !== 'slew' && kind !== 'pin') { c.body = h.body;
+              if (!c.beam && !h.beam && FACES3[face]) { const [k, sg] = FACES3[face]!, [ua, va] = k === 0 ? [2, 1] : k === 1 ? [0, 2] : [0, 1], pu = 0.8 * Math.min(c.size[ua]!, h.size[ua]!), pv = 0.8 * Math.min(c.size[va]!, h.size[va]!), want = Math.min(pu, pv) / 12, d = STD.reduce((b0, x) => (Math.abs(x - want) < Math.abs(b0 - want) ? x : b0), STD[0]!), L = 4 * d;
+                if (pu > 3 * d && pv > 3 * d) { const mid = [0, 1, 2].map((i) => c.lo![i]! + c.size[i]! / 2); mid[k] = H[k]!; let i = 0;
+                  for (const su of [-1, 1]) for (const sv of [-1, 1]) { const C = [...mid]; C[ua] = C[ua]! + (su * pu) / 2; C[va] = C[va]! + (sv * pv) / 2; const size = [d, d, d]; size[k] = L; boltRows.push({ name: `${c.name} mounting bolt ${++i}`, shape: 'rod', axis: 'xyz'[k], size, at: [C[0]!, C[1]! - size[1]! / 2, C[2]!], mat: 'steel-low', color: '#2b2f36', rot: [0, 0, 0], body: h.body }); }
+                  const pat = `4 x M${d} bolts at the corners of a ${Math.round(pu)} x ${Math.round(pv)} mm rectangle`; bolted++;
+                  agree(h.name, `on its ${face} face, at ${Math.round(pct(j[3]))}% and ${Math.round(pct(j[4]))}% across it, the ${c.name} is bolted on with ${pat}: a flat pad there of at least ${Math.round(pu / 0.8)} x ${Math.round(pv / 0.8)} mm`);
+                  agree(c.name, `its ${sg > 0 ? '-' : '+'}${'xyz'[k]} face is bolted to the ${h.name} with ${pat}, centred on that face: a flat base plate or flange there`); } }
+              continue; } c.body = nb++;
             // (a pin's size is a typical proportion, not a rating: a third of a beam's depth and 1.2 times its width; a slew's
             // ring four tenths of the smaller plan size of what turns on it and a twentieth as deep; a box's pin a quarter of
             // its least size and a little wider than it)
             const [d, l] = c.beam ? [c.size[1]! / 3, c.size[2]! * 1.2] : kind === 'slew' ? [Math.min(c.size[0]!, c.size[2]!) * 0.4, Math.max(20, Math.min(c.size[0]!, c.size[2]!) / 20)] : [Math.min(...c.size) / 4, c.size[axis === 'x' ? 0 : axis === 'y' ? 1 : 2]! * 1.1];
+            if (kind === 'slew') { agree(h.name, `on its ${face} face, at ${Math.round(pct(j[3]))}% and ${Math.round(pct(j[4]))}% across it, a slewing ring ${Math.round(d)} mm across carries the ${c.name}: a flat round seat there, that wide`); agree(c.name, `it stands and turns on a slewing ring ${Math.round(d)} mm across under its middle: a flat round seat on its underside`); }
+            else { agree(h.name, `the ${c.name} swings on a ${Math.round(d)} mm pin, ${Math.round(l)} mm long, lying along ${axis}, on its ${face} face at ${Math.round(pct(j[3]))}% and ${Math.round(pct(j[4]))}% across it: two lugs there with that bore, the ${c.name}'s end between them`); agree(c.name, `it swings on a ${Math.round(d)} mm pin lying along ${axis} at ${c.beam ? 'its near end' : 'the middle of its top'}: a boss or an eye there with that bore`); }
             pivots.push({ name: `${c.name} ${kind}`, at: [...H], axis, a: h.body, b: c.body, d: Math.max(2, Math.round(d)), l: Math.max(2, Math.round(l)), ...(Number.isFinite(rl) && Number.isFinite(rh) && rh > rl && j[8] !== null && j[9] !== null ? { range: [Math.round(rl - ang), Math.round(rh - ang)] } : {}) }); }
           pending = next; }
         for (const t of tps) if (!placed(t)) { unmet.push(`${t.name}: no join puts it on a part that is placed: stood on the base`); t.beam = false; t.lo = [-t.size[0]! / 2, base.size[1]!, -t.size[2]! / 2]; t.body = 0; }
@@ -1647,7 +1664,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         const FILL = { beam: 0.2, box: 0.15, round: 0.1, wheel: 0.5 } as const;
         const solids: Record<string, unknown>[] = tps.map((t) => (t.beam ? { name: t.name, fill: FILL.beam, span: [t.p1!, t.p2!], thick: [t.size[1]!, t.size[2]!], ends: true, shape: 'box', size: [t.size[1]!, t.size[0]!, t.size[2]!], at: [0, 1, 2].map((k) => (t.p1![k]! + t.p2![k]!) / 2), mat: 'steel-low', color: bodyCol, rot: [0, 0, 0], body: t.body }
           : { name: t.name, ...(t.shape !== 'ball' ? { fill: FILL[t.shape] } : {}), shape: t.shape === 'ball' ? 'sphere' : t.shape === 'round' || t.shape === 'wheel' ? 'rod' : 'box', axis: t.shape === 'wheel' ? 'z' : 'y', size: t.size, at: [t.lo![0]! + t.size[0]! / 2, t.lo![1]!, t.lo![2]! + t.size[2]! / 2], mat: t.shape === 'wheel' ? 'rubber' : 'steel-low', color: t.shape === 'wheel' ? '#1f2328' : hungNames.has(t.name) && t.shape === 'ball' ? '#4b5563' : bodyCol, rot: [0, 0, 0], body: t.body }));
-        solids.push(...lineSolids.splice(0));
+        solids.push(...lineSolids.splice(0), ...boltRows);
         // (A LINK IS MADE BY RULE, the same for every machine: it calls for a mount on each of its two parts, a lug standing
         // off the surface with a pin through it, and its ends are on those pins. Where a joint lies between its two parts it
         // is a cylinder: a barrel on the first pin and a rod on the second, the rod sliding in the barrel; its stroke is how
@@ -1696,6 +1713,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
           if (!real) unmet.push(`${kn.name}: no real cylinder does this: it must be ${Math.round(Lmin)} mm closed and have a ${Math.round(stroke)} mm stroke (its mounts must move, or the range be less)`); }
         if (linkSays.length) say('features', `links made by rule: ${linkSays.join('; ')}`.slice(0, 900));
         say('features', 'weights: each main part not yet built from its pieces weighs a share of its outline (a body 15%, a box member 20%, a tank 10%, a wheel 50%; typical, not measured); a ball is solid');
+        { const nC = Object.values(contracts).reduce((t, v) => t + v.length, 0); if (nC) say('features', `interfaces fixed before any part is designed: ${nC} between ${Object.keys(contracts).length} parts, ${bolted} of them bolted (4 bolts each, placed by rule; their size a proportion of the patch, typical: not a strength calculation)`); }
         if (axles) say('features', `wheels: ${axles} on axles, each its own body turning on its pin; every one is driven and none steers (steering is not made yet)`);
         if (apartSays.length) say('features', `separate things: ${apartSays.join('; ')}`.slice(0, 500));
         if (hangSays.length) say('features', `hung by rule: ${hangSays.join('; ')} (each bends at its pins only, not all along itself)`.slice(0, 600));
@@ -1705,7 +1723,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         for (const x of solids) if (hungNames.has(String(x.name)) && !Array.isArray(x.span) && Number((x.at as number[])[1]) < -0.5) unmet.push(`${String(x.name)}: its line is longer than the height it hangs from, so it would lie on the ground with its line slack`);
         for (const q of pivots) q.at = (q.at as number[]).map((v) => Math.round(v));
         say('features', `assembler: ${tps.length} main parts joined with no coordinates given, ${pivots.length} of the joins a pin or a slew (${pivots.slice(0, 6).map((q) => `${String(q.name)}${Array.isArray(q.range) ? ` ${(q.range as number[]).join('..')}°` : ''}`).join(', ')}), ${nl} link${nl === 1 ? '' : 's'}${unmet.length ? `; ${unmet.length} unmet: ${unmet.slice(0, 3).join('; ')}` : ''}`, !unmet.length);
-        return { solids, pivots, slides, bodies: nb, paths: tps.filter((t) => !t.beam && t.shape === 'box' && subs.find((n) => n.name === t.name)?.kids.some((k) => k.kind !== 'link')).map((t) => [t.name]) }; };
+        return { solids, pivots, slides, bodies: nb, contracts, paths: tps.filter((t) => !t.beam && t.shape === 'box' && subs.find((n) => n.name === t.name)?.kids.some((k) => k.kind !== 'link')).map((t) => [t.name]) }; };
       // (ENERGY, beside the assembler: which parts hold, convert, control or use energy and what feeds what, as the model
       // reads the tree; then every chain closed by rule, what is missing called for and said)
       const energy = (async () => { try { const names: string[] = [], walkE = (ns: Tree[], d: number) => { for (const n of ns) { names.push(`${'  '.repeat(d)}${n.name}${n.n > 1 ? ` x${n.n}` : ''} (${n.is})`); if (d < 2) walkE(n.kids, d + 1); } }; walkE(tree, 0);
@@ -1887,7 +1905,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       // (then each main part that is a box is built from its own parts, all side by side: sized and joined face to face by
       // the MATER, placed by the app, what its joins call for added. A beam stays one member for now)
       if (pre && pre.paths.length) { try { const toPipe = (ns: Tree[]): PipeNode[] => ns.map((n) => ({ name: n.name, n: n.n, kind: n.kind, is: n.is, state: 'placed' as const, kids: toPipe(n.kids) }));
-          const tM = Date.now(), rb = await buildDeep(request, toPipe(tree), pre.paths, board, { ask: o.ask, ...(o.onPipe ? { onPipe: o.onPipe } : {}), idFrom: pipeId + 5000, maxCalls: 40, ...(o.onStep ? { onBoard: (pb: Board, done: string) => { board = pb; say('features', `in the view now: the ${done} built from its own pieces`); } } : {}) }); pipeId += 20000; asks += rb.calls;
+          const tM = Date.now(), rb = await buildDeep(request, toPipe(tree), pre.paths, board, { ask: o.ask, ...(o.onPipe ? { onPipe: o.onPipe } : {}), idFrom: pipeId + 5000, maxCalls: 40, contracts: pre.contracts, ...(o.onStep ? { onBoard: (pb: Board, done: string) => { board = pb; say('features', `in the view now: the ${done} built from its own pieces`); } } : {}) }); pipeId += 20000; asks += rb.calls;
           board = rb.board; skeleton = rb.board; say('features', `${pre.paths.length} main parts built from their own pieces in ${((Date.now() - tM) / 1000).toFixed(0)} s: ${rb.says}`); }
         catch (e) { say('features', `the main parts stay as their boxes: ${(e as Error).message.slice(0, 160)}`, false); } }
       return done1(`Built: ${solids.length} solids${tree.length ? ` in ${tree.length} subsystems (${tree.map((n) => n.name).join(', ')})` : ''}. A model of plain solids placed as on the real thing: not yet real engineered parts.`); }
