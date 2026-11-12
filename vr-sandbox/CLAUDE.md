@@ -4,6 +4,7 @@ A node-based CAD and engineering app: say what to build, or build by hand, from 
 
 ## Rules (the user's, 2026-11-10)
 - Build features; the user tests the app by hand. No automated tests, no test files, no audits, no plan documents.
+- That covers every kind of run, not only test files (the user, 2026-11-12: "don't run any tests without asking"): no pipeline runs with real AI calls, no physics checks, no scripted browser runs or screenshots, unless the user says yes first. Ask, say what the run would cost and show, and wait. Type check and build are allowed.
 - Read only the code the task touches. No whole-codebase reads, no repeated investigations, no long reports.
 - Do not spawn fleets of agents. Small, complete deliverables; say what changed, what is unfinished, what to test.
 - Never put API keys in the repo or in client code. Port 5173 is the user's.
