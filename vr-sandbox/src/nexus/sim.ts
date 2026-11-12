@@ -452,7 +452,9 @@ function mPlace(of: Part | Assembly, m: THREE.Matrix4): Assembly['items'][number
 export interface MoveBody { name: string; pieces: number[]; frozen: boolean; why: string }
 /** What drives a joint: a hobby servo (its stall torque, vendor figures, typical) or a gear motor or stepper (its torque
  *  not known here: held stiff), and whether it holds where it is put by default. */
-export interface MoveMotor { kind: 'servo' | 'gear motor' | 'stepper' | 'held pivot'; torque?: number; from: string }
+export interface MoveMotor { kind: 'servo' | 'gear motor' | 'stepper' | 'held pivot' | 'cylinder'; torque?: number; from: string;
+  /** a cylinder's: what it pushes out with and draws in with, N (pressure on its piston, and on its piston less its rod);
+   *  `ext` +1 where body a moved along the joint's line from body b is the cylinder getting longer, -1 where shorter */ force?: number; pull?: number; ext?: 1 | -1 }
 /** A body that turns (a) on another (b, the shaft's) about a line through `point` along `dir`, from the faces that say so;
  *  with `slide`, it slides along that line too (a slide fit), within `range` (m from where it stands: its ends' room on the
  *  shaft); with `turns` false, it only slides (two parallel lines, a carriage on its rods; a rack); a motor where one
@@ -579,13 +581,32 @@ export function motionOf(b: Block): Motion {
     if (!j.slide && !j.turns) j.turns = true; }
   // (a motor where one drives the joint: the shaft's body a servo's or a gear motor's)
   for (const j of joints) { const m = motorOf([...bodies[j.b]!.pieces.map((i) => b.pieces[i]!.name), ...j.by].join(' ')); if (m) j.motor = m; }
-  // (a layout's pivot: held where it is put, as the cylinder or the drive that holds it on the real machine would, which is
-  // not modelled yet. Its hold is derived from the thing itself: enough to carry all of its mass at the far end of its
-  // longest side, three times over, so no pose of it sags; the factor of three is a margin, typical, not a rating)
+  // (CYLINDERS (the user, 2026-11-12: "you need to code energy, and solids and in between stands conductors"; "does anything
+  // impossibly move"). A layout's slide is a cylinder: its rod in its barrel. It is what moves and holds the joint it spans,
+  // and it does so with a force and no more: the pressure on its piston pushing out, on its piston less its rod drawing in.
+  // Its piston is the barrel's bore: the barrel's outside less a wall of 15% of its radius (typical of drawn cylinder tube,
+  // not measured from this one). The pressure is 25 MPa: a typical working pressure of mobile hydraulics (they run about 21
+  // to 35 MPa), not this machine's rating, and taken as there whether or not its pump, valve and hoses are solids yet (they
+  // are not: said in `from`). With its valve shut the oil in it is held, and oil is stiff: it stays where it is, up to that
+  // force. So a load too heavy for the cylinder sinks, and a joint no cylinder spans is not moved by one)
+  const P_WORK = 25e6, isCyl = (j: MoveJoint) => !!j.slide && !!j.range && j.by.some((t) => t.startsWith('layout slide'));
+  for (const j of joints) { if (!isCyl(j) || j.motor) continue; const f = b.faces.find((x) => x.by.startsWith('layout slide') && j.by.includes(x.by)); if (!f) continue;
+    type Rd = { c: readonly number[]; r?: number }; const rod = b.pieces[f.b]!.solid.base as unknown as Rd, rr = rod.r ?? 0; if (!(rr > 0)) continue;
+    const barrel = bodies[j.a]!.pieces.map((i) => b.pieces[i]!.solid.base as unknown as Rd).filter((P) => (P.r ?? 0) > rr).sort((p, q) => q.r! - p.r!)[0], rb = barrel ? 0.85 * barrel.r! : rr / 0.6;
+    const from0 = barrel ?? (b.pieces[bodies[j.a]!.pieces[0]!]!.solid.base as unknown as Rd), ext = (from0.c[0]! - rod.c[0]!) * j.dir[0] + (from0.c[1]! - rod.c[1]!) * j.dir[1] + (from0.c[2]! - rod.c[2]!) * j.dir[2] >= 0 ? 1 : -1;
+    const force = P_WORK * Math.PI * rb * rb, pull = P_WORK * Math.PI * (rb * rb - rr * rr), kN = (x: number) => (x / 1000 >= 10 ? Math.round(x / 1000) : +(x / 1000).toFixed(1));
+    j.motor = { kind: 'cylinder', force, pull, ext, from: `it pushes out with ${kN(force)} kN and draws in with ${kN(pull)} kN: 25 MPa (a typical working pressure of mobile hydraulics, not this machine's rating) on a ${Math.round(2000 * rb)} mm bore (${barrel ? "its barrel's outside less a 15% wall, typical" : 'taken from its rod, typical'}) with a ${Math.round(2000 * rr)} mm rod; its pump, valve and hoses are not solids yet, so the pressure is taken as there` }; }
+  // (a layout's pivot that a cylinder spans is held by that cylinder and by nothing else: followed from one of its two
+  // bodies to the other over free pins and cylinders. One that no cylinder spans (a slew ring, a wheel) is still held where
+  // it is put by a hold that is not a part of the machine, derived from the thing itself: enough to carry all of its mass
+  // at the far end of its longest side, three times over; the factor of three is a margin, typical, not a rating. What
+  // drives it on the real machine (a motor, a gear) is not modelled yet, and that is said)
   // (a pin marked free turns freely: a cylinder's eye on its mount)
-  const heldPivot = (j: MoveJoint) => !j.motor && j.by.some((t) => t.startsWith('layout pivot') && !t.includes('(free)'));
+  const carries = joints.filter((j) => j.motor?.kind === 'cylinder' || j.by.some((t) => t.startsWith('layout pivot') && t.includes('(free)')));
+  const spanned = (j: MoveJoint): boolean => { const seen = new Set([j.a]), todo = [j.a]; let cyl = false; while (todo.length) { const k = todo.pop()!; for (const e of carries) { if (e === j || (e.a !== k && e.b !== k)) continue; const o = e.a === k ? e.b : e.a; if (seen.has(o)) continue; seen.add(o); todo.push(o); if (e.motor?.kind === 'cylinder') cyl = true; } } return cyl && seen.has(j.b); };
+  const heldPivot = (j: MoveJoint) => !j.motor && j.by.some((t) => t.startsWith('layout pivot') && !t.includes('(free)')) && !spanned(j);
   if (joints.some(heldPivot)) { const parts = partOfBlock(b).parts ?? [], all = b.pieces.reduce((t, _p, i) => t + (parts[i] ? massOfAll(parts[i]!) : 0), 0), reach = Math.max(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]);
-    const torque = 3 * 9.80665 * Math.max(all, 1e-3) * reach; for (const j of joints) if (heldPivot(j)) j.motor = { kind: 'held pivot', torque, from: 'held where it is put: enough to carry the whole thing at its full reach three times over (derived from its own mass and size; what holds it on the real machine is not modelled yet)' }; }
+    const torque = 3 * 9.80665 * Math.max(all, 1e-3) * reach; for (const j of joints) if (heldPivot(j)) j.motor = { kind: 'held pivot', torque, from: 'held where it is put by a hold that is not a part of the machine (no cylinder spans it): enough to carry the whole thing at its full reach three times over, derived from its own mass and size; what drives it on the real machine is not modelled yet' }; }
   // (P3: a turn's travel from the piece that has one: a servo's from its row, centred on the angle it is drawn at (a horn
   // fitted at the servo's middle, as arm kits are put together: typical, an assumption); none known for the rest)
   for (const j of joints) { if (!j.turns || j.ball || j.motor?.kind !== 'servo') continue; const r = servoRangeOf([...bodies[j.b]!.pieces.map((i) => b.pieces[i]!.name), ...j.by].join(' ')); if (!r) continue;
@@ -635,13 +656,13 @@ export function motionOf(b: Block): Motion {
   for (const j of joints) { if (!bodies[j.b]!.why.startsWith('loose')) { bodies[j.b]!.frozen = true; bodies[j.b]!.why = 'held: a shaft'; } }
   for (const j of joints) if (bodies[j.a]!.why !== 'held: a shaft') { bodies[j.a]!.frozen = false; bodies[j.a]!.why = `loose: ${j.turns ? 'turns' : 'slides'} on ${bodies[j.b]!.name}${j.turns && j.slide ? ' and slides along it' : ''}`; }
   if (joints.some((j) => j.motor)) { const parts = partOfBlock(b).parts ?? [], mass = bodies.map((x) => x.pieces.reduce((t, i) => t + (parts[i] ? massOfAll(parts[i]!) : 0), 0));
-    const driven = new Set(joints.filter((j) => j.motor).flatMap((j) => [j.a, j.b])), low = bodies.map((x) => Math.min(...x.pieces.map((i) => boxes[i]![0][1]!)));
+    const laid = b.faces.some((f) => f.by.startsWith('layout pivot')), driven = new Set(joints.filter((j) => j.motor || laid).flatMap((j) => [j.a, j.b])), low = bodies.map((x) => Math.min(...x.pieces.map((i) => boxes[i]![0][1]!)));
     // (what it stands on: the lowest of them (an arm's base plate), the heavier where two are as low)
     // (as low within a fiftieth of the whole's height: the one with more of its pieces on the ground stands on it (a machine's
     // tracks or wheels, not the house whose slew ring hangs as low))
     const tol = Math.max(1e-6, (b.hi[1] - b.lo[1]) / 50), ground = bodies.map((x) => x.pieces.filter((i) => boxes[i]![0][1]! < b.lo[1] + tol).length);
     const root = [...driven].sort((p, q) => (Math.abs(low[p]! - low[q]!) > tol ? low[p]! - low[q]! : ground[q]! !== ground[p]! ? ground[q]! - ground[p]! : mass[q]! - mass[p]!))[0]!;
-    for (const k of driven) { const j = joints.find((x) => x.a === k && x.motor) ?? joints.find((x) => x.b === k && x.motor)!; bodies[k]!.frozen = k === root; bodies[k]!.why = k === root ? 'held: what it stands on (its lowest), its motors holding the rest' : `loose: held by its ${j.motor!.kind}`; } }
+    for (const k of driven) { const j = joints.find((x) => x.a === k && x.motor) ?? joints.find((x) => x.b === k && x.motor); bodies[k]!.frozen = k === root; bodies[k]!.why = k === root ? 'held: what it stands on (its lowest), its motors holding the rest' : j ? `loose: held by its ${j.motor!.kind}` : 'loose: on its joints'; } }
   // (a laid-out machine: only what it stands on is held; every other body is loose on its joints, a cylinder's barrel and
   // rod among them, which no motor holds and which follow the joint they span)
   if (b.faces.some((f) => f.by.startsWith('layout pivot'))) { const held = bodies.findIndex((x) => x.frozen && x.why.startsWith('held: what it stands on')); if (held >= 0) bodies.forEach((x, k) => { if (k !== held && x.frozen && joints.some((j) => j.a === k || j.b === k)) { x.frozen = false; x.why = 'loose: on its joints'; } }); }
@@ -681,7 +702,8 @@ export class LiveMotion {
   collideSays = '';
   private readonly J: Jolt; private readonly jolt: InstanceType<Jolt['JoltInterface']>; private readonly bi: InstanceType<Jolt['BodyInterface']>;
   private readonly live: { body: InstanceType<Jolt['Body']>; p0: V3; q0: Q4; mass: number }[] = [];
-  private readonly joint = new Map<number, { kind: 'hinge' | 'slide' | 'six'; c: InstanceType<Jolt['TwoBodyConstraint']>; dir: V3; point: V3; last: number; add: number; s0: number }>();
+  private readonly joint = new Map<number, { kind: 'hinge' | 'slide' | 'six'; c: InstanceType<Jolt['TwoBodyConstraint']>; dir: V3; point: V3; last: number; add: number; s0: number;
+    /** a cylinder's: the other body of it, the way along the joint's own line that makes it longer, how far it may go out and in from where it stands (m), its two forces (N), and its valve (+1 out, -1 in, 0 shut) */ cyl?: { other: number; e: number; lo: number; hi: number; force: number; pull: number; valve: number } }>();
   private readonly held = new Set<number>();
   private readonly pending = new Map<number, { T?: number; F?: V3; point?: V3 }>();
   /** Screw joints (decision 0029): the nut's body a, the screw's b, along u (in b's own frame), tied by k = lead / 2π:
@@ -789,6 +811,14 @@ export class LiveMotion {
         for (const ax of [J.SixDOFConstraintSettings_EAxis_TranslationY, J.SixDOFConstraintSettings_EAxis_TranslationZ, J.SixDOFConstraintSettings_EAxis_RotationY, J.SixDOFConstraintSettings_EAxis_RotationZ]) st.MakeFixedAxis(ax);
         st.MakeFreeAxis(J.SixDOFConstraintSettings_EAxis_RotationX); if (rg) st.SetLimitedAxis(J.SixDOFConstraintSettings_EAxis_TranslationX, rg[0], rg[1]); else st.MakeFreeAxis(J.SixDOFConstraintSettings_EAxis_TranslationX);
         const c = J.castObject(st.Create(b1, b2), J.SixDOFConstraint); J.destroy(st); ps.AddConstraint(c); this.joint.set(who, { kind: 'six', c, dir: u, point: j.point, last: 0, add: 0, s0: 0 });
+        // (a cylinder: the slide's own motor is its oil. Shut, it holds its length on the stiffness of the oil column,
+        // k = B A / L (B = 1.4 GPa, a typical bulk modulus of mineral hydraulic oil; A its piston; L its stroke), damped
+        // against the whole machine's mass so it does not ring, and never with more than its pushing or drawing force)
+        if (j.motor?.kind === 'cylinder' && rg) { const e = sgn * (j.motor.ext ?? 1), F = j.motor.force ?? 0, Fp = j.motor.pull ?? 0, AX = J.SixDOFConstraintSettings_EAxis_TranslationX, ms = c.GetMotorSettings(AX), sp = ms.mSpringSettings;
+          const stroke = Math.max(0.01, rg[1] - rg[0]), k = (1.4e9 * (F / 25e6)) / stroke, all = this.live.reduce((t, l) => t + l.mass, 0);
+          sp.mMode = J.ESpringMode_StiffnessAndDamping; sp.mStiffness = k; sp.mDamping = 2 * Math.sqrt(k * Math.max(all, 1e-3)); ms.mMaxForceLimit = e > 0 ? F : Fp; ms.mMinForceLimit = -(e > 0 ? Fp : F);
+          c.SetTargetPositionCS(V([0, 0, 0])); c.SetMotorState(AX, J.EMotorState_Position); this.held.add(who);
+          this.joint.get(who)!.cyl = { other: who === j.a ? j.b : j.a, e, lo: e > 0 ? rg[0] : -rg[1], hi: e > 0 ? rg[1] : -rg[0], force: F, pull: Fp, valve: 0 }; }
       }
     }
     for (const m of this.motion.meshes) {
@@ -823,6 +853,20 @@ export class LiveMotion {
     if (angle === null) { c.SetMotorState(this.J.EMotorState_Off); this.held.delete(body); return; }
     // (Jolt's target is within a half turn of zero: the hinge's own angle, not counting whole turns)
     c.SetTargetAngle(angle ?? c.GetCurrentAngle()); c.SetMotorState(this.J.EMotorState_Position); this.held.add(body); this.bi.ActivateBody(this.live[body]!.body.GetID()); }
+  /** The cylinders: for each, the body its joint is kept under, its name, how far it may go out and in from where it stands
+   *  (m), and its two forces (N). */
+  cylinders(): { body: number; other: number; name: string; lo: number; hi: number; force: number; pull: number }[] { return [...this.joint].filter(([, h]) => h.cyl).map(([k, h]) => ({ body: k, other: h.cyl!.other, name: this.motion.bodies[h.cyl!.other]!.name, lo: h.cyl!.lo, hi: h.cyl!.hi, force: h.cyl!.force, pull: h.cyl!.pull })); }
+  /** How far a cylinder is out from where it stood as made, m (less than nothing: drawn in). */
+  out(body: number): number { const h = this.joint.get(body); if (!h?.cyl) return 0; const o = h.cyl.other, p2 = this.pointOf(body, h.point), p1 = this.pointOf(o, h.point), q = this.pointOf(o, [h.point[0] + h.dir[0], h.point[1] + h.dir[1], h.point[2] + h.dir[2]]);
+    return h.cyl.e * ((p2[0] - p1[0]) * (q[0] - p1[0]) + (p2[1] - p1[1]) * (q[1] - p1[1]) + (p2[2] - p1[2]) * (q[2] - p1[2])); }
+  /** A cylinder's valve: +1 lets oil in to push its rod out, -1 to draw it in, at `speed` m/s (the pump's flow over its
+   *  piston: the pump is not modelled, so the speed is given); 0 shuts it, and the oil in it holds it where it is. Either
+   *  way it gives no more than its force, so what is too heavy for it does not move, or sinks. */
+  valve(body: number, way: -1 | 0 | 1, speed = 0.1): void { const h = this.joint.get(body); if (!h?.cyl) return; const J = this.J, c = h.c as InstanceType<Jolt['SixDOFConstraint']>, AX = J.SixDOFConstraintSettings_EAxis_TranslationX; h.cyl.valve = way;
+    if (way === 0) { const v = new J.Vec3(h.cyl.e * this.out(body), 0, 0); c.SetTargetPositionCS(v); J.destroy(v); c.SetMotorState(AX, J.EMotorState_Position); }
+    else { const v = new J.Vec3(h.cyl.e * way * Math.abs(speed), 0, 0); c.SetTargetVelocityCS(v); J.destroy(v); c.SetMotorState(AX, J.EMotorState_Velocity); } }
+  /** Which way a cylinder's valve is now. */
+  valveOf(body: number): number { return this.joint.get(body)?.cyl?.valve ?? 0; }
   /** Whether a body's joint is held at an angle now. */
   isHeld(body: number): boolean { return this.held.has(body); }
   /** The motor that drives a body's joint, if one does. */

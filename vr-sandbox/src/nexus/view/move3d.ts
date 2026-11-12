@@ -95,7 +95,7 @@ export class MoveMode {
     live.step(dt);
     for (const m of this.meshes) m.mesh.matrix.copy(live.moved(m.body).multiply(m.base));
     this.dock.redraw();
-    if (this.sel >= 0 && Math.round(live.t * 10) % 3 === 0) this.tell();
+    if ((this.sel >= 0 || live.cylinders().some((c) => live.valveOf(c.body) !== 0)) && !this.testing && Math.round(live.t * 10) % 3 === 0) this.tell();
   }
   /** Where a piece is on the page now (css px), by its name, while it moves: what a test presses and drags. */
   screenOf(name: string): [number, number] | null {
@@ -132,11 +132,12 @@ export class MoveMode {
   private tell(): void {
     const live = this.live; if (!live) return; const M = live.motion, esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
     const meshes = [...M.meshes.map((m) => `${esc(m.ga)} meshes ${esc(m.gb)} (${m.za}:${m.zb}, the other way)`), ...M.racks.map((r) => `${esc(r.gear)} drives ${esc(r.rack)} (${(r.r * 1000).toFixed(1)} mm a radian)`), ...M.belts.map((x) => `${esc(x.belt)} joins ${esc(x.pa)} and ${esc(x.pb)} (${x.za}:${x.zb}, the same way)`)].join('<br>');
-    const s = this.sel >= 0 ? M.bodies[this.sel] : undefined, turns = s ? `${(live.angle(this.sel) / (2 * Math.PI)).toFixed(2)} turns` : '';
+    const cyls = live.cylinders(), s = this.sel >= 0 ? M.bodies[this.sel] : undefined, turns = s ? `${(live.angle(this.sel) / (2 * Math.PI)).toFixed(2)} turns` : '';
     this.say(`<b>Moving</b> <span class="dim">· gravity on · ${M.bodies.length} bodies, ${M.bodies.filter((b) => b.frozen).length} frozen (blue) · ${M.joints.length} joint${M.joints.length === 1 ? '' : 's'}</span>${meshes ? `<br>${meshes}` : ''}${this.live?.collideSays ? `<br><span class="dim">${this.live.collideSays}</span>` : ''}
-      <div class="dim">Drag a loose piece to turn or slide it; a servo's joint stays where you put it. Tap one: Freeze, Loose, Motor (rpm), Hold.</div>
+      <div class="dim">Drag a loose piece to turn or slide it; a servo's joint stays where you put it; a joint on a cylinder moves only as far as you can force its cylinder. Tap one: Freeze, Loose, Motor (rpm), Hold.</div>
       ${s ? `<div style="margin-top:6px"><b>${esc(s.name)}</b><br><span class="dim">${esc(s.why)}${turns && live.jointOf(this.sel) ? ` · ${live.jointOf(this.sel)!.kind === 'slide' ? `${(live.slid(this.sel) * 1000).toFixed(1)} mm` : turns}` : ''}${live.motorOf(this.sel) ? ` · a ${esc(live.motorOf(this.sel)!.kind)}, ${esc(live.motorOf(this.sel)!.from)}` : ''}</span></div><div class="row"><button data-a="freeze">Freeze</button><button data-a="loose">Loose</button>${live.jointOf(this.sel)?.kind === 'hinge' ? `<button data-a="spin" class="${this.spinning.has(this.sel) ? 'on' : ''}">Motor</button><input data-a="rpm" type="number" value="${this.rpm}" style="width:56px" title="its speed, turns a minute"> rpm<button data-a="hold" class="${live.isHeld(this.sel) ? 'on' : ''}">Hold</button>` : ''}</div>` : ''}
-      <div class="row"><button data-a="all-frozen">Freeze all</button><button data-a="all-loose">Loose all</button><button data-a="test" class="${this.testing ? 'on' : ''}" title="Drives every held joint to both ends of its range, here in the view, and says what it reached and whether each cylinder stayed on its pins. About ten seconds a joint; no AI calls, nothing spent"${this.testing ? ' disabled' : ''}>${this.testing ? 'Testing…' : 'Test joints'}</button></div>${this.report ? `<div class="dim" style="margin-top:6px;max-height:38vh;overflow:auto">${this.report}</div>` : ''}`);
+      ${cyls.length ? `<div style="margin-top:6px"><b>Cylinders</b> <span class="dim">· each pushes with its own force and no more; shut, its oil holds it</span>${cyls.map((c) => { const v = live.valveOf(c.body), o = live.out(c.body); return `<div class="row"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name.split(' and ')[0]!.split(' > ').pop()!)} <span class="dim">${Math.round(o * 1000)} mm (${Math.round(c.lo * 1000)}…${Math.round(c.hi * 1000)}) · ${Math.round(c.force / 1000)} kN</span></span><button data-a="cyl:${c.body}:-1" class="${v < 0 ? 'on' : ''}" title="Draw it in">◀ In</button><button data-a="cyl:${c.body}:0" title="Shut its valve: it holds where it is">■</button><button data-a="cyl:${c.body}:1" class="${v > 0 ? 'on' : ''}" title="Push it out">Out ▶</button></div>`; }).join('')}</div>` : ''}
+      <div class="row"><button data-a="all-frozen">Freeze all</button><button data-a="all-loose">Loose all</button><button data-a="test" class="${this.testing ? 'on' : ''}" title="Works every cylinder out and in, then every joint that is still held, here in the view, and says what each reached. About fifteen seconds a cylinder; no AI calls, nothing spent"${this.testing ? ' disabled' : ''}>${this.testing ? 'Testing…' : 'Test joints'}</button></div>${this.report ? `<div class="dim" style="margin-top:6px;max-height:38vh;overflow:auto">${this.report}</div>` : ''}`);
     for (const b of this.card.querySelectorAll<HTMLButtonElement>('button[data-a]')) b.onclick = () => this.act(b.dataset.a!);
     const r = this.card.querySelector<HTMLInputElement>('input[data-a="rpm"]'); if (r) r.onchange = () => { this.rpm = Number(r.value) || 0; const w = (this.rpm * 2 * Math.PI) / 60; if (this.spinning.has(this.sel)) { this.spinning.set(this.sel, w); live.spin(this.sel, w); } };
   }
@@ -159,8 +160,16 @@ export class MoveMode {
     const read = () => slides.forEach((j, k) => { const cb = cOf(j.a), cr = cOf(j.b), d = j.dir, pb = live.pointOf(j.a, cb), pr = live.pointOf(j.b, cr), p2 = live.pointOf(j.b, [cr[0] + d[0] * 0.1, cr[1] + d[1] * 0.1, cr[2] + d[2] * 0.1]);
       const ax = [0, 1, 2].map((i) => (p2[i]! - pr[i]!) / 0.1), w = [0, 1, 2].map((i) => pb[i]! - pr[i]!), along = w.reduce((t, v, i) => t + v * ax[i]!, 0), off = Math.hypot(...w.map((v, i) => v - along * ax[i]!)), rest = [0, 1, 2].reduce((t, i) => t + (cb[i]! - cr[i]!) * d[i]!, 0), sl = along - rest;
       const x = worst[k]!; x.off = Math.max(x.off, off); x.lo = Math.min(x.lo, sl); x.hi = Math.max(x.hi, sl); const e = eyes[k]!; if (e.a && e.b) { const L = dist(live.pointOf(j.a, e.a), live.pointOf(j.b, e.b)); x.lmin = Math.min(x.lmin, L); x.lmax = Math.max(x.lmax, L); } });
-    const joints = M.joints.filter((j) => j.motor && j.limits && j.turns && !j.by.some((t) => t.includes('(free)'))), lines: string[] = [];
+    const joints = M.joints.filter((j) => j.motor && j.motor.kind !== 'cylinder' && j.limits && j.turns && !j.by.some((t) => t.includes('(free)'))), lines: string[] = [];
+    // (the joints cylinders carry: held by nothing but them; each cylinder is worked out and in, and what turned is read)
+    const carried = M.joints.filter((j) => !j.motor && j.turns && !j.slide && !j.by.some((t) => t.includes('(free)'))), cyls = live.cylinders(), mm = (x: number) => Math.round(x * 1000);
     try {
+      for (const c of cyls) { const nm = short(c.name), sp = Math.max(0.01, (c.hi - c.lo) / 4), a0 = carried.map((j) => live.angle(j.a)), swing = carried.map(() => [0, 0] as [number, number]), ends: number[] = [];
+        for (const way of [1, -1] as const) { if (this.live !== live) return; this.report = `${lines.join('<br>')}${lines.length ? '<br>' : ''}${way > 0 ? 'Pushing out' : 'Drawing in'} the ${esc(nm)}…`; this.tell();
+          live.valve(c.body, way, sp); for (let t = 0; t < 14; t++) { await wait(500); read(); carried.forEach((j, k) => { const d = live.angle(j.a) - a0[k]!; swing[k]![0] = Math.min(swing[k]![0], d); swing[k]![1] = Math.max(swing[k]![1], d); }); } ends.push(live.out(c.body)); }
+        live.valve(c.body, 0); const short1 = ends[0]! < c.hi - 0.01 - 0.05 * (c.hi - c.lo), short2 = ends[1]! > c.lo + 0.01 + 0.05 * (c.hi - c.lo), turned = carried.map((j, k) => ({ j, s: swing[k]! })).filter((x) => x.s[1] - x.s[0] > 0.02);
+        lines.push(`${short1 || short2 || !turned.length ? '✕' : '✓'} <b>${esc(nm)}</b> (pushes ${Math.round(c.force / 1000)} kN, draws ${Math.round(c.pull / 1000)} kN): out to ${mm(ends[0]!)} of ${mm(c.hi)} mm${short1 ? ' (stopped short: too heavy for it, or something in its way)' : ''}; in to ${mm(ends[1]!)} of ${mm(c.lo)} mm${short2 ? ' (stopped short)' : ''}. ${turned.length ? turned.map((x) => `It turned the ${esc(short(M.bodies[x.j.a]!.name))} from ${deg(x.s[0])}° to ${deg(x.s[1])}°${x.j.limits ? ` (asked ${deg(x.j.limits.lo)}° to ${deg(x.j.limits.hi)}°)` : ''}`).join('; ') : 'It turned no joint: it moves nothing'}`); }
+      for (const j of carried) if (!cyls.length) lines.push(`✕ <b>${esc(short(M.bodies[j.a]!.name))}</b>: nothing holds or moves this joint`);
       for (const j of joints) { const nm = short(M.bodies[j.a]!.name), got: string[] = []; let bad = false;
         for (const want of [j.limits!.hi * 0.9, j.limits!.lo * 0.9]) { if (this.live !== live) return; this.report = `${lines.join('<br>')}${lines.length ? '<br>' : ''}Moving the ${esc(nm)} to ${deg(want)}°…`; this.tell();
           live.hold(j.a, want); await wait(3500); read(); const g = live.angle(j.a), miss = ((((deg(g) - deg(want)) % 360) + 540) % 360) - 180; if (Math.abs(miss) > 5) bad = true; got.push(`asked ${deg(want)}°, reached ${deg(want) + miss}°`); }
@@ -171,13 +180,17 @@ export class MoveMode {
         const e = eyes[k]!, L0 = e.a && e.b ? dist(e.a, e.b) : NaN, made = Number.isFinite(L0) ? `made to work from ${Math.round((L0 - r[1]) * 1000)} to ${Math.round((L0 - r[0]) * 1000)} mm pin to pin (it stands at ${Math.round(L0 * 1000)}); the joints took its pins from ${Math.round(x.lmin * 1000)} to ${Math.round(x.lmax * 1000)} mm apart` : 'its two pins were not found';
         const asked = Number.isFinite(L0) && (x.lmin < L0 - r[1] - 0.01 || x.lmax > L0 - r[0] + 0.01);
         lines.push(`${out || off ? '✕' : '✓'} <b>${esc(short(M.bodies[j.b]!.name))}</b>: rod off its barrel's line by at most ${Math.round(x.off * 1000)} mm${off ? ' (forced out of line)' : ''}. ${made}${asked ? ' — MORE than it was made for: its stroke was worked out wrongly, or the joint was pushed past it' : ''}`); });
-      if (!joints.length) lines.push('No joint here holds its place with a range to test.');
+      if (!joints.length && !cyls.length) lines.push('No cylinder and no held joint here to test.');
+      if (joints.length) lines.push(`Note: ${joints.length} joint${joints.length === 1 ? ' is' : 's are'} still held by a hold that is not a part of the machine (no cylinder spans ${joints.length === 1 ? 'it' : 'them'}).`);
       const fails = lines.filter((l) => l.startsWith('✕')).length; this.report = `<b>Joint test: ${fails ? `${fails} failing` : 'all passed'}</b><br>${lines.join('<br>')}<br><span style="opacity:.7">End of report (${lines.length} lines).</span>`;
     } finally { this.testing = false; if (this.live === live) this.tell(); }
   }
   private act(a: string): void {
     if (a === 'test') { void this.runTest(); return; }
-    const live = this.live; if (!live) return; const fr = live.motion.bodies.map((b) => b.frozen);
+    const live = this.live; if (!live) return;
+    // (a cylinder's valve: out, in, or shut. It runs at a speed that takes its whole stroke in about four seconds: the
+    // pump that would set its speed is not modelled, so this is a choice for watching it, not a figure of the machine)
+    if (a.startsWith('cyl:')) { const [, k, w] = a.split(':'), body = Number(k), c = live.cylinders().find((x) => x.body === body); if (c) live.valve(body, Number(w) as -1 | 0 | 1, Math.max(0.01, (c.hi - c.lo) / 4)); this.tell(); return; } const fr = live.motion.bodies.map((b) => b.frozen);
     if (a === 'spin') { const on = !this.spinning.has(this.sel), w = (this.rpm * 2 * Math.PI) / 60; if (on) this.spinning.set(this.sel, w); else this.spinning.delete(this.sel); live.spin(this.sel, on ? w : null); this.tell(); return; }
     if (a === 'hold') { const on = !live.isHeld(this.sel); this.spinning.delete(this.sel); if (on) { live.hold(this.sel); this.held.add(this.sel); } else { live.hold(this.sel, null); this.held.delete(this.sel); } this.tell(); return; }
     if (a === 'freeze' || a === 'loose') fr[this.sel] = a === 'freeze'; else fr.fill(a === 'all-frozen');
