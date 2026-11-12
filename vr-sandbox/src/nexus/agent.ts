@@ -1319,6 +1319,7 @@ export async function composeBuild(request: string, o: { ask: Ask; board?: Board
    *  can be taken; given, the model is shown it with the recognition list after the build and its checks */ look?: (board: Board) => Promise<{ png: Uint8Array } | undefined>;
   /** the recognition list written before the split (one call more); on where `look` is given, unless said */ features?: boolean;
   /** a layout skeleton first (one call more): the whole as plain solids at places, shown at once, and kept as the build where the parts' build leaves something unmet */ skeleton?: boolean;
+  /** ADVANCED (the user, 2026-11-12: "each part to be built separately in advanced mode down to its bolts"): split two levels deeper and three times as widely, and build up to 150 assemblies from their own pieces where the plain build stops at 40. Many more calls, so it is asked for, never the default */ advanced?: boolean;
   /** every call answers in one closed format (stages.ts FORMATS), forced where the model is called and read from the tool's input, never text; a graph reply is checked by the wall (applyGraph) before it is a plan, returned once with what is wrong; the app turns it on, a test with a scripted text ask leaves it off */ formats?: boolean;
   /** the wall-clock budget, ms (default 240 000): when it is spent the run asks nothing more, returns what it has and says in unmet what was not reached */ budgetMs?: number }): Promise<ComposeRun> {
   const { starterBoards } = await import('./starters'), steps: ComposeStep[] = [], plans: AgentPlan[] = [], unmet: string[] = [], remembered: string[] = [], recalled: string[] = [], missing: string[] = [];
@@ -1543,7 +1544,8 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       const size1 = () => tcall('sizer', 'zones and pivots', `${SIZER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nIts subsystems (and under each, what it is made of):\n${tree.map((n) => `${n.name}${n.n > 1 ? ` x${n.n}` : ''} (${n.is})${n.kids.map((k) => `\n  ${k.name}${k.n > 1 ? ` x${k.n}` : ''}`).join('')}`).join('\n').slice(0, 5000)}`).then((t) => firstJson(t, 'sizer'), (e: unknown) => e);
       sizeStart = size1;
       let level = tree.map((n) => ({ n, path: [n.name] })), total = tree.length, depth = 1;
-      for (; depth < 3 && total < 200; depth++) { const sys = level.filter((x) => x.n.kind === 'system').slice(0, 24); if (!sys.length) break;
+      if (o.advanced) say('features', 'advanced: split two levels deeper and built from more of its own pieces; many more calls than a plain build');
+      for (; depth < (o.advanced ? 5 : 3) && total < (o.advanced ? 600 : 200); depth++) { const sys = level.filter((x) => x.n.kind === 'system').slice(0, o.advanced ? 60 : 24); if (!sys.length) break;
         const next = await pooled(sys, async (x) => { try { x.n.kids = await split1(x.path, x.n.is); } catch { x.n.kids = []; } return x.n.kids.map((k) => ({ n: k, path: [...x.path, k.name] })); });
         level = next.flat(); total += level.length; showTree(); }
       const lines = (ns: Tree[], d: number): string[] => ns.flatMap((n) => [`${'  '.repeat(d)}${n.name}${n.n > 1 ? ` x${n.n}` : ''}${n.kids.length ? ':' : ''} (${n.is})`, ...lines(n.kids, d + 1)]);
@@ -1905,7 +1907,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       // (then each main part that is a box is built from its own parts, all side by side: sized and joined face to face by
       // the MATER, placed by the app, what its joins call for added. A beam stays one member for now)
       if (pre && pre.paths.length) { try { const toPipe = (ns: Tree[]): PipeNode[] => ns.map((n) => ({ name: n.name, n: n.n, kind: n.kind, is: n.is, state: 'placed' as const, kids: toPipe(n.kids) }));
-          const tM = Date.now(), rb = await buildDeep(request, toPipe(tree), pre.paths, board, { ask: o.ask, ...(o.onPipe ? { onPipe: o.onPipe } : {}), idFrom: pipeId + 5000, maxCalls: 40, contracts: pre.contracts, ...(o.onStep ? { onBoard: (pb: Board, done: string) => { board = pb; say('features', `in the view now: the ${done} built from its own pieces`); } } : {}) }); pipeId += 20000; asks += rb.calls;
+          const tM = Date.now(), rb = await buildDeep(request, toPipe(tree), pre.paths, board, { ask: o.ask, ...(o.onPipe ? { onPipe: o.onPipe } : {}), idFrom: pipeId + 5000, maxCalls: o.advanced ? 150 : 40, contracts: pre.contracts, ...(o.onStep ? { onBoard: (pb: Board, done: string) => { board = pb; say('features', `in the view now: the ${done} built from its own pieces`); } } : {}) }); pipeId += 20000; asks += rb.calls;
           board = rb.board; skeleton = rb.board; say('features', `${pre.paths.length} main parts built from their own pieces in ${((Date.now() - tM) / 1000).toFixed(0)} s: ${rb.says}`); }
         catch (e) { say('features', `the main parts stay as their boxes: ${(e as Error).message.slice(0, 160)}`, false); } }
       return done1(`Built: ${solids.length} solids${tree.length ? ` in ${tree.length} subsystems (${tree.map((n) => n.name).join(', ')})` : ''}. A model of plain solids placed as on the real thing: not yet real engineered parts.`); }

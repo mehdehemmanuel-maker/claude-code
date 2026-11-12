@@ -256,6 +256,9 @@ $('msgs').addEventListener('click', (ev) => { const f = (ev.target as HTMLElemen
 function say(text: string, bad = false): void { chat.push({ who: 'ai', html: md(text), ...(bad ? { bad: true } : {}) }); keepChat(); drawChat(); }
 const keepChat = () => store.set(CHAT_KEY, JSON.stringify(chat.slice(-30)));
 $('grab').onclick = () => $('sheet').classList.toggle('low');
+// (Advanced: off until asked for, and kept as it was left; it costs several times the calls of a plain build)
+let advanced = (() => { try { return localStorage.getItem('nexus.advanced') === '1'; } catch { return false; } })();
+{ const b = document.getElementById('adv'); if (b) { b.classList.toggle('on', advanced); b.onclick = () => { advanced = !advanced; b.classList.toggle('on', advanced); try { localStorage.setItem('nexus.advanced', advanced ? '1' : '0'); } catch { /* (not kept) */ } }; } }
 
 /** What was asked and answered before, short: sent with a request, so "make it longer" knows what "it" is (the board is
  *  sent with it, and the relay lists its nodes to the model). */
@@ -564,9 +567,9 @@ async function composeShown(q: string, why: string): Promise<void> {
   const tick = window.setInterval(paint, 1000); paint();
   try {
     let done: ComposeRun & { tokens?: Tok };
-    if (aiHere()) done = await composeBuild(q.trim(), { features: true, skeleton: true, ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: savedBlocks(), onStep: (s, b) => heard(s, structuredClone(b)), onPipe: heardPipe });
+    if (aiHere()) done = await composeBuild(q.trim(), { features: true, skeleton: true, advanced, ask: (prompt, tier) => askClaude(prompt, { tier }), blocks: savedBlocks(), onStep: (s, b) => heard(s, structuredClone(b)), onPipe: heardPipe });
     else {
-      const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'compose', request: q.trim(), blocks: savedBlocks() }) });
+      const res = await fetch('./api/agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'compose', request: q.trim(), blocks: savedBlocks(), advanced }) });
       if (res.status === 404 || res.status === 405) throw new Error('tap the key button (🔑) and paste your Anthropic API key to build with Claude here: this copy of the app is served without its AI relay (it holds no key, and a page never does). By hand works without it; to build with Claude, open the app the session serves (npm run app), or the page on claude.ai.');
       if (!res.ok || !res.body) throw new Error(`the relay answered ${res.status}`);
       const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '', got: (ComposeRun & { tokens?: Tok }) | null = null;
