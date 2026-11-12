@@ -17,6 +17,7 @@ import type { Board } from '../boards';
 import type { Jolt } from '../realize';
 import { leafGeometry, leafMaterial } from './kit3d';
 import { leavesOf } from '../assembly';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 let joltKept: Promise<Jolt> | null = null;
 const jolt = (): Promise<Jolt> => (joltKept ??= import('jolt-physics/wasm-compat').then((m) => m.default() as unknown as Promise<Jolt>));
@@ -44,7 +45,7 @@ export class MoveMode {
   source: () => Block[] = () => { const d = (globalThis as { dashboard?: { wall?: { board(): Board; outputsOf(id: string): Record<string, unknown> | undefined } } }).dashboard?.wall; return d ? blocksShown(d.board(), (id) => d.outputsOf(id)) : []; };
   live: LiveMotion | null = null;
   private block: Block | null = null; private frozen: boolean[] | undefined; private sel = -1; private spinning = new Map<number, number>(); private held = new Set<number>(); private rpm = 60;
-  private readonly group = new THREE.Group(); private meshes: { mesh: THREE.Mesh; body: number; base: THREE.Matrix4 }[] = [];
+  private readonly group = new THREE.Group(); private meshes: { mesh: THREE.Mesh; body: number; fine: boolean }[] = []; private bodyGroups: THREE.Group[] = []; private bodyMid: THREE.Vector3[] = []; private named = new Map<string, { body: number; at: THREE.Vector3 }>(); private fineR = 0; private drawnOnce = false;
   private readonly el: HTMLDivElement; private readonly btn: HTMLButtonElement; private readonly card: HTMLDivElement; private raf = 0; private last = 0;
   private drag: { body: number; made: THREE.Vector3; plane: THREE.Plane; to: THREE.Vector3; was: THREE.Vector3 | null } | null = null;
   constructor(private readonly dock: Dock3D) {
@@ -76,14 +77,31 @@ export class MoveMode {
   }
   /** Stopped: back as it was built. */
   stop(): void { this.halt(); this.frozen = undefined; this.spinning.clear(); this.held.clear(); this.sel = -1; this.card.style.display = 'none'; this.dock.redraw(); }
-  private halt(): void { cancelAnimationFrame(this.raf); this.live?.destroy(); this.live = null; this.drag = null; this.dock.eyes.orbit.enabled = true; for (const m of this.meshes) this.group.remove(m.mesh); this.meshes = []; this.dock.view.group.visible = true; this.btn.textContent = '▶ Move'; this.btn.classList.remove('on'); }
-  /** Each piece's leaves, where the block has them, a body's colour said by whether it is frozen. */
+  private halt(): void { cancelAnimationFrame(this.raf); this.live?.destroy(); this.live = null; this.drag = null; this.dock.eyes.orbit.enabled = true; for (const m of this.meshes) { m.mesh.geometry.dispose(); (m.mesh.material as THREE.Material).dispose(); } for (const g of this.bodyGroups) this.group.remove(g); this.meshes = []; this.bodyGroups = []; this.bodyMid = []; this.named.clear(); this.dock.view.group.visible = true; this.btn.textContent = '▶ Move'; this.btn.classList.remove('on'); }
+  /** What is drawn while it moves, made light on the graphics card (the user, 2026-11-12: "super light on gpu and able to
+   *  render extremely complex moving parts"). A body is rigid, so everything in it moves as one: all of a body's leaves of
+   *  one material are welded into ONE mesh, already in place, and the body is one group with one matrix. A machine of ten
+   *  thousand pieces in twelve bodies is then some dozens of draws a frame and twelve matrices, not ten thousand of each.
+   *  The small pieces of a body (under 1/120 of the whole's size: bolts, washers, pins) are welded apart from the large,
+   *  and are not drawn at all while they would be under about three pixels on the screen. Nothing is drawn again while
+   *  nothing moves. A body's colour says whether it is frozen. */
   private draw(): void {
-    const parts = partOfBlock(this.block!).parts ?? [], bodies = this.live!.motion.bodies;
-    bodies.forEach((body, k) => body.pieces.forEach((i) => { const p = parts[i]; if (!p) return;
-      const own = new THREE.Matrix4().compose(new THREE.Vector3(...(p.at ?? [0, 0, 0])), new THREE.Quaternion().setFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))), new THREE.Vector3(1, 1, 1));
-      for (const l of leavesOf(p)) { const g = leafGeometry(l.part, true); if (!g) continue; const mat = leafMaterial(l.part).clone(); mat.emissive = new THREE.Color(body.frozen ? 0x0b2a55 : 0x000000);
-        const mesh = new THREE.Mesh(g, mat); mesh.matrixAutoUpdate = false; mesh.userData.body = k; mesh.userData.name = this.block!.pieces[i]!.name; const base = own.clone().multiply(l.m); mesh.matrix.copy(base); mesh.castShadow = true; this.group.add(mesh); this.meshes.push({ mesh, body: k, base }); } }));
+    const block = this.block!, parts = partOfBlock(block).parts ?? [], bodies = this.live!.motion.bodies;
+    this.fineR = Math.max(block.hi[0] - block.lo[0], block.hi[1] - block.lo[1], block.hi[2] - block.lo[2]) / 120; this.drawnOnce = false;
+    bodies.forEach((body, k) => { const grp = new THREE.Group(); grp.matrixAutoUpdate = false; const buckets = new Map<string, { src: THREE.MeshStandardMaterial; fine: boolean; geos: THREE.BufferGeometry[] }>();
+      body.pieces.forEach((i) => { const p = parts[i]; if (!p) return; let at: THREE.Vector3 | undefined;
+        const own = new THREE.Matrix4().compose(new THREE.Vector3(...(p.at ?? [0, 0, 0])), new THREE.Quaternion().setFromEuler(new THREE.Euler(...(p.rot ?? [0, 0, 0]))), new THREE.Vector3(1, 1, 1));
+        for (const l of leavesOf(p)) { const g = leafGeometry(l.part, true); if (!g) continue; const base = own.clone().multiply(l.m), src = leafMaterial(l.part) as THREE.MeshStandardMaterial;
+          if (!g.boundingSphere) g.computeBoundingSphere(); const fine = g.boundingSphere!.radius * base.getMaxScaleOnAxis() < this.fineR, key = `${src.uuid}|${fine ? 1 : 0}`;
+          let bk = buckets.get(key); if (!bk) buckets.set(key, (bk = { src, fine, geos: [] }));
+          const ng = g.index ? g.toNonIndexed() : g.clone(); if (!ng.attributes.normal) ng.computeVertexNormals(); for (const n of Object.keys(ng.attributes)) if (n !== 'position' && n !== 'normal' && n !== 'uv') ng.deleteAttribute(n); ng.morphAttributes = {}; ng.applyMatrix4(base); bk.geos.push(ng);
+          at ??= g.boundingSphere!.center.clone().applyMatrix4(base); }
+        if (at) this.named.set(block.pieces[i]!.name, { body: k, at }); });
+      for (const bk of buckets.values()) { if (!bk.geos.every((g) => g.attributes.uv)) for (const g of bk.geos) g.deleteAttribute('uv');
+        const merged = bk.geos.length === 1 ? bk.geos[0]! : mergeGeometries(bk.geos, false); if (bk.geos.length > 1) for (const g of bk.geos) g.dispose(); if (!merged) continue;
+        const mat = bk.src.clone(); mat.emissive = new THREE.Color(body.frozen ? 0x0b2a55 : 0x000000);
+        const mesh = new THREE.Mesh(merged, mat); mesh.matrixAutoUpdate = false; mesh.userData.body = k; mesh.castShadow = !bk.fine; mesh.frustumCulled = true; grp.add(mesh); this.meshes.push({ mesh, body: k, fine: bk.fine }); }
+      this.group.add(grp); this.bodyGroups[k] = grp; const bx = new THREE.Box3().setFromObject(grp); this.bodyMid[k] = bx.isEmpty() ? new THREE.Vector3() : bx.getCenter(new THREE.Vector3()); });
   }
   private frame(dt: number): void {
     const live = this.live!; if (dt <= 0) return;
@@ -93,20 +111,24 @@ export class MoveMode {
       else { const m = live.massOf(k), v = d.was ? now.clone().sub(d.was).divideScalar(dt) : new THREE.Vector3(); const F = d.to.clone().sub(now).multiplyScalar(150 * m).addScaledVector(v, -20 * m); live.pull(k, [F.x, F.y, F.z], [now.x, now.y, now.z]); }
       d.was = now; }
     live.step(dt);
-    for (const m of this.meshes) m.mesh.matrix.copy(live.moved(m.body).multiply(m.base));
-    this.dock.redraw();
+    // (one matrix a body; the small pieces of a body hidden while under about three pixels; nothing drawn while nothing moved)
+    let changed = !this.drawnOnce || !!this.drag; this.drawnOnce = true; const cam = this.dock.eyes.camera as THREE.PerspectiveCamera, pxPerM = (this.dock.canvas.clientHeight || 600) / (2 * Math.tan((((cam.fov ?? 50) * Math.PI) / 180) / 2)), v = new THREE.Vector3(), near: boolean[] = [];
+    this.bodyGroups.forEach((grp, k) => { const m = live.moved(k), a = grp.matrix.elements, e = m.elements; let d = 0; for (let i = 0; i < 16; i++) d += Math.abs(a[i]! - e[i]!); if (d > 1e-7) { grp.matrix.copy(m); grp.matrixWorldNeedsUpdate = true; changed = true; }
+      near[k] = (this.fineR * pxPerM) / Math.max(1e-6, v.copy(this.bodyMid[k]!).applyMatrix4(grp.matrix).distanceTo(cam.position)) > 3; });
+    for (const m of this.meshes) if (m.fine && m.mesh.visible !== near[m.body]) { m.mesh.visible = !!near[m.body]; changed = true; }
+    if (changed) this.dock.redraw();
     if ((this.sel >= 0 || live.cylinders().some((c) => live.valveOf(c.body) !== 0)) && !this.testing && Math.round(live.t * 10) % 3 === 0) this.tell();
   }
   /** Where a piece is on the page now (css px), by its name, while it moves: what a test presses and drags. */
   screenOf(name: string): [number, number] | null {
-    const m = this.meshes.find((x) => x.mesh.userData.name === name); if (!m) return null; m.mesh.geometry.computeBoundingBox();
-    return this.dock.screenOf(m.mesh.geometry.boundingBox!.getCenter(new THREE.Vector3()).applyMatrix4(m.mesh.matrix));
+    const m = this.named.get(name), g = m ? this.bodyGroups[m.body] : undefined; if (!m || !g) return null;
+    return this.dock.screenOf(m.at.clone().applyMatrix4(g.matrix));
   }
   /** How far each body with a joint has turned, in turns, by its name. */
   turns(): Record<string, number> { const l = this.live; if (!l) return {}; return Object.fromEntries(l.motion.bodies.map((b, k) => [b.name, +(l.angle(k) / (2 * Math.PI)).toFixed(3)])); }
   private hit(e: PointerEvent): { body: number; point: THREE.Vector3 } | null {
     const ray = this.dock.rayAt(e.clientX, e.clientY), rc = new THREE.Raycaster(ray.origin, ray.direction); this.group.updateMatrixWorld(true);
-    const h = rc.intersectObjects(this.meshes.map((m) => m.mesh), false)[0]; return h ? { body: h.object.userData.body as number, point: h.point.clone() } : null;
+    const h = rc.intersectObjects(this.meshes.filter((m) => m.mesh.visible).map((m) => m.mesh), false)[0]; return h ? { body: h.object.userData.body as number, point: h.point.clone() } : null;
   }
   private downAt: [number, number] | null = null; private posing = -1;
   private down(e: PointerEvent): void {
