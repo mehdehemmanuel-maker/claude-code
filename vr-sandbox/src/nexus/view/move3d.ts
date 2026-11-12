@@ -151,21 +151,28 @@ export class MoveMode {
     const M = live.motion, wait = (ms: number) => new Promise<void>((ok) => setTimeout(ok, ms)), deg = (r: number) => Math.round((r * 180) / Math.PI), short = (n: string) => n.split(' and ')[0]!.split(' > ').pop()!;
     const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
     const cOf = (body: number) => block.pieces[M.bodies[body]!.pieces[0]!]!.solid.base.c as unknown as [number, number, number];
-    const slides = M.joints.filter((j) => j.slide && j.range), worst = slides.map(() => ({ off: 0, lo: 0, hi: 0 }));
+    const slides = M.joints.filter((j) => j.slide && j.range), worst = slides.map(() => ({ off: 0, lo: 0, hi: 0, lmin: Infinity, lmax: -Infinity }));
+    // (each cylinder's two eye pins: the free pin its barrel turns on and the one its rod turns on; the length between them is
+    // read as it moves, to set beside the closed and open lengths it was made for)
+    const eyeOf = (body: number) => M.joints.find((h) => h !== undefined && h.turns && !h.slide && h.by.some((t) => t.includes('(free)')) && (h.a === body || h.b === body))?.point;
+    const eyes = slides.map((j) => ({ a: eyeOf(j.a), b: eyeOf(j.b) })), dist = (p: readonly number[], q: readonly number[]) => Math.hypot(p[0]! - q[0]!, p[1]! - q[1]!, p[2]! - q[2]!);
     const read = () => slides.forEach((j, k) => { const cb = cOf(j.a), cr = cOf(j.b), d = j.dir, pb = live.pointOf(j.a, cb), pr = live.pointOf(j.b, cr), p2 = live.pointOf(j.b, [cr[0] + d[0] * 0.1, cr[1] + d[1] * 0.1, cr[2] + d[2] * 0.1]);
       const ax = [0, 1, 2].map((i) => (p2[i]! - pr[i]!) / 0.1), w = [0, 1, 2].map((i) => pb[i]! - pr[i]!), along = w.reduce((t, v, i) => t + v * ax[i]!, 0), off = Math.hypot(...w.map((v, i) => v - along * ax[i]!)), rest = [0, 1, 2].reduce((t, i) => t + (cb[i]! - cr[i]!) * d[i]!, 0), sl = along - rest;
-      const x = worst[k]!; x.off = Math.max(x.off, off); x.lo = Math.min(x.lo, sl); x.hi = Math.max(x.hi, sl); });
+      const x = worst[k]!; x.off = Math.max(x.off, off); x.lo = Math.min(x.lo, sl); x.hi = Math.max(x.hi, sl); const e = eyes[k]!; if (e.a && e.b) { const L = dist(live.pointOf(j.a, e.a), live.pointOf(j.b, e.b)); x.lmin = Math.min(x.lmin, L); x.lmax = Math.max(x.lmax, L); } });
     const joints = M.joints.filter((j) => j.motor && j.limits && j.turns && !j.by.some((t) => t.includes('(free)'))), lines: string[] = [];
     try {
       for (const j of joints) { const nm = short(M.bodies[j.a]!.name), got: string[] = []; let bad = false;
         for (const want of [j.limits!.hi * 0.9, j.limits!.lo * 0.9]) { if (this.live !== live) return; this.report = `${lines.join('<br>')}${lines.length ? '<br>' : ''}Moving the ${esc(nm)} to ${deg(want)}°…`; this.tell();
-          live.hold(j.a, want); await wait(3500); read(); const g = live.angle(j.a); if (Math.abs(deg(g) - deg(want)) > 5) bad = true; got.push(`asked ${deg(want)}°, reached ${deg(g)}°`); }
+          live.hold(j.a, want); await wait(3500); read(); const g = live.angle(j.a), miss = ((((deg(g) - deg(want)) % 360) + 540) % 360) - 180; if (Math.abs(miss) > 5) bad = true; got.push(`asked ${deg(want)}°, reached ${deg(want) + miss}°`); }
         live.hold(j.a, 0); await wait(2000); read();
         lines.push(`${bad ? '✕' : '✓'} <b>${esc(nm)}</b>: ${got.join('; ')}${bad ? ' (stopped short: something is in its way, or it cannot reach)' : ''}`); }
       slides.forEach((j, k) => { const x = worst[k]!, len = Math.max(0.05, 2 * Math.max(...((block.pieces[M.bodies[j.a]!.pieces[0]!]!.solid.base as unknown as { h?: number }).h ? [(block.pieces[M.bodies[j.a]!.pieces[0]!]!.solid.base as unknown as { h: number }).h / 2] : [0.5]))), r = j.range!, out = x.lo < r[0] - 0.005 || x.hi > r[1] + 0.005, off = x.off > len / 10;
-        lines.push(`${out || off ? '✕' : '✓'} <b>${esc(short(M.bodies[j.b]!.name))}</b>: its rod left its barrel's line by at most ${Math.round(x.off * 1000)} mm${off ? ' (it was forced out of line)' : ''}; it slid ${Math.round(x.lo * 1000)} to ${Math.round(x.hi * 1000)} mm of a stroke of ${Math.round(r[0] * 1000)} to ${Math.round(r[1] * 1000)} mm${out ? ' (past its stroke)' : ''}`); });
+        // (pin to pin: what it was made for, from its stroke about the length it stands at, beside what the joints asked of it)
+        const e = eyes[k]!, L0 = e.a && e.b ? dist(e.a, e.b) : NaN, made = Number.isFinite(L0) ? `made to work from ${Math.round((L0 - r[1]) * 1000)} to ${Math.round((L0 - r[0]) * 1000)} mm pin to pin (it stands at ${Math.round(L0 * 1000)}); the joints took its pins from ${Math.round(x.lmin * 1000)} to ${Math.round(x.lmax * 1000)} mm apart` : 'its two pins were not found';
+        const asked = Number.isFinite(L0) && (x.lmin < L0 - r[1] - 0.01 || x.lmax > L0 - r[0] + 0.01);
+        lines.push(`${out || off ? '✕' : '✓'} <b>${esc(short(M.bodies[j.b]!.name))}</b>: rod off its barrel's line by at most ${Math.round(x.off * 1000)} mm${off ? ' (forced out of line)' : ''}. ${made}${asked ? ' — MORE than it was made for: its stroke was worked out wrongly, or the joint was pushed past it' : ''}`); });
       if (!joints.length) lines.push('No joint here holds its place with a range to test.');
-      const fails = lines.filter((l) => l.startsWith('✕')).length; this.report = `<b>Joint test: ${fails ? `${fails} failing` : 'all passed'}</b><br>${lines.join('<br>')}`;
+      const fails = lines.filter((l) => l.startsWith('✕')).length; this.report = `<b>Joint test: ${fails ? `${fails} failing` : 'all passed'}</b><br>${lines.join('<br>')}<br><span style="opacity:.7">End of report (${lines.length} lines).</span>`;
     } finally { this.testing = false; if (this.live === live) this.tell(); }
   }
   private act(a: string): void {
