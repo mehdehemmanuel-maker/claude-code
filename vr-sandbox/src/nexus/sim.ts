@@ -452,7 +452,7 @@ function mPlace(of: Part | Assembly, m: THREE.Matrix4): Assembly['items'][number
 export interface MoveBody { name: string; pieces: number[]; frozen: boolean; why: string }
 /** What drives a joint: a hobby servo (its stall torque, vendor figures, typical) or a gear motor or stepper (its torque
  *  not known here: held stiff), and whether it holds where it is put by default. */
-export interface MoveMotor { kind: 'servo' | 'gear motor' | 'stepper' | 'held pivot' | 'cylinder'; torque?: number; from: string;
+export interface MoveMotor { kind: 'servo' | 'gear motor' | 'stepper' | 'held pivot' | 'cylinder' | 'drive'; torque?: number; from: string;
   /** a cylinder's: what it pushes out with and draws in with, N (pressure on its piston, and on its piston less its rod);
    *  `ext` +1 where body a moved along the joint's line from body b is the cylinder getting longer, -1 where shorter */ force?: number; pull?: number; ext?: 1 | -1 }
 /** A body that turns (a) on another (b, the shaft's) about a line through `point` along `dir`, from the faces that say so;
@@ -602,6 +602,13 @@ export function motionOf(b: Block): Motion {
   // at the far end of its longest side, three times over; the factor of three is a margin, typical, not a rating. What
   // drives it on the real machine (a motor, a gear) is not modelled yet, and that is said)
   // (a pin marked free turns freely: a cylinder's eye on its mount)
+  // (WHEELS: a layout's axle is a wheel turning on its pin, and it is driven. Its torque is the most the ground can take
+  // from it before it spins: the floor's friction (0.6) times the whole's weight, shared among the wheels, at the wheel's
+  // radius. That is a limit of grip, not the machine's drive: its motor, gearing and brakes are not modelled, and that is
+  // said. It starts braked: held where it is until it is driven)
+  { const isAxle = (j: MoveJoint) => j.by.some((t) => t.startsWith('layout pivot') && t.includes('(axle)')), ax = joints.filter((j) => isAxle(j) && !j.motor);
+    if (ax.length) { const parts = partOfBlock(b).parts ?? [], all = b.pieces.reduce((t, _p, i) => t + (parts[i] ? massOfAll(parts[i]!) : 0), 0);
+      for (const j of ax) { const r = Math.max(1e-3, ...bodies[j.a]!.pieces.map((i) => (b.pieces[i]!.solid.base as unknown as { r?: number }).r ?? 0)); j.motor = { kind: 'drive', torque: (0.6 * 9.80665 * Math.max(all, 1e-3) * r) / ax.length, from: `driven up to the grip of the ground: 0.6 of the whole's weight shared among ${ax.length} wheel${ax.length === 1 ? '' : 's'} at its ${Math.round(r * 1000)} mm radius; its motor, gearing and brakes are not modelled` }; } } }
   const carries = joints.filter((j) => j.motor?.kind === 'cylinder' || j.by.some((t) => t.startsWith('layout pivot') && t.includes('(free)')));
   const spanned = (j: MoveJoint): boolean => { const seen = new Set([j.a]), todo = [j.a]; let cyl = false; while (todo.length) { const k = todo.pop()!; for (const e of carries) { if (e === j || (e.a !== k && e.b !== k)) continue; const o = e.a === k ? e.b : e.a; if (seen.has(o)) continue; seen.add(o); todo.push(o); if (e.motor?.kind === 'cylinder') cyl = true; } } return cyl && seen.has(j.b); };
   const heldPivot = (j: MoveJoint) => !j.motor && j.by.some((t) => t.startsWith('layout pivot') && !t.includes('(free)')) && !spanned(j);
@@ -625,7 +632,7 @@ export function motionOf(b: Block): Motion {
     // (a pivot given its needed range of motion (degrees from where it stands, the way its pin's line turns) is limited to
     // that: the range is the requirement, and what is built round it must leave it free)
     for (const j of joints) { if (j.limits) continue; const m = j.by.map((t) => /^layout pivot.* range (-?\d+)\.\.(-?\d+)$/.exec(t)).find(Boolean); if (m) j.limits = { lo: (Math.min(Number(m[1]), Number(m[2])) * Math.PI) / 180, hi: (Math.max(Number(m[1]), Number(m[2])) * Math.PI) / 180, src: 'its needed range of motion, as asked' }; }
-    for (const j of joints) { if (j.limits || !j.turns || j.slide || !j.by.some((t) => t.startsWith('layout pivot'))) continue;
+    for (const j of joints) { if (j.limits || !j.turns || j.slide || j.motor?.kind === 'drive' || !j.by.some((t) => t.startsWith('layout pivot'))) continue;
       // (only what is big enough to stop it counts: a piece of at least a thirtieth of its body's volume, or one of its three
       // largest; small fittings laid close to the other body (a hose, a bracket) would lock every joint and are passed by)
       const vol = (i: number) => { const o = obbOf(i); return o.h[0] * o.h[1] * o.h[2]; }, big = (ps: number[]) => { const vs = ps.map(vol), tot = vs.reduce((t, v) => t + v, 0), third = [...vs].sort((p, q) => q - p)[2] ?? 0; return ps.filter((_i, k) => vs[k]! >= tot / 30 || vs[k]! >= third); };
@@ -667,6 +674,8 @@ export function motionOf(b: Block): Motion {
   // rod among them, which no motor holds and which follow the joint they span; a body joined to nothing (a second thing
   // beside it, a load lying on it) is loose too, and stays where it is by its weight)
   if (b.faces.some((f) => f.by.startsWith('layout pivot'))) { const held = bodies.findIndex((x) => x.frozen && x.why.startsWith('held: what it stands on')); if (held >= 0) bodies.forEach((x, k) => { if (k !== held && x.frozen) { const jn = joints.some((j) => j.a === k || j.b === k); x.frozen = false; x.why = jn ? 'loose: on its joints' : 'loose: a separate thing, joined to nothing: it stands or lies there by its weight'; } }); }
+  // (a thing on wheels stands on nothing but them: no body of it is held; the ground carries it)
+  if (joints.some((j) => j.motor?.kind === 'drive')) bodies.forEach((x) => { if (x.frozen) { x.frozen = false; x.why = 'loose: it stands on its wheels'; } });
   const meshes: MoveMesh[] = [], gears = b.pieces.map((p) => gearOf(p));
   for (let i = 0; i < n; i++) for (let k = i + 1; k < n; k++) { const A = gears[i], B = gears[k]; if (!A || !B || Math.abs(A.m - B.m) > 1e-9 || find(i) === find(k)) continue;
     const d = Math.hypot(A.at[0] - B.at[0], A.at[1] - B.at[1]), a0 = (A.m * (A.z + B.z)) / 2;
@@ -874,6 +883,11 @@ export class LiveMotion {
   valve(body: number, way: -1 | 0 | 1, speed = 0.1): void { const h = this.joint.get(body); if (!h?.cyl) return; const J = this.J, c = h.c as InstanceType<Jolt['SixDOFConstraint']>, AX = J.SixDOFConstraintSettings_EAxis_TranslationX; h.cyl.valve = way;
     if (way === 0) { const v = new J.Vec3(h.cyl.e * this.out(body), 0, 0); c.SetTargetPositionCS(v); J.destroy(v); c.SetMotorState(AX, J.EMotorState_Position); }
     else { const v = new J.Vec3(h.cyl.e * way * Math.abs(speed), 0, 0); c.SetTargetVelocityCS(v); J.destroy(v); c.SetMotorState(AX, J.EMotorState_Velocity); } }
+  /** The driven wheels: each one's body and its radius, m. */
+  wheels(): { body: number; r: number }[] { return this.motion.joints.filter((j) => j.motor?.kind === 'drive' && this.joint.has(j.a)).map((j) => ({ body: j.a, r: Math.max(1e-3, ...this.motion.bodies[j.a]!.pieces.map((i) => (this.block.pieces[i]!.solid.base as unknown as { r?: number }).r ?? 0)) })); }
+  /** Drives every wheel: +1 forward (toward +x), -1 back, at `speed` m/s over the ground; 0 brakes them where they are. */
+  drive(way: -1 | 0 | 1, speed = 1): void { this.driving = way; for (const w of this.wheels()) { const h = this.joint.get(w.body)!; if (way === 0) this.spin(w.body, null); else this.spin(w.body, -way * (Math.abs(speed) / w.r) * (h.dir[2] >= 0 ? 1 : -1)); } }
+  driving = 0;
   /** Which way a cylinder's valve is now. */
   valveOf(body: number): number { return this.joint.get(body)?.cyl?.valve ?? 0; }
   /** Whether a body's joint is held at an angle now. */
