@@ -137,11 +137,20 @@ export class MoveMode {
       <div class="dim">Drag a loose piece to turn or slide it; a servo's joint stays where you put it; a joint on a cylinder moves only as far as you can force its cylinder. Tap one: Freeze, Loose, Motor (rpm), Hold.</div>
       ${s ? `<div style="margin-top:6px"><b>${esc(s.name)}</b><br><span class="dim">${esc(s.why)}${turns && live.jointOf(this.sel) ? ` · ${live.jointOf(this.sel)!.kind === 'slide' ? `${(live.slid(this.sel) * 1000).toFixed(1)} mm` : turns}` : ''}${live.motorOf(this.sel) ? ` · a ${esc(live.motorOf(this.sel)!.kind)}, ${esc(live.motorOf(this.sel)!.from)}` : ''}</span></div><div class="row"><button data-a="freeze">Freeze</button><button data-a="loose">Loose</button>${live.jointOf(this.sel)?.kind === 'hinge' ? `<button data-a="spin" class="${this.spinning.has(this.sel) ? 'on' : ''}">Motor</button><input data-a="rpm" type="number" value="${this.rpm}" style="width:56px" title="its speed, turns a minute"> rpm<button data-a="hold" class="${live.isHeld(this.sel) ? 'on' : ''}">Hold</button>` : ''}</div>` : ''}
       ${cyls.length ? `<div style="margin-top:6px"><b>Cylinders</b> <span class="dim">· each pushes with its own force and no more; shut, its oil holds it</span>${cyls.map((c) => { const v = live.valveOf(c.body), o = live.out(c.body); return `<div class="row"><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name.split(' and ')[0]!.split(' > ').pop()!)} <span class="dim">${Math.round(o * 1000)} mm (${Math.round(c.lo * 1000)}…${Math.round(c.hi * 1000)}) · ${Math.round(c.force / 1000)} kN</span></span><button data-a="cyl:${c.body}:-1" class="${v < 0 ? 'on' : ''}" title="Draw it in">◀ In</button><button data-a="cyl:${c.body}:0" title="Shut its valve: it holds where it is">■</button><button data-a="cyl:${c.body}:1" class="${v > 0 ? 'on' : ''}" title="Push it out">Out ▶</button></div>`; }).join('')}</div>` : ''}
-      <div class="row"><button data-a="all-frozen">Freeze all</button><button data-a="all-loose">Loose all</button><button data-a="test" class="${this.testing ? 'on' : ''}" title="Works every cylinder out and in, then every joint that is still held, here in the view, and says what each reached. About fifteen seconds a cylinder; no AI calls, nothing spent"${this.testing ? ' disabled' : ''}>${this.testing ? 'Testing…' : 'Test joints'}</button></div>${this.report ? `<div class="dim" style="margin-top:6px;max-height:38vh;overflow:auto">${this.report}</div>` : ''}`);
+      <div class="row"><button data-a="all-frozen">Freeze all</button><button data-a="all-loose">Loose all</button>${this.testMode ? `<button data-a="test" class="${this.testing ? 'on' : ''}" title="Works every cylinder out and in, then every joint that is still held, here in the view, and says what each reached. About fifteen seconds a cylinder; no AI calls, nothing spent"${this.testing ? ' disabled' : ''}>${this.testing ? 'Testing…' : 'Test joints'}</button>` : ''}<button data-a="testmode" class="${this.testMode ? 'on' : ''}" title="Test mode: shows the checks you can run on what was built. Off for ordinary use">Test mode</button></div>${this.testMode && this.report ? `<div class="row"><button data-a="copy"${this.testing ? ' disabled' : ''}>${this.copied ? 'Copied' : 'Copy report'}</button></div><div class="dim" style="margin-top:6px;max-height:38vh;overflow:auto;user-select:text;-webkit-user-select:text">${this.report}</div>` : ''}`);
     for (const b of this.card.querySelectorAll<HTMLButtonElement>('button[data-a]')) b.onclick = () => this.act(b.dataset.a!);
     const r = this.card.querySelector<HTMLInputElement>('input[data-a="rpm"]'); if (r) r.onchange = () => { this.rpm = Number(r.value) || 0; const w = (this.rpm * 2 * Math.PI) / 60; if (this.spinning.has(this.sel)) { this.spinning.set(this.sel, w); live.spin(this.sel, w); } };
   }
-  private testing = false; private report = '';
+  private testing = false; private report = ''; private copied = false;
+  /** Test mode (the user, 2026-11-12: "make this a test feature only so test mode"): the checks and their report are shown
+   *  only with it on; it is off until turned on, and stays as it was left. */
+  private testMode = (() => { try { return localStorage.getItem('nexus.testMode') === '1'; } catch { return false; } })();
+  /** The report as plain text, one line each, for pasting. */
+  private reportText(): string { const d = document.createElement('div'); d.innerHTML = this.report.replace(/<br\s*\/?>/g, '\n'); return (d.textContent ?? '').trim(); }
+  private async copyReport(): Promise<void> { const t = this.reportText(); let ok = false;
+    try { await navigator.clipboard.writeText(t); ok = true; } catch { /* (not allowed here: the older way below) */ }
+    if (!ok) { const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;left:0;top:0;opacity:0'; document.body.appendChild(ta); ta.select(); try { ok = document.execCommand('copy'); } catch { ok = false; } ta.remove(); }
+    this.copied = ok; if (!ok) this.report += '<br><span style="opacity:.7">It could not be copied from here: press and hold on the report to select it.</span>'; this.tell(); if (ok) setTimeout(() => { this.copied = false; if (this.live) this.tell(); }, 2000); }
   /** Test joints (the user, 2026-11-12: "make it testable to me not to you"): each joint that holds its place is driven to
    *  nine tenths of each end of its range, in the view, one after another; what it reached is said against what was asked,
    *  and for each cylinder how far its rod left its barrel's line and how much of its stroke it used. Run by the person, on
@@ -187,6 +196,8 @@ export class MoveMode {
   }
   private act(a: string): void {
     if (a === 'test') { void this.runTest(); return; }
+    if (a === 'copy') { void this.copyReport(); return; }
+    if (a === 'testmode') { this.testMode = !this.testMode; try { localStorage.setItem('nexus.testMode', this.testMode ? '1' : '0'); } catch { /* (not kept) */ } this.tell(); return; }
     const live = this.live; if (!live) return;
     // (a cylinder's valve: out, in, or shut. It runs at a speed that takes its whole stroke in about four seconds: the
     // pump that would set its speed is not modelled, so this is a choice for watching it, not a figure of the machine)
