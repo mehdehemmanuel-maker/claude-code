@@ -839,6 +839,18 @@ export class LiveMotion {
           this.joint.get(who)!.cyl = { other: who === j.a ? j.b : j.a, e, lo: e > 0 ? rg[0] : -rg[1], hi: e > 0 ? rg[1] : -rg[0], force: F, pull: Fp, valve: 0 }; }
       }
     }
+    // (A LINE CARRIES ITS LOAD BY THE ENGINE'S OWN TETHER (the user, 2026-11-12: "fully use them"). A cable, rope, chain or
+    // hose is drawn and bends as its run of pinned lengths, but a heavy thing hung on a run of light pinned lengths
+    // stretches it: each pin gives a little, and they add up. So between the two bodies at its ends the engine holds one
+    // distance constraint: never further apart than the line is long (the sum of its lengths), free to come nearer. The
+    // pull goes straight through it, as through a real cable; the lengths only have to follow)
+    { const chains = new Map<string, { k: number; j: MoveJoint }[]>(), far = (p: V3, q: V3) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+      for (const j of this.motion.joints) { const m = j.by.map((t) => /turns on the (.+) link (\d+) pin \(free\)/.exec(t)).find(Boolean); if (m) chains.set(m[1]!, [...(chains.get(m[1]!) ?? []), { k: Number(m[2]), j }]); }
+      let tied = 0;
+      for (const ls of chains.values()) { if (ls.length < 3) continue; ls.sort((p, q) => p.k - q.k); const first = ls[0]!.j, last = ls[ls.length - 1]!.j, outer = (e: MoveJoint, nb: MoveJoint) => (e.a === nb.a || e.a === nb.b ? e.b : e.a), A = outer(first, ls[1]!.j), Z = outer(last, ls[ls.length - 2]!.j);
+        if (A === Z || (B[A]!.frozen && B[Z]!.frozen)) continue; let L = 0; for (let i = 1; i < ls.length; i++) L += far(ls[i - 1]!.j.point, ls[i]!.j.point);
+        const st = new J.DistanceConstraintSettings(); st.mPoint1 = R(first.point); st.mPoint2 = R(last.point); st.mMinDistance = 0; st.mMaxDistance = L * 1.002; const c = st.Create(this.live[A]!.body, this.live[Z]!.body); J.destroy(st); ps.AddConstraint(c); tied++; }
+      if (tied) this.collideSays += `${this.collideSays ? '. ' : ''}${tied} line${tied === 1 ? '' : 's'} carried by a tether as long as the line (it pulls and cannot push)`; }
     for (const m of this.motion.meshes) {
       const st = new J.GearConstraintSettings(); st.mHingeAxis1 = V([0, 0, 1]); st.mHingeAxis2 = V([0, 0, 1]); st.SetRatio(m.za, m.zb);
       const c = J.castObject(st.Create(this.live[m.a]!.body, this.live[m.b]!.body), J.GearConstraint); J.destroy(st);

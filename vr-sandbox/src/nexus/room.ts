@@ -112,7 +112,7 @@ export interface Line { readonly port: string; readonly x: number; readonly z: n
 /** An operating limit of a line: below `min`, above `max` it is out of its rating; in `unit`, from `src`. */
 export interface LineLimit { readonly min?: number; readonly max?: number; readonly unit: string; readonly src: string }
 export interface JointRef { readonly name: string; readonly slide?: number; readonly turn?: true }
-export interface Piece { readonly name: string; readonly mat: string; readonly color?: number; readonly solid: Solid; readonly joint?: JointRef; readonly axis?: readonly [number, number]; readonly bought?: true; readonly tapped?: true; readonly lines: readonly Line[]; /** the path of block names it came through, outermost first, a copy's number on the name it repeats ("Robot leg #2"): written by dataflow.ts as a folded board carries its pieces out (`Block.owned`); none for a piece made on the board in hand */ readonly owner?: readonly string[] }
+export interface Piece { readonly name: string; readonly mat: string; readonly color?: number; readonly solid: Solid; readonly joint?: JointRef; readonly axis?: readonly [number, number]; readonly bought?: true; readonly tapped?: true; /** the share of its shape that is solid, where it stands for something not yet built from its own pieces (a machine's body drawn as one box): its weight is that share of its volume's */ readonly fill?: number; readonly lines: readonly Line[]; /** the path of block names it came through, outermost first, a copy's number on the name it repeats ("Robot leg #2"): written by dataflow.ts as a folded board carries its pieces out (`Block.owned`); none for a piece made on the board in hand */ readonly owner?: readonly string[] }
 export interface Face {
   readonly a: number; readonly b: number; readonly kind: 'contact' | 'gap'; readonly patch: 'area' | 'line'; readonly area: number; readonly length?: number;
   readonly at: P3; readonly normal: P3; readonly gap: number; /** the fit that left the gap, where an operation sized it (root 6) */ readonly fit?: Fit; readonly medium?: string; readonly gate?: string; readonly interference?: { readonly um: number; readonly pressure?: number; readonly src: string }; readonly by: string;
@@ -850,7 +850,7 @@ export class Block {
     }
     // (the port contract a pattern carries, on each line it made)
     for (const pat of [...(o.pattern ? [o.pattern] : []), ...(o.patterns ?? [])]) if (pat.port) lines.forEach((l, i) => { if (l.port === `${name}/${pat.name}`) lines[i] = { ...l, ...pat.port }; });
-    const piece: Piece = { name, mat, ...(o.color !== undefined ? { color: o.color } : {}), solid: { base, minus }, lines, ...(o.joint ? { joint: o.joint, ...(o.joint.turn ? { axis: [0, 0] as const } : {}) } : {}), ...(o.bought ? { bought: true as const } : {}), ...(o.tapped ? { tapped: true as const } : {}) };
+    const piece: Piece = { name, mat, ...(o.color !== undefined ? { color: o.color } : {}), solid: { base, minus }, lines, ...(o.joint ? { joint: o.joint, ...(o.joint.turn ? { axis: [0, 0] as const } : {}) } : {}), ...(o.bought ? { bought: true as const } : {}), ...(o.fill !== undefined && o.fill > 0 && o.fill < 1 ? { fill: o.fill } : {}), ...(o.tapped ? { tapped: true as const } : {}) };
     const rooms: RoomOf[] = base.k === 'cup' ? [{ name: `${name}/cavity`, c: [0, (base.ends) / 2, 0], r: base.r - base.wall, h: base.h - base.ends, open: true }]
       : base.k === 'box' && base.tray ? [{ name: `${name}/cavity`, c: [0, base.tray.floor / 2, 0], r: Math.hypot(base.size[0] - 2 * base.tray.wall, base.size[2] - 2 * base.tray.wall) / 2, h: base.size[1] - base.tray.floor, open: true, size: [base.size[0] - 2 * base.tray.wall, base.size[2] - 2 * base.tray.wall] }] : [];
     return Block.#seal(name, [piece], [], rooms);
@@ -1706,7 +1706,7 @@ const FACES: readonly FaceName[] = ['+x', '-x', '+y', '-y', '+z', '-z'];
 /** What `made` is asked besides its shape: a joint, bought, a colour, and a pattern of holes and lines (a circle about
  *  its middle or points; on a face, through or so deep, plain, counterbored [radius, depth] or countersunk to a radius at
  *  the face, 90°). */
-export interface MadeOpts { joint?: Joint; bought?: boolean; color?: number; pattern?: Pattern; patterns?: Pattern[];
+export interface MadeOpts { joint?: Joint; bought?: boolean; color?: number; /** the share of its shape that is solid (weight only) */ fill?: number; pattern?: Pattern; patterns?: Pattern[];
   /** a section's bore that may be opened to this radius by what goes along its axis (a gear bought with a pilot bore,
    *  bored to its shaft by Through a line): its axis's slot, never less than the bore it has */
   boreTo?: number;
@@ -1860,7 +1860,7 @@ export function partOfBlock(b: Block): Part {
     // each cut in the piece's own frame)
     const B = p.solid.base, cuts: Cut[] = [], cores: Part[] = [], f = B.frame, own = (v: P3): V3 => (f ? mtv(f, v) : [v[0], v[1], v[2]]);
     const origin: V3 = B.k === 'bend' ? sub(B.c, f ? mv(f, bendMid(B)) : bendMid(B)) : [B.c[0], B.c[1], B.c[2]], turned = f ? { rot: eulerOf(f) } : {};
-    const look = { mat: p.mat, ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}) };
+    const look = { mat: p.mat, ...(p.fill !== undefined ? { fill: p.fill } : {}), ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}) };
     if ((B.k === 'cyl' || B.k === 'hex') && B.ri !== undefined) cuts.push({ r: B.ri, depth: B.h, at: [0, B.h / 2, 0], dir: [0, -1, 0] });
     for (const m of p.solid.minus) {
       if (m.k === 'bend' || missesBase(B, m)) continue; const h = boxy(m) ? m.size[1] : m.h, mf = m.frame ?? I3, at = own(sub(add(m.c, mv(mf, [0, h / 2, 0])), origin)), dir = own(mv(mf, [0, -1, 0]));
@@ -1902,7 +1902,7 @@ export function partOfBlock(b: Block): Part {
     const shape: Shape = B.k === 'loft' ? { loft: { st: B.st.map((q) => ({ ...q })) } } : B.k === 'box' ? (B.sect ? { prism: { pts: B.sect.map(([x, y]) => [x, y] as [number, number]), L: B.size[2] } } : { box: [B.size[0], B.size[1], B.size[2]] }) : B.k === 'cyl' || B.k === 'hex' ? { cyl: [B.r, B.h] } : B.k === 'dome' ? { lathe: domeProfile(B.r) }
       : B.k === 'sphere' ? (B.ri === undefined ? { sphere: B.r } : { lathe: closedLathe(clipOut(sphereProfile(B.r), B.ri)) }) : B.k === 'lathe' ? { lathe: closedLathe(B.pts) }
       : B.k === 'coil' ? { tube: { r: B.d / 2, pts: helix(B.R, B.turns, B.pitch, B.h - B.d) } } : B.k === 'bend' ? (B.ri !== undefined ? { tube: { r: B.ro, pts: arc(B), wall: B.ro - B.ri, bend: B.R } } : { torus: [B.R, B.ro, B.a] }) : { lathe: cupProfile(B) };
-    return { name: p.name, item: p.name, shape, at: origin, ...turned, mat: p.mat, ...(B.k === 'hex' ? { facets: 6 } : {}), ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}), ...(cuts.length ? { cuts } : {}), ...(cores.length ? { parts: cores } : {}) };
+    return { name: p.name, item: p.name, shape, at: origin, ...turned, mat: p.mat, ...(p.fill !== undefined ? { fill: p.fill } : {}), ...(B.k === 'hex' ? { facets: 6 } : {}), ...(p.color !== undefined ? { color: p.color } : LOOK[p.mat] !== undefined ? { color: LOOK[p.mat] } : {}), ...(cuts.length ? { cuts } : {}), ...(cores.length ? { parts: cores } : {}) };
   });
   return { name: b.name, parts, says: `${b.pieces.length} pieces, each placed by the operations; ${b.faces.length} faces where they meet` };
 }

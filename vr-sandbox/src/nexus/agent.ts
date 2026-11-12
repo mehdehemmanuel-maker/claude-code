@@ -1638,8 +1638,15 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
             pivots.push({ name: `${c.name} ${kind}`, at: [...H], axis, a: h.body, b: c.body, d: Math.max(2, Math.round(d)), l: Math.max(2, Math.round(l)), ...(Number.isFinite(rl) && Number.isFinite(rh) && rh > rl && j[8] !== null && j[9] !== null ? { range: [Math.round(rl - ang), Math.round(rh - ang)] } : {}) }); }
           pending = next; }
         for (const t of tps) if (!placed(t)) { unmet.push(`${t.name}: no join puts it on a part that is placed: stood on the base`); t.beam = false; t.lo = [-t.size[0]! / 2, base.size[1]!, -t.size[2]! / 2]; t.body = 0; }
-        const solids: Record<string, unknown>[] = tps.map((t) => (t.beam ? { name: t.name, span: [t.p1!, t.p2!], thick: [t.size[1]!, t.size[2]!], ends: true, shape: 'box', size: [t.size[1]!, t.size[0]!, t.size[2]!], at: [0, 1, 2].map((k) => (t.p1![k]! + t.p2![k]!) / 2), mat: 'steel-low', color: bodyCol, rot: [0, 0, 0], body: t.body }
-          : { name: t.name, shape: t.shape === 'ball' ? 'sphere' : t.shape === 'round' || t.shape === 'wheel' ? 'rod' : 'box', axis: t.shape === 'wheel' ? 'z' : 'y', size: t.size, at: [t.lo![0]! + t.size[0]! / 2, t.lo![1]!, t.lo![2]! + t.size[2]! / 2], mat: t.shape === 'wheel' ? 'rubber' : 'steel-low', color: t.shape === 'wheel' ? '#1f2328' : hungNames.has(t.name) && t.shape === 'ball' ? '#4b5563' : bodyCol, rot: [0, 0, 0], body: t.body }));
+        // (REAL WEIGHT: a main part drawn as one solid stands for something built up, and a solid block of steel its size
+        // weighs many times what the real part does (the user's cylinders could not lift what they should). Until it is
+        // built from its own pieces it weighs a share of its shape, by what it stands for. The shares are typical, not
+        // measured from this machine, and are said: a fabricated body with its machinery 0.15 (an excavator's house, about
+        // 1.2 t a cubic metre of its outline), a box-section member 0.2, an empty tank or drum 0.1, a wheel with its tyre
+        // 0.5; a ball is solid. Once a part is built from its pieces, each piece weighs its own volume and this is gone)
+        const FILL = { beam: 0.2, box: 0.15, round: 0.1, wheel: 0.5 } as const;
+        const solids: Record<string, unknown>[] = tps.map((t) => (t.beam ? { name: t.name, fill: FILL.beam, span: [t.p1!, t.p2!], thick: [t.size[1]!, t.size[2]!], ends: true, shape: 'box', size: [t.size[1]!, t.size[0]!, t.size[2]!], at: [0, 1, 2].map((k) => (t.p1![k]! + t.p2![k]!) / 2), mat: 'steel-low', color: bodyCol, rot: [0, 0, 0], body: t.body }
+          : { name: t.name, ...(t.shape !== 'ball' ? { fill: FILL[t.shape] } : {}), shape: t.shape === 'ball' ? 'sphere' : t.shape === 'round' || t.shape === 'wheel' ? 'rod' : 'box', axis: t.shape === 'wheel' ? 'z' : 'y', size: t.size, at: [t.lo![0]! + t.size[0]! / 2, t.lo![1]!, t.lo![2]! + t.size[2]! / 2], mat: t.shape === 'wheel' ? 'rubber' : 'steel-low', color: t.shape === 'wheel' ? '#1f2328' : hungNames.has(t.name) && t.shape === 'ball' ? '#4b5563' : bodyCol, rot: [0, 0, 0], body: t.body }));
         solids.push(...lineSolids.splice(0));
         // (A LINK IS MADE BY RULE, the same for every machine: it calls for a mount on each of its two parts, a lug standing
         // off the surface with a pin through it, and its ends are on those pins. Where a joint lies between its two parts it
@@ -1688,6 +1695,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
           linkSays.push(`${kn.name}: on a mount on the ${A.name} and one on the ${B.name}; over the ${String(pv.name)}'s range its pins are ${Math.round(Lmin)} to ${Math.round(Lmax)} mm apart, so its stroke is ${Math.round(stroke)} mm${Array.isArray(pv.range) ? '' : ' (no range was asked: 30° each way taken)'}`);
           if (!real) unmet.push(`${kn.name}: no real cylinder does this: it must be ${Math.round(Lmin)} mm closed and have a ${Math.round(stroke)} mm stroke (its mounts must move, or the range be less)`); }
         if (linkSays.length) say('features', `links made by rule: ${linkSays.join('; ')}`.slice(0, 900));
+        say('features', 'weights: each main part not yet built from its pieces weighs a share of its outline (a body 15%, a box member 20%, a tank 10%, a wheel 50%; typical, not measured); a ball is solid');
         if (axles) say('features', `wheels: ${axles} on axles, each its own body turning on its pin; every one is driven and none steers (steering is not made yet)`);
         if (apartSays.length) say('features', `separate things: ${apartSays.join('; ')}`.slice(0, 500));
         if (hangSays.length) say('features', `hung by rule: ${hangSays.join('; ')} (each bends at its pins only, not all along itself)`.slice(0, 600));
