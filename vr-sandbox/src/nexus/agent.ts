@@ -954,7 +954,9 @@ Reply with one JSON object and nothing else, compact: {"pieces":[[name, shape, a
 /** Build the assembly at `path` of a tree from its own pieces (it must have been taken apart): one call for it and one for
  *  each assembly under it, each given the box its parent gave it. The rough solids named under the path leave the board's
  *  layout and the built pieces take their place, of the same body, so what moved still moves. Sixty calls a press. */
-export async function buildDeep(request: string, tree: PipeNode[], path: string[] | string[][], board: Board, o: { ask: Ask; onPipe?: (e: PipeEvent | { tree: PipeNode[] }) => void; maxCalls?: number; idFrom?: number }): Promise<{ board: Board; calls: number; pieces: number; real: number; says: string }> {
+export async function buildDeep(request: string, tree: PipeNode[], path: string[] | string[][], board: Board, o: { ask: Ask; onPipe?: (e: PipeEvent | { tree: PipeNode[] }) => void; maxCalls?: number; idFrom?: number;
+  /** the model as it stands each time one of the parts asked for is finished: its real pieces in, the parts not yet built
+   *  still as their rough solids (library parts drawn plain until the end) */ onBoard?: (b: Board, done: string) => void }): Promise<{ board: Board; calls: number; pieces: number; real: number; says: string }> {
   let id = o.idFrom ?? 200000, calls = 0; const max = o.maxCalls ?? 60, paths = (Array.isArray(path[0]) ? path : [path]) as string[][], P = paths.map((q) => q.join(' > ')).join(', ');
   const at = (ns: PipeNode[], p: string[]): PipeNode | undefined => { const n = ns.find((x) => x.name === p[0]); return !n || p.length === 1 ? n : at(n.kids, p.slice(1)); };
   const groups = paths.map((q) => ({ p: q, P: q.join(' > '), node: at(tree, q) })).filter((g): g is { p: string[]; P: string; node: PipeNode } => !!g.node && g.node.kids.length > 0);
@@ -1038,8 +1040,11 @@ export async function buildDeep(request: string, tree: PipeNode[], path: string[
     catch (e) { out.push(...rough.map((x) => ({ ...x }))); o.onPipe?.({ id: myId, stage: 'mater', label, state: 'fail', ms: Date.now() - t0, rule: BUILDER_RULE, sent, got: (e as Error).message.slice(0, 600) }); } };
   // (each part asked for is built side by side; every piece connects to another: among themselves first, then the whole to
   // the rest of the machine if it stands clear; and its pieces are of the body its rough solids were of)
-  let joined = 0; const fixedRest = rest.filter((x) => !Array.isArray(x.span) || Array.isArray(x.thick)).slice(0, 400);
-  await Promise.all(live.map(async (g) => { const out: Sol[] = []; await one(g.node, g.p, boxOf(g.mine), g.mine, out); joined += connectParts(out); connectParts(out, { fixed: fixedRest, small: 1.01 }); const body = bodyOf(g.mine); if (body !== undefined) for (const x of out) x.body = body; built.push(...out); }));
+  let joined = 0; const finished = new Set<string>(), fixedRest = rest.filter((x) => !Array.isArray(x.span) || Array.isArray(x.thick)).slice(0, 400);
+  await Promise.all(live.map(async (g) => { const out: Sol[] = []; await one(g.node, g.p, boxOf(g.mine), g.mine, out); joined += connectParts(out); connectParts(out, { fixed: fixedRest, small: 1.01 }); const body = bodyOf(g.mine); if (body !== undefined) for (const x of out) x.body = body; built.push(...out); finished.add(g.P);
+    if (o.onBoard) { try { const now = [...rest, ...built, ...live.filter((q) => !finished.has(q.P)).flatMap((q) => q.mine)].filter((x) => typeof x.shape === 'string' || Array.isArray(x.span)).map((x) => { const { use: _u, set: _s, pre: _p, kind: _k, ...d } = x; return d; });
+        const pb = emptyBoard(board.title ?? request.slice(0, 80)); placeBlock(pb, 'room.layout', 0, 0, { name: String(lay.set?.name ?? request.slice(0, 60)), boxes: JSON.stringify(now.slice(0, 1500)), pivots: String(lay.set?.pivots ?? '[]'), slides: String(lay.set?.slides ?? '[]') }, 'layout'); placeBlock(pb, 'space.show', 330, 0, {}, 'show'); wire(pb, 'layout', 'thing', 'show', 'thing'); o.onBoard(pb, g.P); }
+      catch { /* a picture of the build as it goes: never a reason to stop it */ } } }));
   // (a piece of a kind becomes that kind's library part, fitted to its box; one that will not fit stays as drawn. No more
   // than 250 library parts in one layout: each is a node of its own, and a phone must still draw it)
   let real = 0, asDrawn = 0; const had = rest.filter((x) => typeof x.use === 'string').length;
@@ -1641,7 +1646,10 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
           return energyOf(rowsE(r.parts).map((x) => ({ name: String(x[0] ?? ''), kind: String(x[1] ?? '') })).filter((x) => x.name), rowsE(r.feeds).map((x) => ({ from: String(x[0] ?? ''), to: String(x[1] ?? ''), by: String(x[2] ?? '') }))); }
         catch (e) { say('features', `energy: ${(e as Error).message.slice(0, 140)}`, false); return null; } })();
       let pre: Awaited<ReturnType<typeof assemble>> | null = null;
-      if (tree.length) { try { pre = await assemble(); solids = pre.solids; } catch (e) { say('features', `assembler: ${(e as Error).message.slice(0, 140)}; placed by the older stages instead`, false); } }
+      if (tree.length) { try { pre = await assemble(); solids = pre.solids;
+          // (SEEN AS IT IS BUILT (the user, 2026-11-12: "I wanna see the building process in 3d real not mock"): the main
+          // parts stand in the view the moment they are joined, as the solids they really are at that point)
+          if (o.onStep) { const pb = emptyBoard(request.slice(0, 80)); placeBlock(pb, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify(solids.map((x) => { const { use: _u, kind: _k, ...d } = x; return d; })), pivots: JSON.stringify(pre.pivots), slides: JSON.stringify(pre.slides) }, 'layout'); placeBlock(pb, 'space.show', 330, 0, {}, 'show'); wire(pb, 'layout', 'thing', 'show', 'thing'); board = pb; say('features', `in the view now: the ${solids.length} main solids, joined; their own pieces follow`); } } catch (e) { say('features', `assembler: ${(e as Error).message.slice(0, 140)}; placed by the older stages instead`, false); } }
       if (tree.length && !pre) { try {
         sizing ??= sizeStart?.(); if (!sizing) throw new Error('no sizer to ask'); const sz0 = await sizing; if (sz0 instanceof Error) throw sz0; const sz = sz0 as { rows?: unknown; body?: unknown; whole?: unknown };
         const zones = new Map((Array.isArray(sz.rows) ? sz.rows as Row[] : []).filter(Array.isArray).map((r) => [String(r[0]), r] as const)), livery = `Main body colour ${String(sz.body ?? '#c8a200')}; the whole machine is ${JSON.stringify(sz.whole ?? [])} mm (x long, y high, z wide).`;
@@ -1784,7 +1792,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       // (then each main part that is a box is built from its own parts, all side by side: sized and joined face to face by
       // the MATER, placed by the app, what its joins call for added. A beam stays one member for now)
       if (pre && pre.paths.length) { try { const toPipe = (ns: Tree[]): PipeNode[] => ns.map((n) => ({ name: n.name, n: n.n, kind: n.kind, is: n.is, state: 'placed' as const, kids: toPipe(n.kids) }));
-          const tM = Date.now(), rb = await buildDeep(request, toPipe(tree), pre.paths, board, { ask: o.ask, ...(o.onPipe ? { onPipe: o.onPipe } : {}), idFrom: pipeId + 5000, maxCalls: 40 }); pipeId += 20000; asks += rb.calls;
+          const tM = Date.now(), rb = await buildDeep(request, toPipe(tree), pre.paths, board, { ask: o.ask, ...(o.onPipe ? { onPipe: o.onPipe } : {}), idFrom: pipeId + 5000, maxCalls: 40, ...(o.onStep ? { onBoard: (pb: Board, done: string) => { board = pb; say('features', `in the view now: the ${done} built from its own pieces`); } } : {}) }); pipeId += 20000; asks += rb.calls;
           board = rb.board; skeleton = rb.board; say('features', `${pre.paths.length} main parts built from their own pieces in ${((Date.now() - tM) / 1000).toFixed(0)} s: ${rb.says}`); }
         catch (e) { say('features', `the main parts stay as their boxes: ${(e as Error).message.slice(0, 160)}`, false); } }
       return done1(`Built: ${solids.length} solids${tree.length ? ` in ${tree.length} subsystems (${tree.map((n) => n.name).join(', ')})` : ''}. A model of plain solids placed as on the real thing: not yet real engineered parts.`); }
