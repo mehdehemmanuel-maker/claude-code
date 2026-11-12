@@ -22,6 +22,7 @@ import { massOfAll, type Assembly } from './assembly';
 import { alternatives, badConnections, compatible, interference, missingInterfaces, revisions, piecesOfParts, roleOf, searchByFunction, variantsOf as variantsById, working, type Found, type Working } from './aitools';
 import type { Block } from './room';
 import { turnOf as roomTurnOf } from './room';
+import { CONDUCTORS, ENERGY_KINDS, energyOf } from './energy';
 import { FORMATS, FormatError, SPLIT_STAGE_RULE, applyGraph, graphOf, newReplies, replyOf, sizeFits, sizeKeys, sizeLine, type Format, type Graph, type Replies } from './stages';
 import { REQUIRE_RULE, engineeringOf, marginLine, needsLine, needsOf, qty, requirementLine, requirementLines, requirementsOf, settingsForNeeds, type Engineering, type Needs, type Requirement } from './lookat';
 import { FEATURE_RULE, LOOK_RULE, SEE_RULE, featureLine, longestOf, lookedOf, metres, recognitionLines, recognitionOf, sameFeature, sizeOff, type Feature, type Looked, type Recognition } from './lookat';
@@ -841,6 +842,14 @@ Reply with one JSON object and nothing else, compact: {"body":"#rrggbb","pieces"
 - A beam's near end is on its join's point. A box on a "pin" hangs from the pin by the middle of its top. A "fixed" or "slew" box sits against the face.
 - links: the slender parts pinned between two pieces (hydraulic cylinders, struts, tie rods): begin the name with its kind and a colon where it is one of cylinder, aircylinder, gasstrut, shock, spring, shaft ("cylinder: Boom cylinder"); piece A, the face of A it is pinned on and how far along that face in percent (on a beam: "-y" its underside, "+y" its top, and u how far along its length from its near end); the same for piece B; and its thickness in mm. Links named among the subsystems are given here, never as pieces.
 - body: the machine's main paint colour on the real thing.`;
+/** The energy stage: the model says only which of the machine's parts hold, convert, control or use energy and what
+ *  feeds what; the chain is then closed by rule (energy.ts), and what is missing is called for by name. */
+const ENERGY_RULE = `## Here: ENERGY (one task: what powers what on this machine)
+Nothing moves by itself. You are given a machine's parts. Say which of them hold, make, pass on or use energy, and what feeds what. No positions and no sizes.
+Reply with one JSON object and nothing else, compact: {"parts":[[name, kind],...],"feeds":[[from, to, by],...]}
+- parts: only the parts that hold, convert, control or use energy, each named exactly as given (a part there are several of: once). kind is one of: ${Object.entries(ENERGY_KINDS).map(([k, v]) => `${k} (${v.says})`).join(', ')}.
+- feeds: one row for each conductor that carries energy from one part to another: from, to (both among your parts) and by, one of: ${[...new Set(Object.values(CONDUCTORS).flat())].join(', ')}.
+- Give only what the list given shows the machine has. Never invent a part to complete a chain: what is missing is worked out afterwards, and inventing it would hide that it is missing.`;
 const JOINER_RULE = `## Here: JOINER (one task: the links, each pinned between the two solids it joins)
 The machine's solids are placed and numbered below. The links are the straight parts still missing: each runs from one solid to another and is pinned to both (a boom cylinder from the frame up to the boom's underside). Give each link its two end points, on the real mounting spots of the two solids it joins.
 Reply with one JSON object and nothing else, compact: {"rows":[[name, shape, thick, x1, y1, z1, a, x2, y2, z2, b, mat, color],...]}
@@ -1038,7 +1047,7 @@ export async function buildDeep(request: string, tree: PipeNode[], path: string[
     const f = await fitTool(lib, N3(x.size).map(Math.abs)); if (f && f.err < 1.2) { x.use = lib; x.set = f.set; x.pre = f.pre; real++; } else asDrawn++; }
   let solids = [...rest, ...built], out = board;
   for (let pass = 0; pass < 2; pass++) { const nb = emptyBoard(board.title ?? request.slice(0, 80)), tools = solids.filter((x) => typeof x.use === 'string' && LIBRARY.has(String(x.use))), drawn = solids.filter((x) => typeof x.use !== 'string' || !LIBRARY.has(String(x.use))).map((x) => { const { use: _u, set: _s, pre: _p, ...d } = x; return d; }), idOf = (k: number) => `t${String(k).padStart(3, '0')}`;
-    placeBlock(nb, 'room.layout', 0, 0, { name: String(lay.set?.name ?? request.slice(0, 60)), boxes: JSON.stringify([...drawn, ...tools.map((t, k) => ({ in: k, name: t.name, at: t.at, rot: t.rot, pre: t.pre, span: t.span, body: t.body }))]), pivots: String(lay.set?.pivots ?? '[]'), slides: String(lay.set?.slides ?? '[]') }, 'layout'); placeBlock(nb, 'space.show', 330, 0, {}, 'show'); wire(nb, 'layout', 'thing', 'show', 'thing');
+    placeBlock(nb, 'room.layout', 0, 0, { name: String(lay.set?.name ?? request.slice(0, 60)), boxes: JSON.stringify([...drawn, ...tools.map((t, k) => ({ in: k, name: t.name, at: t.at, rot: t.rot, pre: t.pre, span: t.span, body: t.body }))]), pivots: String(lay.set?.pivots ?? '[]'), slides: String(lay.set?.slides ?? '[]'), energy: String(lay.set?.energy ?? '{}') }, 'layout'); placeBlock(nb, 'space.show', 330, 0, {}, 'show'); wire(nb, 'layout', 'thing', 'show', 'thing');
     tools.forEach((t, k) => { placeBlock(nb, String(t.use), -330, k * 140, (t.set ?? {}) as Record<string, unknown>, idOf(k)); nb.nodes[idOf(k)]!.label = String(t.name); wire(nb, idOf(k), 'block', 'layout', 'blocks'); });
     const e = new Engine(nb); await e.run(); const bad = tools.filter((_t, k) => e.state.get(idOf(k))?.status !== 'ok'), st = e.state.get('layout');
     if (!bad.length) { if (st?.status !== 'ok') throw new Error(String(st?.error ?? 'the layout did not build').slice(0, 200)); out = nb; break; }
@@ -1586,7 +1595,23 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         const turnZ = (p: number[], c: number[], deg: number): number[] => { const t = (deg * Math.PI) / 180, x = p[0]! - c[0]!, y = p[1]! - c[1]!; return [c[0]! + x * Math.cos(t) - y * Math.sin(t), c[1]! + x * Math.sin(t) + y * Math.cos(t), p[2]!]; };
         for (const x of rowsOf(r.links).slice(0, 40)) { const kn = kindOf(x[0]), A = find(x[1]), B = find(x[4]); if (!A || !B || !placed(A) || !placed(B)) { unmet.push(`${kn.name}: one of its two parts is not placed`); continue; }
           const fA = String(x[2] ?? '+y'), fB = String(x[5] ?? '+y'), sA = pointOn(A, fA, pct(x[3]), 50), sB = pointOn(B, fB, pct(x[6]), 50); if (!sA || !sB) continue;
-          const t0 = Math.abs(Number(x[7])) || Math.hypot(sB[0]! - sA[0]!, sB[1]! - sA[1]!, sB[2]! - sA[2]!) / 12, h = 1.6 * t0, nA = outOf(A, fA), nB = outOf(B, fB), eA = sA.map((v, k) => v + nA[k]! * h), eB = sB.map((v, k) => v + nB[k]! * h), L0 = Math.hypot(eB[0]! - eA[0]!, eB[1]! - eA[1]!, eB[2]! - eA[2]!); if (!(L0 > 4 * t0)) { unmet.push(`${kn.name}: its two mounts are too near each other for it`); continue; } nl++;
+          const t0 = Math.abs(Number(x[7])) || Math.hypot(sB[0]! - sA[0]!, sB[1]! - sA[1]!, sB[2]! - sA[2]!) / 12, nA = outOf(A, fA), nB = outOf(B, fB), pv0 = pivots.find((q) => (q.a === A.body && q.b === B.body) || (q.a === B.body && q.b === A.body));
+          // (SOLIDS: the link may not enter either of its two parts at any angle of the joint between them. Its mounts stand
+          // off the surfaces by h; h is the least of 1.6, 2.4, 3.2, 4.5 and 6 bores at which its line, as thick as it is,
+          // stays clear of both parts over the joint's whole needed range (every 5°). Where none does, it is said: the
+          // mounts are in the wrong place, and no height mends that. Read in the upright plane along the machine)
+          const clearOf = (P: TP, q: number[]): boolean => { if (P.beam) { const a2 = P.p1!, c2 = P.p2!, dx = c2[0]! - a2[0]!, dy = c2[1]! - a2[1]!, L2 = dx * dx + dy * dy || 1, tt = Math.max(0, Math.min(1, ((q[0]! - a2[0]!) * dx + (q[1]! - a2[1]!) * dy) / L2)); return Math.hypot(q[0]! - a2[0]! - tt * dx, q[1]! - a2[1]! - tt * dy) >= P.size[1]! / 2 + t0 / 2 || Math.abs(q[2]! - a2[2]!) >= P.size[2]! / 2 + t0 / 2; }
+            const lo2 = P.lo!; return [0, 1, 2].some((k) => q[k]! <= lo2[k]! - t0 / 2 || q[k]! >= lo2[k]! + P.size[k]! + t0 / 2); };
+          const eyes = (hh: number) => [sA.map((v, k) => v + nA[k]! * hh), sB.map((v, k) => v + nB[k]! * hh)] as [number[], number[]];
+          const clears = (hh: number): boolean => { const [ea, eb] = eyes(hh); if (!pv0 || pv0.axis !== 'z' || A.body === B.body) return [0.15, 0.3, 0.5, 0.7, 0.85].every((f) => { const q = ea.map((v, k) => v + (eb[k]! - v) * f); return clearOf(A, q) && clearOf(B, q); });
+            const rg0 = (Array.isArray(pv0.range) ? pv0.range : [-30, 30]) as number[], c0 = pv0.at as number[], kidB = pv0.b === B.body;
+            for (let a3 = Math.min(rg0[0]!, 0); a3 <= Math.max(rg0[1]!, 0) + 1e-9; a3 += 5) for (const f of [0.15, 0.3, 0.5, 0.7, 0.85]) {
+              // (against the part that stays, the far eye turned; against the part that turns, the near eye turned back)
+              const inA = (() => { const pa = kidB ? ea : turnZ(ea, c0, a3), pb = kidB ? turnZ(eb, c0, a3) : eb; return (kidB ? pa : turnZ(pa, c0, -a3)).map((v, k) => v + ((kidB ? pb : turnZ(pb, c0, -a3))[k]! - v) * f); })();
+              const inB = (() => { const pa = kidB ? turnZ(ea, c0, -a3) : turnZ(ea, c0, a3), pb = eb; return pa.map((v, k) => v + (pb[k]! - v) * f); })();
+              if (!clearOf(A, inA) || !clearOf(B, inB)) return false; } return true; };
+          const hTry = [1.6, 2.4, 3.2, 4.5, 6].map((m) => m * t0), h = hTry.find(clears) ?? hTry[hTry.length - 1]!, [eA, eB] = eyes(h), L0 = Math.hypot(eB[0]! - eA[0]!, eB[1]! - eA[1]!, eB[2]! - eA[2]!); if (!(L0 > 4 * t0)) { unmet.push(`${kn.name}: its two mounts are too near each other for it`); continue; } nl++;
+          if (!clears(h)) unmet.push(`${kn.name}: at some angle of its joint its line enters the ${A.name} or the ${B.name}, whatever the height of its mounts up to 6 of its bores: its mounts are in the wrong place (as a solid it will be held off, and will bind)`);
           // (its two mounts: a lug from the surface out past the pin, on its part's own body)
           for (const [P0, n0, H, tag] of [[sA, nA, A, 'A'], [sB, nB, B, 'B']] as [number[], number[], TP, string][]) solids.push({ name: `${H.name} > ${kn.name} mount ${tag}`, span: [P0, P0.map((v, k) => v + n0[k]! * (h + 0.6 * t0))], thick: [1.3 * t0, 0.5 * t0], shape: 'box', size: [1.3 * t0, h + 0.6 * t0, 0.5 * t0], at: P0.map((v, k) => v + (n0[k]! * (h + 0.6 * t0)) / 2), mat: 'steel-low', color: bodyCol, rot: [0, 0, 0], body: H.body });
           const u = [0, 1, 2].map((k) => (eB[k]! - eA[k]!) / L0), pv = pivots.find((q) => (q.a === A.body && q.b === B.body) || (q.a === B.body && q.b === A.body));
@@ -1608,6 +1633,13 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         for (const q of pivots) q.at = (q.at as number[]).map((v) => Math.round(v));
         say('features', `assembler: ${tps.length} main parts joined with no coordinates given, ${pivots.length} of the joins a pin or a slew (${pivots.slice(0, 6).map((q) => `${String(q.name)}${Array.isArray(q.range) ? ` ${(q.range as number[]).join('..')}°` : ''}`).join(', ')}), ${nl} link${nl === 1 ? '' : 's'}${unmet.length ? `; ${unmet.length} unmet: ${unmet.slice(0, 3).join('; ')}` : ''}`, !unmet.length);
         return { solids, pivots, slides, bodies: nb, paths: tps.filter((t) => !t.beam && subs.find((n) => n.name === t.name)?.kids.some((k) => k.kind !== 'link')).map((t) => [t.name]) }; };
+      // (ENERGY, beside the assembler: which parts hold, convert, control or use energy and what feeds what, as the model
+      // reads the tree; then every chain closed by rule, what is missing called for and said)
+      const energy = (async () => { try { const names: string[] = [], walkE = (ns: Tree[], d: number) => { for (const n of ns) { names.push(`${'  '.repeat(d)}${n.name}${n.n > 1 ? ` x${n.n}` : ''} (${n.is})`); if (d < 2) walkE(n.kids, d + 1); } }; walkE(tree, 0);
+          const r = firstJson(await tcall('energy', 'what powers what', `${ENERGY_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nIts parts:\n${names.join('\n').slice(0, 5000)}`), 'energy') as { parts?: unknown; feeds?: unknown };
+          const rowsE = (v: unknown) => (Array.isArray(v) ? v : []).filter(Array.isArray) as unknown[][];
+          return energyOf(rowsE(r.parts).map((x) => ({ name: String(x[0] ?? ''), kind: String(x[1] ?? '') })).filter((x) => x.name), rowsE(r.feeds).map((x) => ({ from: String(x[0] ?? ''), to: String(x[1] ?? ''), by: String(x[2] ?? '') }))); }
+        catch (e) { say('features', `energy: ${(e as Error).message.slice(0, 140)}`, false); return null; } })();
       let pre: Awaited<ReturnType<typeof assemble>> | null = null;
       if (tree.length) { try { pre = await assemble(); solids = pre.solids; } catch (e) { say('features', `assembler: ${(e as Error).message.slice(0, 140)}; placed by the older stages instead`, false); } }
       if (tree.length && !pre) { try {
@@ -1695,6 +1727,11 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       // body most of its subsystem is of, else with the nearest. The pivots are kept as a tree from what stands lowest, each
       // pin fixed in the body nearer the ground. A pin's size is a typical proportion, not a rating: a third of the depth and
       // 1.2 times the width of the member that ends on it, else a tenth and a half of the smaller body's extent along it)
+      const chain = tree.length ? await energy : null;
+      if (chain) { say('features', chain.says, !chain.unmet.length);
+        if (chain.chains.length) say('features', `energy chains (a star marks a conductor called for by rule): ${chain.chains.slice(0, 8).map((c) => c.join(' < ')).join(' | ')}`.slice(0, 900));
+        if (chain.called.length) say('features', `called for by the energy rule, not yet solids in the machine: ${chain.called.slice(0, 10).join('; ')}`.slice(0, 700), false);
+        if (chain.unmet.length) say('features', `energy unmet: ${chain.unmet.slice(0, 6).join('; ')}`.slice(0, 700), false); }
       const pivotsOut: Record<string, unknown>[] = [];
       if (pre) { pivotsOut.push(...pre.pivots); say('features', `movement: ${pre.bodies} bod${pre.bodies === 1 ? 'y' : 'ies'}, ${pre.pivots.length} pin joint${pre.pivots.length === 1 ? '' : 's'}, each with the range it was asked to reach`, pre.pivots.length > 0); }
       if (pivotRows.length) { const lc = (v: unknown) => String(v ?? '').trim().toLowerCase(), ids = new Map<string, number>(); for (const r of pivotRows) for (const nm of [lc(r[4]), lc(r[5])]) if (nm && !ids.has(nm)) ids.set(nm, ids.size);
@@ -1734,7 +1771,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       for (let pass = 0; pass < 2; pass++) { b = emptyBoard(request.slice(0, 80));
         const tools = solids.filter((x) => typeof x.use === 'string' && LIBRARY.has(String(x.use))).slice(0, 120), drawn = solids.filter((x) => x.use === undefined);
         const idOf = (k: number) => `t${String(k).padStart(3, '0')}`;
-        placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify([...drawn, ...tools.map((t, k) => ({ in: k, name: t.name, at: t.at, rot: t.rot, pre: t.pre, span: t.span, body: t.body }))]), pivots: JSON.stringify(pivotsOut), slides: JSON.stringify(pre?.slides ?? []) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
+        placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify([...drawn, ...tools.map((t, k) => ({ in: k, name: t.name, at: t.at, rot: t.rot, pre: t.pre, span: t.span, body: t.body }))]), pivots: JSON.stringify(pivotsOut), slides: JSON.stringify(pre?.slides ?? []), energy: JSON.stringify(chain ? { parts: chain.parts, feeds: chain.feeds } : {}) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
         tools.forEach((t, k) => { placeBlock(b, String(t.use), -330, k * 140, (t.set ?? {}) as Record<string, unknown>, idOf(k)); b.nodes[idOf(k)]!.label = String(t.name); wire(b, idOf(k), 'block', 'layout', 'blocks'); });
         const e = new Engine(b); await e.run(); st = e.state.get('layout'); used = tools.length;
         const bad = tools.filter((_t, k) => e.state.get(idOf(k))?.status !== 'ok');
@@ -1979,7 +2016,7 @@ export function sdkAsk(o: { model?: string; signal?: AbortSignal; tokens?: Agent
     // body, a part's joins without their bolts): the stages that give sizes and places need it. So it is off only for the
     // decomposers, which write a list of names; on the models that allow it at this effort (the claude-api skill, read
     // 2026-11-10: Haiku 5.5 and Opus 5 at high or below, Opus 4.8 and 4.7, Sonnet 5))
-    const model0 = o.model ?? AGENT_MODEL, noThink = tier === 'quick' && /^## Here: (DEEP )?DECOMPOSER/m.test(head) && /(haiku-5-5|opus-5$|opus-4-[78]|sonnet-5$)/.test(model0);
+    const model0 = o.model ?? AGENT_MODEL, noThink = tier === 'quick' && /^## Here: ((DEEP )?DECOMPOSER|ENERGY)/m.test(head) && /(haiku-5-5|opus-5$|opus-4-[78]|sonnet-5$)/.test(model0);
     const r = await client.messages.create({ model: model0, max_tokens: 12_000, ...(head ? { system: cachedSystem(head) } : {}), ...(noThink ? { thinking: { type: 'disabled' as const } } : {}), output_config: { effort: tier === 'quick' ? 'low' : 'medium' }, messages: [{ role: 'user', content: images?.length ? [...images.map((png) => ({ type: 'image' as const, source: { type: 'base64' as const, media_type: 'image/png' as const, data: Buffer.from(png).toString('base64') } })), { type: 'text' as const, text: tail }] : tail }] }, { signal: o.signal ?? AbortSignal.timeout(90_000) });
     if (o.tokens) { o.tokens.in += r.usage.input_tokens; o.tokens.out += r.usage.output_tokens; o.tokens.cached += r.usage.cache_read_input_tokens ?? 0; o.tokens.written += r.usage.cache_creation_input_tokens ?? 0; }
     const turn = turnOf(r); return turn.ends ? turn.answer : '';
