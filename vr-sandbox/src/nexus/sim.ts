@@ -747,7 +747,14 @@ export class LiveMotion {
     // (they would be thrown apart the moment it starts))
     const pivots = this.motion.joints.filter((j) => j.by.some((t) => t.startsWith('layout pivot'))), atPin = new Set<number>();
     for (const j of pivots) for (const k of [j.a, j.b]) for (const i of B[k]!.pieces) { const bx = pieceBox(block, i); if (pointInBox(j.point, bx, 0.002 + 0.05 * Math.max(...bx.h))) atPin.add(i); }
-    const solidOf = B.map((body) => { const keep = body.pieces.filter((i) => !atPin.has(i)); return keep.length ? keep : body.pieces; }), onlyPin = B.map((body) => body.pieces.every((i) => atPin.has(i)));
+    // (LIGHT ON THE PROCESSOR (the user, 2026-11-12: "able to render extremely complex moving parts"): a body of many pieces
+    // does not collide on every bolt and washer. Past 24 pieces it collides on its largest ones only: taken largest first
+    // until they hold 98% of the body's volume, 48 at most. The small ones still ride with it, are still drawn and still
+    // weighed: only their own touch is left out, and how many is said)
+    let lightened = 0;
+    const solidOf = B.map((body) => { const keep0 = body.pieces.filter((i) => !atPin.has(i)), keep = keep0.length ? keep0 : body.pieces; if (keep.length <= 24) return keep;
+      const vol = new Map(keep.map((i) => { const h = pieceBox(block, i).h; return [i, 8 * h[0] * h[1] * h[2]] as const; })), by = [...keep].sort((p, q) => vol.get(q)! - vol.get(p)!), tot = by.reduce((t, i) => t + vol.get(i)!, 0), out: number[] = []; let sum = 0;
+      for (const i of by) { if (out.length >= 48 || (out.length && sum >= 0.98 * tot)) break; out.push(i); sum += vol.get(i)!; } lightened += keep.length - out.length; return out; }), onlyPin = B.map((body) => body.pieces.every((i) => atPin.has(i)));
     B.forEach((body, k) => {
       const sh = solidOf[k]!.map(shapeOf), origin = sh[0]!.pos, mass = Math.max(1e-3, body.pieces.reduce((t, i) => t + (parts[i] ? massOfAll(parts[i]!) : 0), 0));
       let shape: InstanceType<Jolt['Shape']>, at = origin, q: Q4 = [0, 0, 0, 1];
@@ -775,6 +782,7 @@ export class LiveMotion {
       const ba = solidOf[j.a]!.map((i) => pieceBox(block, i, 0.98)), bb = solidOf[j.b]!.map((i) => pieceBox(block, i, 0.98)), clash = ba.length * bb.length <= 60000 && ba.some((x) => bb.some((y) => boxesMeet(x, y)));
       if (clash || ba.length * bb.length > 60000) { pair(j.a, j.b); through.push(`${nm} (${clash ? 'built into each other as they stand' : 'too many pieces to check'})`); } else real.push(nm); }
     this.collideSays = pivots.length ? `${real.length} pinned pair${real.length === 1 ? '' : 's'} keep each other out for real${real.length ? `: ${real.slice(0, 6).join('; ')}` : ''}${through.length ? `. Still passing through each other: ${through.slice(0, 6).join('; ')}` : ''}` : '';
+    if (lightened) this.collideSays += `${this.collideSays ? '. ' : ''}${lightened} small piece${lightened === 1 ? '' : 's'} left out of collisions (bolts, washers and the like: they ride with their body, and are still drawn and weighed)`;
     for (const r of this.motion.racks) pair(r.a, r.b);
     for (const x of this.motion.belts) { pair(x.a, x.b); for (const k of B.keys()) if (B[k]!.name === x.belt) { pair(k, x.a); pair(k, x.b); } }
     for (const k of touch) { const [a, c] = k.split(',').map(Number); filter.DisableCollision(a!, c!); }
