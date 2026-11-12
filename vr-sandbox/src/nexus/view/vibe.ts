@@ -558,7 +558,9 @@ async function composeShown(q: string, why: string): Promise<void> {
   let finalOf: (() => string) | null = null;
   const render = () => { live.html = finalOf ? finalOf() : `<div class="live"><span class="dots">${esc(note)}</span> · ${Math.round((Date.now() - t0) / 1000)} s</div><div class="note">${esc(why)}</div>${pipe.size || ptree.length ? pipeHtml([...pipe.values()], ptree, pkey) : orchestrationHtml(orchestration(steps), 110)}`; };
   const paint = () => { render(); drawChat(); }; pipeRuns.set(pkey, { render, request: q.trim(), tree: () => ptree, events: pipe, hear: (e) => heardPipe(e) });
-  const heard = (s: ComposeStep, b?: Board) => { steps.push(s); note = `${s.stage}: ${steps.length} step${steps.length === 1 ? '' : 's'}`; if (b && nodesOf(b).length) void use(b, false); paint(); };
+  let shownKey = '';
+  const heard = (s: ComposeStep, b?: Board) => { steps.push(s); note = `${s.stage}: ${steps.length} step${steps.length === 1 ? '' : 's'}`; if (b && nodesOf(b).length) { const k = JSON.stringify(b.nodes); // (drawn only when it has changed: every line said used to start the drawing again, so a quick run of lines kept throwing away the drawing before it was done)
+      if (k !== shownKey) { shownKey = k; void use(b, false); } } paint(); };
   const tick = window.setInterval(paint, 1000); paint();
   try {
     let done: ComposeRun & { tokens?: Tok };
