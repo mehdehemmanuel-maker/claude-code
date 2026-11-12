@@ -210,7 +210,9 @@ export class PasteSession implements PasteHooks {
   sources(): (PasteRecipe & { key: string })[] { const b = this.wall.board(), list = boltSources(b, this.wall.outputsOf).map((r, i) => ({ ...r, key: `bolt:${i}:${r.wires[0]?.from}.${r.wires[0]?.out}` }));
     return this.copied ? [...list, { ...this.copied, key: 'copied' }] : list; }
   /** The strip drawn again (after a run: what the board makes may have changed). */
-  chips(): void { this.card?.chips(this.sources().map((r) => ({ key: r.key, name: r.key === 'copied' ? `Copied: ${r.name} (as '${r.copiedFrom}' made it)` : r.name, says: r.key === 'copied' ? `paste the interface copied from '${r.copiedFrom}'` : `drag it onto a surface of what is shown (or tap it, then tap the part)` }))); }
+  // (one chip for each different thing to paste, six at most: a built machine has hundreds of the same bolt, and a chip
+  // for each of them covered the whole view)
+  chips(): void { const seen = new Set<string>(); this.card?.chips(this.sources().filter((r) => { const k = r.key === 'copied' ? 'copied' : r.name; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 6).map((r) => ({ key: r.key, name: r.key === 'copied' ? `Copied: ${r.name} (as '${r.copiedFrom}' made it)` : r.name, says: r.key === 'copied' ? `paste the interface copied from '${r.copiedFrom}'` : `drag it onto a surface of what is shown (or tap it, then tap the part)` }))); }
   begin(key: string, x: number, y: number): void { const r = this.sources().find((s) => s.key === key); if (!r) return; this.clear(); this.recipe = r; this.st = 'held'; this.screen = [x, y]; }
   move(x: number, y: number): void {
     if (this.st !== 'held' || !this.recipe) return; this.screen = [x, y];

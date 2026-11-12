@@ -570,7 +570,9 @@ export function motionOf(b: Block): Motion {
     for (let i = 0; i < n; i++) { if (bodyOf(i) === j.a || onto.includes(i)) continue; const q = boxes[i]!; if (!o.every((x, m) => q[0][x]! < H0[m]! - 1e-9 && q[1][x]! > L0[m]! + 1e-9)) continue;
       if (q[1][k]! <= lo + 1e-9) r0 = Math.max(r0, q[1][k]! - lo); else if (q[0][k]! >= hi - 1e-9) r1 = Math.min(r1, q[0][k]! - hi); }
     if (!Number.isFinite(r0) || !Number.isFinite(r1)) return undefined; const s = Math.sign(j.dir[k]!); return s > 0 ? [Math.min(0, r0), Math.max(0, r1)] : [-Math.max(0, r1), -Math.min(0, r0)]; };
-  for (const j of joints) if (j.slide) { const onto = turns.filter((t) => bodyOf(t.on) === j.a && bodyOf(t.shaft) === j.b).map((t) => t.shaft), r = rangeOf(j, onto);
+  // (a layout's slide says its own travel: a cylinder's stroke, along its rod's line whichever way that lies)
+  for (const j of joints) { const m = j.by.map((t) => /^layout slide.* range (-?[\d.]+)\.\.(-?[\d.]+)$/.exec(t)).find(Boolean); if (m) { j.slide = true; j.range = [Number(m[1]) / 1000, Number(m[2]) / 1000]; } }
+  for (const j of joints) if (j.slide) { const onto = turns.filter((t) => bodyOf(t.on) === j.a && bodyOf(t.shaft) === j.b).map((t) => t.shaft), r = j.range ?? rangeOf(j, onto);
     if (r && r[1] - r[0] > 1e-6) j.range = r; else { j.slide = false; delete j.screw; said.push(`${bodies[j.a]!.name}: its ends held, it only turns`); }
     // (a screw joint: the nut turns and slides on its screw alone, the two tied by its lead; held from turning by rods beside
     // it, it only slides, and moves only as its screw turns)
@@ -580,8 +582,10 @@ export function motionOf(b: Block): Motion {
   // (a layout's pivot: held where it is put, as the cylinder or the drive that holds it on the real machine would, which is
   // not modelled yet. Its hold is derived from the thing itself: enough to carry all of its mass at the far end of its
   // longest side, three times over, so no pose of it sags; the factor of three is a margin, typical, not a rating)
-  if (joints.some((j) => !j.motor && j.by.some((t) => t.startsWith('layout pivot')))) { const parts = partOfBlock(b).parts ?? [], all = b.pieces.reduce((t, _p, i) => t + (parts[i] ? massOfAll(parts[i]!) : 0), 0), reach = Math.max(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]);
-    const torque = 3 * 9.80665 * Math.max(all, 1e-3) * reach; for (const j of joints) if (!j.motor && j.by.some((t) => t.startsWith('layout pivot'))) j.motor = { kind: 'held pivot', torque, from: 'held where it is put: enough to carry the whole thing at its full reach three times over (derived from its own mass and size; what holds it on the real machine is not modelled yet)' }; }
+  // (a pin marked free turns freely: a cylinder's eye on its mount)
+  const heldPivot = (j: MoveJoint) => !j.motor && j.by.some((t) => t.startsWith('layout pivot') && !t.includes('(free)'));
+  if (joints.some(heldPivot)) { const parts = partOfBlock(b).parts ?? [], all = b.pieces.reduce((t, _p, i) => t + (parts[i] ? massOfAll(parts[i]!) : 0), 0), reach = Math.max(b.hi[0] - b.lo[0], b.hi[1] - b.lo[1], b.hi[2] - b.lo[2]);
+    const torque = 3 * 9.80665 * Math.max(all, 1e-3) * reach; for (const j of joints) if (heldPivot(j)) j.motor = { kind: 'held pivot', torque, from: 'held where it is put: enough to carry the whole thing at its full reach three times over (derived from its own mass and size; what holds it on the real machine is not modelled yet)' }; }
   // (P3: a turn's travel from the piece that has one: a servo's from its row, centred on the angle it is drawn at (a horn
   // fitted at the servo's middle, as arm kits are put together: typical, an assumption); none known for the rest)
   for (const j of joints) { if (!j.turns || j.ball || j.motor?.kind !== 'servo') continue; const r = servoRangeOf([...bodies[j.b]!.pieces.map((i) => b.pieces[i]!.name), ...j.by].join(' ')); if (!r) continue;
@@ -638,6 +642,9 @@ export function motionOf(b: Block): Motion {
     const tol = Math.max(1e-6, (b.hi[1] - b.lo[1]) / 50), ground = bodies.map((x) => x.pieces.filter((i) => boxes[i]![0][1]! < b.lo[1] + tol).length);
     const root = [...driven].sort((p, q) => (Math.abs(low[p]! - low[q]!) > tol ? low[p]! - low[q]! : ground[q]! !== ground[p]! ? ground[q]! - ground[p]! : mass[q]! - mass[p]!))[0]!;
     for (const k of driven) { const j = joints.find((x) => x.a === k && x.motor) ?? joints.find((x) => x.b === k && x.motor)!; bodies[k]!.frozen = k === root; bodies[k]!.why = k === root ? 'held: what it stands on (its lowest), its motors holding the rest' : `loose: held by its ${j.motor!.kind}`; } }
+  // (a laid-out machine: only what it stands on is held; every other body is loose on its joints, a cylinder's barrel and
+  // rod among them, which no motor holds and which follow the joint they span)
+  if (b.faces.some((f) => f.by.startsWith('layout pivot'))) { const held = bodies.findIndex((x) => x.frozen && x.why.startsWith('held: what it stands on')); if (held >= 0) bodies.forEach((x, k) => { if (k !== held && x.frozen && joints.some((j) => j.a === k || j.b === k)) { x.frozen = false; x.why = 'loose: on its joints'; } }); }
   const meshes: MoveMesh[] = [], gears = b.pieces.map((p) => gearOf(p));
   for (let i = 0; i < n; i++) for (let k = i + 1; k < n; k++) { const A = gears[i], B = gears[k]; if (!A || !B || Math.abs(A.m - B.m) > 1e-9 || find(i) === find(k)) continue;
     const d = Math.hypot(A.at[0] - B.at[0], A.at[1] - B.at[1]), a0 = (A.m * (A.z + B.z)) / 2;
@@ -719,6 +726,10 @@ export class LiveMotion {
     for (const f of block.faces) { const a = bodyOf.get(f.a)!, c = bodyOf.get(f.b)!; if (a !== c && (f.gap === 0 || / meshes | laid round /.test(f.by))) pair(a, c); }
     for (const m of this.motion.meshes) pair(m.a, m.b);
     for (const j of this.motion.joints) pair(j.a, j.b);
+    // (two bodies that slide on each other are one member in two halves (a cylinder's barrel and its rod): each half may lie
+    // along whatever the other is pinned to, as the whole cylinder lies along the boom it works. Without this the barrel
+    // struck the part its rod is pinned to and the rod was knocked out of its line (measured 2026-11-12: 870 mm off))
+    for (const j of this.motion.joints) { if (!j.slide) continue; for (const h of this.motion.joints) { if (h === j) continue; for (const k of [j.a, j.b]) { const o = h.a === k ? h.b : h.b === k ? h.a : -1; if (o >= 0) { pair(o, j.a); pair(o, j.b); } } } }
     for (const r of this.motion.racks) pair(r.a, r.b);
     for (const x of this.motion.belts) { pair(x.a, x.b); for (const k of B.keys()) if (B[k]!.name === x.belt) { pair(k, x.a); pair(k, x.b); } }
     for (const k of touch) { const [a, c] = k.split(',').map(Number); filter.DisableCollision(a!, c!); }
@@ -751,6 +762,9 @@ export class LiveMotion {
       } else {
         // (it turns and slides: a six-axis constraint with its own x along the line free to slide (within its room) and turn)
         const st = new J.SixDOFConstraintSettings(); st.mPosition1 = R(j.point); st.mPosition2 = R(j.point); st.mAxisX1 = V(u); st.mAxisX2 = V(u); st.mAxisY1 = V(nr); st.mAxisY2 = V(nr);
+        // (every other axis is held: the engine leaves an axis free unless told, and a cylinder's rod left free across its
+        // barrel came out of it and hung from its pin (seen 2026-11-10))
+        for (const ax of [J.SixDOFConstraintSettings_EAxis_TranslationY, J.SixDOFConstraintSettings_EAxis_TranslationZ, J.SixDOFConstraintSettings_EAxis_RotationY, J.SixDOFConstraintSettings_EAxis_RotationZ]) st.MakeFixedAxis(ax);
         st.MakeFreeAxis(J.SixDOFConstraintSettings_EAxis_RotationX); if (rg) st.SetLimitedAxis(J.SixDOFConstraintSettings_EAxis_TranslationX, rg[0], rg[1]); else st.MakeFreeAxis(J.SixDOFConstraintSettings_EAxis_TranslationX);
         const c = J.castObject(st.Create(b1, b2), J.SixDOFConstraint); J.destroy(st); ps.AddConstraint(c); this.joint.set(who, { kind: 'six', c, dir: u, point: j.point, last: 0, add: 0, s0: 0 });
       }

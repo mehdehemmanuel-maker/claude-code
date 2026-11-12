@@ -692,7 +692,9 @@ export class Block {
    *  the body's first piece: "layout: held as one body", not a real fastening yet). A hinge names an item that is a round
    *  pin, the body it is fixed in (a) and the body that turns on it (b): the pin joins a's body, and one face says b turns
    *  on it, so what reads the faces for motion (sim.ts motionOf) finds a turn about the pin's own line. */
-  static layout(name: string, items: { b: Block; at: P3; body?: number }[], hinges: { pin: number; a: number; b: number; name?: string; range?: readonly [number, number] }[] = []): Block {
+  static layout(name: string, items: { b: Block; at: P3; body?: number }[], hinges: { pin: number; a: number; b: number; name?: string; range?: readonly [number, number] }[] = [],
+    /** a slide: an item that is a round rod (of body b) slides along its own line through body a (a cylinder's rod in its
+     *  barrel), between `range` (m from where it stands, along the rod's line) */ slides: { rod: number; a: number; b: number; range: readonly [number, number]; name?: string }[] = []): Block {
     if (!items.length) throw new Error(`${name}: a layout of nothing`);
     const ds = items.map((it) => { Block.#is(it.b); return [it.at[0] - (it.b.lo[0] + it.b.hi[0]) / 2, it.at[1] - it.b.lo[1], it.at[2] - (it.b.lo[2] + it.b.hi[2]) / 2] as V3; });
     const low = Math.min(...items.map((it, k) => it.b.lo[1] + ds[k]![1]!)), pieces: Piece[] = [], faces: Face[] = [], rooms: RoomOf[] = [], first: number[] = [], bodies = new Map<number, number[]>();
@@ -702,6 +704,8 @@ export class Block {
     for (const ps of bodies.values()) for (const i of ps.slice(1)) faces.push({ a: ps[0]!, b: i, kind: 'contact', patch: 'area', area: 0, at: pieces[i]!.solid.base.c, normal: [0, 1, 0], gap: 0, by: 'layout: held as one body', joint: 'fixed' });
     for (const h of hinges) { const it = items[h.pin]; if (!it || !bodies.has(h.a) || !bodies.has(h.b) || h.a === h.b) continue; const pin = first[h.pin]!, P = pieces[pin]!.solid.base; if (P.k === 'box' || P.k === 'bend') continue;
       faces.push({ a: bodies.get(h.b)![0]!, b: pin, kind: 'gap', patch: 'area', area: 0, at: P.c, normal: [1, 0, 0], gap: 1e-4, by: `layout pivot: the ${pieces[bodies.get(h.b)![0]!]!.name} turns on the ${h.name ?? pieces[pin]!.name} through it${h.range ? ` range ${Math.round(h.range[0])}..${Math.round(h.range[1])}` : ''}`, joint: 'turns' }); }
+    for (const sl of slides) { const it = items[sl.rod]; if (!it || !bodies.has(sl.a) || !bodies.has(sl.b) || sl.a === sl.b) continue; const rod = first[sl.rod]!, R = pieces[rod]!.solid.base; if (R.k === 'box' || R.k === 'bend') continue;
+      faces.push({ a: bodies.get(sl.a)![0]!, b: rod, kind: 'gap', patch: 'area', area: 0, at: R.c, normal: [1, 0, 0], gap: 1e-4, by: `layout slide: the ${sl.name ?? pieces[rod]!.name} slides through the ${pieces[bodies.get(sl.a)![0]!]!.name} range ${(sl.range[0] * 1000).toFixed(1)}..${(sl.range[1] * 1000).toFixed(1)}`, joint: 'slides' }); }
     return Block.#seal(name, pieces, faces, rooms);
   }
   static turn(b: Block, axis: Axis | P3, degrees: number, name = b.name): Block {
