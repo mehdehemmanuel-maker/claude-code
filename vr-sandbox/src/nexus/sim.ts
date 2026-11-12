@@ -661,6 +661,15 @@ export function motionOf(b: Block): Motion {
 }
 const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
+/** A piece as the box round it, turned as it is (a round one as the box round its cylinder), and whether two such boxes
+ *  meet (separating axes). `grow` scales the box about its middle. */
+type PieceBox = { c: V3; ax: V3[]; h: V3 };
+function pieceBox(b: Block, i: number, grow = 1): PieceBox { const P = b.pieces[i]!.solid.base as unknown as { c: V3; frame?: number[]; size?: V3; r?: number; h?: number }, F = P.frame ?? [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  const h: V3 = P.size ? [P.size[0] / 2, P.size[1] / 2, P.size[2] / 2] : P.r !== undefined && P.h !== undefined ? [P.r, P.h / 2, P.r] : P.r !== undefined ? [P.r, P.r, P.r] : (() => { const [lo, hi] = primBox(b.pieces[i]!.solid.base); return [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, (hi[2] - lo[2]) / 2] as V3; })();
+  return { c: [P.c[0], P.c[1], P.c[2]], ax: [[F[0]!, F[3]!, F[6]!], [F[1]!, F[4]!, F[7]!], [F[2]!, F[5]!, F[8]!]], h: [h[0] * grow, h[1] * grow, h[2] * grow] }; }
+function boxesMeet(A: PieceBox, B: PieceBox): boolean { const d: V3 = [B.c[0] - A.c[0], B.c[1] - A.c[1], B.c[2] - A.c[2]], axes: V3[] = [...A.ax, ...B.ax]; for (const p of A.ax) for (const q of B.ax) { const c = cross(p, q); if (Math.hypot(...c) > 1e-9) axes.push(c); }
+  for (const L of axes) { const n = Math.hypot(...L), ra = A.ax.reduce((t, u, k) => t + A.h[k]! * Math.abs(dot(u, L)), 0), rb = B.ax.reduce((t, u, k) => t + B.h[k]! * Math.abs(dot(u, L)), 0); if (Math.abs(dot(d, L)) > ra + rb + 1e-9 * n) return false; } return true; }
+function pointInBox(p: V3, A: PieceBox, slack: number): boolean { const d: V3 = [p[0] - A.c[0], p[1] - A.c[1], p[2] - A.c[2]]; return A.ax.every((u, k) => Math.abs(dot(d, u)) <= A.h[k]! + slack); }
 /** What is made, moving live: Jolt stepped as often as asked, each body frozen (static) or loose, its joints hinges about
  *  their lines, meshing gears held to their ratio. A drag or a crank is a torque about a body's joint (or a pull on a free
  *  one); `spin` drives a joint at a speed. Stop is `destroy`: the build stands as it was made. */
@@ -668,6 +677,8 @@ export class LiveMotion {
   readonly motion: Motion; t = 0;
   /** Where its floor is, m: under the lowest of it by half its widest. */
   readonly floor: number;
+  /** which bodies joined by a pin keep each other out for real, and which still pass through each other, and why */
+  collideSays = '';
   private readonly J: Jolt; private readonly jolt: InstanceType<Jolt['JoltInterface']>; private readonly bi: InstanceType<Jolt['BodyInterface']>;
   private readonly live: { body: InstanceType<Jolt['Body']>; p0: V3; q0: Q4; mass: number }[] = [];
   private readonly joint = new Map<number, { kind: 'hinge' | 'slide' | 'six'; c: InstanceType<Jolt['TwoBodyConstraint']>; dir: V3; point: V3; last: number; add: number; s0: number }>();
@@ -705,8 +716,17 @@ export class LiveMotion {
       if (P.k === 'sphere') return { st: new J.SphereShapeSettings(P.r), pos: c, R: f };
       return { st: new J.CylinderShapeSettings(P.h / 2, P.r, cr(Math.min(P.h, 2 * P.r) / 2)), pos: c, R: f };
     };
+    // (REAL SOLIDS (the user, 2026-11-12: "solids can't pass through each other"). Two bodies joined by a pin used not to
+    // collide at all: what a pin joins overlaps at the pin, and solids that overlap fly apart. Now, on a laid-out machine,
+    // only what is AT the pin is left out of the collision: a piece the pin's point lies in (the pin, the two round ends,
+    // a mount's lug). The rest of the two bodies keep each other out. Two cases stay as they were, and are said: a body
+    // that is nothing but such a piece (a rough box hung on its pin), and two bodies built into each other as they stand
+    // (they would be thrown apart the moment it starts))
+    const pivots = this.motion.joints.filter((j) => j.by.some((t) => t.startsWith('layout pivot'))), atPin = new Set<number>();
+    for (const j of pivots) for (const k of [j.a, j.b]) for (const i of B[k]!.pieces) { const bx = pieceBox(block, i); if (pointInBox(j.point, bx, 0.002 + 0.05 * Math.max(...bx.h))) atPin.add(i); }
+    const solidOf = B.map((body) => { const keep = body.pieces.filter((i) => !atPin.has(i)); return keep.length ? keep : body.pieces; }), onlyPin = B.map((body) => body.pieces.every((i) => atPin.has(i)));
     B.forEach((body, k) => {
-      const sh = body.pieces.map(shapeOf), origin = sh[0]!.pos, mass = Math.max(1e-3, body.pieces.reduce((t, i) => t + (parts[i] ? massOfAll(parts[i]!) : 0), 0));
+      const sh = solidOf[k]!.map(shapeOf), origin = sh[0]!.pos, mass = Math.max(1e-3, body.pieces.reduce((t, i) => t + (parts[i] ? massOfAll(parts[i]!) : 0), 0));
       let shape: InstanceType<Jolt['Shape']>, at = origin, q: Q4 = [0, 0, 0, 1];
       if (sh.length === 1) { shape = sh[0]!.st.Create().Get(); q = quatOf(sh[0]!.R); }
       else { const sc = new J.StaticCompoundShapeSettings(); for (const x of sh) sc.AddShape(V([x.pos[0] - origin[0], x.pos[1] - origin[1], x.pos[2] - origin[2]]), Q(quatOf(x.R)), x.st, 0); shape = sc.Create().Get(); J.destroy(sc); at = origin; }
@@ -725,11 +745,13 @@ export class LiveMotion {
     const touch = new Set<string>(), bodyOf = new Map<number, number>(), pair = (a: number, c: number) => touch.add(`${Math.min(a, c)},${Math.max(a, c)}`); B.forEach((x, k) => x.pieces.forEach((i) => bodyOf.set(i, k)));
     for (const f of block.faces) { const a = bodyOf.get(f.a)!, c = bodyOf.get(f.b)!; if (a !== c && (f.gap === 0 || / meshes | laid round /.test(f.by))) pair(a, c); }
     for (const m of this.motion.meshes) pair(m.a, m.b);
-    for (const j of this.motion.joints) pair(j.a, j.b);
-    // (two bodies that slide on each other are one member in two halves (a cylinder's barrel and its rod): each half may lie
-    // along whatever the other is pinned to, as the whole cylinder lies along the boom it works. Without this the barrel
-    // struck the part its rod is pinned to and the rod was knocked out of its line (measured 2026-11-12: 870 mm off))
-    for (const j of this.motion.joints) { if (!j.slide) continue; for (const h of this.motion.joints) { if (h === j) continue; for (const k of [j.a, j.b]) { const o = h.a === k ? h.b : h.b === k ? h.a : -1; if (o >= 0) { pair(o, j.a); pair(o, j.b); } } } }
+    const real: string[] = [], through: string[] = [];
+    for (const j of this.motion.joints) { const piv = pivots.includes(j), nm = `${B[j.a]!.name.split(' and ')[0]} and ${B[j.b]!.name.split(' and ')[0]}`;
+      if (!piv) { pair(j.a, j.b); continue; }
+      if (onlyPin[j.a] || onlyPin[j.b]) { pair(j.a, j.b); if (!j.by.some((t) => t.includes('(free)'))) through.push(`${nm} (one of them is a single piece on its pin)`); continue; }
+      const ba = solidOf[j.a]!.map((i) => pieceBox(block, i, 0.98)), bb = solidOf[j.b]!.map((i) => pieceBox(block, i, 0.98)), clash = ba.length * bb.length <= 60000 && ba.some((x) => bb.some((y) => boxesMeet(x, y)));
+      if (clash || ba.length * bb.length > 60000) { pair(j.a, j.b); through.push(`${nm} (${clash ? 'built into each other as they stand' : 'too many pieces to check'})`); } else real.push(nm); }
+    this.collideSays = pivots.length ? `${real.length} pinned pair${real.length === 1 ? '' : 's'} keep each other out for real${real.length ? `: ${real.slice(0, 6).join('; ')}` : ''}${through.length ? `. Still passing through each other: ${through.slice(0, 6).join('; ')}` : ''}` : '';
     for (const r of this.motion.racks) pair(r.a, r.b);
     for (const x of this.motion.belts) { pair(x.a, x.b); for (const k of B.keys()) if (B[k]!.name === x.belt) { pair(k, x.a); pair(k, x.b); } }
     for (const k of touch) { const [a, c] = k.split(',').map(Number); filter.DisableCollision(a!, c!); }
