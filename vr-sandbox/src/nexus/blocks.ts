@@ -1477,7 +1477,7 @@ const BUILT_THINGS: BlockDef[] = [
       let rows: unknown; try { rows = JSON.parse(String(c.set.boxes || '[]')); } catch (e) { throw new Error(`the solids are not JSON: ${(e as Error).message}`); }
       if (!Array.isArray(rows) || !rows.length) throw new Error('a layout needs at least one solid');
       const num = (v: unknown, k: number, what: string, at: string) => { const x = Number((v as unknown[])?.[k]); if (!Number.isFinite(x)) throw new Error(`${at}: its ${what} needs three numbers (mm)`); return x / 1000; };
-      const items = (rows as Record<string, unknown>[]).slice(0, 1500).flatMap((r, n) => { const nm = String(r.name || `solid ${n + 1}`), at = (Array.isArray(r.span) ? [0, 0, 0] : [0, 1, 2].map((k) => num(r.at, k, 'place', nm))) as [number, number, number];
+      const items = (rows as Record<string, unknown>[]).slice(0, 200000).flatMap((r, n) => { const nm = String(r.name || `solid ${n + 1}`), at = (Array.isArray(r.span) ? [0, 0, 0] : [0, 1, 2].map((k) => num(r.at, k, 'place', nm))) as [number, number, number];
         // (a span: a straight part pinned between two points, mm. It is made upright, as long as the points are apart (a
         // wired part: laid long side up by its quarter turns), turned from upright to the line between them, and put with
         // its middle on the line's middle)
@@ -1532,12 +1532,12 @@ const BUILT_THINGS: BlockDef[] = [
       // (the pivots: each a steel pin at its point along its axis, fixed in one body, the other turning on it)
       let pv: unknown = []; try { pv = JSON.parse(String(c.set.pivots || '[]')); } catch (e) { throw new Error(`the pivots are not JSON: ${(e as Error).message}`); }
       const hinges: { pin: number; a: number; b: number; name: string; range?: [number, number] }[] = [];
-      for (const [n, h] of ((Array.isArray(pv) ? pv : []) as Record<string, unknown>[]).slice(0, 200).entries()) { const nm = String(h.name || `pivot ${n + 1}`), d = Math.abs(Number(h.d)) / 1000, l = Math.abs(Number(h.l)) / 1000; if (!(d > 0.001 && l > 0.001) || !Number.isInteger(Number(h.a)) || !Number.isInteger(Number(h.b))) continue;
+      for (const [n, h] of ((Array.isArray(pv) ? pv : []) as Record<string, unknown>[]).slice(0, 20000).entries()) { const nm = String(h.name || `pivot ${n + 1}`), d = Math.abs(Number(h.d)) / 1000, l = Math.abs(Number(h.l)) / 1000; if (!(d > 0.001 && l > 0.001) || !Number.isInteger(Number(h.a)) || !Number.isInteger(Number(h.b))) continue;
         const up = roomMade(`${nm} pin`, 'steel-low', { cyl: [d / 2, l] }, { color: 0x9aa3ad }), pin = h.axis === 'x' ? roomTurn(up, 2, 90) : h.axis === 'y' ? up : roomTurn(up, 0, 90);
         hinges.push({ pin: items.length, a: Number(h.a), b: Number(h.b), name: `${nm} pin${h.free ? ' (free)' : h.drive ? ' (axle)' : ''}`, ...(Array.isArray(h.range) && h.range.length === 2 && h.range.every((v) => Number.isFinite(Number(v))) ? { range: [Number(h.range[0]), Number(h.range[1])] as [number, number] } : {}) }); items.push({ b: pin, at: [num(h.at, 0, 'place', nm), num(h.at, 1, 'place', nm) - (pin.hi[1] - pin.lo[1]) / 2, num(h.at, 2, 'place', nm)] }); }
       // (the slides: a row named as its rod, the body it slides through, its own body, its travel in mm)
       let sv: unknown = []; try { sv = JSON.parse(String(c.set.slides || '[]')); } catch (e) { throw new Error(`the slides are not JSON: ${(e as Error).message}`); }
-      const slides = ((Array.isArray(sv) ? sv : []) as Record<string, unknown>[]).slice(0, 40).flatMap((q) => { const rod = items.findIndex((it) => it.b.pieces[0]?.name === String(q.rod)), rg = Array.isArray(q.range) ? q.range.map(Number) : []; return rod >= 0 && Number.isInteger(Number(q.a)) && Number.isInteger(Number(q.b)) && rg.length === 2 && rg.every(Number.isFinite) ? [{ rod, a: Number(q.a), b: Number(q.b), range: [rg[0]! / 1000, rg[1]! / 1000] as [number, number], name: String(q.rod) }] : []; });
+      const slides = ((Array.isArray(sv) ? sv : []) as Record<string, unknown>[]).slice(0, 5000).flatMap((q) => { const rod = items.findIndex((it) => it.b.pieces[0]?.name === String(q.rod)), rg = Array.isArray(q.range) ? q.range.map(Number) : []; return rod >= 0 && Number.isInteger(Number(q.a)) && Number.isInteger(Number(q.b)) && rg.length === 2 && rg.every(Number.isFinite) ? [{ rod, a: Number(q.a), b: Number(q.b), range: [rg[0]! / 1000, rg[1]! / 1000] as [number, number], name: String(q.rod) }] : []; });
       return roomOut(roomLayout(String(c.set.name || 'layout'), items, hinges, slides));
     },
     tests: [{ set: {}, inputs: {}, outputs: { pieces: 2 } }] }),

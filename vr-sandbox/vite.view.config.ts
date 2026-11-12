@@ -46,7 +46,7 @@ const relay = (): Plugin => {
       res.on('close', () => { if (!res.writableEnded) gone.abort(); });
       const alive = setInterval(() => line({ alive: Math.round((Date.now() - t0) / 1000) }), 10_000);
       try { await load(seeds); const m = await load(agent), tokens = { in: 0, out: 0, cached: 0, written: 0 };
-        const r = await m.composeBuild(String(request ?? ''), { ask: m.sdkAsk({ model, tokens, signal: AbortSignal.any([gone.signal, AbortSignal.timeout(asked.advanced ? 900_000 : 240_000)]) }), features: true, skeleton: true, advanced: asked.advanced === true, board, blocks,
+        const r = await m.composeBuild(String(request ?? ''), { ask: m.sdkAsk({ model, tokens, signal: AbortSignal.any([gone.signal, AbortSignal.timeout(asked.advanced ? 7_200_000 : 240_000)]) }), features: true, skeleton: true, advanced: asked.advanced === true, board, blocks,
           onStep: (s: { stage: string; line: string; ok: boolean }, b: unknown) => line({ compose: s, board: b }), onPipe: (e: unknown) => line({ pipe: e }) });
         line({ done: { ...r, tokens } }); }
       catch (e) { line({ error: (e as Error).message }); }

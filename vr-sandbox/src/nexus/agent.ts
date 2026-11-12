@@ -962,7 +962,7 @@ Reply with one JSON object and nothing else, compact: {"pieces":[[name, shape, a
  *  layout and the built pieces take their place, of the same body, so what moved still moves. Sixty calls a press. */
 export async function buildDeep(request: string, tree: PipeNode[], path: string[] | string[][], board: Board, o: { ask: Ask; onPipe?: (e: PipeEvent | { tree: PipeNode[] }) => void; maxCalls?: number; idFrom?: number;
   /** the model as it stands each time one of the parts asked for is finished: its real pieces in, the parts not yet built
-   *  still as their rough solids (library parts drawn plain until the end) */ onBoard?: (b: Board, done: string) => void; /** each main part's interfaces with the parts round it, by its name in lower case: fixed before it is designed */ contracts?: Record<string, string[]> }): Promise<{ board: Board; calls: number; pieces: number; real: number; says: string }> {
+   *  still as their rough solids (library parts drawn plain until the end) */ onBoard?: (b: Board, done: string) => void; /** each main part's interfaces with the parts round it, by its name in lower case: fixed before it is designed */ contracts?: Record<string, string[]>; /** advanced: every library part fitted, however many */ noCap?: boolean }): Promise<{ board: Board; calls: number; pieces: number; real: number; says: string }> {
   let id = o.idFrom ?? 200000, calls = 0; const max = o.maxCalls ?? 60, paths = (Array.isArray(path[0]) ? path : [path]) as string[][], P = paths.map((q) => q.join(' > ')).join(', ');
   const at = (ns: PipeNode[], p: string[]): PipeNode | undefined => { const n = ns.find((x) => x.name === p[0]); return !n || p.length === 1 ? n : at(n.kids, p.slice(1)); };
   const groups = paths.map((q) => ({ p: q, P: q.join(' > '), node: at(tree, q) })).filter((g): g is { p: string[]; P: string; node: PipeNode } => !!g.node && g.node.kids.length > 0);
@@ -1049,12 +1049,12 @@ export async function buildDeep(request: string, tree: PipeNode[], path: string[
   let joined = 0; const finished = new Set<string>(), fixedRest = rest.filter((x) => !Array.isArray(x.span) || Array.isArray(x.thick)).slice(0, 400);
   await Promise.all(live.map(async (g) => { const out: Sol[] = []; await one(g.node, g.p, boxOf(g.mine), g.mine, out); joined += connectParts(out); connectParts(out, { fixed: fixedRest, small: 1.01 }); const body = bodyOf(g.mine); if (body !== undefined) for (const x of out) x.body = body; built.push(...out); finished.add(g.P);
     if (o.onBoard) { try { const now = [...rest, ...built, ...live.filter((q) => !finished.has(q.P)).flatMap((q) => q.mine)].filter((x) => typeof x.shape === 'string' || Array.isArray(x.span)).map((x) => { const { use: _u, set: _s, pre: _p, kind: _k, ...d } = x; return d; });
-        const pb = emptyBoard(board.title ?? request.slice(0, 80)); placeBlock(pb, 'room.layout', 0, 0, { name: String(lay.set?.name ?? request.slice(0, 60)), boxes: JSON.stringify(now.slice(0, 1500)), pivots: String(lay.set?.pivots ?? '[]'), slides: String(lay.set?.slides ?? '[]') }, 'layout'); placeBlock(pb, 'space.show', 330, 0, {}, 'show'); wire(pb, 'layout', 'thing', 'show', 'thing'); o.onBoard(pb, g.P); }
+        const pb = emptyBoard(board.title ?? request.slice(0, 80)); placeBlock(pb, 'room.layout', 0, 0, { name: String(lay.set?.name ?? request.slice(0, 60)), boxes: JSON.stringify(now), pivots: String(lay.set?.pivots ?? '[]'), slides: String(lay.set?.slides ?? '[]') }, 'layout'); placeBlock(pb, 'space.show', 330, 0, {}, 'show'); wire(pb, 'layout', 'thing', 'show', 'thing'); o.onBoard(pb, g.P); }
       catch { /* a picture of the build as it goes: never a reason to stop it */ } } }));
   // (a piece of a kind becomes that kind's library part, fitted to its box; one that will not fit stays as drawn. No more
   // than 250 library parts in one layout: each is a node of its own, and a phone must still draw it)
   let real = 0, asDrawn = 0; const had = rest.filter((x) => typeof x.use === 'string').length;
-  for (const x of built) { const lib = typeof x.kind === 'string' ? KINDS[x.kind] : undefined; if (!lib || !LIBRARY.has(lib) || Array.isArray(x.span)) continue; if (had + real >= 250) { asDrawn++; continue; }
+  for (const x of built) { const lib = typeof x.kind === 'string' ? KINDS[x.kind] : undefined; if (!lib || !LIBRARY.has(lib) || Array.isArray(x.span)) continue; if (!o.noCap && had + real >= 250) { asDrawn++; continue; }
     const f = await fitTool(lib, N3(x.size).map(Math.abs)); if (f && f.err < 1.2) { x.use = lib; x.set = f.set; x.pre = f.pre; real++; } else asDrawn++; }
   let solids = [...rest, ...built], out = board;
   for (let pass = 0; pass < 2; pass++) { const nb = emptyBoard(board.title ?? request.slice(0, 80)), tools = solids.filter((x) => typeof x.use === 'string' && LIBRARY.has(String(x.use))), drawn = solids.filter((x) => typeof x.use !== 'string' || !LIBRARY.has(String(x.use))).map((x) => { const { use: _u, set: _s, pre: _p, ...d } = x; return d; }), idOf = (k: number) => `t${String(k).padStart(3, '0')}`;
@@ -1319,7 +1319,7 @@ export async function composeBuild(request: string, o: { ask: Ask; board?: Board
    *  can be taken; given, the model is shown it with the recognition list after the build and its checks */ look?: (board: Board) => Promise<{ png: Uint8Array } | undefined>;
   /** the recognition list written before the split (one call more); on where `look` is given, unless said */ features?: boolean;
   /** a layout skeleton first (one call more): the whole as plain solids at places, shown at once, and kept as the build where the parts' build leaves something unmet */ skeleton?: boolean;
-  /** ADVANCED (the user, 2026-11-12: "each part to be built separately in advanced mode down to its bolts"): split two levels deeper and three times as widely, and build up to 150 assemblies from their own pieces where the plain build stops at 40. Many more calls, so it is asked for, never the default */ advanced?: boolean;
+  /** ADVANCED (the user, 2026-11-12: "each part to be built separately in advanced mode down to its bolts"): NO CAP (the user, 2026-11-12: "on advanced there needs to be no cap and go through and just upgrade everything"): every system is split until only parts are left, every assembly is built from its own pieces, every library part is fitted and every conductor run, however many. The one stop left is twelve levels of splitting: a thing that is still called a system twelve levels down is a reply going round in a circle, not a machine. Many more calls, so it is asked for, never the default */ advanced?: boolean;
   /** every call answers in one closed format (stages.ts FORMATS), forced where the model is called and read from the tool's input, never text; a graph reply is checked by the wall (applyGraph) before it is a plan, returned once with what is wrong; the app turns it on, a test with a scripted text ask leaves it off */ formats?: boolean;
   /** the wall-clock budget, ms (default 240 000): when it is spent the run asks nothing more, returns what it has and says in unmet what was not reached */ budgetMs?: number }): Promise<ComposeRun> {
   const { starterBoards } = await import('./starters'), steps: ComposeStep[] = [], plans: AgentPlan[] = [], unmet: string[] = [], remembered: string[] = [], recalled: string[] = [], missing: string[] = [];
@@ -1544,8 +1544,8 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       const size1 = () => tcall('sizer', 'zones and pivots', `${SIZER_RULE}${PROMPT_CUT}Request: ${request.slice(0, 600)}\nIts subsystems (and under each, what it is made of):\n${tree.map((n) => `${n.name}${n.n > 1 ? ` x${n.n}` : ''} (${n.is})${n.kids.map((k) => `\n  ${k.name}${k.n > 1 ? ` x${k.n}` : ''}`).join('')}`).join('\n').slice(0, 5000)}`).then((t) => firstJson(t, 'sizer'), (e: unknown) => e);
       sizeStart = size1;
       let level = tree.map((n) => ({ n, path: [n.name] })), total = tree.length, depth = 1;
-      if (o.advanced) say('features', 'advanced: split two levels deeper and built from more of its own pieces; many more calls than a plain build');
-      for (; depth < (o.advanced ? 5 : 3) && total < (o.advanced ? 600 : 200); depth++) { const sys = level.filter((x) => x.n.kind === 'system').slice(0, o.advanced ? 60 : 24); if (!sys.length) break;
+      if (o.advanced) say('features', 'advanced: no cap. Every system is split until only parts are left and every assembly is built from its own pieces; it takes as many calls as the thing has assemblies');
+      for (; depth < (o.advanced ? 12 : 3) && (o.advanced || total < 200); depth++) { const sys = level.filter((x) => x.n.kind === 'system').slice(0, o.advanced ? Infinity : 24); if (!sys.length) break;
         const next = await pooled(sys, async (x) => { try { x.n.kids = await split1(x.path, x.n.is); } catch { x.n.kids = []; } return x.n.kids.map((k) => ({ n: k, path: [...x.path, k.name] })); });
         level = next.flat(); total += level.length; showTree(); }
       const lines = (ns: Tree[], d: number): string[] => ns.flatMap((n) => [`${'  '.repeat(d)}${n.name}${n.n > 1 ? ` x${n.n}` : ''}${n.kids.length ? ':' : ''} (${n.is})`, ...lines(n.kids, d + 1)]);
@@ -1677,7 +1677,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
         let nl = 0; const slides: Record<string, unknown>[] = [], linkSays: string[] = [];
         const outOf = (h: TP, face: string): number[] => { if (h.beam) { const d = [h.p2![0]! - h.p1![0]!, h.p2![1]! - h.p1![1]!], L = Math.hypot(d[0]!, d[1]!) || 1; return face === '-y' ? [d[1]! / L, -d[0]! / L, 0] : face === '+z' ? [0, 0, 1] : face === '-z' ? [0, 0, -1] : face === 'end' ? [d[0]! / L, d[1]! / L, 0] : [-d[1]! / L, d[0]! / L, 0]; } const f = FACES3[face] ?? [1, 1], n = [0, 0, 0]; n[f[0]] = f[1]; return n; };
         const turnZ = (p: number[], c: number[], deg: number): number[] => { const t = (deg * Math.PI) / 180, x = p[0]! - c[0]!, y = p[1]! - c[1]!; return [c[0]! + x * Math.cos(t) - y * Math.sin(t), c[1]! + x * Math.sin(t) + y * Math.cos(t), p[2]!]; };
-        for (const x of rowsOf(r.links).slice(0, 40)) { const kn = kindOf(x[0]), A = find(x[1]), B = find(x[4]); if (!A || !B || !placed(A) || !placed(B)) { unmet.push(`${kn.name}: one of its two parts is not placed`); continue; }
+        for (const x of rowsOf(r.links).slice(0, o.advanced ? Infinity : 40)) { const kn = kindOf(x[0]), A = find(x[1]), B = find(x[4]); if (!A || !B || !placed(A) || !placed(B)) { unmet.push(`${kn.name}: one of its two parts is not placed`); continue; }
           const fA = String(x[2] ?? '+y'), fB = String(x[5] ?? '+y'), sA = pointOn(A, fA, pct(x[3]), 50), sB = pointOn(B, fB, pct(x[6]), 50); if (!sA || !sB) continue;
           // (a flexible line between two parts: made as a line, never as a cylinder; one a "hang" join already made is not made twice)
           { const lm = /^\s*(cable|rope|chain|strap|cord|hose|wire|tether)\s*:\s*(.+)$/i.exec(String(x[0] ?? '')); if (lm) { if (linePairs.has([A.name, B.name].sort().join('|'))) continue; const Ll = Math.hypot(sB[0]! - sA[0]!, sB[1]! - sA[1]!, sB[2]! - sA[2]!), th1 = Math.max(2, Math.abs(Number(x[7])) || Ll / 60); if (!(Ll > 8 * th1)) { unmet.push(`${lm[2]}: its two ends are too near each other for a line`); continue; }
@@ -1805,7 +1805,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       const tApp = Date.now();
       { let poor = 0, late = 0; const misfit: string[] = []; for (const x of solids) { if (typeof x.use !== 'string') continue;
           // (ten seconds for fitting in all: what is left after that stays as drawn, and is said)
-          if (Date.now() - tApp > 10_000) { late++; delete x.use; if (typeof x.shape !== 'string') { x.shape = 'box'; x.axis = 'y'; } continue; }
+          if (!o.advanced && Date.now() - tApp > 10_000) { late++; delete x.use; if (typeof x.shape !== 'string') { x.shape = 'box'; x.axis = 'y'; } continue; }
           const target = (x.size as unknown[]).map((v) => Math.abs(Number(v)));
           const spanLen = Array.isArray(x.span) ? Math.max(...target) : 0, f = LIBRARY.has(x.use) ? await fitTool(x.use, target, spanLen || undefined) : undefined;
           // (within about a third on each side, summed: else the part is not the thing for that place, and a box stands in)
@@ -1849,7 +1849,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
           if (!(L > 3 * th)) { notRun.push(`${nm} (its ends touch)`); continue; }
           if (A.body === B.body) { solids.push({ name: nm, span: [P, Q], thick: th, shape: 'rod', size: [th, L, th], at: [0, 1, 2].map((i) => (P[i]! + Q[i]!) / 2), mat, color, rot: [0, 0, 0], body: A.body }); stiff++; continue; }
           if (f.form === 'shaft') { notRun.push(`${nm} (a shaft between two bodies that move on each other needs a joint of its own: not made yet)`); continue; }
-          if (flex >= 6 || typeof A.body !== 'number' || typeof B.body !== 'number') { notRun.push(`${nm} (${flex >= 6 ? 'only six flexible conductors are run for now, so the physics is not swamped' : 'an end has no body'})`); continue; }
+          if ((!o.advanced && flex >= 6) || typeof A.body !== 'number' || typeof B.body !== 'number') { notRun.push(`${nm} (${flex >= 6 && !o.advanced ? 'only six flexible conductors are run for now, so the physics is not swamped' : 'an end has no body'})`); continue; }
           // (bowed out to the side by 0.35 of the gap: about a third more length than the gap, for slack)
           const n = 8, sd = P[2]! + Q[2]! >= 0 ? 1 : -1, at = (k: number) => { const t = k / n; return [P[0]! + (Q[0]! - P[0]!) * t, P[1]! + (Q[1]! - P[1]!) * t, P[2]! + (Q[2]! - P[2]!) * t + sd * 0.35 * L * 4 * t * (1 - t)]; }, ids: number[] = [];
           for (let k = 0; k < n; k++) { const id = pre.bodies++; ids.push(id); const a = at(k), c = at(k + 1), l = Math.hypot(c[0]! - a[0]!, c[1]! - a[1]!, c[2]! - a[2]!); solids.push({ name: `${nm} ${k + 1}`, span: [a, c], thick: th, shape: 'rod', size: [th, l, th], at: [0, 1, 2].map((i) => (a[i]! + c[i]!) / 2), mat, color, rot: [0, 0, 0], body: id }); }
@@ -1892,7 +1892,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       const tLay = Date.now();
       let b = emptyBoard(request.slice(0, 80)), st: ReturnType<Engine['state']['get']>, used = 0;
       for (let pass = 0; pass < 2; pass++) { b = emptyBoard(request.slice(0, 80));
-        const tools = solids.filter((x) => typeof x.use === 'string' && LIBRARY.has(String(x.use))).slice(0, 120), drawn = solids.filter((x) => x.use === undefined);
+        const tools = solids.filter((x) => typeof x.use === 'string' && LIBRARY.has(String(x.use))).slice(0, o.advanced ? Infinity : 120), drawn = solids.filter((x) => x.use === undefined);
         const idOf = (k: number) => `t${String(k).padStart(3, '0')}`;
         placeBlock(b, 'room.layout', 0, 0, { name: request.slice(0, 60), boxes: JSON.stringify([...drawn, ...tools.map((t, k) => ({ in: k, name: t.name, at: t.at, rot: t.rot, pre: t.pre, span: t.span, body: t.body }))]), pivots: JSON.stringify(pivotsOut), slides: JSON.stringify(pre?.slides ?? []), energy: JSON.stringify(chain ? { parts: chain.parts, feeds: chain.feeds } : {}) }, 'layout'); placeBlock(b, 'space.show', 330, 0, {}, 'show'); wire(b, 'layout', 'thing', 'show', 'thing');
         tools.forEach((t, k) => { placeBlock(b, String(t.use), -330, k * 140, (t.set ?? {}) as Record<string, unknown>, idOf(k)); b.nodes[idOf(k)]!.label = String(t.name); wire(b, idOf(k), 'block', 'layout', 'blocks'); });
@@ -1907,7 +1907,7 @@ ${RULE.replace('put every part\'s block into one block', 'join each of these to 
       // (then each main part that is a box is built from its own parts, all side by side: sized and joined face to face by
       // the MATER, placed by the app, what its joins call for added. A beam stays one member for now)
       if (pre && pre.paths.length) { try { const toPipe = (ns: Tree[]): PipeNode[] => ns.map((n) => ({ name: n.name, n: n.n, kind: n.kind, is: n.is, state: 'placed' as const, kids: toPipe(n.kids) }));
-          const tM = Date.now(), rb = await buildDeep(request, toPipe(tree), pre.paths, board, { ask: o.ask, ...(o.onPipe ? { onPipe: o.onPipe } : {}), idFrom: pipeId + 5000, maxCalls: o.advanced ? 150 : 40, contracts: pre.contracts, ...(o.onStep ? { onBoard: (pb: Board, done: string) => { board = pb; say('features', `in the view now: the ${done} built from its own pieces`); } } : {}) }); pipeId += 20000; asks += rb.calls;
+          const tM = Date.now(), rb = await buildDeep(request, toPipe(tree), pre.paths, board, { ask: o.ask, ...(o.onPipe ? { onPipe: o.onPipe } : {}), idFrom: pipeId + 5000, maxCalls: o.advanced ? Infinity : 40, noCap: !!o.advanced, contracts: pre.contracts, ...(o.onStep ? { onBoard: (pb: Board, done: string) => { board = pb; say('features', `in the view now: the ${done} built from its own pieces`); } } : {}) }); pipeId += 20000; asks += rb.calls;
           board = rb.board; skeleton = rb.board; say('features', `${pre.paths.length} main parts built from their own pieces in ${((Date.now() - tM) / 1000).toFixed(0)} s: ${rb.says}`); }
         catch (e) { say('features', `the main parts stay as their boxes: ${(e as Error).message.slice(0, 160)}`, false); } }
       return done1(`Built: ${solids.length} solids${tree.length ? ` in ${tree.length} subsystems (${tree.map((n) => n.name).join(', ')})` : ''}. A model of plain solids placed as on the real thing: not yet real engineered parts.`); }
